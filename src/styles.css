@@ -360,6 +360,24 @@ input {
   text-align: center;
 }
 
+.delete-object-button {
+  min-height: 40px;
+  border: 1px solid rgba(240, 110, 92, 0.56);
+  border-radius: 8px;
+  color: #fff4f1;
+  background: rgba(240, 110, 92, 0.14);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.delete-object-button:hover,
+.delete-object-button:focus-visible {
+  border-color: rgba(255, 145, 126, 0.86);
+  background: rgba(240, 110, 92, 0.23);
+  outline: none;
+}
+
 .empty-selection {
   margin: 0;
   color: rgba(237, 243, 240, 0.64);

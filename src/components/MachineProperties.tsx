@@ -3,11 +3,16 @@ import type { PlacedMachine } from "../types/machine";
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
   onUpdateMachine: (instanceId: string, updates: Partial<Pick<PlacedMachine, "position" | "rotationY">>) => void;
+  onDeleteSelected: () => void;
 };
 
 const formatMeters = (value: number) => `${value.toFixed(2)} m`;
 
-export function MachineProperties({ selectedMachine, onUpdateMachine }: MachinePropertiesProps) {
+export function MachineProperties({
+  selectedMachine,
+  onUpdateMachine,
+  onDeleteSelected
+}: MachinePropertiesProps) {
   const updatePosition = (axis: "x" | "z", value: string) => {
     if (!selectedMachine) {
       return;
@@ -76,7 +81,7 @@ export function MachineProperties({ selectedMachine, onUpdateMachine }: MachineP
             />
           </label>
           <label className="property-field">
-            <span>Dönüş Açısı (°)</span>
+            <span>Rotation Angle (&deg;)</span>
             <input
               type="number"
               step="1"
@@ -90,6 +95,10 @@ export function MachineProperties({ selectedMachine, onUpdateMachine }: MachineP
             <span>D {formatMeters(selectedMachine.definition.depth)}</span>
             <span>H {formatMeters(selectedMachine.definition.height)}</span>
           </div>
+
+          <button className="delete-object-button" type="button" onClick={onDeleteSelected}>
+            Delete Selected Object
+          </button>
         </div>
       ) : (
         <p className="empty-selection">Click a machine in the scene to inspect and transform it.</p>

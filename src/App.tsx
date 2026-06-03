@@ -111,6 +111,20 @@ export function App() {
     setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
   }, []);
 
+  const deleteSelectedMachine = useCallback(() => {
+    if (!selectedMachine) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete ${selectedMachine.definition.name} from the layout?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setPlacedMachines((current) => current.filter((machine) => machine.instanceId !== selectedMachine.instanceId));
+    setSelectedMachineId(null);
+  }, [selectedMachine]);
+
   useEffect(() => {
     try {
       const rawLayout = window.localStorage.getItem(AUTOSAVE_KEY);
@@ -172,6 +186,33 @@ export function App() {
     setAutosaveReady(true);
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" || !selectedMachine) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      deleteSelectedMachine();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [deleteSelectedMachine, selectedMachine]);
+
   return (
     <main className="app-shell">
       <BabylonScene
@@ -196,7 +237,11 @@ export function App() {
         ) : null}
         <MachineLibrary onAddMachine={addMachine} />
         <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
-        <MachineProperties selectedMachine={selectedMachine} onUpdateMachine={updateMachine} />
+        <MachineProperties
+          selectedMachine={selectedMachine}
+          onUpdateMachine={updateMachine}
+          onDeleteSelected={deleteSelectedMachine}
+        />
       </aside>
     </main>
   );
