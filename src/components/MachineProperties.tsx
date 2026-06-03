@@ -1,0 +1,99 @@
+import type { PlacedMachine } from "../types/machine";
+
+type MachinePropertiesProps = {
+  selectedMachine?: PlacedMachine;
+  onUpdateMachine: (instanceId: string, updates: Partial<Pick<PlacedMachine, "position" | "rotationY">>) => void;
+};
+
+const formatMeters = (value: number) => `${value.toFixed(2)} m`;
+
+export function MachineProperties({ selectedMachine, onUpdateMachine }: MachinePropertiesProps) {
+  const updatePosition = (axis: "x" | "z", value: string) => {
+    if (!selectedMachine) {
+      return;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return;
+    }
+
+    onUpdateMachine(selectedMachine.instanceId, {
+      position: {
+        ...selectedMachine.position,
+        [axis]: numericValue
+      }
+    });
+  };
+
+  const updateRotation = (value: string) => {
+    if (!selectedMachine) {
+      return;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return;
+    }
+
+    onUpdateMachine(selectedMachine.instanceId, { rotationY: numericValue });
+  };
+
+  return (
+    <section className="properties-section" aria-label="Selected machine properties">
+      <header className="section-header">
+        <span>Selection</span>
+        <strong>{selectedMachine ? selectedMachine.definition.name : "None"}</strong>
+      </header>
+
+      {selectedMachine ? (
+        <div className="properties-body">
+          <div className="property-readout">
+            <span>Name</span>
+            <strong>{selectedMachine.definition.name}</strong>
+          </div>
+          <div className="property-readout">
+            <span>Category</span>
+            <strong>{selectedMachine.definition.category}</strong>
+          </div>
+
+          <label className="property-field">
+            <span>Position X</span>
+            <input
+              type="number"
+              step="0.1"
+              value={selectedMachine.position.x}
+              onChange={(event) => updatePosition("x", event.target.value)}
+            />
+          </label>
+          <label className="property-field">
+            <span>Position Z</span>
+            <input
+              type="number"
+              step="0.1"
+              value={selectedMachine.position.z}
+              onChange={(event) => updatePosition("z", event.target.value)}
+            />
+          </label>
+          <label className="property-field">
+            <span>Rotation Y</span>
+            <input
+              type="number"
+              step="1"
+              value={selectedMachine.rotationY}
+              onChange={(event) => updateRotation(event.target.value)}
+            />
+          </label>
+
+          <div className="dimension-grid" aria-label="Machine dimensions">
+            <span>W {formatMeters(selectedMachine.definition.width)}</span>
+            <span>D {formatMeters(selectedMachine.definition.depth)}</span>
+            <span>H {formatMeters(selectedMachine.definition.height)}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="empty-selection">Click a machine in the scene to inspect and transform it.</p>
+      )}
+    </section>
+  );
+}
