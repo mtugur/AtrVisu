@@ -24,4 +24,4 @@ Use Export Layout to download the current scene as JSON. Use Import Layout to re
 
 AtrVisu also autosaves the current layout in browser localStorage. If an unsaved layout is found after a refresh, the app prompts to restore it or dismiss and clear the autosave.
 
-Machine definitions currently live in `src/data/machines.ts`; there is no backend, database, or authentication layer.
+Machine libraries are loaded from `public/library/libraries.index.json`, which points to enabled JSON library files under `public/library/libraries/`. The library schema supports nested groups, machine items at any group level, model/thumbnail paths for future use, connection points, clearance, and capabilities. There is no backend, database, or authentication layer.

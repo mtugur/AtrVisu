@@ -1,0 +1,214 @@
+{
+  "libraryId": "atara-standard",
+  "libraryName": "Atara Standard Library",
+  "readonly": true,
+  "root": {
+    "id": "root",
+    "name": "Atara Standard Library",
+    "children": [
+      {
+        "id": "packaging-lines",
+        "name": "Packaging Lines",
+        "children": [
+          {
+            "id": "primary-packaging",
+            "name": "Primary Packaging",
+            "children": [
+              {
+                "id": "horizontal-flow-pack",
+                "name": "Horizontal Flow Pack",
+                "children": [],
+                "items": [
+                  {
+                    "id": "packaging-flowpack-01",
+                    "name": "Flow Pack Machine",
+                    "type": "Packaging Machine",
+                    "width": 3.6,
+                    "depth": 1.4,
+                    "height": 1.8,
+                    "defaultColor": "#4fb3d8",
+                    "modelPath": null,
+                    "thumbnailPath": null,
+                    "connectionPoints": [
+                      { "id": "infeed", "label": "Infeed", "x": -1.8, "y": 0.9, "z": 0, "direction": "west" },
+                      { "id": "outfeed", "label": "Outfeed", "x": 1.8, "y": 0.9, "z": 0, "direction": "east" }
+                    ],
+                    "clearance": { "front": 0.8, "back": 0.8, "left": 0.6, "right": 0.6 },
+                    "capabilities": {
+                      "canConvey": false,
+                      "canPalletize": false,
+                      "canWrap": false,
+                      "hasFlowDirection": false
+                    }
+                  }
+                ]
+              }
+            ],
+            "items": []
+          }
+        ],
+        "items": []
+      },
+      {
+        "id": "material-handling",
+        "name": "Material Handling",
+        "children": [
+          {
+            "id": "conveyors",
+            "name": "Conveyors",
+            "children": [
+              {
+                "id": "belt-conveyors",
+                "name": "Belt Conveyors",
+                "children": [],
+                "items": [
+                  {
+                    "id": "conveyor-belt-01",
+                    "name": "Belt Conveyor",
+                    "type": "Conveyor",
+                    "width": 5.2,
+                    "depth": 0.9,
+                    "height": 0.8,
+                    "defaultColor": "#91c95f",
+                    "modelPath": null,
+                    "thumbnailPath": null,
+                    "connectionPoints": [
+                      { "id": "start", "label": "Start", "x": -2.6, "y": 0.4, "z": 0, "direction": "west" },
+                      { "id": "end", "label": "End", "x": 2.6, "y": 0.4, "z": 0, "direction": "east" }
+                    ],
+                    "clearance": { "front": 0.5, "back": 0.5, "left": 0.5, "right": 0.5 },
+                    "capabilities": {
+                      "canConvey": true,
+                      "canPalletize": false,
+                      "canWrap": false,
+                      "hasFlowDirection": true
+                    }
+                  }
+                ]
+              }
+            ],
+            "items": []
+          }
+        ],
+        "items": []
+      },
+      {
+        "id": "end-of-line",
+        "name": "End of Line",
+        "children": [
+          {
+            "id": "palletizing",
+            "name": "Palletizing",
+            "children": [
+              {
+                "id": "robot-palletizers",
+                "name": "Robot Palletizers",
+                "children": [],
+                "items": [
+                  {
+                    "id": "robot-palletizer-01",
+                    "name": "Robot Palletizer",
+                    "type": "Robot Palletizer",
+                    "width": 3.2,
+                    "depth": 3.2,
+                    "height": 2.7,
+                    "defaultColor": "#f0a23a",
+                    "modelPath": null,
+                    "thumbnailPath": null,
+                    "connectionPoints": [
+                      { "id": "product-in", "label": "Product In", "x": -1.6, "y": 0.9, "z": 0, "direction": "west" },
+                      { "id": "pallet-out", "label": "Pallet Out", "x": 1.6, "y": 0.4, "z": 0, "direction": "east" }
+                    ],
+                    "clearance": { "front": 1.2, "back": 1.2, "left": 1.2, "right": 1.2 },
+                    "capabilities": {
+                      "canConvey": false,
+                      "canPalletize": true,
+                      "canWrap": false,
+                      "hasFlowDirection": false
+                    }
+                  },
+                  {
+                    "id": "high-level-palletizer-01",
+                    "name": "High Level Palletizer",
+                    "type": "High Level Palletizer",
+                    "width": 4.6,
+                    "depth": 3.8,
+                    "height": 5.2,
+                    "defaultColor": "#c985f2",
+                    "modelPath": null,
+                    "thumbnailPath": null,
+                    "connectionPoints": [
+                      { "id": "case-infeed", "label": "Case Infeed", "x": -2.3, "y": 3.6, "z": 0, "direction": "west" },
+                      { "id": "pallet-exit", "label": "Pallet Exit", "x": 2.3, "y": 0.5, "z": 0, "direction": "east" }
+                    ],
+                    "clearance": { "front": 1.4, "back": 1.4, "left": 1.2, "right": 1.2 },
+                    "capabilities": {
+                      "canConvey": false,
+                      "canPalletize": true,
+                      "canWrap": false,
+                      "hasFlowDirection": false
+                    }
+                  }
+                ]
+              }
+            ],
+            "items": []
+          },
+          {
+            "id": "wrapping",
+            "name": "Wrapping",
+            "children": [],
+            "items": [
+              {
+                "id": "stretch-wrapper-01",
+                "name": "Rotary Stretch Wrapper",
+                "type": "Stretch Wrapper",
+                "width": 2.4,
+                "depth": 2.4,
+                "height": 2.5,
+                "defaultColor": "#78d6b5",
+                "modelPath": null,
+                "thumbnailPath": null,
+                "connectionPoints": [
+                  { "id": "wrapper-in", "label": "In", "x": -1.2, "y": 0.5, "z": 0, "direction": "west" },
+                  { "id": "wrapper-out", "label": "Out", "x": 1.2, "y": 0.5, "z": 0, "direction": "east" }
+                ],
+                "clearance": { "front": 0.8, "back": 0.8, "left": 0.8, "right": 0.8 },
+                "capabilities": {
+                  "canConvey": false,
+                  "canPalletize": false,
+                  "canWrap": true,
+                  "hasFlowDirection": false
+                }
+              }
+            ]
+          }
+        ],
+        "items": []
+      }
+    ],
+    "items": [
+      {
+        "id": "euro-pallet-01",
+        "name": "Euro Pallet",
+        "type": "Pallet",
+        "width": 1.2,
+        "depth": 0.8,
+        "height": 0.14,
+        "defaultColor": "#b78b5f",
+        "modelPath": null,
+        "thumbnailPath": null,
+        "connectionPoints": [
+          { "id": "top-load", "label": "Load", "x": 0, "y": 0.14, "z": 0, "direction": "up" }
+        ],
+        "clearance": { "front": 0.1, "back": 0.1, "left": 0.1, "right": 0.1 },
+        "capabilities": {
+          "canConvey": false,
+          "canPalletize": false,
+          "canWrap": false,
+          "hasFlowDirection": false
+        }
+      }
+    ]
+  }
+}

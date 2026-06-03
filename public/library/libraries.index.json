@@ -1,0 +1,18 @@
+{
+  "libraries": [
+    {
+      "libraryId": "atara-standard",
+      "libraryName": "Atara Standard Library",
+      "path": "/library/libraries/atara-standard.library.json",
+      "readonly": true,
+      "enabled": true
+    },
+    {
+      "libraryId": "project-custom",
+      "libraryName": "Project Custom Library",
+      "path": "/library/libraries/project-custom.library.json",
+      "readonly": false,
+      "enabled": true
+    }
+  ]
+}

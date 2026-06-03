@@ -3,6 +3,7 @@ import { BabylonScene } from "./components/BabylonScene";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
+import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 
 const PLACEMENT_COLUMNS = 3;
@@ -16,6 +17,8 @@ export function App() {
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
   const [autosaveReady, setAutosaveReady] = useState(false);
+  const [isSimulationRunning, setIsSimulationRunning] = useState(false);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
 
@@ -26,7 +29,9 @@ export function App() {
       exportedAt,
       objects: placedMachines.map((machine) => ({
         id: machine.instanceId,
-        machineDefinitionId: machine.definition.id,
+        libraryId: machine.libraryId,
+        machineDefinitionId: machine.machineDefinitionId,
+        definitionSnapshot: machine.definitionSnapshot,
         name: machine.definition.name,
         category: machine.definition.category,
         width: machine.definition.width,
@@ -35,13 +40,15 @@ export function App() {
         positionX: machine.position.x,
         positionZ: machine.position.z,
         rotationY: machine.rotationY,
-        defaultColor: machine.definition.defaultColor
+        defaultColor: machine.definition.defaultColor,
+        flowDirection: machine.flowDirection
       }))
     }),
     [placedMachines]
   );
 
-  const addMachine = useCallback((definition: MachineDefinition) => {
+  const addMachine = useCallback((selection: { libraryId: string; definition: MachineDefinition }) => {
+    const { definition, libraryId } = selection;
     const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
 
     setPlacedMachines((current) => {
@@ -53,12 +60,16 @@ export function App() {
         ...current,
         {
           instanceId,
+          libraryId,
+          machineDefinitionId: definition.id,
+          definitionSnapshot: definition,
           definition,
           position: {
             x: PLACEMENT_ORIGIN.x + column * PLACEMENT_SPACING,
             z: PLACEMENT_ORIGIN.z + row * PLACEMENT_SPACING
           },
-          rotationY: 0
+          rotationY: 0,
+          flowDirection: "forward"
         }
       ];
     });
@@ -67,7 +78,7 @@ export function App() {
 
   const updateMachine = useCallback((
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "rotationY">>
+    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
   ) => {
     setPlacedMachines((current) =>
       current.map((machine) => (machine.instanceId === instanceId ? { ...machine, ...updates } : machine))
@@ -88,9 +99,9 @@ export function App() {
   }, [createLayoutSnapshot]);
 
   const importLayout = useCallback((layout: AtrVisuLayout) => {
-    const importedMachines: PlacedMachine[] = layout.objects.map((object) => ({
-      instanceId: object.id,
-      definition: {
+    const importedMachines: PlacedMachine[] = layout.objects.map((object) => {
+      const definition: MachineDefinition =
+        object.definitionSnapshot ?? {
         id: object.machineDefinitionId,
         name: object.name,
         category: object.category,
@@ -98,14 +109,23 @@ export function App() {
         depth: object.depth,
         height: object.height,
         defaultColor: object.defaultColor,
-        connectionPoints: []
-      },
-      position: {
-        x: object.positionX,
-        z: object.positionZ
-      },
-      rotationY: object.rotationY
-    }));
+          connectionPoints: []
+        };
+
+      return {
+        instanceId: object.id,
+        libraryId: object.libraryId,
+        machineDefinitionId: object.machineDefinitionId,
+        definitionSnapshot: definition,
+        definition,
+        position: {
+          x: object.positionX,
+          z: object.positionZ
+        },
+        rotationY: object.rotationY,
+        flowDirection: object.flowDirection ?? "forward"
+      };
+    });
 
     setPlacedMachines(importedMachines);
     setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
@@ -220,6 +240,8 @@ export function App() {
         selectedMachineId={selectedMachineId}
         onSelectMachine={setSelectedMachineId}
         onUpdateMachine={updateMachine}
+        isSimulationRunning={isSimulationRunning}
+        simulationSpeed={simulationSpeed}
       />
       <aside className="machine-panel" aria-label="Machine library, layout, and properties">
         {recoveryLayout ? (
@@ -237,6 +259,12 @@ export function App() {
         ) : null}
         <MachineLibrary onAddMachine={addMachine} />
         <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
+        <SimulationControls
+          isRunning={isSimulationRunning}
+          speed={simulationSpeed}
+          onToggleRunning={() => setIsSimulationRunning((current) => !current)}
+          onChangeSpeed={setSimulationSpeed}
+        />
         <MachineProperties
           selectedMachine={selectedMachine}
           onUpdateMachine={updateMachine}

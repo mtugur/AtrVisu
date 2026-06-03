@@ -2,7 +2,10 @@ import type { PlacedMachine } from "../types/machine";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
-  onUpdateMachine: (instanceId: string, updates: Partial<Pick<PlacedMachine, "position" | "rotationY">>) => void;
+  onUpdateMachine: (
+    instanceId: string,
+    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
+  ) => void;
   onDeleteSelected: () => void;
 };
 
@@ -95,6 +98,24 @@ export function MachineProperties({
             <span>D {formatMeters(selectedMachine.definition.depth)}</span>
             <span>H {formatMeters(selectedMachine.definition.height)}</span>
           </div>
+
+          {selectedMachine.definition.capabilities?.hasFlowDirection ||
+          selectedMachine.definition.category === "Conveyor" ? (
+            <label className="property-field">
+              <span>Flow Direction</span>
+              <select
+                value={selectedMachine.flowDirection}
+                onChange={(event) =>
+                  onUpdateMachine(selectedMachine.instanceId, {
+                    flowDirection: event.target.value === "reverse" ? "reverse" : "forward"
+                  })
+                }
+              >
+                <option value="forward">Forward</option>
+                <option value="reverse">Reverse</option>
+              </select>
+            </label>
+          ) : null}
 
           <button className="delete-object-button" type="button" onClick={onDeleteSelected}>
             Delete Selected Object

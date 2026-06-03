@@ -1,0 +1,55 @@
+{
+  "libraryId": "project-custom",
+  "libraryName": "Project Custom Library",
+  "readonly": false,
+  "root": {
+    "id": "root",
+    "name": "Project Custom Library",
+    "children": [
+      {
+        "id": "site-specific-assets",
+        "name": "Site Specific Assets",
+        "children": [
+          {
+            "id": "safety",
+            "name": "Safety",
+            "children": [
+              {
+                "id": "fencing",
+                "name": "Fencing",
+                "children": [],
+                "items": [
+                  {
+                    "id": "project-safety-fence-01",
+                    "name": "Project Safety Fence Section",
+                    "type": "Safety Fence",
+                    "width": 3.0,
+                    "depth": 0.12,
+                    "height": 2.0,
+                    "defaultColor": "#e4c849",
+                    "modelPath": null,
+                    "thumbnailPath": null,
+                    "connectionPoints": [
+                      { "id": "left-post", "label": "Left Post", "x": -1.5, "y": 1, "z": 0, "direction": "west" },
+                      { "id": "right-post", "label": "Right Post", "x": 1.5, "y": 1, "z": 0, "direction": "east" }
+                    ],
+                    "clearance": { "front": 0.2, "back": 0.2, "left": 0.1, "right": 0.1 },
+                    "capabilities": {
+                      "canConvey": false,
+                      "canPalletize": false,
+                      "canWrap": false,
+                      "hasFlowDirection": false
+                    }
+                  }
+                ]
+              }
+            ],
+            "items": []
+          }
+        ],
+        "items": []
+      }
+    ],
+    "items": []
+  }
+}
