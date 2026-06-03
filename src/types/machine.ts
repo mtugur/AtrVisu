@@ -34,4 +34,26 @@ export type PlacedMachine = {
     x: number;
     z: number;
   };
+  rotationY: number;
+};
+
+export type LayoutObject = {
+  id: string;
+  machineDefinitionId: string;
+  name: string;
+  category: MachineCategory;
+  width: number;
+  depth: number;
+  height: number;
+  positionX: number;
+  positionZ: number;
+  rotationY: number;
+  defaultColor: string;
+};
+
+export type AtrVisuLayout = {
+  appName: "AtrVisu";
+  version: 1;
+  exportedAt: string;
+  objects: LayoutObject[];
 };
