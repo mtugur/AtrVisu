@@ -58,7 +58,7 @@ export function MachineProperties({ selectedMachine, onUpdateMachine }: MachineP
           </div>
 
           <label className="property-field">
-            <span>Position X</span>
+            <span>Plan X (m)</span>
             <input
               type="number"
               step="0.1"
@@ -67,7 +67,7 @@ export function MachineProperties({ selectedMachine, onUpdateMachine }: MachineP
             />
           </label>
           <label className="property-field">
-            <span>Position Z</span>
+            <span>Plan Y (m)</span>
             <input
               type="number"
               step="0.1"
@@ -76,7 +76,7 @@ export function MachineProperties({ selectedMachine, onUpdateMachine }: MachineP
             />
           </label>
           <label className="property-field">
-            <span>Rotation Y</span>
+            <span>Dönüş Açısı (°)</span>
             <input
               type="number"
               step="1"

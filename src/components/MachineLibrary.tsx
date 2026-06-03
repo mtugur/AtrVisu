@@ -7,7 +7,7 @@ type MachineLibraryProps = {
 
 export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
   return (
-    <aside className="machine-panel" aria-label="Machine library">
+    <section className="library-section" aria-label="Machine library">
       <header className="panel-header">
         <span className="panel-kicker">AtrVisu</span>
         <h1>Machine Library</h1>
@@ -44,6 +44,6 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
           </button>
         ))}
       </section>
-    </aside>
+    </section>
   );
 }
