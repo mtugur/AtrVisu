@@ -30,8 +30,10 @@ type BabylonSceneProps = {
   onSelectMachine: (instanceId: string | null) => void;
   onUpdateMachine: (
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "rotationY">>
+    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
   ) => void;
+  isSimulationRunning: boolean;
+  simulationSpeed: number;
 };
 
 type PlacedMachineNode = {
@@ -40,6 +42,8 @@ type PlacedMachineNode = {
   labelTexture: DynamicTexture;
   material: StandardMaterial;
   selectionFrame: LinesMesh;
+  flowArrow?: LinesMesh;
+  products: Mesh[];
 };
 
 const hexToColor3 = (hex: string) => {
@@ -111,11 +115,57 @@ const createSelectionFrame = (scene: Scene, machine: PlacedMachine) => {
   return frame;
 };
 
+const createFlowArrow = (scene: Scene, machine: PlacedMachine) => {
+  const { width, height } = machine.definition;
+  const arrowY = height / 2 + 0.12;
+  const startX = -width * 0.34;
+  const endX = width * 0.34;
+  const headX = width * 0.2;
+  const headZ = Math.min(0.28, machine.definition.depth * 0.28);
+
+  const arrow = MeshBuilder.CreateLineSystem(
+    `flow-arrow-${machine.instanceId}`,
+    {
+      lines: [
+        [new Vector3(startX, arrowY, 0), new Vector3(endX, arrowY, 0)],
+        [new Vector3(endX, arrowY, 0), new Vector3(headX, arrowY, headZ)],
+        [new Vector3(endX, arrowY, 0), new Vector3(headX, arrowY, -headZ)]
+      ]
+    },
+    scene
+  );
+  arrow.color = new Color3(0.98, 0.98, 0.72);
+  arrow.isPickable = false;
+
+  return arrow;
+};
+
+const createProductMeshes = (scene: Scene, machine: PlacedMachine) => {
+  const material = new StandardMaterial(`product-material-${machine.instanceId}`, scene);
+  material.diffuseColor = new Color3(0.96, 0.82, 0.38);
+  material.emissiveColor = new Color3(0.08, 0.05, 0.01);
+  material.specularColor = new Color3(0.12, 0.1, 0.05);
+
+  return Array.from({ length: 3 }, (_, index) => {
+    const product = MeshBuilder.CreateBox(
+      `product-${machine.instanceId}-${index}`,
+      { width: 0.38, height: 0.24, depth: 0.32 },
+      scene
+    );
+    product.material = material;
+    product.isPickable = false;
+    product.isVisible = false;
+    return product;
+  });
+};
+
 export function BabylonScene({
   placedMachines,
   selectedMachineId,
   onSelectMachine,
-  onUpdateMachine
+  onUpdateMachine,
+  isSimulationRunning,
+  simulationSpeed
 }: BabylonSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -124,6 +174,9 @@ export function BabylonScene({
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const selectedMachineIdRef = useRef<string | null>(selectedMachineId);
+  const isSimulationRunningRef = useRef(isSimulationRunning);
+  const simulationSpeedRef = useRef(simulationSpeed);
+  const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<{
     instanceId: string;
     offsetX: number;
@@ -142,6 +195,14 @@ export function BabylonScene({
       node.material.emissiveColor = isSelected ? new Color3(0.24, 0.2, 0.05) : Color3.Black();
     });
   }, [selectedMachineId]);
+
+  useEffect(() => {
+    isSimulationRunningRef.current = isSimulationRunning;
+  }, [isSimulationRunning]);
+
+  useEffect(() => {
+    simulationSpeedRef.current = simulationSpeed;
+  }, [simulationSpeed]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -291,6 +352,34 @@ export function BabylonScene({
     });
 
     engine.runRenderLoop(() => {
+      const deltaSeconds = engine.getDeltaTime() / 1000;
+      machineNodesRef.current.forEach((node, instanceId) => {
+        const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
+        if (!machine || machine.definition.category !== "Conveyor") {
+          return;
+        }
+
+        node.products.forEach((product) => {
+          product.isVisible = isSimulationRunningRef.current;
+        });
+
+        if (!isSimulationRunningRef.current) {
+          return;
+        }
+
+        const currentPhase = productPhaseRef.current.get(instanceId) ?? 0;
+        const nextPhase = (currentPhase + (deltaSeconds * simulationSpeedRef.current) / 2.8) % 1;
+        productPhaseRef.current.set(instanceId, nextPhase);
+
+        node.products.forEach((product, index) => {
+          const spacingOffset = index / node.products.length;
+          const progress = (nextPhase + spacingOffset) % 1;
+          const localProgress = machine.flowDirection === "reverse" ? 1 - progress : progress;
+          product.position.x = -machine.definition.width / 2 + localProgress * machine.definition.width;
+          product.position.y = machine.definition.height / 2 + 0.22;
+          product.position.z = 0;
+        });
+      });
       scene.render();
     });
 
@@ -308,6 +397,11 @@ export function BabylonScene({
         node.labelTexture.dispose();
         node.material.dispose();
         node.selectionFrame.dispose();
+        node.flowArrow?.dispose();
+        node.products.forEach((product) => {
+          product.material?.dispose();
+          product.dispose();
+        });
         node.label.dispose();
         node.box.dispose();
       });
@@ -332,6 +426,12 @@ export function BabylonScene({
         node.labelTexture.dispose();
         node.material.dispose();
         node.selectionFrame.dispose();
+        node.flowArrow?.dispose();
+        node.products.forEach((product) => {
+          product.material?.dispose();
+          product.dispose();
+        });
+        productPhaseRef.current.delete(instanceId);
         node.label.dispose();
         node.box.dispose();
         machineNodesRef.current.delete(instanceId);
@@ -370,7 +470,25 @@ export function BabylonScene({
       selectionFrame.parent = box;
       selectionFrame.isVisible = selectedMachineIdRef.current === instanceId;
 
-      machineNodesRef.current.set(instanceId, { box, label, labelTexture: texture, material, selectionFrame });
+      const flowArrow = definition.category === "Conveyor" ? createFlowArrow(scene, machine) : undefined;
+      if (flowArrow) {
+        flowArrow.parent = box;
+      }
+
+      const products = definition.category === "Conveyor" ? createProductMeshes(scene, machine) : [];
+      products.forEach((product) => {
+        product.parent = box;
+      });
+
+      machineNodesRef.current.set(instanceId, {
+        box,
+        label,
+        labelTexture: texture,
+        material,
+        selectionFrame,
+        flowArrow,
+        products
+      });
     });
 
     placedMachines.forEach((machine) => {
@@ -383,6 +501,9 @@ export function BabylonScene({
       node.box.position.y = machine.definition.height / 2;
       node.box.position.z = machine.position.z;
       node.box.rotation.y = (machine.rotationY * Math.PI) / 180;
+      if (node.flowArrow) {
+        node.flowArrow.rotation.y = machine.flowDirection === "reverse" ? Math.PI : 0;
+      }
       node.label.position.x = machine.position.x;
       node.label.position.y = machine.definition.height + 0.85;
       node.label.position.z = machine.position.z;

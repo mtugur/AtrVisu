@@ -35,6 +35,7 @@ export type PlacedMachine = {
     z: number;
   };
   rotationY: number;
+  flowDirection: "forward" | "reverse";
 };
 
 export type LayoutObject = {
@@ -49,6 +50,7 @@ export type LayoutObject = {
   positionZ: number;
   rotationY: number;
   defaultColor: string;
+  flowDirection?: "forward" | "reverse";
 };
 
 export type AtrVisuLayout = {

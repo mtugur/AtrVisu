@@ -23,7 +23,8 @@ body,
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -269,6 +270,56 @@ input {
   line-height: 1.35;
 }
 
+.simulation-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(167, 191, 184, 0.18);
+}
+
+.simulation-button {
+  min-height: 40px;
+  border: 1px solid rgba(79, 179, 216, 0.54);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(79, 179, 216, 0.15);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.simulation-button:hover,
+.simulation-button:focus-visible {
+  border-color: rgba(105, 210, 240, 0.82);
+  background: rgba(79, 179, 216, 0.24);
+  outline: none;
+}
+
+.simulation-speed {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 10px;
+  align-items: center;
+}
+
+.simulation-speed span {
+  color: rgba(237, 243, 240, 0.62);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.simulation-speed input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #4fb3d8;
+}
+
+.simulation-speed strong {
+  color: #f4f7f2;
+  font-size: 0.82rem;
+}
+
 .properties-section {
   display: grid;
   gap: 14px;
@@ -327,7 +378,8 @@ input {
   gap: 6px;
 }
 
-.property-field input {
+.property-field input,
+.property-field select {
   min-height: 38px;
   width: 100%;
   border: 1px solid rgba(164, 190, 178, 0.22);
@@ -338,7 +390,8 @@ input {
   padding: 0 10px;
 }
 
-.property-field input:focus {
+.property-field input:focus,
+.property-field select:focus {
   border-color: rgba(168, 201, 120, 0.72);
 }
 

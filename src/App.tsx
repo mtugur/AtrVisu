@@ -3,6 +3,7 @@ import { BabylonScene } from "./components/BabylonScene";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
+import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 
 const PLACEMENT_COLUMNS = 3;
@@ -16,6 +17,8 @@ export function App() {
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
   const [autosaveReady, setAutosaveReady] = useState(false);
+  const [isSimulationRunning, setIsSimulationRunning] = useState(false);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
 
@@ -35,7 +38,8 @@ export function App() {
         positionX: machine.position.x,
         positionZ: machine.position.z,
         rotationY: machine.rotationY,
-        defaultColor: machine.definition.defaultColor
+        defaultColor: machine.definition.defaultColor,
+        flowDirection: machine.flowDirection
       }))
     }),
     [placedMachines]
@@ -58,7 +62,8 @@ export function App() {
             x: PLACEMENT_ORIGIN.x + column * PLACEMENT_SPACING,
             z: PLACEMENT_ORIGIN.z + row * PLACEMENT_SPACING
           },
-          rotationY: 0
+          rotationY: 0,
+          flowDirection: "forward"
         }
       ];
     });
@@ -67,7 +72,7 @@ export function App() {
 
   const updateMachine = useCallback((
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "rotationY">>
+    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
   ) => {
     setPlacedMachines((current) =>
       current.map((machine) => (machine.instanceId === instanceId ? { ...machine, ...updates } : machine))
@@ -104,7 +109,8 @@ export function App() {
         x: object.positionX,
         z: object.positionZ
       },
-      rotationY: object.rotationY
+      rotationY: object.rotationY,
+      flowDirection: object.flowDirection ?? "forward"
     }));
 
     setPlacedMachines(importedMachines);
@@ -220,6 +226,8 @@ export function App() {
         selectedMachineId={selectedMachineId}
         onSelectMachine={setSelectedMachineId}
         onUpdateMachine={updateMachine}
+        isSimulationRunning={isSimulationRunning}
+        simulationSpeed={simulationSpeed}
       />
       <aside className="machine-panel" aria-label="Machine library, layout, and properties">
         {recoveryLayout ? (
@@ -237,6 +245,12 @@ export function App() {
         ) : null}
         <MachineLibrary onAddMachine={addMachine} />
         <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
+        <SimulationControls
+          isRunning={isSimulationRunning}
+          speed={simulationSpeed}
+          onToggleRunning={() => setIsSimulationRunning((current) => !current)}
+          onChangeSpeed={setSimulationSpeed}
+        />
         <MachineProperties
           selectedMachine={selectedMachine}
           onUpdateMachine={updateMachine}
