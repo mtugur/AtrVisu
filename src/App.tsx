@@ -3,13 +3,15 @@ import { BabylonScene } from "./components/BabylonScene";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
+import { SavedLayoutManager } from "./components/SavedLayoutManager";
 import { SimulationControls } from "./components/SimulationControls";
-import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
+import type { AtrVisuLayout, MachineDefinition, PlacedMachine, SavedAtrVisuLayout } from "./types/machine";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
 const PLACEMENT_ORIGIN = { x: -8, z: -6 };
 const AUTOSAVE_KEY = "atrvisu.autosavedLayout.v1";
+const SAVED_LAYOUTS_KEY = "atrvisu.savedLayouts.v1";
 const AUTOSAVE_DELAY_MS = 500;
 
 export function App() {
@@ -19,6 +21,8 @@ export function App() {
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [savedLayouts, setSavedLayouts] = useState<SavedAtrVisuLayout[]>([]);
+  const [isSavedLayoutPanelOpen, setIsSavedLayoutPanelOpen] = useState(false);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
 
@@ -117,6 +121,94 @@ export function App() {
     setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
   }, []);
 
+  const loadSavedLayouts = useCallback(() => {
+    try {
+      const rawLayouts = window.localStorage.getItem(SAVED_LAYOUTS_KEY);
+      if (!rawLayouts) {
+        setSavedLayouts([]);
+        return;
+      }
+
+      const parsedLayouts = JSON.parse(rawLayouts) as SavedAtrVisuLayout[];
+      setSavedLayouts(Array.isArray(parsedLayouts) ? parsedLayouts : []);
+    } catch {
+      window.localStorage.removeItem(SAVED_LAYOUTS_KEY);
+      setSavedLayouts([]);
+    }
+  }, []);
+
+  const persistSavedLayouts = (layouts: SavedAtrVisuLayout[]) => {
+    window.localStorage.setItem(SAVED_LAYOUTS_KEY, JSON.stringify(layouts));
+    setSavedLayouts(layouts);
+  };
+
+  const saveNamedLayout = useCallback(() => {
+    const rawName = window.prompt("Layout name");
+    const name = rawName?.trim();
+    if (!name) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existingLayout = savedLayouts.find((layout) => layout.name.toLowerCase() === name.toLowerCase());
+    if (existingLayout && !window.confirm(`Overwrite saved layout "${existingLayout.name}"?`)) {
+      return;
+    }
+
+    const baseLayout = createLayoutSnapshot(now);
+    const savedLayout: SavedAtrVisuLayout = {
+      id: existingLayout?.id ?? `layout-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+      name,
+      appName: "AtrVisu",
+      version: 1,
+      savedAt: existingLayout?.savedAt ?? now,
+      updatedAt: now,
+      objectCount: baseLayout.objects.length,
+      objects: baseLayout.objects
+    };
+
+    const nextLayouts = existingLayout
+      ? savedLayouts.map((layout) => (layout.id === existingLayout.id ? savedLayout : layout))
+      : [...savedLayouts, savedLayout];
+
+    persistSavedLayouts(nextLayouts.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    setIsSavedLayoutPanelOpen(true);
+  }, [createLayoutSnapshot, savedLayouts]);
+
+  const loadNamedLayout = useCallback(
+    (layoutId: string) => {
+      const layout = savedLayouts.find((savedLayout) => savedLayout.id === layoutId);
+      if (!layout) {
+        return;
+      }
+
+      if (placedMachines.length > 0 && !window.confirm("Replace the current scene with this saved layout?")) {
+        return;
+      }
+
+      importLayout({
+        appName: "AtrVisu",
+        version: 1,
+        exportedAt: layout.updatedAt,
+        objects: layout.objects
+      });
+      setIsSavedLayoutPanelOpen(false);
+    },
+    [importLayout, placedMachines.length, savedLayouts]
+  );
+
+  const deleteNamedLayout = useCallback(
+    (layoutId: string) => {
+      const layout = savedLayouts.find((savedLayout) => savedLayout.id === layoutId);
+      if (!layout || !window.confirm(`Delete saved layout "${layout.name}"?`)) {
+        return;
+      }
+
+      persistSavedLayouts(savedLayouts.filter((savedLayout) => savedLayout.id !== layoutId));
+    },
+    [savedLayouts]
+  );
+
   const deleteSelectedMachine = useCallback(() => {
     if (!selectedMachine) {
       return;
@@ -152,6 +244,10 @@ export function App() {
       setAutosaveReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    loadSavedLayouts();
+  }, [loadSavedLayouts]);
 
   useEffect(() => {
     if (!autosaveReady) {
@@ -244,6 +340,14 @@ export function App() {
           </section>
         ) : null}
         <MachineLibrary onAddMachine={addMachine} />
+        <SavedLayoutManager
+          isOpen={isSavedLayoutPanelOpen}
+          savedLayouts={savedLayouts}
+          onSaveLayout={saveNamedLayout}
+          onToggleLoadPanel={() => setIsSavedLayoutPanelOpen((current) => !current)}
+          onLoadLayout={loadNamedLayout}
+          onDeleteLayout={deleteNamedLayout}
+        />
         <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
         <SimulationControls
           isRunning={isSimulationRunning}

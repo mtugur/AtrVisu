@@ -59,3 +59,14 @@ export type AtrVisuLayout = {
   exportedAt: string;
   objects: LayoutObject[];
 };
+
+export type SavedAtrVisuLayout = {
+  id: string;
+  name: string;
+  appName: "AtrVisu";
+  version: 1;
+  savedAt: string;
+  updatedAt: string;
+  objectCount: number;
+  objects: LayoutObject[];
+};

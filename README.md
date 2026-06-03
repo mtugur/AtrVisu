@@ -22,7 +22,7 @@ Click a machine in the library to add a meter-scale placeholder box to the grid.
 
 Conveyors show a top-mounted flow direction arrow. Select a conveyor to switch its Flow Direction between Forward and Reverse. Use Start Simulation to show simple product placeholders moving along conveyors, and adjust Simulation Speed to change their visual movement rate.
 
-Use Export Layout to download the current scene as JSON. Use Import Layout to restore a previously exported layout; imported objects replace the current scene objects and keep their dimensions, labels, positions, rotations, and colors.
+Use Save Layout and Load Layout for named layouts stored in this browser. Use Export Layout to download the current scene as JSON. Use Import Layout to restore a previously exported layout; imported objects replace the current scene objects and keep their dimensions, labels, positions, rotations, colors, and conveyor flow directions.
 
 AtrVisu also autosaves the current layout in browser localStorage. If an unsaved layout is found after a refresh, the app prompts to restore it or dismiss and clear the autosave.
 

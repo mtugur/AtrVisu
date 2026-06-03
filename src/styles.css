@@ -232,6 +232,82 @@ select {
   font-size: 0.75rem;
 }
 
+.saved-layout-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(167, 191, 184, 0.18);
+}
+
+.saved-layout-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.saved-layout-note,
+.saved-layout-empty {
+  margin: 0;
+  color: rgba(237, 243, 240, 0.66);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.saved-layout-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-layout-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(164, 190, 178, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.saved-layout-card > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.saved-layout-card strong {
+  color: #f4f7f2;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.saved-layout-card span,
+.saved-layout-card small {
+  color: rgba(237, 243, 240, 0.62);
+  font-size: 0.76rem;
+}
+
+.saved-layout-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.saved-layout-card-actions button {
+  min-height: 34px;
+  border: 1px solid rgba(164, 190, 178, 0.22);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.saved-layout-card-actions button:hover,
+.saved-layout-card-actions button:focus-visible {
+  border-color: rgba(168, 201, 120, 0.72);
+  background: rgba(168, 201, 120, 0.18);
+  outline: none;
+}
+
 .layout-section {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
