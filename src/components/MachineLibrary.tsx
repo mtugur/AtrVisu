@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { LibraryManager } from "./LibraryManager";
 import type {
   LibraryGroup,
   LibraryMachineItem,
@@ -111,6 +112,8 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
   const [openLibraries, setOpenLibraries] = useState<Set<string>>(new Set());
   const [warnings, setWarnings] = useState<LibraryValidationWarning[]>([]);
   const [loadError, setLoadError] = useState<string>("");
+  const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -131,7 +134,7 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [reloadToken]);
 
   const libraryCountText = useMemo(
     () => `${libraries.length} librar${libraries.length === 1 ? "y" : "ies"}`,
@@ -149,6 +152,10 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
         <span aria-hidden="true">+</span>
         <input type="search" placeholder={libraryCountText} aria-label="Machine library status" readOnly />
       </div>
+
+      <button className="manager-open-button" type="button" onClick={() => setIsManagerOpen(true)}>
+        Library Manager
+      </button>
 
       {loadError ? <p className="library-error">{loadError}</p> : null}
       {warnings.length > 0 ? (
@@ -198,6 +205,14 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
           );
         })}
       </section>
+
+      {isManagerOpen ? (
+        <LibraryManager
+          libraries={libraries}
+          onClose={() => setIsManagerOpen(false)}
+          onLibrariesChanged={() => setReloadToken((current) => current + 1)}
+        />
+      ) : null}
     </section>
   );
 }
