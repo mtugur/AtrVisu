@@ -20,7 +20,7 @@
                 "children": [],
                 "items": [
                   {
-                    "id": "packaging-flowpack-01",
+                    "id": "packaging-flowpack-01", 
                     "name": "Flow Pack Machine",
                     "type": "Packaging Machine",
                     "width": 3.6,
