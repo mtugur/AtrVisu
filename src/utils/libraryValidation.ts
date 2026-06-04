@@ -18,7 +18,10 @@ type LoadMachineLibrariesResult = {
   loadError: string;
 };
 
-const MACHINE_CATEGORIES: MachineCategory[] = [
+export const PROJECT_CUSTOM_LIBRARY_ID = "project-custom";
+export const CUSTOM_LIBRARY_STORAGE_KEY = "atrvisu.projectCustomLibrary.v1";
+
+export const MACHINE_CATEGORIES: MachineCategory[] = [
   "Packaging Machine",
   "Conveyor",
   "Robot Palletizer",
@@ -281,7 +284,7 @@ const emptyRoot = (libraryName: string): LibraryGroup => ({
   items: []
 });
 
-const validateLibraryDocument = (
+export const validateLibraryDocument = (
   entry: LibraryIndexEntry,
   data: unknown,
   warnings: LibraryValidationWarning[]
@@ -311,6 +314,33 @@ const validateLibraryDocument = (
     enabled: entry.enabled,
     path: entry.path,
     root
+  };
+};
+
+export const validateProjectCustomLibraryDocument = (data: unknown) => {
+  const warnings: LibraryValidationWarning[] = [];
+  const library = validateLibraryDocument(
+    {
+      libraryId: PROJECT_CUSTOM_LIBRARY_ID,
+      libraryName: "Project Custom Library",
+      path: "localStorage",
+      readonly: false,
+      enabled: true
+    },
+    data,
+    warnings
+  );
+
+  return {
+    library: {
+      ...library,
+      libraryId: PROJECT_CUSTOM_LIBRARY_ID,
+      libraryName: "Project Custom Library",
+      readonly: false,
+      enabled: true,
+      path: "localStorage"
+    },
+    warnings
   };
 };
 
@@ -360,7 +390,11 @@ export const loadMachineLibraries = async (): Promise<LoadMachineLibrariesResult
     const loadedLibraries = await Promise.all(
       enabledEntries.map(async (entry) => {
         try {
-          const libraryJson = await fetchJson(entry.path);
+          const customLibraryJson =
+            entry.libraryId === PROJECT_CUSTOM_LIBRARY_ID && typeof window !== "undefined"
+              ? window.localStorage.getItem(CUSTOM_LIBRARY_STORAGE_KEY)
+              : null;
+          const libraryJson = customLibraryJson ? JSON.parse(customLibraryJson) : await fetchJson(entry.path);
           return validateLibraryDocument(entry, libraryJson, warnings);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown load error";
