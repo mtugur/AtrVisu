@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { CSSProperties } from "react";
 import type {
   LibraryGroup,
   LibraryMachineItem,
@@ -19,6 +21,10 @@ type LibraryManagerProps = {
   onLibrariesChanged: () => void;
 };
 
+type SelectedNode =
+  | { type: "group"; groupId: string }
+  | { type: "item"; groupId: string; itemId: string };
+
 type ItemEditorState = {
   mode: "add" | "edit";
   parentGroupId: string;
@@ -36,18 +42,18 @@ type ItemEditorState = {
   hasFlowDirection: boolean;
 };
 
-const createEmptyGroup = (id: string, name: string): LibraryGroup => ({
-  id,
-  name,
-  children: [],
-  items: []
-});
-
 const cloneLibrary = (library: LoadedMachineLibrary): MachineLibraryDocument => ({
   libraryId: library.libraryId,
   libraryName: library.libraryName,
   readonly: library.readonly,
   root: JSON.parse(JSON.stringify(library.root)) as LibraryGroup
+});
+
+const createEmptyGroup = (id: string, name: string): LibraryGroup => ({
+  id,
+  name,
+  children: [],
+  items: []
 });
 
 const makeSlug = (name: string) => {
@@ -116,6 +122,12 @@ const deleteGroupById = (group: LibraryGroup, groupId: string): LibraryGroup => 
     .map((child) => deleteGroupById(child, groupId))
 });
 
+const deleteItemById = (group: LibraryGroup, itemId: string): LibraryGroup => ({
+  ...group,
+  items: group.items.filter((item) => item.id !== itemId),
+  children: group.children.map((child) => deleteItemById(child, itemId))
+});
+
 const findGroup = (group: LibraryGroup, groupId: string): LibraryGroup | null => {
   if (group.id === groupId) {
     return group;
@@ -131,11 +143,28 @@ const findGroup = (group: LibraryGroup, groupId: string): LibraryGroup | null =>
   return null;
 };
 
-const deleteItemById = (group: LibraryGroup, itemId: string): LibraryGroup => ({
-  ...group,
-  items: group.items.filter((item) => item.id !== itemId),
-  children: group.children.map((child) => deleteItemById(child, itemId))
-});
+const findItem = (
+  group: LibraryGroup,
+  itemId: string
+): { group: LibraryGroup; item: LibraryMachineItem } | null => {
+  const item = group.items.find((candidate) => candidate.id === itemId);
+  if (item) {
+    return { group, item };
+  }
+
+  for (const child of group.children) {
+    const result = findItem(child, itemId);
+    if (result) {
+      return result;
+    }
+  }
+
+  return null;
+};
+
+const countItems = (group: LibraryGroup): number => {
+  return group.items.length + group.children.reduce((total, child) => total + countItems(child), 0);
+};
 
 const toEditorState = (
   parentGroupId: string,
@@ -157,85 +186,102 @@ const toEditorState = (
   hasFlowDirection: item?.capabilities?.hasFlowDirection ?? false
 });
 
-function EditableGroupNode({
+function ManagerTreeNode({
   group,
   depth,
+  editable,
+  selectedNode,
+  onSelectGroup,
+  onSelectItem,
   onAddChildGroup,
-  onRenameGroup,
-  onDeleteGroup,
   onAddItem,
-  onEditItem,
-  onDeleteItem
+  onRenameGroup,
+  onDeleteGroup
 }: {
   group: LibraryGroup;
   depth: number;
+  editable: boolean;
+  selectedNode: SelectedNode | null;
+  onSelectGroup: (groupId: string) => void;
+  onSelectItem: (groupId: string, item: LibraryMachineItem) => void;
   onAddChildGroup: (groupId: string) => void;
+  onAddItem: (groupId: string) => void;
   onRenameGroup: (groupId: string) => void;
   onDeleteGroup: (groupId: string) => void;
-  onAddItem: (groupId: string) => void;
-  onEditItem: (groupId: string, item: LibraryMachineItem) => void;
-  onDeleteItem: (itemId: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(depth < 2);
   const isRoot = depth === 0;
+  const isSelected = selectedNode?.type === "group" && selectedNode.groupId === group.id;
+  const itemCount = countItems(group);
 
   return (
     <div className="manager-tree-node">
-      <div className="manager-tree-row" style={{ paddingLeft: 8 + depth * 16 }}>
-        <button type="button" onClick={() => setIsOpen((current) => !current)}>
+      <div
+        className={`manager-tree-row${isSelected ? " is-selected" : ""}`}
+        style={{ "--tree-depth": depth } as CSSProperties}
+      >
+        <button className="manager-row-toggle" type="button" onClick={() => setIsOpen((current) => !current)}>
           {isOpen ? "-" : "+"}
         </button>
-        <strong>{group.name}</strong>
-        <span>{group.items.length} items</span>
-        <button type="button" onClick={() => onAddChildGroup(group.id)}>
-          Add Group
+        <button className="manager-tree-label" type="button" onClick={() => onSelectGroup(group.id)}>
+          <strong>{group.name}</strong>
+          <span>{itemCount} items</span>
         </button>
-        <button type="button" onClick={() => onAddItem(group.id)}>
-          Add Item
-        </button>
-        {!isRoot ? (
-          <>
-            <button type="button" onClick={() => onRenameGroup(group.id)}>
-              Rename
+        {editable ? (
+          <div className="manager-row-actions">
+            <button type="button" onClick={() => onAddChildGroup(group.id)} title="Add Child Group">
+              Group
             </button>
-            <button type="button" onClick={() => onDeleteGroup(group.id)}>
-              Delete
+            <button type="button" onClick={() => onAddItem(group.id)} title="Add Item">
+              Item
             </button>
-          </>
+            {!isRoot ? (
+              <>
+                <button type="button" onClick={() => onRenameGroup(group.id)} title="Rename Group">
+                  Rename
+                </button>
+                <button className="danger-action" type="button" onClick={() => onDeleteGroup(group.id)} title="Delete Group">
+                  Delete
+                </button>
+              </>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
       {isOpen ? (
         <div className="manager-tree-children">
           {group.children.map((child) => (
-            <EditableGroupNode
+            <ManagerTreeNode
               depth={depth + 1}
+              editable={editable}
               group={child}
               key={child.id}
+              selectedNode={selectedNode}
+              onSelectGroup={onSelectGroup}
+              onSelectItem={onSelectItem}
               onAddChildGroup={onAddChildGroup}
+              onAddItem={onAddItem}
               onRenameGroup={onRenameGroup}
               onDeleteGroup={onDeleteGroup}
-              onAddItem={onAddItem}
-              onEditItem={onEditItem}
-              onDeleteItem={onDeleteItem}
             />
           ))}
-          {group.items.map((item) => (
-            <div className="manager-item-row" key={item.id} style={{ marginLeft: 28 + depth * 16 }}>
-              <span className="manager-item-color" style={{ backgroundColor: item.defaultColor }} aria-hidden="true" />
-              <strong>{item.name}</strong>
-              <span>{item.type}</span>
-              <small>
-                {item.width} x {item.depth} x {item.height} m
-              </small>
-              <button type="button" onClick={() => onEditItem(group.id, item)}>
-                Edit
+          {group.items.map((item) => {
+            const itemSelected = selectedNode?.type === "item" && selectedNode.itemId === item.id;
+            return (
+              <button
+                className={`manager-item-row${itemSelected ? " is-selected" : ""}`}
+                key={item.id}
+                style={{ "--tree-depth": depth + 1 } as CSSProperties}
+                type="button"
+                onClick={() => onSelectItem(group.id, item)}
+              >
+                <span className="manager-item-color" style={{ backgroundColor: item.defaultColor }} aria-hidden="true" />
+                <strong>{item.name}</strong>
+                <span>{item.type}</span>
               </button>
-              <button type="button" onClick={() => onDeleteItem(item.id)}>
-                Delete
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -245,6 +291,7 @@ function EditableGroupNode({
 export function LibraryManager({ libraries, onClose, onLibrariesChanged }: LibraryManagerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedLibraryId, setSelectedLibraryId] = useState(PROJECT_CUSTOM_LIBRARY_ID);
+  const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [draftLibrary, setDraftLibrary] = useState<MachineLibraryDocument | null>(null);
   const [itemEditor, setItemEditor] = useState<ItemEditorState | null>(null);
   const [message, setMessage] = useState("");
@@ -254,6 +301,12 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
     () => libraries.find((library) => library.libraryId === selectedLibraryId) ?? libraries[0],
     [libraries, selectedLibraryId]
   );
+  const editable = selectedLibrary?.libraryId === PROJECT_CUSTOM_LIBRARY_ID && !selectedLibrary.readonly;
+  const activeRoot = editable ? draftLibrary?.root : selectedLibrary?.root;
+  const selectedGroup =
+    activeRoot && selectedNode?.type === "group" ? findGroup(activeRoot, selectedNode.groupId) : null;
+  const selectedItem =
+    activeRoot && selectedNode?.type === "item" ? findItem(activeRoot, selectedNode.itemId) : null;
 
   useEffect(() => {
     const customLibrary = libraries.find((library) => library.libraryId === PROJECT_CUSTOM_LIBRARY_ID);
@@ -261,6 +314,14 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       setDraftLibrary(cloneLibrary(customLibrary));
     }
   }, [libraries]);
+
+  useEffect(() => {
+    if (activeRoot) {
+      setSelectedNode({ type: "group", groupId: activeRoot.id });
+      setItemEditor(null);
+      setValidationError("");
+    }
+  }, [activeRoot?.id, selectedLibraryId]);
 
   const persistLibrary = (library: MachineLibraryDocument, statusText: string) => {
     window.localStorage.setItem(CUSTOM_LIBRARY_STORAGE_KEY, JSON.stringify(library, null, 2));
@@ -270,10 +331,45 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
     onLibrariesChanged();
   };
 
-  const editable = selectedLibrary?.libraryId === PROJECT_CUSTOM_LIBRARY_ID && !selectedLibrary.readonly;
+  const requestClose = () => {
+    if (itemEditor) {
+      const confirmed = window.confirm("Close Library Manager and discard the current item editor changes?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    onClose();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        requestClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  });
+
+  const selectGroup = (groupId: string) => {
+    setSelectedNode({ type: "group", groupId });
+    setItemEditor(null);
+    setValidationError("");
+  };
+
+  const selectItem = (groupId: string, item: LibraryMachineItem) => {
+    setSelectedNode({ type: "item", groupId, itemId: item.id });
+    setItemEditor(toEditorState(groupId, item));
+    setValidationError("");
+  };
 
   const addGroup = (parentGroupId: string) => {
-    if (!draftLibrary) {
+    if (!editable || !draftLibrary) {
       return;
     }
 
@@ -291,10 +387,11 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       }))
     };
     persistLibrary(nextLibrary, `Group "${group.name}" added.`);
+    setSelectedNode({ type: "group", groupId: group.id });
   };
 
   const renameGroup = (groupId: string) => {
-    if (!draftLibrary) {
+    if (!editable || !draftLibrary) {
       return;
     }
 
@@ -312,15 +409,16 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       }))
     };
     persistLibrary(nextLibrary, "Group renamed.");
+    setSelectedNode({ type: "group", groupId });
   };
 
   const deleteGroup = (groupId: string) => {
-    if (!draftLibrary) {
+    if (!editable || !draftLibrary) {
       return;
     }
 
     const group = findGroup(draftLibrary.root, groupId);
-    if (!group) {
+    if (!group || group.id === draftLibrary.root.id) {
       return;
     }
 
@@ -341,10 +439,11 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       },
       "Group deleted."
     );
+    setSelectedNode({ type: "group", groupId: draftLibrary.root.id });
   };
 
   const deleteItem = (itemId: string) => {
-    if (!draftLibrary) {
+    if (!editable || !draftLibrary) {
       return;
     }
 
@@ -360,10 +459,21 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       },
       "Machine item deleted."
     );
+    setItemEditor(null);
+    setSelectedNode({ type: "group", groupId: draftLibrary.root.id });
+  };
+
+  const startAddItem = (groupId: string) => {
+    if (!editable) {
+      return;
+    }
+    setSelectedNode({ type: "group", groupId });
+    setItemEditor(toEditorState(groupId));
+    setValidationError("");
   };
 
   const saveItem = () => {
-    if (!draftLibrary || !itemEditor) {
+    if (!editable || !draftLibrary || !itemEditor) {
       return;
     }
 
@@ -433,7 +543,8 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
     };
 
     persistLibrary(nextLibrary, `Machine item "${item.name}" saved.`);
-    setItemEditor(null);
+    setSelectedNode({ type: "item", groupId: itemEditor.parentGroupId, itemId: item.id });
+    setItemEditor(toEditorState(itemEditor.parentGroupId, item));
   };
 
   const exportCustomLibrary = () => {
@@ -470,16 +581,15 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
         return;
       }
 
-      persistLibrary(
-        {
-          libraryId: PROJECT_CUSTOM_LIBRARY_ID,
-          libraryName: "Project Custom Library",
-          readonly: false,
-          root: library.root
-        },
-        "Custom library imported."
-      );
+      const importedLibrary = {
+        libraryId: PROJECT_CUSTOM_LIBRARY_ID,
+        libraryName: "Project Custom Library",
+        readonly: false,
+        root: library.root
+      };
+      persistLibrary(importedLibrary, "Custom library imported.");
       setItemEditor(null);
+      setSelectedNode({ type: "group", groupId: importedLibrary.root.id });
     } catch {
       setValidationError("Could not import custom library JSON.");
     } finally {
@@ -502,7 +612,7 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
     onLibrariesChanged();
   };
 
-  return (
+  const modal = (
     <div className="manager-backdrop" role="presentation">
       <section className="manager-dialog" role="dialog" aria-modal="true" aria-label="Library Manager">
         <header className="manager-header">
@@ -510,7 +620,13 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
             <span className="panel-kicker">AtrVisu</span>
             <h2>Library Manager</h2>
           </div>
-          <button type="button" onClick={onClose}>
+          <div className="manager-context">
+            <strong>{selectedLibrary?.libraryName ?? "No library"}</strong>
+            <span className={`manager-mode-badge${editable ? " is-editable" : ""}`}>
+              {editable ? "Editable" : "Read-only"}
+            </span>
+          </div>
+          <button type="button" onClick={requestClose}>
             Close
           </button>
         </header>
@@ -530,166 +646,223 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
             ))}
           </aside>
 
-          <div className="manager-main">
+          <section className="manager-tree-panel" aria-label="Library group and item tree">
+            <div className="manager-column-header">
+              <span>Library Tree</span>
+              {activeRoot ? <strong>{countItems(activeRoot)} items</strong> : null}
+            </div>
+            {!editable ? <p className="manager-readonly-note">This library is read-only.</p> : null}
+            {activeRoot ? (
+              <div className="manager-tree">
+                <ManagerTreeNode
+                  depth={0}
+                  editable={editable}
+                  group={activeRoot}
+                  selectedNode={selectedNode}
+                  onSelectGroup={selectGroup}
+                  onSelectItem={selectItem}
+                  onAddChildGroup={addGroup}
+                  onAddItem={startAddItem}
+                  onRenameGroup={renameGroup}
+                  onDeleteGroup={deleteGroup}
+                />
+              </div>
+            ) : (
+              <p className="empty-selection">No library tree is available.</p>
+            )}
+          </section>
+
+          <section className="manager-detail-panel" aria-label="Library details and editor">
+            <div className="manager-column-header">
+              <span>Details</span>
+              <strong>{itemEditor ? (itemEditor.mode === "add" ? "New Item" : "Machine Item") : "Selection"}</strong>
+            </div>
             {message ? <p className="manager-status">{message}</p> : null}
             {validationError ? <p className="manager-validation">{validationError}</p> : null}
 
             {!selectedLibrary ? (
               <p className="empty-selection">No libraries are loaded.</p>
-            ) : selectedLibrary.readonly || !editable ? (
-              <section className="manager-readonly">
-                <h3>{selectedLibrary.libraryName}</h3>
-                <p>This library is read-only and cannot be edited from the Library Manager.</p>
-              </section>
-            ) : draftLibrary ? (
-              <>
-                <section className="manager-actions">
-                  <button type="button" onClick={() => addGroup(draftLibrary.root.id)}>
-                    Add Root Group
-                  </button>
-                  <button type="button" onClick={exportCustomLibrary}>
-                    Export Custom Library
-                  </button>
-                  <button type="button" onClick={() => fileInputRef.current?.click()}>
-                    Import Custom Library
-                  </button>
-                  <button type="button" onClick={resetCustomLibrary}>
-                    Reset Custom Library
-                  </button>
-                  <input
-                    className="file-input"
-                    type="file"
-                    accept="application/json"
-                    ref={fileInputRef}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) {
-                        void importCustomLibrary(file);
+            ) : itemEditor ? (
+              <div className="manager-editor" aria-label="Machine item editor">
+                <div className="manager-editor-grid">
+                  <label>
+                    <span>ID</span>
+                    <input
+                      disabled={!editable}
+                      value={itemEditor.id}
+                      onChange={(event) => setItemEditor({ ...itemEditor, id: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Name</span>
+                    <input
+                      disabled={!editable}
+                      value={itemEditor.name}
+                      onChange={(event) => setItemEditor({ ...itemEditor, name: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Type</span>
+                    <select
+                      disabled={!editable}
+                      value={itemEditor.type}
+                      onChange={(event) =>
+                        setItemEditor({ ...itemEditor, type: event.target.value as MachineCategory })
                       }
-                    }}
-                  />
-                </section>
-
-                <section className="manager-tree" aria-label="Editable custom library tree">
-                  <EditableGroupNode
-                    depth={0}
-                    group={draftLibrary.root}
-                    onAddChildGroup={addGroup}
-                    onRenameGroup={renameGroup}
-                    onDeleteGroup={deleteGroup}
-                    onAddItem={(groupId) => {
-                      setItemEditor(toEditorState(groupId));
-                      setValidationError("");
-                    }}
-                    onEditItem={(groupId, item) => {
-                      setItemEditor(toEditorState(groupId, item));
-                      setValidationError("");
-                    }}
-                    onDeleteItem={deleteItem}
-                  />
-                </section>
-
-                {itemEditor ? (
-                  <section className="manager-editor" aria-label="Machine item editor">
-                    <header className="section-header">
-                      <span>{itemEditor.mode === "add" ? "Add Item" : "Edit Item"}</span>
-                      <strong>{itemEditor.name || "Machine item"}</strong>
-                    </header>
-                    <div className="manager-editor-grid">
-                      <label>
-                        <span>ID</span>
-                        <input
-                          value={itemEditor.id}
-                          onChange={(event) => setItemEditor({ ...itemEditor, id: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>Name</span>
-                        <input
-                          value={itemEditor.name}
-                          onChange={(event) => setItemEditor({ ...itemEditor, name: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>Type</span>
-                        <select
-                          value={itemEditor.type}
-                          onChange={(event) =>
-                            setItemEditor({ ...itemEditor, type: event.target.value as MachineCategory })
-                          }
-                        >
-                          {MACHINE_CATEGORIES.map((category) => (
-                            <option key={category} value={category}>
-                              {category}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>Width (m)</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={itemEditor.width}
-                          onChange={(event) => setItemEditor({ ...itemEditor, width: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>Depth (m)</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={itemEditor.depth}
-                          onChange={(event) => setItemEditor({ ...itemEditor, depth: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>Height (m)</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={itemEditor.height}
-                          onChange={(event) => setItemEditor({ ...itemEditor, height: event.target.value })}
-                        />
-                      </label>
-                      <label>
-                        <span>Color</span>
-                        <input
-                          type="color"
-                          value={itemEditor.defaultColor}
-                          onChange={(event) => setItemEditor({ ...itemEditor, defaultColor: event.target.value })}
-                        />
-                      </label>
-                    </div>
-                    <div className="manager-capabilities">
-                      {(["canConvey", "canPalletize", "canWrap", "hasFlowDirection"] as const).map((key) => (
-                        <label key={key}>
-                          <input
-                            type="checkbox"
-                            checked={itemEditor[key]}
-                            onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.checked })}
-                          />
-                          <span>{key}</span>
-                        </label>
+                    >
+                      {MACHINE_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
                       ))}
-                    </div>
-                    <div className="manager-editor-actions">
-                      <button type="button" onClick={saveItem}>
-                        Save Item
-                      </button>
-                      <button type="button" onClick={() => setItemEditor(null)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </section>
-                ) : null}
-              </>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Width (m)</span>
+                    <input
+                      disabled={!editable}
+                      type="number"
+                      step="0.1"
+                      value={itemEditor.width}
+                      onChange={(event) => setItemEditor({ ...itemEditor, width: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Depth (m)</span>
+                    <input
+                      disabled={!editable}
+                      type="number"
+                      step="0.1"
+                      value={itemEditor.depth}
+                      onChange={(event) => setItemEditor({ ...itemEditor, depth: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Height (m)</span>
+                    <input
+                      disabled={!editable}
+                      type="number"
+                      step="0.1"
+                      value={itemEditor.height}
+                      onChange={(event) => setItemEditor({ ...itemEditor, height: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Color</span>
+                    <input
+                      disabled={!editable}
+                      type="color"
+                      value={itemEditor.defaultColor}
+                      onChange={(event) => setItemEditor({ ...itemEditor, defaultColor: event.target.value })}
+                    />
+                  </label>
+                </div>
+                <div className="manager-capabilities">
+                  {(["canConvey", "canPalletize", "canWrap", "hasFlowDirection"] as const).map((key) => (
+                    <label key={key}>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor[key]}
+                        onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.checked })}
+                      />
+                      <span>{key}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="manager-editor-actions">
+                  <button className="primary-action" disabled={!editable} type="button" onClick={saveItem}>
+                    Save Item
+                  </button>
+                  <button type="button" onClick={() => setItemEditor(null)}>
+                    Cancel
+                  </button>
+                  {itemEditor.mode === "edit" && itemEditor.originalId ? (
+                    <button
+                      className="danger-action"
+                      disabled={!editable}
+                      type="button"
+                      onClick={() => deleteItem(itemEditor.originalId ?? "")}
+                    >
+                      Delete Item
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : selectedGroup ? (
+              <div className="manager-detail-card">
+                <span>Group</span>
+                <h3>{selectedGroup.name}</h3>
+                <p>{countItems(selectedGroup)} machine item{countItems(selectedGroup) === 1 ? "" : "s"} in this group.</p>
+                {!editable ? <p className="manager-readonly-note">This library is read-only.</p> : null}
+                <div className="manager-detail-actions">
+                  <button className="primary-action" disabled={!editable} type="button" onClick={() => addGroup(selectedGroup.id)}>
+                    Add Child Group
+                  </button>
+                  <button disabled={!editable} type="button" onClick={() => startAddItem(selectedGroup.id)}>
+                    Add Item
+                  </button>
+                  <button disabled={!editable || selectedGroup.id === activeRoot?.id} type="button" onClick={() => renameGroup(selectedGroup.id)}>
+                    Rename
+                  </button>
+                  <button
+                    className="danger-action"
+                    disabled={!editable || selectedGroup.id === activeRoot?.id}
+                    type="button"
+                    onClick={() => deleteGroup(selectedGroup.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ) : selectedItem ? (
+              <div className="manager-detail-card">
+                <span>Machine Item</span>
+                <h3>{selectedItem.item.name}</h3>
+                <p>{selectedItem.item.width} x {selectedItem.item.depth} x {selectedItem.item.height} m</p>
+                <button type="button" onClick={() => selectItem(selectedItem.group.id, selectedItem.item)}>
+                  Open Editor
+                </button>
+              </div>
             ) : (
-              <p className="empty-selection">Project Custom Library is not available.</p>
+              <p className="empty-selection">Select a group or machine item to view details.</p>
             )}
-          </div>
+          </section>
         </div>
+
+        <footer className="manager-footer">
+          <div className="manager-footer-left">
+            <button disabled={!editable || !draftLibrary} type="button" onClick={exportCustomLibrary}>
+              Export Custom Library
+            </button>
+            <button disabled={!editable || !draftLibrary} type="button" onClick={() => fileInputRef.current?.click()}>
+              Import Custom Library
+            </button>
+            <input
+              className="file-input"
+              type="file"
+              accept="application/json"
+              ref={fileInputRef}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                  void importCustomLibrary(file);
+                }
+              }}
+            />
+          </div>
+          <div className="manager-footer-right">
+            <button className="danger-action" disabled={!editable || !draftLibrary} type="button" onClick={resetCustomLibrary}>
+              Reset Custom Library
+            </button>
+            <button type="button" onClick={requestClose}>
+              Close
+            </button>
+          </div>
+        </footer>
       </section>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

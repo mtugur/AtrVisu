@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene } from "./components/BabylonScene";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
+import { PanelSection } from "./components/PanelSection";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 
@@ -11,6 +14,11 @@ const PLACEMENT_SPACING = 7;
 const PLACEMENT_ORIGIN = { x: -8, z: -6 };
 const AUTOSAVE_KEY = "atrvisu.autosavedLayout.v1";
 const AUTOSAVE_DELAY_MS = 500;
+const PANEL_WIDTH_KEY = "atrvisu.rightPanelWidth.v1";
+const PANEL_COLLAPSED_KEY = "atrvisu.rightPanelCollapsed.v1";
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_WIDTH = 600;
+const DEFAULT_PANEL_WIDTH = 360;
 const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
 const DEFAULT_CAPABILITIES = {
   canConvey: false,
@@ -26,8 +34,77 @@ export function App() {
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [panelWidth, setPanelWidth] = useState(() => {
+    try {
+      const rawSavedWidth = window.localStorage.getItem(PANEL_WIDTH_KEY);
+      const savedWidth = rawSavedWidth === null ? Number.NaN : Number(rawSavedWidth);
+      return Number.isFinite(savedWidth)
+        ? Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, savedWidth))
+        : DEFAULT_PANEL_WIDTH;
+    } catch {
+      return DEFAULT_PANEL_WIDTH;
+    }
+  });
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(PANEL_COLLAPSED_KEY) === "collapsed";
+    } catch {
+      return false;
+    }
+  });
+  const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
+    } catch {
+      // UI preferences are best-effort only.
+    }
+  }, [panelWidth]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PANEL_COLLAPSED_KEY, isPanelCollapsed ? "collapsed" : "open");
+    } catch {
+      // UI preferences are best-effort only.
+    }
+  }, [isPanelCollapsed]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const resizeStart = resizeStartRef.current;
+      if (!resizeStart) {
+        return;
+      }
+
+      const nextWidth = resizeStart.width + resizeStart.pointerX - event.clientX;
+      setPanelWidth(Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(nextWidth))));
+    };
+
+    const handlePointerUp = () => {
+      resizeStartRef.current = null;
+      document.body.classList.remove("is-resizing-panel");
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, []);
+
+  const startPanelResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    resizeStartRef.current = {
+      pointerX: event.clientX,
+      width: panelWidth
+    };
+    document.body.classList.add("is-resizing-panel");
+  };
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout => ({
@@ -253,34 +330,87 @@ export function App() {
         isSimulationRunning={isSimulationRunning}
         simulationSpeed={simulationSpeed}
       />
-      <aside className="machine-panel" aria-label="Machine library, layout, and properties">
-        {recoveryLayout ? (
-          <section className="recovery-prompt" aria-label="Autosave recovery">
-            <p>A previous unsaved layout was found. Restore it?</p>
-            <div className="recovery-actions">
-              <button type="button" onClick={restoreAutosavedLayout}>
-                Restore
-              </button>
-              <button type="button" onClick={dismissAutosavedLayout}>
-                Dismiss
-              </button>
-            </div>
-          </section>
-        ) : null}
-        <MachineLibrary onAddMachine={addMachine} />
-        <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
-        <SimulationControls
-          isRunning={isSimulationRunning}
-          speed={simulationSpeed}
-          onToggleRunning={() => setIsSimulationRunning((current) => !current)}
-          onChangeSpeed={setSimulationSpeed}
-        />
-        <MachineProperties
-          selectedMachine={selectedMachine}
-          onUpdateMachine={updateMachine}
-          onDeleteSelected={deleteSelectedMachine}
-        />
-      </aside>
+      {isPanelCollapsed ? (
+        <button
+          className="panel-reopen-tab"
+          type="button"
+          aria-label="Open right panel"
+          onClick={() => setIsPanelCollapsed(false)}
+        >
+          Panel
+        </button>
+      ) : (
+        <aside
+          className="machine-panel"
+          style={{ "--panel-width": `${panelWidth}px` } as CSSProperties}
+          aria-label="Machine library, layout, and properties"
+        >
+          <button
+            className="panel-resize-handle"
+            type="button"
+            aria-label="Resize right panel"
+            onPointerDown={startPanelResize}
+          />
+          <div className="panel-toolbar">
+            <span>AtrVisu Tools</span>
+            <button type="button" onClick={() => setIsPanelCollapsed(true)}>
+              Collapse
+            </button>
+          </div>
+          {recoveryLayout ? (
+            <section className="recovery-prompt" aria-label="Autosave recovery">
+              <p>A previous unsaved layout was found. Restore it?</p>
+              <div className="recovery-actions">
+                <button type="button" onClick={restoreAutosavedLayout}>
+                  Restore
+                </button>
+                <button type="button" onClick={dismissAutosavedLayout}>
+                  Dismiss
+                </button>
+              </div>
+            </section>
+          ) : null}
+          <PanelSection
+            title="Machine Library"
+            storageKey="atrvisu.panelSection.machineLibrary.v1"
+            defaultExpanded
+          >
+            <MachineLibrary onAddMachine={addMachine} />
+          </PanelSection>
+          <PanelSection
+            title="Layout Controls"
+            storageKey="atrvisu.panelSection.layoutControls.v1"
+            defaultExpanded
+          >
+            <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
+          </PanelSection>
+          <PanelSection
+            title="Simulation Controls"
+            storageKey="atrvisu.panelSection.simulationControls.v1"
+            defaultExpanded={false}
+            badge={isSimulationRunning ? "Running" : undefined}
+          >
+            <SimulationControls
+              isRunning={isSimulationRunning}
+              speed={simulationSpeed}
+              onToggleRunning={() => setIsSimulationRunning((current) => !current)}
+              onChangeSpeed={setSimulationSpeed}
+            />
+          </PanelSection>
+          <PanelSection
+            title="Selected Object Properties"
+            storageKey="atrvisu.panelSection.properties.v1"
+            defaultExpanded={Boolean(selectedMachine)}
+            badge={selectedMachine ? selectedMachine.definition.name : "None"}
+          >
+            <MachineProperties
+              selectedMachine={selectedMachine}
+              onUpdateMachine={updateMachine}
+              onDeleteSelected={deleteSelectedMachine}
+            />
+          </PanelSection>
+        </aside>
+      )}
     </main>
   );
 }

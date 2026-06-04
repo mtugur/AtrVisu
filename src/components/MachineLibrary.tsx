@@ -143,19 +143,10 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
 
   return (
     <section className="library-section" aria-label="Machine library">
-      <header className="panel-header">
-        <span className="panel-kicker">AtrVisu</span>
-        <h1>Machine Library</h1>
-      </header>
-
       <div className="panel-search">
         <span aria-hidden="true">+</span>
         <input type="search" placeholder={libraryCountText} aria-label="Machine library status" readOnly />
       </div>
-
-      <button className="manager-open-button" type="button" onClick={() => setIsManagerOpen(true)}>
-        Library Manager
-      </button>
 
       {loadError ? <p className="library-error">{loadError}</p> : null}
       {warnings.length > 0 ? (
@@ -204,6 +195,16 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
             </article>
           );
         })}
+      </section>
+
+      <section className="library-tools" aria-label="Library tools">
+        <div className="section-header">
+          <span>Library Tools</span>
+          <strong>Manager</strong>
+        </div>
+        <button className="manager-open-button" type="button" onClick={() => setIsManagerOpen(true)}>
+          Open Library Manager
+        </button>
       </section>
 
       {isManagerOpen ? (
