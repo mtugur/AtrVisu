@@ -108,4 +108,10 @@ export type MachineLibraryDocument = {
 export type LoadedMachineLibrary = MachineLibraryDocument & {
   path: string;
   enabled: boolean;
+  loadError?: string;
+};
+
+export type LibraryValidationWarning = {
+  path: string;
+  message: string;
 };

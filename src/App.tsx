@@ -11,6 +11,13 @@ const PLACEMENT_SPACING = 7;
 const PLACEMENT_ORIGIN = { x: -8, z: -6 };
 const AUTOSAVE_KEY = "atrvisu.autosavedLayout.v1";
 const AUTOSAVE_DELAY_MS = 500;
+const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
+const DEFAULT_CAPABILITIES = {
+  canConvey: false,
+  canPalletize: false,
+  canWrap: false,
+  hasFlowDirection: false
+};
 
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
@@ -100,17 +107,20 @@ export function App() {
 
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines: PlacedMachine[] = layout.objects.map((object) => {
-      const definition: MachineDefinition =
-        object.definitionSnapshot ?? {
-        id: object.machineDefinitionId,
-        name: object.name,
-        category: object.category,
-        width: object.width,
-        depth: object.depth,
-        height: object.height,
-        defaultColor: object.defaultColor,
+      const definition: MachineDefinition = {
+        ...(object.definitionSnapshot ?? {
+          id: object.machineDefinitionId,
+          name: object.name,
+          category: object.category,
+          width: object.width,
+          depth: object.depth,
+          height: object.height,
+          defaultColor: object.defaultColor,
           connectionPoints: []
-        };
+        }),
+        clearance: object.definitionSnapshot?.clearance ?? DEFAULT_CLEARANCE,
+        capabilities: object.definitionSnapshot?.capabilities ?? DEFAULT_CAPABILITIES
+      };
 
       return {
         instanceId: object.id,

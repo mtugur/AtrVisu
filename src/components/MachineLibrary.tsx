@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
   LibraryGroup,
-  LibraryIndexEntry,
   LibraryMachineItem,
+  LibraryValidationWarning,
   LoadedMachineLibrary,
   MachineDefinition
 } from "../types/machine";
+import { loadMachineLibraries } from "../utils/libraryValidation";
 
 type LibrarySelection = {
   libraryId: string;
@@ -15,10 +16,6 @@ type LibrarySelection = {
 
 type MachineLibraryProps = {
   onAddMachine: (selection: LibrarySelection) => void;
-};
-
-type LibraryIndex = {
-  libraries: LibraryIndexEntry[];
 };
 
 const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => ({
@@ -35,34 +32,6 @@ const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => ({
   clearance: item.clearance,
   capabilities: item.capabilities
 });
-
-const filterDuplicateItems = (libraries: LoadedMachineLibrary[]) => {
-  const seenIds = new Set<string>();
-
-  const visitGroup = (library: LoadedMachineLibrary, group: LibraryGroup): LibraryGroup => {
-    const items = group.items.filter((item) => {
-      if (seenIds.has(item.id)) {
-        console.warn(
-          `Duplicate machine item id "${item.id}" found in library "${library.libraryName}". Keeping the first loaded item.`
-        );
-        return false;
-      }
-      seenIds.add(item.id);
-      return true;
-    });
-
-    return {
-      ...group,
-      items,
-      children: group.children.map((child) => visitGroup(library, child))
-    };
-  };
-
-  return libraries.map((library) => ({
-    ...library,
-    root: visitGroup(library, library.root)
-  }));
-};
 
 function GroupNode({
   group,
@@ -140,48 +109,20 @@ function GroupNode({
 export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
   const [libraries, setLibraries] = useState<LoadedMachineLibrary[]>([]);
   const [openLibraries, setOpenLibraries] = useState<Set<string>>(new Set());
+  const [warnings, setWarnings] = useState<LibraryValidationWarning[]>([]);
   const [loadError, setLoadError] = useState<string>("");
 
   useEffect(() => {
     let isCancelled = false;
 
     const loadLibraries = async () => {
-      try {
-        const indexResponse = await fetch("/library/libraries.index.json");
-        if (!indexResponse.ok) {
-          throw new Error("Could not load library index.");
-        }
+      const result = await loadMachineLibraries();
 
-        const index = (await indexResponse.json()) as LibraryIndex;
-        const enabledEntries = index.libraries.filter((entry) => entry.enabled);
-        const loadedLibraries = await Promise.all(
-          enabledEntries.map(async (entry) => {
-            const response = await fetch(entry.path);
-            if (!response.ok) {
-              throw new Error(`Could not load ${entry.libraryName}.`);
-            }
-
-            const library = (await response.json()) as LoadedMachineLibrary;
-            return {
-              ...library,
-              path: entry.path,
-              enabled: entry.enabled,
-              readonly: entry.readonly
-            };
-          })
-        );
-
-        if (isCancelled) {
-          return;
-        }
-
-        const uniqueLibraries = filterDuplicateItems(loadedLibraries);
-        setLibraries(uniqueLibraries);
-        setOpenLibraries(new Set(uniqueLibraries.map((library) => library.libraryId)));
-      } catch (error) {
-        if (!isCancelled) {
-          setLoadError(error instanceof Error ? error.message : "Could not load libraries.");
-        }
+      if (!isCancelled) {
+        setLibraries(result.libraries);
+        setWarnings(result.warnings);
+        setLoadError(result.loadError);
+        setOpenLibraries(new Set(result.libraries.map((library) => library.libraryId)));
       }
     };
 
@@ -210,13 +151,21 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
       </div>
 
       {loadError ? <p className="library-error">{loadError}</p> : null}
+      {warnings.length > 0 ? (
+        <p className="library-warning-summary">
+          Library warnings found: {warnings.length}. Check console for details.
+        </p>
+      ) : null}
 
       <section className="machine-list" aria-label="Available libraries">
         {libraries.map((library) => {
           const isOpen = openLibraries.has(library.libraryId);
 
           return (
-            <article className="library-card" key={library.libraryId}>
+            <article
+              className={`library-card${library.loadError ? " has-error" : ""}`}
+              key={library.libraryId}
+            >
               <button
                 className="library-title"
                 type="button"
@@ -234,7 +183,7 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
               >
                 <span aria-hidden="true">{isOpen ? "-" : "+"}</span>
                 <strong>{library.libraryName}</strong>
-                <small>{library.readonly ? "Read-only" : "Editable later"}</small>
+                <small>{library.loadError ?? (library.readonly ? "Read-only" : "Editable later")}</small>
               </button>
 
               {isOpen ? (

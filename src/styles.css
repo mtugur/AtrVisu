@@ -173,6 +173,17 @@ select {
   line-height: 1.4;
 }
 
+.library-warning-summary {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(238, 196, 103, 0.34);
+  border-radius: 8px;
+  color: #ffe6ad;
+  background: rgba(238, 196, 103, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .library-card {
   display: grid;
   gap: 6px;
@@ -180,6 +191,11 @@ select {
   border: 1px solid rgba(164, 190, 178, 0.16);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.035);
+}
+
+.library-card.has-error {
+  border-color: rgba(240, 110, 92, 0.42);
+  background: rgba(240, 110, 92, 0.08);
 }
 
 .library-title {
