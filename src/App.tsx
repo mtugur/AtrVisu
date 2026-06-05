@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene } from "./components/BabylonScene";
+import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
 import { PanelSection } from "./components/PanelSection";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
+import type { VisualModelDiagnostics } from "./types/overlays";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
 import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
+import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 
@@ -31,6 +34,8 @@ export function App() {
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [overlaySettings, setOverlaySettings] = useState(loadOverlaySettings);
+  const [visualDiagnostics, setVisualDiagnostics] = useState<Record<string, VisualModelDiagnostics>>({});
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
       const rawSavedWidth = window.localStorage.getItem(PANEL_WIDTH_KEY);
@@ -52,6 +57,15 @@ export function App() {
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
+  const selectedVisualDiagnostics = selectedMachineId ? visualDiagnostics[selectedMachineId] : undefined;
+
+  useEffect(() => {
+    try {
+      saveOverlaySettings(overlaySettings);
+    } catch {
+      // Display preferences are best-effort only.
+    }
+  }, [overlaySettings]);
 
   useEffect(() => {
     try {
@@ -310,6 +324,13 @@ export function App() {
         onUpdateMachine={updateMachine}
         isSimulationRunning={isSimulationRunning}
         simulationSpeed={simulationSpeed}
+        overlaySettings={overlaySettings}
+        onVisualDiagnosticsChange={(diagnostics) =>
+          setVisualDiagnostics((current) => ({
+            ...current,
+            [diagnostics.instanceId]: diagnostics
+          }))
+        }
       />
       {isPanelCollapsed ? (
         <button
@@ -380,6 +401,13 @@ export function App() {
             />
           </PanelSection>
           <PanelSection
+            title="Display / Overlay Controls"
+            storageKey="atrvisu.panelSection.overlayControls.v1"
+            defaultExpanded={false}
+          >
+            <DisplayOverlayControls settings={overlaySettings} onChange={setOverlaySettings} />
+          </PanelSection>
+          <PanelSection
             title="Selected Object Properties"
             storageKey="atrvisu.panelSection.properties.v1"
             defaultExpanded={Boolean(selectedMachine)}
@@ -387,6 +415,7 @@ export function App() {
           >
             <MachineProperties
               selectedMachine={selectedMachine}
+              visualDiagnostics={selectedVisualDiagnostics}
               onUpdateMachine={updateMachine}
               onDeleteSelected={deleteSelectedMachine}
             />

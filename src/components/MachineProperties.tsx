@@ -1,9 +1,11 @@
 import type { PlacedMachine } from "../types/machine";
+import type { VisualModelDiagnostics } from "../types/overlays";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
+  visualDiagnostics?: VisualModelDiagnostics;
   onUpdateMachine: (
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
@@ -15,6 +17,7 @@ const formatMm = (value: number) => formatLength(value, "mm", 0);
 
 export function MachineProperties({
   selectedMachine,
+  visualDiagnostics,
   onUpdateMachine,
   onDeleteSelected
 }: MachinePropertiesProps) {
@@ -90,6 +93,11 @@ export function MachineProperties({
 
   const positionMm = getPositionMm();
   const dimensionsMm = selectedMachine ? getMachineDimensionsMm(selectedMachine.definition) : null;
+  const formatOptionalMm = (value?: number) => (typeof value === "number" ? formatMm(value) : "Not available");
+  const formatOffset = (offset?: { xMm: number; yMm: number; zMm: number }) =>
+    offset ? `X ${formatMm(offset.xMm)}, Y ${formatMm(offset.yMm)}, Z ${formatMm(offset.zMm)}` : "Not available";
+  const formatRotationOffset = (offset?: { x: number; y: number; z: number }) =>
+    offset ? `X ${offset.x} deg, Y ${offset.y} deg, Z ${offset.z} deg` : "Not available";
 
   return (
     <section className="properties-section" aria-label="Selected machine properties">
@@ -153,6 +161,60 @@ export function MachineProperties({
               <span>H {formatMm(dimensionsMm.heightMm)}</span>
             </div>
           ) : null}
+
+          <details className="diagnostics-section" data-testid="visual-model-diagnostics" open>
+            <summary>Visual Model Diagnostics</summary>
+            <div className="diagnostics-grid">
+              <span>Visual Status</span>
+              <strong>{visualDiagnostics?.visualStatus ?? "Not available"}</strong>
+              <span>Visual Source</span>
+              <strong>{visualDiagnostics?.visualSource ?? "Not available"}</strong>
+              <span>Model Path</span>
+              <strong>{visualDiagnostics?.modelPath || "None"}</strong>
+              <span>Category</span>
+              <strong>{visualDiagnostics?.category ?? selectedMachine.definition.category}</strong>
+              <span>Machine Type</span>
+              <strong>{visualDiagnostics?.machineType ?? selectedMachine.definition.machineType ?? "Not set"}</strong>
+              <span>Placeholder Visual Type</span>
+              <strong>{visualDiagnostics?.placeholderVisualType ?? selectedMachine.definition.placeholderVisualType ?? "box-generic"}</strong>
+              <span>Scale Mode</span>
+              <strong>{visualDiagnostics?.scaleMode ?? selectedMachine.definition.visualModel?.scaleMode ?? "metadata-box"}</strong>
+              <span>Model Unit</span>
+              <strong>{visualDiagnostics?.modelUnit ?? selectedMachine.definition.visualModel?.unit ?? "m"}</strong>
+              <span>Product Family Code</span>
+              <strong>{visualDiagnostics?.productFamilyCode || selectedMachine.definition.productFamilyCode || "None"}</strong>
+              <span>Metadata Width / Depth / Height</span>
+              <strong>
+                {visualDiagnostics
+                  ? `${formatMm(visualDiagnostics.metadataBoundsMm.widthMm)} / ${formatMm(visualDiagnostics.metadataBoundsMm.depthMm)} / ${formatMm(visualDiagnostics.metadataBoundsMm.heightMm)}`
+                  : dimensionsMm
+                    ? `${formatMm(dimensionsMm.widthMm)} / ${formatMm(dimensionsMm.depthMm)} / ${formatMm(dimensionsMm.heightMm)}`
+                    : "Not available"}
+              </strong>
+              <span>Visual Bounds Width / Depth / Height</span>
+              <strong>
+                {visualDiagnostics?.visualBoundsMm
+                  ? `${formatMm(visualDiagnostics.visualBoundsMm.widthMm)} / ${formatMm(visualDiagnostics.visualBoundsMm.depthMm)} / ${formatMm(visualDiagnostics.visualBoundsMm.heightMm)}`
+                  : "Not available"}
+              </strong>
+              <span>Visual vs Metadata Difference</span>
+              <strong>
+                {visualDiagnostics?.boundsDifferenceMm
+                  ? `${formatOptionalMm(visualDiagnostics.boundsDifferenceMm.widthMm)} / ${formatOptionalMm(visualDiagnostics.boundsDifferenceMm.depthMm)} / ${formatOptionalMm(visualDiagnostics.boundsDifferenceMm.heightMm)}`
+                  : "Not available"}
+              </strong>
+              <span>Rotation Offset</span>
+              <strong>{formatRotationOffset(visualDiagnostics?.rotationOffsetDeg)}</strong>
+              <span>Position Offset</span>
+              <strong>{formatOffset(visualDiagnostics?.positionOffsetMm)}</strong>
+              {visualDiagnostics?.fallbackReason ? (
+                <>
+                  <span>Fallback Reason</span>
+                  <strong>{visualDiagnostics.fallbackReason}</strong>
+                </>
+              ) : null}
+            </div>
+          </details>
 
           {selectedMachine.definition.capabilities?.hasFlowDirection ||
           selectedMachine.definition.category === "Conveyor" ? (

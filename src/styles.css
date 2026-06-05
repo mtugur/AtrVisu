@@ -1026,6 +1026,60 @@ select {
   font-size: 0.78rem;
 }
 
+.overlay-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.overlay-controls label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  color: rgba(237, 243, 240, 0.78);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.8rem;
+}
+
+.diagnostics-section {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.diagnostics-section summary {
+  cursor: pointer;
+  color: #f4f7f2;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 7px 10px;
+  margin-top: 10px;
+  font-size: 0.76rem;
+}
+
+.diagnostics-grid span {
+  color: rgba(237, 243, 240, 0.58);
+  font-weight: 800;
+}
+
+.diagnostics-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: rgba(244, 247, 242, 0.88);
+  font-weight: 750;
+}
+
 .primary-action {
   border-color: rgba(168, 201, 120, 0.62) !important;
   background: rgba(168, 201, 120, 0.18) !important;
