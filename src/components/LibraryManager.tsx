@@ -761,7 +761,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
 
   const modal = (
     <div className="manager-backdrop" role="presentation">
-      <section className="manager-dialog" role="dialog" aria-modal="true" aria-label="Library Manager">
+      <section className="manager-dialog" data-testid="library-manager-modal" role="dialog" aria-modal="true" aria-label="Library Manager">
         <header className="manager-header">
           <div>
             <span className="panel-kicker">AtrVisu</span>
@@ -773,7 +773,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
               {editable ? "Editable" : "Read-only"}
             </span>
           </div>
-          <button type="button" onClick={requestClose}>
+          <button data-testid="close-library-manager" type="button" onClick={requestClose}>
             Close
           </button>
         </header>

@@ -47,6 +47,26 @@ const LEGACY_CATEGORY_MAP: Record<string, { category: string; machineType: strin
   "Safety Fence": { category: "Safety", machineType: "Safety Fence", placeholder: "safety-fence" }
 };
 
+const RENDERED_PLACEHOLDER_IDS = new Set([
+  "box-generic",
+  "conveyor-belt",
+  "conveyor-roller",
+  "elevator-vertical",
+  "elevator-inclined",
+  "silo-cylinder",
+  "tank-cylinder",
+  "hopper",
+  "forklift-proxy",
+  "pallet-proxy",
+  "robot-cell",
+  "wrapper-proxy",
+  "safety-fence",
+  "building-column",
+  "building-wall",
+  "platform",
+  "electrical-panel"
+]);
+
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 };
@@ -248,7 +268,7 @@ export const inferPlaceholderVisualType = (category: string, machineType: string
   if (text.includes("wall")) return "building-wall";
   if (text.includes("platform")) return "platform";
   if (text.includes("electrical") || text.includes("panel")) return "electrical-panel";
-  return fallback;
+  return RENDERED_PLACEHOLDER_IDS.has(fallback) ? fallback : "box-generic";
 };
 
 export const normalizeTags = (value: unknown): string[] => {

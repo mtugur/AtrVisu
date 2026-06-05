@@ -212,9 +212,11 @@ const validateMachineItem = (
   const machineType = isNonEmptyString(item.machineType)
     ? item.machineType
     : legacyHints.machineType;
-  const placeholderVisualType = isNonEmptyString(item.placeholderVisualType)
-    ? item.placeholderVisualType
-    : inferPlaceholderVisualType(category, machineType, legacyHints.placeholder);
+  const placeholderVisualType = inferPlaceholderVisualType(
+    category,
+    machineType,
+    isNonEmptyString(item.placeholderVisualType) ? item.placeholderVisualType : legacyHints.placeholder
+  );
   const widthMm = readDimensionMm(item, "widthMm", "width");
   const depthMm = readDimensionMm(item, "depthMm", "depth");
   const heightMm = readDimensionMm(item, "heightMm", "height");
@@ -392,7 +394,7 @@ export const validateProjectCustomLibraryDocument = (data: unknown) => {
   };
 };
 
-const removeDuplicateItems = (
+export const removeDuplicateLibraryItems = (
   libraries: LoadedMachineLibrary[],
   warnings: LibraryValidationWarning[]
 ): LoadedMachineLibrary[] => {
@@ -457,7 +459,7 @@ export const loadMachineLibraries = async (): Promise<LoadMachineLibrariesResult
     );
 
     return {
-      libraries: removeDuplicateItems(loadedLibraries, warnings),
+      libraries: removeDuplicateLibraryItems(loadedLibraries, warnings),
       warnings,
       loadError: ""
     };

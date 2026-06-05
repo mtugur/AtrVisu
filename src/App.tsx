@@ -8,11 +8,8 @@ import { MachineProperties } from "./components/MachineProperties";
 import { PanelSection } from "./components/PanelSection";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
-import {
-  ATRVISU_UNIT_SYSTEM,
-  getMachineDimensionsMm,
-  normalizeMachineDefinitionDimensions
-} from "./utils/machineDimensions";
+import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
+import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 
@@ -26,13 +23,6 @@ const PANEL_COLLAPSED_KEY = "atrvisu.rightPanelCollapsed.v1";
 const MIN_PANEL_WIDTH = 280;
 const MAX_PANEL_WIDTH = 600;
 const DEFAULT_PANEL_WIDTH = 360;
-const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
-const DEFAULT_CAPABILITIES = {
-  canConvey: false,
-  canPalletize: false,
-  canWrap: false,
-  hasFlowDirection: false
-};
 
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
@@ -114,43 +104,8 @@ export function App() {
   };
 
   const createLayoutSnapshot = useCallback(
-    (exportedAt = new Date().toISOString()): AtrVisuLayout => ({
-      appName: "AtrVisu",
-      version: 1,
-      unitSystem: ATRVISU_UNIT_SYSTEM,
-      exportedAt,
-      objects: placedMachines.map((machine) => {
-        const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definition));
-        const snapshot = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definitionSnapshot));
-        const dimensionsMm = getMachineDimensionsMm(definition);
-        const positionMm = machine.positionMm ?? {
-          xMm: metersToMm(machine.position.x),
-          yMm: metersToMm(machine.position.z)
-        };
-        const rotationDeg = machine.rotationDeg ?? machine.rotationY;
-
-        return {
-          id: machine.instanceId,
-          libraryId: machine.libraryId,
-          machineDefinitionId: machine.machineDefinitionId,
-          definitionSnapshot: snapshot,
-          name: definition.name,
-          category: definition.category,
-          ...dimensionsMm,
-          width: definition.width,
-          depth: definition.depth,
-          height: definition.height,
-          positionMm,
-          elevationMm: machine.elevationMm ?? 0,
-          rotationDeg,
-          positionX: machine.position.x,
-          positionZ: machine.position.z,
-          rotationY: machine.rotationY,
-          defaultColor: definition.defaultColor,
-          flowDirection: machine.flowDirection
-        };
-      })
-    }),
+    (exportedAt = new Date().toISOString()): AtrVisuLayout =>
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt),
     [placedMachines]
   );
 
@@ -238,47 +193,7 @@ export function App() {
   }, [createLayoutSnapshot]);
 
   const importLayout = useCallback((layout: AtrVisuLayout) => {
-    const importedMachines: PlacedMachine[] = layout.objects.map((object) => {
-      const definition: MachineDefinition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
-        ...(object.definitionSnapshot ?? {
-          id: object.machineDefinitionId,
-          name: object.name,
-          category: object.category,
-          widthMm: object.widthMm,
-          depthMm: object.depthMm,
-          heightMm: object.heightMm,
-          width: object.width,
-          depth: object.depth,
-          height: object.height,
-          defaultColor: object.defaultColor,
-          connectionPoints: []
-        }),
-        clearance: object.definitionSnapshot?.clearance ?? DEFAULT_CLEARANCE,
-        capabilities: object.definitionSnapshot?.capabilities ?? DEFAULT_CAPABILITIES
-      }));
-      const positionMm = object.positionMm ?? {
-        xMm: metersToMm(object.positionX),
-        yMm: metersToMm(object.positionZ)
-      };
-      const rotationDeg = object.rotationDeg ?? object.rotationY;
-
-      return {
-        instanceId: object.id,
-        libraryId: object.libraryId,
-        machineDefinitionId: object.machineDefinitionId,
-        definitionSnapshot: definition,
-        definition,
-        position: {
-          x: mmToMeters(positionMm.xMm),
-          z: mmToMeters(positionMm.yMm)
-        },
-        positionMm,
-        elevationMm: object.elevationMm ?? 0,
-        rotationDeg,
-        rotationY: rotationDeg,
-        flowDirection: object.flowDirection ?? "forward"
-      };
-    });
+    const importedMachines = placedMachinesFromLayout(layout);
 
     setPlacedMachines(importedMachines);
     setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
@@ -387,7 +302,7 @@ export function App() {
   }, [deleteSelectedMachine, selectedMachine]);
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-testid="app-root">
       <BabylonScene
         placedMachines={placedMachines}
         selectedMachineId={selectedMachineId}
@@ -408,6 +323,7 @@ export function App() {
       ) : (
         <aside
           className="machine-panel"
+          data-testid="right-panel"
           style={{ "--panel-width": `${panelWidth}px` } as CSSProperties}
           aria-label="Machine library, layout, and properties"
         >
