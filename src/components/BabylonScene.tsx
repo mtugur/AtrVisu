@@ -21,8 +21,10 @@ import {
   Vector3
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
+import type { CollisionCheckResult } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
+import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
 import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
@@ -44,6 +46,7 @@ type BabylonSceneProps = {
   isSimulationRunning: boolean;
   simulationSpeed: number;
   overlaySettings: OverlaySettings;
+  collisionResult: CollisionCheckResult;
   onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
 };
 
@@ -55,6 +58,7 @@ type PlacedMachineNode = {
   selectionFrame: LinesMesh;
   flowArrow?: LinesMesh;
   metadataFrame: LinesMesh;
+  collisionFrame: LinesMesh;
   clearanceFrame?: LinesMesh;
   products: Mesh[];
   placeholderMeshes: Mesh[];
@@ -201,6 +205,26 @@ const createClearanceFrame = (scene: Scene, machine: PlacedMachine) => {
     { width, depth, height: dimensions.height },
     new Color3(1, 0.56, 0.22)
   );
+};
+
+const createCollisionFrame = (scene: Scene, machine: PlacedMachine) => {
+  const dimensions = getMachineDimensionsMeters(machine.definition);
+  const envelope = getCollisionEnvelopeForMachine(machine);
+  const offset = envelope.offsetMm ?? { xMm: 0, yMm: 0, zMm: 0 };
+  const frame = createWireBoxFrame(
+    scene,
+    `collision-frame-${machine.instanceId}`,
+    {
+      width: mmToMeters(envelope.widthMm),
+      depth: mmToMeters(envelope.depthMm),
+      height: mmToMeters(envelope.heightMm)
+    },
+    new Color3(0.35, 0.72, 1)
+  );
+  frame.position.x = mmToMeters(offset.xMm);
+  frame.position.y = mmToMeters(offset.yMm) + mmToMeters(envelope.heightMm) / 2 - dimensions.height / 2;
+  frame.position.z = mmToMeters(offset.zMm);
+  return frame;
 };
 
 const hasFlowDirection = (machine: PlacedMachine) => {
@@ -517,6 +541,7 @@ export function BabylonScene({
   isSimulationRunning,
   simulationSpeed,
   overlaySettings,
+  collisionResult,
   onVisualDiagnosticsChange
 }: BabylonSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -529,6 +554,7 @@ export function BabylonScene({
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
   const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
+  const collisionResultRef = useRef<CollisionCheckResult>(collisionResult);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<{
     instanceId: string;
@@ -544,12 +570,21 @@ export function BabylonScene({
     selectedMachineIdRef.current = selectedMachineId;
     machineNodesRef.current.forEach((node, instanceId) => {
       const isSelected = instanceId === selectedMachineId;
+      const isColliding = collisionResultRef.current.collidingObjectIds.includes(instanceId);
       node.selectionFrame.isVisible = isSelected && overlaySettingsRef.current.showSelectionBox;
       node.metadataFrame.isVisible = isSelected && overlaySettingsRef.current.showMetadataBox;
+      node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
+      node.collisionFrame.color = isColliding ? new Color3(1, 0.22, 0.16) : new Color3(0.35, 0.72, 1);
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible = isSelected && overlaySettingsRef.current.showClearanceEnvelope;
       }
-      node.material.emissiveColor = isSelected ? new Color3(0.24, 0.2, 0.05) : Color3.Black();
+      node.material.emissiveColor = isSelected
+        ? isColliding
+          ? new Color3(0.42, 0.08, 0.04)
+          : new Color3(0.24, 0.2, 0.05)
+        : isColliding
+          ? new Color3(0.18, 0.03, 0.02)
+          : Color3.Black();
     });
   }, [selectedMachineId]);
 
@@ -560,11 +595,29 @@ export function BabylonScene({
       node.label.isVisible = overlaySettings.showLabels;
       node.selectionFrame.isVisible = isSelected && overlaySettings.showSelectionBox;
       node.metadataFrame.isVisible = isSelected && overlaySettings.showMetadataBox;
+      node.collisionFrame.isVisible = overlaySettings.showCollisionEnvelope;
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible = isSelected && overlaySettings.showClearanceEnvelope;
       }
     });
   }, [overlaySettings]);
+
+  useEffect(() => {
+    collisionResultRef.current = collisionResult;
+    machineNodesRef.current.forEach((node, instanceId) => {
+      const isSelected = instanceId === selectedMachineIdRef.current;
+      const isColliding = collisionResult.collidingObjectIds.includes(instanceId);
+      node.collisionFrame.color = isColliding ? new Color3(1, 0.22, 0.16) : new Color3(0.35, 0.72, 1);
+      node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
+      node.material.emissiveColor = isSelected
+        ? isColliding
+          ? new Color3(0.42, 0.08, 0.04)
+          : new Color3(0.24, 0.2, 0.05)
+        : isColliding
+          ? new Color3(0.18, 0.03, 0.02)
+          : Color3.Black();
+    });
+  }, [collisionResult]);
 
   useEffect(() => {
     isSimulationRunningRef.current = isSimulationRunning;
@@ -769,6 +822,7 @@ export function BabylonScene({
         node.selectionFrame.dispose();
         node.flowArrow?.dispose();
         node.metadataFrame.dispose();
+        node.collisionFrame.dispose();
         node.clearanceFrame?.dispose();
         node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
         node.visualRoot?.dispose(false, true);
@@ -807,6 +861,7 @@ export function BabylonScene({
         node.selectionFrame.dispose();
         node.flowArrow?.dispose();
         node.metadataFrame.dispose();
+        node.collisionFrame.dispose();
         node.clearanceFrame?.dispose();
         node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
         node.visualRoot?.dispose(false, true);
@@ -868,6 +923,13 @@ export function BabylonScene({
       metadataFrame.isVisible =
         selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showMetadataBox;
 
+      const collisionFrame = createCollisionFrame(scene, machine);
+      collisionFrame.parent = box;
+      collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
+      collisionFrame.color = collisionResultRef.current.collidingObjectIds.includes(instanceId)
+        ? new Color3(1, 0.22, 0.16)
+        : new Color3(0.35, 0.72, 1);
+
       const clearanceFrame = createClearanceFrame(scene, machine);
       if (clearanceFrame) {
         clearanceFrame.parent = box;
@@ -902,6 +964,7 @@ export function BabylonScene({
         selectionFrame,
         flowArrow,
         metadataFrame,
+        collisionFrame,
         clearanceFrame,
         products,
         placeholderMeshes,
@@ -985,12 +1048,23 @@ export function BabylonScene({
         machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showSelectionBox;
       node.metadataFrame.isVisible =
         machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showMetadataBox;
+      node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
+      node.collisionFrame.color = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId)
+        ? new Color3(1, 0.22, 0.16)
+        : new Color3(0.35, 0.72, 1);
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible =
           machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showClearanceEnvelope;
       }
-      node.material.emissiveColor =
-        machine.instanceId === selectedMachineIdRef.current ? new Color3(0.24, 0.2, 0.05) : Color3.Black();
+      const isSelected = machine.instanceId === selectedMachineIdRef.current;
+      const isColliding = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId);
+      node.material.emissiveColor = isSelected
+        ? isColliding
+          ? new Color3(0.42, 0.08, 0.04)
+          : new Color3(0.24, 0.2, 0.05)
+        : isColliding
+          ? new Color3(0.18, 0.03, 0.02)
+          : Color3.Black();
     });
   }, [placedMachines]);
 

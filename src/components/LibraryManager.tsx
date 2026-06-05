@@ -16,6 +16,7 @@ import {
 } from "../utils/libraryValidation";
 import { inferPlaceholderVisualType, loadMachineTaxonomy, normalizeTags } from "../utils/taxonomy";
 import { mmToMeters } from "../utils/units";
+import { normalizeCollisionEnvelope } from "../utils/collision";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
@@ -74,6 +75,13 @@ type ItemEditorState = {
   preserveAspectRatio: boolean;
   forwardAxis: "x+" | "x-" | "z+" | "z-";
   upAxis: "y+" | "z+" | "x+";
+  collisionEnvelopeEnabled: boolean;
+  collisionWidthMm: string;
+  collisionDepthMm: string;
+  collisionHeightMm: string;
+  collisionOffsetXMm: string;
+  collisionOffsetYMm: string;
+  collisionOffsetZMm: string;
 };
 
 const cloneLibrary = (library: LoadedMachineLibrary): MachineLibraryDocument => ({
@@ -206,6 +214,9 @@ const toEditorState = (
 ): ItemEditorState => {
   const dimensionsMm = item ? getMachineDimensionsMm({ ...item, category: item.type }) : null;
   const visualModel = item?.visualModel;
+  const collisionEnvelope = item
+    ? normalizeCollisionEnvelope(item.collisionEnvelope, dimensionsMm ?? { widthMm: 1000, depthMm: 1000, heightMm: 1000 })
+    : null;
 
   return {
     mode: item ? "edit" : "add",
@@ -252,7 +263,14 @@ const toEditorState = (
     bottomOnFloor: visualModel?.calibration.bottomOnFloor ?? true,
     preserveAspectRatio: visualModel?.calibration.preserveAspectRatio ?? true,
     forwardAxis: visualModel?.calibration.forwardAxis ?? "z+",
-    upAxis: visualModel?.calibration.upAxis ?? "y+"
+    upAxis: visualModel?.calibration.upAxis ?? "y+",
+    collisionEnvelopeEnabled: collisionEnvelope?.enabled ?? true,
+    collisionWidthMm: collisionEnvelope ? String(collisionEnvelope.widthMm) : "",
+    collisionDepthMm: collisionEnvelope ? String(collisionEnvelope.depthMm) : "",
+    collisionHeightMm: collisionEnvelope ? String(collisionEnvelope.heightMm) : "",
+    collisionOffsetXMm: String(collisionEnvelope?.offsetMm?.xMm ?? 0),
+    collisionOffsetYMm: String(collisionEnvelope?.offsetMm?.yMm ?? 0),
+    collisionOffsetZMm: String(collisionEnvelope?.offsetMm?.zMm ?? 0)
   };
 };
 
@@ -577,6 +595,12 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
     const positionOffsetXMm = Number(itemEditor.positionOffsetXMm);
     const positionOffsetYMm = Number(itemEditor.positionOffsetYMm);
     const positionOffsetZMm = Number(itemEditor.positionOffsetZMm);
+    const collisionWidthMm = itemEditor.collisionWidthMm.trim() ? Number(itemEditor.collisionWidthMm) : widthMm;
+    const collisionDepthMm = itemEditor.collisionDepthMm.trim() ? Number(itemEditor.collisionDepthMm) : depthMm;
+    const collisionHeightMm = itemEditor.collisionHeightMm.trim() ? Number(itemEditor.collisionHeightMm) : heightMm;
+    const collisionOffsetXMm = Number(itemEditor.collisionOffsetXMm);
+    const collisionOffsetYMm = Number(itemEditor.collisionOffsetYMm);
+    const collisionOffsetZMm = Number(itemEditor.collisionOffsetZMm);
     const ids = collectItemIds(draftLibrary.root);
     if (itemEditor.originalId) {
       ids.delete(itemEditor.originalId);
@@ -622,6 +646,20 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
       !Number.isFinite(positionOffsetZMm)
     ) {
       setValidationError("Visual model offsets must be valid numbers.");
+      return;
+    }
+    if (
+      !Number.isFinite(collisionWidthMm) ||
+      collisionWidthMm <= 0 ||
+      !Number.isFinite(collisionDepthMm) ||
+      collisionDepthMm <= 0 ||
+      !Number.isFinite(collisionHeightMm) ||
+      collisionHeightMm <= 0 ||
+      !Number.isFinite(collisionOffsetXMm) ||
+      !Number.isFinite(collisionOffsetYMm) ||
+      !Number.isFinite(collisionOffsetZMm)
+    ) {
+      setValidationError("Collision envelope dimensions must be positive and offsets must be valid millimeter values.");
       return;
     }
 
@@ -675,6 +713,20 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
         left: 0,
         right: 0
       },
+      collisionEnvelope: normalizeCollisionEnvelope(
+        {
+          widthMm: collisionWidthMm,
+          depthMm: collisionDepthMm,
+          heightMm: collisionHeightMm,
+          offsetMm: {
+            xMm: collisionOffsetXMm,
+            yMm: collisionOffsetYMm,
+            zMm: collisionOffsetZMm
+          },
+          enabled: itemEditor.collisionEnvelopeEnabled
+        },
+        { widthMm, depthMm, heightMm }
+      ),
       capabilities: {
         canConvey: itemEditor.canConvey,
         canPalletize: itemEditor.canPalletize,
@@ -1165,6 +1217,87 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                         <option value="z+">Z+</option>
                         <option value="x+">X+</option>
                       </select>
+                    </label>
+                  </div>
+                </details>
+                <details className="manager-visual-model" data-testid="collision-envelope-editor-section">
+                  <summary>Collision Envelope</summary>
+                  <div className="manager-capabilities">
+                    <label>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor.collisionEnvelopeEnabled}
+                        onChange={(event) =>
+                          setItemEditor({ ...itemEditor, collisionEnvelopeEnabled: event.target.checked })
+                        }
+                      />
+                      <span>Enable Collision Envelope</span>
+                    </label>
+                  </div>
+                  <div className="manager-editor-grid">
+                    <label>
+                      <span>Collision Width (mm)</span>
+                      <input
+                        disabled={!editable}
+                        placeholder={itemEditor.widthMm}
+                        type="number"
+                        step="1"
+                        value={itemEditor.collisionWidthMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, collisionWidthMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Collision Depth (mm)</span>
+                      <input
+                        disabled={!editable}
+                        placeholder={itemEditor.depthMm}
+                        type="number"
+                        step="1"
+                        value={itemEditor.collisionDepthMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, collisionDepthMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Collision Height (mm)</span>
+                      <input
+                        disabled={!editable}
+                        placeholder={itemEditor.heightMm}
+                        type="number"
+                        step="1"
+                        value={itemEditor.collisionHeightMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, collisionHeightMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset X (mm)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.collisionOffsetXMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, collisionOffsetXMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset Y / Elevation Offset (mm)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.collisionOffsetYMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, collisionOffsetYMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset Z / Plan Y Offset (mm)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.collisionOffsetZMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, collisionOffsetZMm: event.target.value })}
+                      />
                     </label>
                   </div>
                 </details>

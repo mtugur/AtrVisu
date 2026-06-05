@@ -1,6 +1,6 @@
 import type { PlanPositionMm } from "./coordinates";
 
-export type CollisionSeverity = "info" | "warning" | "critical";
+export type CollisionSeverity = "warning" | "error";
 
 export type CollisionEnvelope = {
   widthMm: number;
@@ -9,8 +9,29 @@ export type CollisionEnvelope = {
   offsetMm?: {
     xMm: number;
     yMm: number;
-    elevationMm: number;
+    zMm: number;
   };
+  enabled: boolean;
+};
+
+export type CollisionPair = {
+  objectAId: string;
+  objectBId: string;
+  objectAName: string;
+  objectBName: string;
+  severity: CollisionSeverity;
+  reason: string;
+};
+
+export type CollisionCheckResult = {
+  enabled: boolean;
+  checkedObjectCount: number;
+  pairs: CollisionPair[];
+  collidingObjectIds: string[];
+};
+
+export type CollisionSettings = {
+  enabled: boolean;
 };
 
 export type ClearanceEnvelope = {

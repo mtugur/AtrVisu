@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene } from "./components/BabylonScene";
+import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
@@ -10,6 +11,8 @@ import { PanelSection } from "./components/PanelSection";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 import type { VisualModelDiagnostics } from "./types/overlays";
+import { checkAllObjectCollisions } from "./utils/collision";
+import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
 import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
@@ -35,6 +38,7 @@ export function App() {
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
   const [overlaySettings, setOverlaySettings] = useState(loadOverlaySettings);
+  const [collisionSettings, setCollisionSettings] = useState(loadCollisionSettings);
   const [visualDiagnostics, setVisualDiagnostics] = useState<Record<string, VisualModelDiagnostics>>({});
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
@@ -58,6 +62,15 @@ export function App() {
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
   const selectedVisualDiagnostics = selectedMachineId ? visualDiagnostics[selectedMachineId] : undefined;
+  const collisionResult = useMemo(
+    () => checkAllObjectCollisions(placedMachines, collisionSettings.enabled),
+    [collisionSettings.enabled, placedMachines]
+  );
+  const selectedCollisionPairs = selectedMachineId
+    ? collisionResult.pairs.filter(
+        (pair) => pair.objectAId === selectedMachineId || pair.objectBId === selectedMachineId
+      )
+    : [];
 
   useEffect(() => {
     try {
@@ -66,6 +79,14 @@ export function App() {
       // Display preferences are best-effort only.
     }
   }, [overlaySettings]);
+
+  useEffect(() => {
+    try {
+      saveCollisionSettings(collisionSettings);
+    } catch {
+      // Collision preferences are best-effort only.
+    }
+  }, [collisionSettings]);
 
   useEffect(() => {
     try {
@@ -325,6 +346,7 @@ export function App() {
         isSimulationRunning={isSimulationRunning}
         simulationSpeed={simulationSpeed}
         overlaySettings={overlaySettings}
+        collisionResult={collisionResult}
         onVisualDiagnosticsChange={(diagnostics) =>
           setVisualDiagnostics((current) => ({
             ...current,
@@ -408,6 +430,18 @@ export function App() {
             <DisplayOverlayControls settings={overlaySettings} onChange={setOverlaySettings} />
           </PanelSection>
           <PanelSection
+            title="Collision Check"
+            storageKey="atrvisu.panelSection.collisionCheck.v1"
+            defaultExpanded
+            badge={collisionSettings.enabled ? `${collisionResult.pairs.length}` : "Off"}
+          >
+            <CollisionCheckPanel
+              settings={collisionSettings}
+              result={collisionResult}
+              onChange={setCollisionSettings}
+            />
+          </PanelSection>
+          <PanelSection
             title="Selected Object Properties"
             storageKey="atrvisu.panelSection.properties.v1"
             defaultExpanded={Boolean(selectedMachine)}
@@ -416,6 +450,7 @@ export function App() {
             <MachineProperties
               selectedMachine={selectedMachine}
               visualDiagnostics={selectedVisualDiagnostics}
+              collisionPairs={selectedCollisionPairs}
               onUpdateMachine={updateMachine}
               onDeleteSelected={deleteSelectedMachine}
             />

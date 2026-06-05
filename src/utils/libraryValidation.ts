@@ -10,6 +10,7 @@ import type { MachineCapabilities } from "../types/taxonomy";
 import { DEFAULT_CAPABILITIES, getLegacyTaxonomyHints, inferPlaceholderVisualType, normalizeTags } from "./taxonomy";
 import { metersToMm, mmToMeters } from "./units";
 import { normalizeVisualModel } from "./visualModel";
+import { normalizeCollisionEnvelope } from "./collision";
 
 type LibraryIndexDocument = {
   libraries?: unknown;
@@ -194,6 +195,32 @@ const readCapabilities = (
   };
 };
 
+const readCollisionEnvelope = (
+  value: unknown,
+  dimensionsMm: { widthMm: number; depthMm: number; heightMm: number },
+  warnings: LibraryValidationWarning[],
+  path: string
+): LibraryMachineItem["collisionEnvelope"] => {
+  if (value === undefined) {
+    return normalizeCollisionEnvelope(undefined, dimensionsMm);
+  }
+
+  if (!isRecord(value)) {
+    createWarning(warnings, path, "Invalid collisionEnvelope; metadata dimension defaults were applied.");
+    return normalizeCollisionEnvelope(undefined, dimensionsMm);
+  }
+
+  const invalidDimension =
+    (value.widthMm !== undefined && !isPositiveNumber(value.widthMm)) ||
+    (value.depthMm !== undefined && !isPositiveNumber(value.depthMm)) ||
+    (value.heightMm !== undefined && !isPositiveNumber(value.heightMm));
+  if (invalidDimension) {
+    createWarning(warnings, path, "Invalid collisionEnvelope dimensions; metadata dimension defaults were applied where needed.");
+  }
+
+  return normalizeCollisionEnvelope(value, dimensionsMm);
+};
+
 const validateMachineItem = (
   item: unknown,
   warnings: LibraryValidationWarning[],
@@ -278,6 +305,7 @@ const validateMachineItem = (
     thumbnailPath: isNonEmptyString(item.thumbnailPath) ? item.thumbnailPath : null,
     connectionPoints,
     clearance: readClearance(item.clearance, warnings, path),
+    collisionEnvelope: readCollisionEnvelope(item.collisionEnvelope, { widthMm, depthMm, heightMm }, warnings, path),
     capabilities: readCapabilities(item.capabilities, warnings, path)
   };
 };

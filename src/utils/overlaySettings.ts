@@ -6,6 +6,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showLabels: true,
   showSelectionBox: true,
   showMetadataBox: false,
+  showCollisionEnvelope: false,
   showClearanceEnvelope: false
 };
 
@@ -26,6 +27,10 @@ export const normalizeOverlaySettings = (value: unknown): OverlaySettings => {
         : DEFAULT_OVERLAY_SETTINGS.showSelectionBox,
     showMetadataBox:
       typeof value.showMetadataBox === "boolean" ? value.showMetadataBox : DEFAULT_OVERLAY_SETTINGS.showMetadataBox,
+    showCollisionEnvelope:
+      typeof value.showCollisionEnvelope === "boolean"
+        ? value.showCollisionEnvelope
+        : DEFAULT_OVERLAY_SETTINGS.showCollisionEnvelope,
     showClearanceEnvelope:
       typeof value.showClearanceEnvelope === "boolean"
         ? value.showClearanceEnvelope

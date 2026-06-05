@@ -1,3 +1,5 @@
+import type { CollisionEnvelope } from "./collision";
+
 export type MachineCategory = string;
 
 export type ConnectionPoint = {
@@ -59,6 +61,7 @@ export type MachineDefinition = {
     left: number;
     right: number;
   };
+  collisionEnvelope?: CollisionEnvelope;
   capabilities?: {
     canConvey: boolean;
     canPalletize: boolean;
@@ -122,6 +125,7 @@ export type LayoutObject = {
   positionZ: number;
   rotationY: number;
   defaultColor: string;
+  collisionEnvelope?: CollisionEnvelope;
   flowDirection?: "forward" | "reverse";
 };
 
