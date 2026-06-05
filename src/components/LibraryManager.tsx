@@ -8,12 +8,14 @@ import type {
   MachineCategory,
   MachineLibraryDocument
 } from "../types/machine";
+import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import {
   CUSTOM_LIBRARY_STORAGE_KEY,
   MACHINE_CATEGORIES,
   PROJECT_CUSTOM_LIBRARY_ID,
   validateProjectCustomLibraryDocument
 } from "../utils/libraryValidation";
+import { mmToMeters } from "../utils/units";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
@@ -32,9 +34,9 @@ type ItemEditorState = {
   id: string;
   name: string;
   type: MachineCategory;
-  width: string;
-  depth: string;
-  height: string;
+  widthMm: string;
+  depthMm: string;
+  heightMm: string;
   defaultColor: string;
   canConvey: boolean;
   canPalletize: boolean;
@@ -169,22 +171,26 @@ const countItems = (group: LibraryGroup): number => {
 const toEditorState = (
   parentGroupId: string,
   item?: LibraryMachineItem
-): ItemEditorState => ({
-  mode: item ? "edit" : "add",
-  parentGroupId,
-  originalId: item?.id,
-  id: item?.id ?? "",
-  name: item?.name ?? "",
-  type: item?.type ?? "Packaging Machine",
-  width: item ? String(item.width) : "1",
-  depth: item ? String(item.depth) : "1",
-  height: item ? String(item.height) : "1",
-  defaultColor: item?.defaultColor ?? "#7fc8ff",
-  canConvey: item?.capabilities?.canConvey ?? false,
-  canPalletize: item?.capabilities?.canPalletize ?? false,
-  canWrap: item?.capabilities?.canWrap ?? false,
-  hasFlowDirection: item?.capabilities?.hasFlowDirection ?? false
-});
+): ItemEditorState => {
+  const dimensionsMm = item ? getMachineDimensionsMm({ ...item, category: item.type }) : null;
+
+  return {
+    mode: item ? "edit" : "add",
+    parentGroupId,
+    originalId: item?.id,
+    id: item?.id ?? "",
+    name: item?.name ?? "",
+    type: item?.type ?? "Packaging Machine",
+    widthMm: dimensionsMm ? String(dimensionsMm.widthMm) : "1000",
+    depthMm: dimensionsMm ? String(dimensionsMm.depthMm) : "1000",
+    heightMm: dimensionsMm ? String(dimensionsMm.heightMm) : "1000",
+    defaultColor: item?.defaultColor ?? "#7fc8ff",
+    canConvey: item?.capabilities?.canConvey ?? false,
+    canPalletize: item?.capabilities?.canPalletize ?? false,
+    canWrap: item?.capabilities?.canWrap ?? false,
+    hasFlowDirection: item?.capabilities?.hasFlowDirection ?? false
+  };
+};
 
 function ManagerTreeNode({
   group,
@@ -477,9 +483,9 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       return;
     }
 
-    const width = Number(itemEditor.width);
-    const depth = Number(itemEditor.depth);
-    const height = Number(itemEditor.height);
+    const widthMm = Number(itemEditor.widthMm);
+    const depthMm = Number(itemEditor.depthMm);
+    const heightMm = Number(itemEditor.heightMm);
     const ids = collectItemIds(draftLibrary.root);
     if (itemEditor.originalId) {
       ids.delete(itemEditor.originalId);
@@ -497,8 +503,15 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       setValidationError("Machine item type is required.");
       return;
     }
-    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(depth) || depth <= 0 || !Number.isFinite(height) || height <= 0) {
-      setValidationError("Width, depth, and height must be positive numbers.");
+    if (
+      !Number.isFinite(widthMm) ||
+      widthMm <= 0 ||
+      !Number.isFinite(depthMm) ||
+      depthMm <= 0 ||
+      !Number.isFinite(heightMm) ||
+      heightMm <= 0
+    ) {
+      setValidationError("Width, depth, and height must be positive millimeter values.");
       return;
     }
     if (ids.has(itemEditor.id.trim())) {
@@ -510,9 +523,12 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       id: itemEditor.id.trim(),
       name: itemEditor.name.trim(),
       type: itemEditor.type,
-      width,
-      depth,
-      height,
+      widthMm,
+      depthMm,
+      heightMm,
+      width: mmToMeters(widthMm),
+      depth: mmToMeters(depthMm),
+      height: mmToMeters(heightMm),
       defaultColor: itemEditor.defaultColor || "#7fc8ff",
       modelPath: null,
       thumbnailPath: null,
@@ -718,33 +734,33 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
                     </select>
                   </label>
                   <label>
-                    <span>Width (m)</span>
+                    <span>Width (mm)</span>
                     <input
                       disabled={!editable}
                       type="number"
-                      step="0.1"
-                      value={itemEditor.width}
-                      onChange={(event) => setItemEditor({ ...itemEditor, width: event.target.value })}
+                      step="1"
+                      value={itemEditor.widthMm}
+                      onChange={(event) => setItemEditor({ ...itemEditor, widthMm: event.target.value })}
                     />
                   </label>
                   <label>
-                    <span>Depth (m)</span>
+                    <span>Depth (mm)</span>
                     <input
                       disabled={!editable}
                       type="number"
-                      step="0.1"
-                      value={itemEditor.depth}
-                      onChange={(event) => setItemEditor({ ...itemEditor, depth: event.target.value })}
+                      step="1"
+                      value={itemEditor.depthMm}
+                      onChange={(event) => setItemEditor({ ...itemEditor, depthMm: event.target.value })}
                     />
                   </label>
                   <label>
-                    <span>Height (m)</span>
+                    <span>Height (mm)</span>
                     <input
                       disabled={!editable}
                       type="number"
-                      step="0.1"
-                      value={itemEditor.height}
-                      onChange={(event) => setItemEditor({ ...itemEditor, height: event.target.value })}
+                      step="1"
+                      value={itemEditor.heightMm}
+                      onChange={(event) => setItemEditor({ ...itemEditor, heightMm: event.target.value })}
                     />
                   </label>
                   <label>
@@ -819,7 +835,15 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
               <div className="manager-detail-card">
                 <span>Machine Item</span>
                 <h3>{selectedItem.item.name}</h3>
-                <p>{selectedItem.item.width} x {selectedItem.item.depth} x {selectedItem.item.height} m</p>
+                <p>
+                  {(() => {
+                    const dimensionsMm = getMachineDimensionsMm({
+                      ...selectedItem.item,
+                      category: selectedItem.item.type
+                    });
+                    return `${dimensionsMm.widthMm} x ${dimensionsMm.depthMm} x ${dimensionsMm.heightMm} mm`;
+                  })()}
+                </p>
                 <button type="button" onClick={() => selectItem(selectedItem.group.id, selectedItem.item)}>
                   Open Editor
                 </button>

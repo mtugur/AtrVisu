@@ -8,6 +8,12 @@ import { MachineProperties } from "./components/MachineProperties";
 import { PanelSection } from "./components/PanelSection";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
+import {
+  ATRVISU_UNIT_SYSTEM,
+  getMachineDimensionsMm,
+  normalizeMachineDefinitionDimensions
+} from "./utils/machineDimensions";
+import { metersToMm, mmToMeters } from "./utils/units";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -110,35 +116,57 @@ export function App() {
     (exportedAt = new Date().toISOString()): AtrVisuLayout => ({
       appName: "AtrVisu",
       version: 1,
+      unitSystem: ATRVISU_UNIT_SYSTEM,
       exportedAt,
-      objects: placedMachines.map((machine) => ({
-        id: machine.instanceId,
-        libraryId: machine.libraryId,
-        machineDefinitionId: machine.machineDefinitionId,
-        definitionSnapshot: machine.definitionSnapshot,
-        name: machine.definition.name,
-        category: machine.definition.category,
-        width: machine.definition.width,
-        depth: machine.definition.depth,
-        height: machine.definition.height,
-        positionX: machine.position.x,
-        positionZ: machine.position.z,
-        rotationY: machine.rotationY,
-        defaultColor: machine.definition.defaultColor,
-        flowDirection: machine.flowDirection
-      }))
+      objects: placedMachines.map((machine) => {
+        const definition = normalizeMachineDefinitionDimensions(machine.definition);
+        const snapshot = normalizeMachineDefinitionDimensions(machine.definitionSnapshot);
+        const dimensionsMm = getMachineDimensionsMm(definition);
+        const positionMm = machine.positionMm ?? {
+          xMm: metersToMm(machine.position.x),
+          yMm: metersToMm(machine.position.z)
+        };
+        const rotationDeg = machine.rotationDeg ?? machine.rotationY;
+
+        return {
+          id: machine.instanceId,
+          libraryId: machine.libraryId,
+          machineDefinitionId: machine.machineDefinitionId,
+          definitionSnapshot: snapshot,
+          name: definition.name,
+          category: definition.category,
+          ...dimensionsMm,
+          width: definition.width,
+          depth: definition.depth,
+          height: definition.height,
+          positionMm,
+          elevationMm: machine.elevationMm ?? 0,
+          rotationDeg,
+          positionX: machine.position.x,
+          positionZ: machine.position.z,
+          rotationY: machine.rotationY,
+          defaultColor: definition.defaultColor,
+          flowDirection: machine.flowDirection
+        };
+      })
     }),
     [placedMachines]
   );
 
   const addMachine = useCallback((selection: { libraryId: string; definition: MachineDefinition }) => {
-    const { definition, libraryId } = selection;
+    const { libraryId } = selection;
+    const definition = normalizeMachineDefinitionDimensions(selection.definition);
     const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
 
     setPlacedMachines((current) => {
       const index = current.length;
       const column = index % PLACEMENT_COLUMNS;
       const row = Math.floor(index / PLACEMENT_COLUMNS);
+
+      const position = {
+        x: PLACEMENT_ORIGIN.x + column * PLACEMENT_SPACING,
+        z: PLACEMENT_ORIGIN.z + row * PLACEMENT_SPACING
+      };
 
       return [
         ...current,
@@ -148,10 +176,13 @@ export function App() {
           machineDefinitionId: definition.id,
           definitionSnapshot: definition,
           definition,
-          position: {
-            x: PLACEMENT_ORIGIN.x + column * PLACEMENT_SPACING,
-            z: PLACEMENT_ORIGIN.z + row * PLACEMENT_SPACING
+          position,
+          positionMm: {
+            xMm: metersToMm(position.x),
+            yMm: metersToMm(position.z)
           },
+          elevationMm: 0,
+          rotationDeg: 0,
           rotationY: 0,
           flowDirection: "forward"
         }
@@ -162,10 +193,33 @@ export function App() {
 
   const updateMachine = useCallback((
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
+    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => {
     setPlacedMachines((current) =>
-      current.map((machine) => (machine.instanceId === instanceId ? { ...machine, ...updates } : machine))
+      current.map((machine) => {
+        if (machine.instanceId !== instanceId) {
+          return machine;
+        }
+
+        const nextPosition = updates.position ?? (
+          updates.positionMm
+            ? { x: mmToMeters(updates.positionMm.xMm), z: mmToMeters(updates.positionMm.yMm) }
+            : machine.position
+        );
+        const nextRotationY = updates.rotationY ?? updates.rotationDeg ?? machine.rotationY;
+
+        return {
+          ...machine,
+          ...updates,
+          position: nextPosition,
+          positionMm: updates.positionMm ?? {
+            xMm: metersToMm(nextPosition.x),
+            yMm: metersToMm(nextPosition.z)
+          },
+          rotationY: nextRotationY,
+          rotationDeg: updates.rotationDeg ?? updates.rotationY ?? machine.rotationDeg ?? machine.rotationY
+        };
+      })
     );
   }, []);
 
@@ -184,11 +238,14 @@ export function App() {
 
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines: PlacedMachine[] = layout.objects.map((object) => {
-      const definition: MachineDefinition = {
+      const definition: MachineDefinition = normalizeMachineDefinitionDimensions({
         ...(object.definitionSnapshot ?? {
           id: object.machineDefinitionId,
           name: object.name,
           category: object.category,
+          widthMm: object.widthMm,
+          depthMm: object.depthMm,
+          heightMm: object.heightMm,
           width: object.width,
           depth: object.depth,
           height: object.height,
@@ -197,7 +254,12 @@ export function App() {
         }),
         clearance: object.definitionSnapshot?.clearance ?? DEFAULT_CLEARANCE,
         capabilities: object.definitionSnapshot?.capabilities ?? DEFAULT_CAPABILITIES
+      });
+      const positionMm = object.positionMm ?? {
+        xMm: metersToMm(object.positionX),
+        yMm: metersToMm(object.positionZ)
       };
+      const rotationDeg = object.rotationDeg ?? object.rotationY;
 
       return {
         instanceId: object.id,
@@ -206,10 +268,13 @@ export function App() {
         definitionSnapshot: definition,
         definition,
         position: {
-          x: object.positionX,
-          z: object.positionZ
+          x: mmToMeters(positionMm.xMm),
+          z: mmToMeters(positionMm.yMm)
         },
-        rotationY: object.rotationY,
+        positionMm,
+        elevationMm: object.elevationMm ?? 0,
+        rotationDeg,
+        rotationY: rotationDeg,
         flowDirection: object.flowDirection ?? "forward"
       };
     });

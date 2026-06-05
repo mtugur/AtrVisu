@@ -20,6 +20,10 @@ export type MachineDefinition = {
   id: string;
   name: string;
   category: MachineCategory;
+  widthMm?: number;
+  depthMm?: number;
+  heightMm?: number;
+  /** Legacy meter dimensions kept for older layouts and Babylon render compatibility. */
   width: number;
   depth: number;
   height: number;
@@ -51,6 +55,12 @@ export type PlacedMachine = {
     x: number;
     z: number;
   };
+  positionMm?: {
+    xMm: number;
+    yMm: number;
+  };
+  elevationMm?: number;
+  rotationDeg?: number;
   rotationY: number;
   flowDirection: "forward" | "reverse";
 };
@@ -62,9 +72,18 @@ export type LayoutObject = {
   definitionSnapshot?: MachineDefinition;
   name: string;
   category: MachineCategory;
+  widthMm?: number;
+  depthMm?: number;
+  heightMm?: number;
   width: number;
   depth: number;
   height: number;
+  positionMm?: {
+    xMm: number;
+    yMm: number;
+  };
+  elevationMm?: number;
+  rotationDeg?: number;
   positionX: number;
   positionZ: number;
   rotationY: number;
@@ -75,6 +94,11 @@ export type LayoutObject = {
 export type AtrVisuLayout = {
   appName: "AtrVisu";
   version: 1;
+  unitSystem?: {
+    canonicalUnit: "mm";
+    renderUnit: "m";
+    version: "1.0";
+  };
   exportedAt: string;
   objects: LayoutObject[];
 };

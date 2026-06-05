@@ -19,6 +19,7 @@ import {
   Vector3
 } from "@babylonjs/core";
 import type { PlacedMachine } from "../types/machine";
+import { getMachineDimensionsMeters } from "../utils/machineDimensions";
 
 const GRID_SIZE = 42;
 const GRID_MAJOR_STEP = 6;
@@ -30,7 +31,7 @@ type BabylonSceneProps = {
   onSelectMachine: (instanceId: string | null) => void;
   onUpdateMachine: (
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
+    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => void;
   isSimulationRunning: boolean;
   simulationSpeed: number;
@@ -76,7 +77,7 @@ const createLabel = (scene: Scene, textureKey: string, text: string, y: number) 
 };
 
 const createSelectionFrame = (scene: Scene, machine: PlacedMachine) => {
-  const { width, depth, height } = machine.definition;
+  const { width, depth, height } = getMachineDimensionsMeters(machine.definition);
   const yMin = -height / 2 - 0.02;
   const yMax = height / 2 + 0.02;
   const xMin = -width / 2;
@@ -120,7 +121,7 @@ const hasFlowDirection = (machine: PlacedMachine) => {
 };
 
 const createFlowArrow = (scene: Scene, machine: PlacedMachine) => {
-  const { width, depth, height } = machine.definition;
+  const { width, depth, height } = getMachineDimensionsMeters(machine.definition);
   const arrowY = height / 2 + 0.12;
   const startX = -width * 0.34;
   const endX = width * 0.34;
@@ -376,10 +377,11 @@ export function BabylonScene({
         productPhaseRef.current.set(instanceId, nextPhase);
 
         node.products.forEach((product, index) => {
+          const dimensions = getMachineDimensionsMeters(machine.definition);
           const progress = (nextPhase + index / node.products.length) % 1;
           const localProgress = machine.flowDirection === "reverse" ? 1 - progress : progress;
-          product.position.x = -machine.definition.width / 2 + localProgress * machine.definition.width;
-          product.position.y = machine.definition.height / 2 + 0.22;
+          product.position.x = -dimensions.width / 2 + localProgress * dimensions.width;
+          product.position.y = dimensions.height / 2 + 0.22;
           product.position.z = 0;
         });
       });
@@ -447,6 +449,7 @@ export function BabylonScene({
       }
 
       const { definition, instanceId, position } = machine;
+      const dimensions = getMachineDimensionsMeters(definition);
       const material = new StandardMaterial(`machine-material-${instanceId}`, scene);
       material.diffuseColor = hexToColor3(definition.defaultColor);
       material.specularColor = new Color3(0.14, 0.16, 0.18);
@@ -454,18 +457,18 @@ export function BabylonScene({
       const box = MeshBuilder.CreateBox(
         `machine-${instanceId}`,
         {
-          width: definition.width,
-          depth: definition.depth,
-          height: definition.height
+          width: dimensions.width,
+          depth: dimensions.depth,
+          height: dimensions.height
         },
         scene
       );
-      box.position = new Vector3(position.x, definition.height / 2, position.z);
+      box.position = new Vector3(position.x, dimensions.height / 2, position.z);
       box.rotation.y = (machine.rotationY * Math.PI) / 180;
       box.material = material;
       box.metadata = { instanceId };
 
-      const { label, texture } = createLabel(scene, instanceId, definition.name, definition.height + 0.85);
+      const { label, texture } = createLabel(scene, instanceId, definition.name, dimensions.height + 0.85);
       label.position.x = position.x;
       label.position.z = position.z;
 
@@ -500,15 +503,16 @@ export function BabylonScene({
         return;
       }
 
+      const dimensions = getMachineDimensionsMeters(machine.definition);
       node.box.position.x = machine.position.x;
-      node.box.position.y = machine.definition.height / 2;
+      node.box.position.y = dimensions.height / 2;
       node.box.position.z = machine.position.z;
       node.box.rotation.y = (machine.rotationY * Math.PI) / 180;
       if (node.flowArrow) {
         node.flowArrow.rotation.y = machine.flowDirection === "reverse" ? Math.PI : 0;
       }
       node.label.position.x = machine.position.x;
-      node.label.position.y = machine.definition.height + 0.85;
+      node.label.position.y = dimensions.height + 0.85;
       node.label.position.z = machine.position.z;
       node.selectionFrame.isVisible = machine.instanceId === selectedMachineIdRef.current;
       node.material.emissiveColor =

@@ -1,15 +1,17 @@
 import type { PlacedMachine } from "../types/machine";
+import { getMachineDimensionsMm } from "../utils/machineDimensions";
+import { formatLength, metersToMm, mmToMeters } from "../utils/units";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
   onUpdateMachine: (
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "rotationY" | "flowDirection">>
+    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => void;
   onDeleteSelected: () => void;
 };
 
-const formatMeters = (value: number) => `${value.toFixed(2)} m`;
+const formatMm = (value: number) => formatLength(value, "mm", 0);
 
 export function MachineProperties({
   selectedMachine,
@@ -26,12 +28,48 @@ export function MachineProperties({
       return;
     }
 
+    const currentPositionMm = selectedMachine.positionMm ?? {
+      xMm: metersToMm(selectedMachine.position.x),
+      yMm: metersToMm(selectedMachine.position.z)
+    };
+    const nextPositionMm = {
+      ...currentPositionMm,
+      [axis === "x" ? "xMm" : "yMm"]: numericValue
+    };
+
     onUpdateMachine(selectedMachine.instanceId, {
       position: {
-        ...selectedMachine.position,
-        [axis]: numericValue
-      }
+        x: mmToMeters(nextPositionMm.xMm),
+        z: mmToMeters(nextPositionMm.yMm)
+      },
+      positionMm: nextPositionMm
     });
+  };
+
+  const updateElevation = (value: string) => {
+    if (!selectedMachine) {
+      return;
+    }
+
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return;
+    }
+
+    onUpdateMachine(selectedMachine.instanceId, {
+      elevationMm: numericValue
+    });
+  };
+
+  const getPositionMm = () => {
+    if (!selectedMachine) {
+      return { xMm: 0, yMm: 0 };
+    }
+
+    return selectedMachine.positionMm ?? {
+      xMm: metersToMm(selectedMachine.position.x),
+      yMm: metersToMm(selectedMachine.position.z)
+    };
   };
 
   const updateRotation = (value: string) => {
@@ -44,8 +82,14 @@ export function MachineProperties({
       return;
     }
 
-    onUpdateMachine(selectedMachine.instanceId, { rotationY: numericValue });
+    onUpdateMachine(selectedMachine.instanceId, {
+      rotationY: numericValue,
+      rotationDeg: numericValue
+    });
   };
+
+  const positionMm = getPositionMm();
+  const dimensionsMm = selectedMachine ? getMachineDimensionsMm(selectedMachine.definition) : null;
 
   return (
     <section className="properties-section" aria-label="Selected machine properties">
@@ -66,21 +110,30 @@ export function MachineProperties({
           </div>
 
           <label className="property-field">
-            <span>Plan X (m)</span>
+            <span>Plan X (mm)</span>
             <input
               type="number"
-              step="0.1"
-              value={selectedMachine.position.x}
+              step="10"
+              value={positionMm.xMm}
               onChange={(event) => updatePosition("x", event.target.value)}
             />
           </label>
           <label className="property-field">
-            <span>Plan Y (m)</span>
+            <span>Plan Y (mm)</span>
             <input
               type="number"
-              step="0.1"
-              value={selectedMachine.position.z}
+              step="10"
+              value={positionMm.yMm}
               onChange={(event) => updatePosition("z", event.target.value)}
+            />
+          </label>
+          <label className="property-field">
+            <span>Elevation (mm)</span>
+            <input
+              type="number"
+              step="10"
+              value={selectedMachine.elevationMm ?? 0}
+              onChange={(event) => updateElevation(event.target.value)}
             />
           </label>
           <label className="property-field">
@@ -88,16 +141,18 @@ export function MachineProperties({
             <input
               type="number"
               step="1"
-              value={selectedMachine.rotationY}
+              value={selectedMachine.rotationDeg ?? selectedMachine.rotationY}
               onChange={(event) => updateRotation(event.target.value)}
             />
           </label>
 
-          <div className="dimension-grid" aria-label="Machine dimensions">
-            <span>W {formatMeters(selectedMachine.definition.width)}</span>
-            <span>D {formatMeters(selectedMachine.definition.depth)}</span>
-            <span>H {formatMeters(selectedMachine.definition.height)}</span>
-          </div>
+          {dimensionsMm ? (
+            <div className="dimension-grid" aria-label="Machine dimensions">
+              <span>W {formatMm(dimensionsMm.widthMm)}</span>
+              <span>D {formatMm(dimensionsMm.depthMm)}</span>
+              <span>H {formatMm(dimensionsMm.heightMm)}</span>
+            </div>
+          ) : null}
 
           {selectedMachine.definition.capabilities?.hasFlowDirection ||
           selectedMachine.definition.category === "Conveyor" ? (
