@@ -8,6 +8,8 @@ import type {
   MachineDefinition
 } from "../types/machine";
 import { loadMachineLibraries } from "../utils/libraryValidation";
+import { getMachineDimensionsMm, normalizeMachineDefinitionDimensions } from "../utils/machineDimensions";
+import { formatLength } from "../utils/units";
 
 type LibrarySelection = {
   libraryId: string;
@@ -19,10 +21,13 @@ type MachineLibraryProps = {
   onAddMachine: (selection: LibrarySelection) => void;
 };
 
-const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => ({
+const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineDefinitionDimensions({
   id: item.id,
   name: item.name,
   category: item.type,
+  widthMm: item.widthMm,
+  depthMm: item.depthMm,
+  heightMm: item.heightMm,
   width: item.width,
   depth: item.depth,
   height: item.height,
@@ -33,6 +38,15 @@ const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => ({
   clearance: item.clearance,
   capabilities: item.capabilities
 });
+
+const formatDimensions = (item: LibraryMachineItem) => {
+  const dimensions = getMachineDimensionsMm({
+    ...item,
+    category: item.type
+  });
+
+  return `${formatLength(dimensions.widthMm, "mm", 0)} x ${formatLength(dimensions.depthMm, "mm", 0)} x ${formatLength(dimensions.heightMm, "mm", 0)}`;
+};
 
 function GroupNode({
   group,
@@ -94,9 +108,7 @@ function GroupNode({
                 <span className="machine-content">
                   <strong>{item.name}</strong>
                   <span>{item.type}</span>
-                  <small>
-                    {item.width} x {item.depth} x {item.height} m
-                  </small>
+                  <small>{formatDimensions(item)}</small>
                 </span>
               </button>
             );

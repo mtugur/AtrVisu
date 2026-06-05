@@ -7,6 +7,7 @@ import type {
   MachineCategory,
   MachineLibraryDocument
 } from "../types/machine";
+import { metersToMm, mmToMeters } from "./units";
 
 type LibraryIndexDocument = {
   libraries?: unknown;
@@ -55,6 +56,20 @@ const isNonEmptyString = (value: unknown): value is string => {
 
 const isPositiveNumber = (value: unknown): value is number => {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+};
+
+const readDimensionMm = (item: Record<string, unknown>, mmKey: string, meterKey: string) => {
+  const mmValue = item[mmKey];
+  if (isPositiveNumber(mmValue)) {
+    return mmValue;
+  }
+
+  const meterValue = item[meterKey];
+  if (isPositiveNumber(meterValue)) {
+    return metersToMm(meterValue);
+  }
+
+  return null;
 };
 
 const isMachineCategory = (value: unknown): value is MachineCategory => {
@@ -181,9 +196,9 @@ const validateMachineItem = (
   const id = item.id;
   const name = item.name;
   const type = item.type;
-  const width = item.width;
-  const depth = item.depth;
-  const height = item.height;
+  const widthMm = readDimensionMm(item, "widthMm", "width");
+  const depthMm = readDimensionMm(item, "depthMm", "depth");
+  const heightMm = readDimensionMm(item, "heightMm", "height");
   const defaultColor = item.defaultColor;
   const connectionPoints = item.connectionPoints;
 
@@ -191,9 +206,9 @@ const validateMachineItem = (
     !isNonEmptyString(id) ? "id" : "",
     !isNonEmptyString(name) ? "name" : "",
     !isMachineCategory(type) ? "type" : "",
-    !isPositiveNumber(width) ? "width" : "",
-    !isPositiveNumber(depth) ? "depth" : "",
-    !isPositiveNumber(height) ? "height" : "",
+    widthMm === null ? "widthMm/width" : "",
+    depthMm === null ? "depthMm/depth" : "",
+    heightMm === null ? "heightMm/height" : "",
     !isNonEmptyString(defaultColor) ? "defaultColor" : "",
     !Array.isArray(connectionPoints) ? "connectionPoints" : ""
   ].filter(Boolean);
@@ -207,9 +222,9 @@ const validateMachineItem = (
     !isNonEmptyString(id) ||
     !isNonEmptyString(name) ||
     !isMachineCategory(type) ||
-    !isPositiveNumber(width) ||
-    !isPositiveNumber(depth) ||
-    !isPositiveNumber(height) ||
+    widthMm === null ||
+    depthMm === null ||
+    heightMm === null ||
     !isNonEmptyString(defaultColor) ||
     !Array.isArray(connectionPoints)
   ) {
@@ -220,9 +235,12 @@ const validateMachineItem = (
     id,
     name,
     type,
-    width,
-    depth,
-    height,
+    widthMm,
+    depthMm,
+    heightMm,
+    width: mmToMeters(widthMm),
+    depth: mmToMeters(depthMm),
+    height: mmToMeters(heightMm),
     defaultColor,
     modelPath: isNonEmptyString(item.modelPath) ? item.modelPath : null,
     thumbnailPath: isNonEmptyString(item.thumbnailPath) ? item.thumbnailPath : null,
