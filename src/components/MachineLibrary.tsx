@@ -10,6 +10,7 @@ import type {
 import { loadMachineLibraries } from "../utils/libraryValidation";
 import { getMachineDimensionsMm, normalizeMachineDefinitionDimensions } from "../utils/machineDimensions";
 import { formatLength } from "../utils/units";
+import { normalizeMachineVisualModel } from "../utils/visualModel";
 
 type LibrarySelection = {
   libraryId: string;
@@ -21,7 +22,7 @@ type MachineLibraryProps = {
   onAddMachine: (selection: LibrarySelection) => void;
 };
 
-const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineDefinitionDimensions({
+const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
   id: item.id,
   name: item.name,
   category: item.type,
@@ -33,11 +34,12 @@ const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => nor
   height: item.height,
   defaultColor: item.defaultColor,
   modelPath: item.modelPath,
+  visualModel: item.visualModel,
   thumbnailPath: item.thumbnailPath,
   connectionPoints: item.connectionPoints,
   clearance: item.clearance,
   capabilities: item.capabilities
-});
+}));
 
 const formatDimensions = (item: LibraryMachineItem) => {
   const dimensions = getMachineDimensionsMm({

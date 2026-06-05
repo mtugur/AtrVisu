@@ -906,6 +906,26 @@ select {
   padding: 3px;
 }
 
+.manager-visual-model {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.manager-visual-model summary {
+  cursor: pointer;
+  color: #f4f7f2;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.manager-visual-model .manager-editor-grid {
+  margin-top: 10px;
+}
+
 .manager-capabilities {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

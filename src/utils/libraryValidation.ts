@@ -8,6 +8,7 @@ import type {
   MachineLibraryDocument
 } from "../types/machine";
 import { metersToMm, mmToMeters } from "./units";
+import { normalizeVisualModel } from "./visualModel";
 
 type LibraryIndexDocument = {
   libraries?: unknown;
@@ -243,6 +244,7 @@ const validateMachineItem = (
     height: mmToMeters(heightMm),
     defaultColor,
     modelPath: isNonEmptyString(item.modelPath) ? item.modelPath : null,
+    visualModel: normalizeVisualModel(item.visualModel, isNonEmptyString(item.modelPath) ? item.modelPath : null),
     thumbnailPath: isNonEmptyString(item.thumbnailPath) ? item.thumbnailPath : null,
     connectionPoints,
     clearance: readClearance(item.clearance, warnings, path),
