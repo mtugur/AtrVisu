@@ -53,6 +53,13 @@ describe("layout serialization", () => {
     expect(object.widthMm).toBe(2876);
     expect(object.width).toBe(2.876);
     expect(object.positionMm).toEqual({ xMm: 1250, yMm: -2500 });
+    expect(object.collisionEnvelope).toEqual({
+      widthMm: 2876,
+      depthMm: 1200,
+      heightMm: 2100,
+      offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
+      enabled: true
+    });
   });
 
   it("normalizes legacy layouts without unit metadata", () => {
@@ -81,6 +88,13 @@ describe("layout serialization", () => {
 
     expect(machine.definition.widthMm).toBe(2876);
     expect(machine.definition.depthMm).toBe(760);
+    expect(machine.definition.collisionEnvelope).toEqual({
+      widthMm: 2876,
+      depthMm: 760,
+      heightMm: 500,
+      offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
+      enabled: true
+    });
     expect(machine.positionMm).toEqual({ xMm: 1250, yMm: -2500 });
     expect(machine.rotationDeg).toBe(90);
   });

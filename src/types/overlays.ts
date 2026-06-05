@@ -2,6 +2,7 @@ export type OverlaySettings = {
   showLabels: boolean;
   showSelectionBox: boolean;
   showMetadataBox: boolean;
+  showCollisionEnvelope: boolean;
   showClearanceEnvelope: boolean;
 };
 

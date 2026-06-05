@@ -42,6 +42,13 @@ describe("library validation", () => {
 
     expect(item.widthMm).toBe(2876);
     expect(item.width).toBe(2.876);
+    expect(item.collisionEnvelope).toEqual({
+      widthMm: 2876,
+      depthMm: 760,
+      heightMm: 500,
+      offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
+      enabled: true
+    });
     expect(item.visualModel).toEqual({
       modelPath: null,
       unit: "m",
@@ -79,6 +86,25 @@ describe("library validation", () => {
 
     expect(item.visualModel?.unit).toBe("m");
     expect(item.visualModel?.scaleMode).toBe("metadata-box");
+  });
+
+  it("normalizes invalid collision envelope safely", () => {
+    const warnings: LibraryValidationWarning[] = [];
+    const library = validateLibraryDocument(
+      entry,
+      createLibrary({ collisionEnvelope: { widthMm: -1, depthMm: 800, heightMm: 400, enabled: true } }),
+      warnings
+    );
+    const item = library.root.items[0];
+
+    expect(item.collisionEnvelope).toEqual({
+      widthMm: 2876,
+      depthMm: 800,
+      heightMm: 400,
+      offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
+      enabled: true
+    });
+    expect(warnings.some((warning) => warning.message.includes("collisionEnvelope"))).toBe(true);
   });
 
   it("falls back when placeholderVisualType is not renderable", () => {

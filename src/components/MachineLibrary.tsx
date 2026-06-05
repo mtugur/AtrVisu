@@ -44,6 +44,7 @@ const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => nor
   thumbnailPath: item.thumbnailPath,
   connectionPoints: item.connectionPoints,
   clearance: item.clearance,
+  collisionEnvelope: item.collisionEnvelope,
   capabilities: item.capabilities
 }));
 

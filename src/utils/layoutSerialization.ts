@@ -7,6 +7,7 @@ import {
 import { DEFAULT_CAPABILITIES } from "./taxonomy";
 import { metersToMm, mmToMeters } from "./units";
 import { normalizeMachineVisualModel } from "./visualModel";
+import { normalizeCollisionEnvelope } from "./collision";
 
 const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
 
@@ -46,6 +47,7 @@ export const createLayoutSnapshotFromMachines = (
       positionZ: machine.position.z,
       rotationY: machine.rotationY,
       defaultColor: definition.defaultColor,
+      collisionEnvelope: normalizeCollisionEnvelope(definition.collisionEnvelope, dimensionsMm),
       flowDirection: machine.flowDirection
     };
   })
@@ -53,7 +55,7 @@ export const createLayoutSnapshotFromMachines = (
 
 export const placedMachinesFromLayout = (layout: AtrVisuLayout): PlacedMachine[] => {
   return layout.objects.map((object) => {
-    const definition: MachineDefinition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
+    const rawDefinition = normalizeMachineDefinitionDimensions({
       ...(object.definitionSnapshot ?? {
         id: object.machineDefinitionId,
         name: object.name,
@@ -68,8 +70,13 @@ export const placedMachinesFromLayout = (layout: AtrVisuLayout): PlacedMachine[]
         connectionPoints: []
       }),
       clearance: object.definitionSnapshot?.clearance ?? DEFAULT_CLEARANCE,
+      collisionEnvelope: object.definitionSnapshot?.collisionEnvelope ?? object.collisionEnvelope,
       capabilities: object.definitionSnapshot?.capabilities ?? DEFAULT_CAPABILITIES
-    }));
+    });
+    const definition: MachineDefinition = normalizeMachineVisualModel({
+      ...rawDefinition,
+      collisionEnvelope: normalizeCollisionEnvelope(rawDefinition.collisionEnvelope, getMachineDimensionsMm(rawDefinition))
+    });
     const positionMm = object.positionMm ?? {
       xMm: metersToMm(object.positionX),
       yMm: metersToMm(object.positionZ)

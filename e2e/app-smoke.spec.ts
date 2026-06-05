@@ -26,11 +26,18 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await expect(page.getByTestId("overlay-controls")).toBeVisible();
   await page.getByLabel("Show Labels").uncheck();
   await page.getByLabel("Show Labels").check();
+  await page.getByLabel("Show Collision Envelope").check();
+
+  await expect(page.getByRole("button", { name: /Collision Check/i })).toBeVisible();
+  await expect(page.getByTestId("collision-check-panel")).toBeVisible();
+  await page.getByLabel("Enable Collision Check").uncheck();
+  await page.getByLabel("Enable Collision Check").check();
 
   await page.getByTestId("open-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await page.getByRole("dialog", { name: "Library Manager" }).getByRole("button", { name: "Add Item" }).last().click();
   await expect(page.getByTestId("visual-model-calibration-section")).toBeVisible();
+  await expect(page.getByTestId("collision-envelope-editor-section")).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByTestId("close-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);

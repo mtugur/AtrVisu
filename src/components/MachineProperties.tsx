@@ -1,11 +1,14 @@
+import type { CollisionPair } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
 import type { VisualModelDiagnostics } from "../types/overlays";
+import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
   visualDiagnostics?: VisualModelDiagnostics;
+  collisionPairs: CollisionPair[];
   onUpdateMachine: (
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
@@ -18,6 +21,7 @@ const formatMm = (value: number) => formatLength(value, "mm", 0);
 export function MachineProperties({
   selectedMachine,
   visualDiagnostics,
+  collisionPairs,
   onUpdateMachine,
   onDeleteSelected
 }: MachinePropertiesProps) {
@@ -101,6 +105,12 @@ export function MachineProperties({
   const formatYesNo = (value?: boolean) => (typeof value === "boolean" ? (value ? "Yes" : "No") : "Not available");
   const formatScale = (scale?: { x: number; y: number; z: number }) =>
     scale ? `X ${scale.x.toFixed(4)}, Y ${scale.y.toFixed(4)}, Z ${scale.z.toFixed(4)}` : "Not available";
+  const collisionEnvelope = selectedMachine ? getCollisionEnvelopeForMachine(selectedMachine) : null;
+  const collidingNames = selectedMachine
+    ? collisionPairs.map((pair) =>
+        pair.objectAId === selectedMachine.instanceId ? pair.objectBName : pair.objectAName
+      )
+    : [];
 
   return (
     <section className="properties-section" aria-label="Selected machine properties">
@@ -164,6 +174,30 @@ export function MachineProperties({
               <span>H {formatMm(dimensionsMm.heightMm)}</span>
             </div>
           ) : null}
+
+          <details className="diagnostics-section" data-testid="collision-diagnostics" open>
+            <summary>Collision Diagnostics</summary>
+            <div className="diagnostics-grid">
+              <span>Collision Envelope Enabled</span>
+              <strong>{collisionEnvelope?.enabled ? "Yes" : "No"}</strong>
+              <span>Collision Width / Depth / Height</span>
+              <strong>
+                {collisionEnvelope
+                  ? `${formatMm(collisionEnvelope.widthMm)} / ${formatMm(collisionEnvelope.depthMm)} / ${formatMm(collisionEnvelope.heightMm)}`
+                  : "Not available"}
+              </strong>
+              <span>Collision Offset</span>
+              <strong>
+                {collisionEnvelope?.offsetMm
+                  ? `X ${formatMm(collisionEnvelope.offsetMm.xMm)}, Y ${formatMm(collisionEnvelope.offsetMm.yMm)}, Z ${formatMm(collisionEnvelope.offsetMm.zMm)}`
+                  : "X 0 mm, Y 0 mm, Z 0 mm"}
+              </strong>
+              <span>Current Status</span>
+              <strong>{collidingNames.length > 0 ? "Colliding" : "Clear"}</strong>
+              <span>Colliding With</span>
+              <strong>{collidingNames.length > 0 ? collidingNames.join(", ") : "None"}</strong>
+            </div>
+          </details>
 
           <details className="diagnostics-section" data-testid="visual-model-diagnostics" open>
             <summary>Visual Model Diagnostics</summary>

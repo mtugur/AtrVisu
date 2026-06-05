@@ -11,6 +11,7 @@ describe("overlay settings", () => {
       showLabels: false,
       showSelectionBox: true,
       showMetadataBox: true,
+      showCollisionEnvelope: false,
       showClearanceEnvelope: false
     });
   });
@@ -20,6 +21,7 @@ describe("overlay settings", () => {
       showLabels: true,
       showSelectionBox: false,
       showMetadataBox: false,
+      showCollisionEnvelope: false,
       showClearanceEnvelope: false
     });
   });

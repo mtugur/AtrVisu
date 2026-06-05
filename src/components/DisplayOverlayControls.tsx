@@ -42,6 +42,14 @@ export function DisplayOverlayControls({ settings, onChange }: DisplayOverlayCon
       <label>
         <input
           type="checkbox"
+          checked={settings.showCollisionEnvelope}
+          onChange={(event) => updateSetting("showCollisionEnvelope", event.target.checked)}
+        />
+        <span>Show Collision Envelope</span>
+      </label>
+      <label>
+        <input
+          type="checkbox"
           checked={settings.showClearanceEnvelope}
           onChange={(event) => updateSetting("showClearanceEnvelope", event.target.checked)}
         />
