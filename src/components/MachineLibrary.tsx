@@ -164,7 +164,7 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
   );
 
   return (
-    <section className="library-section" aria-label="Machine library">
+    <section className="library-section" aria-label="Machine library" data-testid="machine-library-panel">
       <div className="panel-search">
         <span aria-hidden="true">+</span>
         <input type="search" placeholder={libraryCountText} aria-label="Machine library status" readOnly />
@@ -224,10 +224,10 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
           <span>Library Tools</span>
           <strong>Manager</strong>
         </div>
-        <button className="manager-open-button" type="button" onClick={() => setIsManagerOpen(true)}>
+        <button className="manager-open-button" data-testid="open-library-manager" type="button" onClick={() => setIsManagerOpen(true)}>
           Open Library Manager
         </button>
-        <button className="manager-open-button" type="button" onClick={() => setIsTaxonomyManagerOpen(true)}>
+        <button className="manager-open-button" data-testid="open-taxonomy-manager" type="button" onClick={() => setIsTaxonomyManagerOpen(true)}>
           Open Taxonomy Manager
         </button>
       </section>

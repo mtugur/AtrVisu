@@ -235,13 +235,13 @@ export function TaxonomyManager({ onClose, onChanged }: TaxonomyManagerProps) {
 
   return createPortal(
     <div className="manager-backdrop" role="presentation">
-      <section className="manager-dialog taxonomy-dialog" role="dialog" aria-modal="true" aria-label="Taxonomy Manager">
+      <section className="manager-dialog taxonomy-dialog" data-testid="taxonomy-manager-modal" role="dialog" aria-modal="true" aria-label="Taxonomy Manager">
         <header className="manager-header">
           <div>
             <span className="panel-kicker">AtrVisu</span>
             <h2>Taxonomy Manager</h2>
           </div>
-          <button type="button" onClick={onClose}>Close</button>
+          <button data-testid="close-taxonomy-manager" type="button" onClick={onClose}>Close</button>
         </header>
 
         {message ? <p className="manager-status">{message}</p> : null}
