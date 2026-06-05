@@ -14,6 +14,7 @@ import {
   normalizeMachineDefinitionDimensions
 } from "./utils/machineDimensions";
 import { metersToMm, mmToMeters } from "./utils/units";
+import { normalizeMachineVisualModel } from "./utils/visualModel";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -119,8 +120,8 @@ export function App() {
       unitSystem: ATRVISU_UNIT_SYSTEM,
       exportedAt,
       objects: placedMachines.map((machine) => {
-        const definition = normalizeMachineDefinitionDimensions(machine.definition);
-        const snapshot = normalizeMachineDefinitionDimensions(machine.definitionSnapshot);
+        const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definition));
+        const snapshot = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definitionSnapshot));
         const dimensionsMm = getMachineDimensionsMm(definition);
         const positionMm = machine.positionMm ?? {
           xMm: metersToMm(machine.position.x),
@@ -155,7 +156,7 @@ export function App() {
 
   const addMachine = useCallback((selection: { libraryId: string; definition: MachineDefinition }) => {
     const { libraryId } = selection;
-    const definition = normalizeMachineDefinitionDimensions(selection.definition);
+    const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(selection.definition));
     const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
 
     setPlacedMachines((current) => {
@@ -238,7 +239,7 @@ export function App() {
 
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines: PlacedMachine[] = layout.objects.map((object) => {
-      const definition: MachineDefinition = normalizeMachineDefinitionDimensions({
+      const definition: MachineDefinition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
         ...(object.definitionSnapshot ?? {
           id: object.machineDefinitionId,
           name: object.name,
@@ -254,7 +255,7 @@ export function App() {
         }),
         clearance: object.definitionSnapshot?.clearance ?? DEFAULT_CLEARANCE,
         capabilities: object.definitionSnapshot?.capabilities ?? DEFAULT_CAPABILITIES
-      });
+      }));
       const positionMm = object.positionMm ?? {
         xMm: metersToMm(object.positionX),
         yMm: metersToMm(object.positionZ)

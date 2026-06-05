@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import {
+  AbstractMesh,
   ArcRotateCamera,
   Color3,
   Color4,
@@ -14,12 +15,16 @@ import {
   PointerEventTypes,
   PointerInfo,
   Scene,
+  SceneLoader,
   StandardMaterial,
   Texture,
   Vector3
 } from "@babylonjs/core";
+import "@babylonjs/loaders/glTF";
 import type { PlacedMachine } from "../types/machine";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
+import { mmToMeters } from "../utils/units";
+import { DEFAULT_VISUAL_MODEL, normalizeVisualModel } from "../utils/visualModel";
 
 const GRID_SIZE = 42;
 const GRID_MAJOR_STEP = 6;
@@ -45,6 +50,8 @@ type PlacedMachineNode = {
   selectionFrame: LinesMesh;
   flowArrow?: LinesMesh;
   products: Mesh[];
+  visualRoot?: Mesh;
+  loadedVisualMeshes: AbstractMesh[];
 };
 
 const hexToColor3 = (hex: string) => {
@@ -162,6 +169,105 @@ const createProductMeshes = (scene: Scene, machine: PlacedMachine) => {
     product.isVisible = false;
     return product;
   });
+};
+
+const radiansFromDegrees = (degrees: number) => (degrees * Math.PI) / 180;
+
+const splitModelPath = (modelPath: string) => {
+  const slashIndex = modelPath.lastIndexOf("/");
+  if (slashIndex < 0) {
+    return { rootUrl: "", fileName: modelPath };
+  }
+
+  return {
+    rootUrl: `${modelPath.slice(0, slashIndex + 1)}`,
+    fileName: modelPath.slice(slashIndex + 1)
+  };
+};
+
+const applyMetadataToHierarchy = (mesh: AbstractMesh, instanceId: string) => {
+  mesh.metadata = { ...(mesh.metadata ?? {}), instanceId };
+  mesh.isPickable = true;
+  mesh.getChildMeshes(false).forEach((child) => {
+    child.metadata = { ...(child.metadata ?? {}), instanceId };
+    child.isPickable = true;
+  });
+};
+
+const getSafeScale = (target: number, source: number) => {
+  return source > 0.0001 ? target / source : 1;
+};
+
+const loadVisualModel = async (
+  scene: Scene,
+  machine: PlacedMachine,
+  rootBox: Mesh,
+  placeholderMaterial: StandardMaterial
+) => {
+  const visualModel = normalizeVisualModel(machine.definition.visualModel, machine.definition.modelPath);
+  const modelPath = visualModel.modelPath?.trim();
+  if (!modelPath) {
+    return null;
+  }
+
+  try {
+    const { rootUrl, fileName } = splitModelPath(modelPath);
+    const result = await SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene);
+    const visualRoot = new Mesh(`visual-root-${machine.instanceId}`, scene);
+    visualRoot.metadata = { instanceId: machine.instanceId };
+    visualRoot.isPickable = false;
+
+    result.meshes.forEach((mesh) => {
+      if (mesh !== visualRoot) {
+        mesh.parent = visualRoot;
+        applyMetadataToHierarchy(mesh, machine.instanceId);
+      }
+    });
+
+    const dimensions = getMachineDimensionsMeters(machine.definition);
+    const bounds = visualRoot.getHierarchyBoundingVectors(true);
+    const size = bounds.max.subtract(bounds.min);
+    const center = bounds.min.add(size.scale(0.5));
+
+    // metadata-box intentionally uses non-uniform visual scaling so engineering metadata remains authoritative.
+    // This is a visual fit, not a collision or machine envelope calculation.
+    if (visualModel.scaleMode === "metadata-box") {
+      visualRoot.scaling = new Vector3(
+        getSafeScale(dimensions.width, size.x),
+        getSafeScale(dimensions.height, size.y),
+        getSafeScale(dimensions.depth, size.z)
+      );
+    } else if (visualModel.unit === "mm") {
+      const unitScale = mmToMeters(1);
+      visualRoot.scaling = new Vector3(unitScale, unitScale, unitScale);
+    }
+
+    visualRoot.parent = rootBox;
+    visualRoot.position = new Vector3(
+      -center.x * visualRoot.scaling.x + mmToMeters(visualModel.positionOffsetMm.xMm),
+      -dimensions.height / 2 - bounds.min.y * visualRoot.scaling.y + mmToMeters(visualModel.positionOffsetMm.yMm),
+      -center.z * visualRoot.scaling.z + mmToMeters(visualModel.positionOffsetMm.zMm)
+    );
+    visualRoot.rotation = new Vector3(
+      radiansFromDegrees(visualModel.rotationOffsetDeg.x),
+      radiansFromDegrees(visualModel.rotationOffsetDeg.y),
+      radiansFromDegrees(visualModel.rotationOffsetDeg.z)
+    );
+
+    placeholderMaterial.alpha = 0.08;
+    rootBox.visibility = 0.16;
+
+    return {
+      visualRoot,
+      loadedVisualMeshes: result.meshes
+    };
+  } catch (error) {
+    console.warn(
+      `[AtrVisu visual model] Could not load "${modelPath}" for "${machine.definition.name}". Placeholder box was used.`,
+      error
+    );
+    return null;
+  }
 };
 
 export function BabylonScene({
@@ -403,6 +509,12 @@ export function BabylonScene({
         node.material.dispose();
         node.selectionFrame.dispose();
         node.flowArrow?.dispose();
+        node.visualRoot?.dispose(false, true);
+        node.loadedVisualMeshes.forEach((mesh) => {
+          if (!mesh.isDisposed()) {
+            mesh.dispose(false, true);
+          }
+        });
         node.products.forEach((product) => {
           product.material?.dispose();
           product.dispose();
@@ -432,6 +544,12 @@ export function BabylonScene({
         node.material.dispose();
         node.selectionFrame.dispose();
         node.flowArrow?.dispose();
+        node.visualRoot?.dispose(false, true);
+        node.loadedVisualMeshes.forEach((mesh) => {
+          if (!mesh.isDisposed()) {
+            mesh.dispose(false, true);
+          }
+        });
         node.products.forEach((product) => {
           product.material?.dispose();
           product.dispose();
@@ -453,6 +571,7 @@ export function BabylonScene({
       const material = new StandardMaterial(`machine-material-${instanceId}`, scene);
       material.diffuseColor = hexToColor3(definition.defaultColor);
       material.specularColor = new Color3(0.14, 0.16, 0.18);
+      material.alpha = 1;
 
       const box = MeshBuilder.CreateBox(
         `machine-${instanceId}`,
@@ -493,8 +612,32 @@ export function BabylonScene({
         material,
         selectionFrame,
         flowArrow,
-        products
+        products,
+        loadedVisualMeshes: []
       });
+
+      const visualModel = definition.visualModel ?? DEFAULT_VISUAL_MODEL;
+      if (visualModel.modelPath || definition.modelPath) {
+        void loadVisualModel(scene, machine, box, material).then((loadedModel) => {
+          if (!loadedModel) {
+            return;
+          }
+
+          const currentNode = machineNodesRef.current.get(instanceId);
+          if (!currentNode) {
+            loadedModel.visualRoot.dispose(false, true);
+            loadedModel.loadedVisualMeshes.forEach((mesh) => {
+              if (!mesh.isDisposed()) {
+                mesh.dispose(false, true);
+              }
+            });
+            return;
+          }
+
+          currentNode.visualRoot = loadedModel.visualRoot;
+          currentNode.loadedVisualMeshes = loadedModel.loadedVisualMeshes;
+        });
+      }
     });
 
     placedMachines.forEach((machine) => {

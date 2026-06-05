@@ -16,6 +16,22 @@ export type ConnectionPoint = {
   direction: "north" | "south" | "east" | "west" | "up" | "down";
 };
 
+export type VisualModelDefinition = {
+  modelPath: string | null;
+  unit: "m" | "mm";
+  scaleMode: "metadata-box" | "model-units";
+  rotationOffsetDeg: {
+    x: number;
+    y: number;
+    z: number;
+  };
+  positionOffsetMm: {
+    xMm: number;
+    yMm: number;
+    zMm: number;
+  };
+};
+
 export type MachineDefinition = {
   id: string;
   name: string;
@@ -29,6 +45,7 @@ export type MachineDefinition = {
   height: number;
   defaultColor: string;
   modelPath?: string | null;
+  visualModel?: VisualModelDefinition;
   thumbnailPath?: string | null;
   connectionPoints: ConnectionPoint[];
   clearance?: {

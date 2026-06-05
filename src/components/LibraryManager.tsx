@@ -42,6 +42,15 @@ type ItemEditorState = {
   canPalletize: boolean;
   canWrap: boolean;
   hasFlowDirection: boolean;
+  visualModelPath: string;
+  visualModelUnit: "m" | "mm";
+  visualModelScaleMode: "metadata-box" | "model-units";
+  rotationOffsetX: string;
+  rotationOffsetY: string;
+  rotationOffsetZ: string;
+  positionOffsetXMm: string;
+  positionOffsetYMm: string;
+  positionOffsetZMm: string;
 };
 
 const cloneLibrary = (library: LoadedMachineLibrary): MachineLibraryDocument => ({
@@ -173,6 +182,7 @@ const toEditorState = (
   item?: LibraryMachineItem
 ): ItemEditorState => {
   const dimensionsMm = item ? getMachineDimensionsMm({ ...item, category: item.type }) : null;
+  const visualModel = item?.visualModel;
 
   return {
     mode: item ? "edit" : "add",
@@ -188,7 +198,16 @@ const toEditorState = (
     canConvey: item?.capabilities?.canConvey ?? false,
     canPalletize: item?.capabilities?.canPalletize ?? false,
     canWrap: item?.capabilities?.canWrap ?? false,
-    hasFlowDirection: item?.capabilities?.hasFlowDirection ?? false
+    hasFlowDirection: item?.capabilities?.hasFlowDirection ?? false,
+    visualModelPath: visualModel?.modelPath ?? item?.modelPath ?? "",
+    visualModelUnit: visualModel?.unit ?? "m",
+    visualModelScaleMode: visualModel?.scaleMode ?? "metadata-box",
+    rotationOffsetX: String(visualModel?.rotationOffsetDeg.x ?? 0),
+    rotationOffsetY: String(visualModel?.rotationOffsetDeg.y ?? 0),
+    rotationOffsetZ: String(visualModel?.rotationOffsetDeg.z ?? 0),
+    positionOffsetXMm: String(visualModel?.positionOffsetMm.xMm ?? 0),
+    positionOffsetYMm: String(visualModel?.positionOffsetMm.yMm ?? 0),
+    positionOffsetZMm: String(visualModel?.positionOffsetMm.zMm ?? 0)
   };
 };
 
@@ -486,6 +505,12 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
     const widthMm = Number(itemEditor.widthMm);
     const depthMm = Number(itemEditor.depthMm);
     const heightMm = Number(itemEditor.heightMm);
+    const rotationOffsetX = Number(itemEditor.rotationOffsetX);
+    const rotationOffsetY = Number(itemEditor.rotationOffsetY);
+    const rotationOffsetZ = Number(itemEditor.rotationOffsetZ);
+    const positionOffsetXMm = Number(itemEditor.positionOffsetXMm);
+    const positionOffsetYMm = Number(itemEditor.positionOffsetYMm);
+    const positionOffsetZMm = Number(itemEditor.positionOffsetZMm);
     const ids = collectItemIds(draftLibrary.root);
     if (itemEditor.originalId) {
       ids.delete(itemEditor.originalId);
@@ -518,6 +543,19 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       setValidationError("Machine item id must be unique inside Project Custom Library.");
       return;
     }
+    if (
+      !Number.isFinite(rotationOffsetX) ||
+      !Number.isFinite(rotationOffsetY) ||
+      !Number.isFinite(rotationOffsetZ) ||
+      !Number.isFinite(positionOffsetXMm) ||
+      !Number.isFinite(positionOffsetYMm) ||
+      !Number.isFinite(positionOffsetZMm)
+    ) {
+      setValidationError("Visual model offsets must be valid numbers.");
+      return;
+    }
+
+    const visualModelPath = itemEditor.visualModelPath.trim();
 
     const item: LibraryMachineItem = {
       id: itemEditor.id.trim(),
@@ -530,7 +568,22 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       depth: mmToMeters(depthMm),
       height: mmToMeters(heightMm),
       defaultColor: itemEditor.defaultColor || "#7fc8ff",
-      modelPath: null,
+      modelPath: visualModelPath || null,
+      visualModel: {
+        modelPath: visualModelPath || null,
+        unit: itemEditor.visualModelUnit,
+        scaleMode: itemEditor.visualModelScaleMode,
+        rotationOffsetDeg: {
+          x: rotationOffsetX,
+          y: rotationOffsetY,
+          z: rotationOffsetZ
+        },
+        positionOffsetMm: {
+          xMm: positionOffsetXMm,
+          yMm: positionOffsetYMm,
+          zMm: positionOffsetZMm
+        }
+      },
       thumbnailPath: null,
       connectionPoints: [],
       clearance: {
@@ -773,6 +826,110 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
                     />
                   </label>
                 </div>
+                <details className="manager-visual-model" open>
+                  <summary>Visual Model</summary>
+                  <div className="manager-editor-grid">
+                    <label>
+                      <span>Model Path</span>
+                      <input
+                        disabled={!editable}
+                        placeholder="/library/models/example.glb"
+                        value={itemEditor.visualModelPath}
+                        onChange={(event) => setItemEditor({ ...itemEditor, visualModelPath: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Model Unit</span>
+                      <select
+                        disabled={!editable}
+                        value={itemEditor.visualModelUnit}
+                        onChange={(event) =>
+                          setItemEditor({ ...itemEditor, visualModelUnit: event.target.value === "mm" ? "mm" : "m" })
+                        }
+                      >
+                        <option value="m">Meters</option>
+                        <option value="mm">Millimeters</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Scale Mode</span>
+                      <select
+                        disabled={!editable}
+                        value={itemEditor.visualModelScaleMode}
+                        onChange={(event) =>
+                          setItemEditor({
+                            ...itemEditor,
+                            visualModelScaleMode:
+                              event.target.value === "model-units" ? "model-units" : "metadata-box"
+                          })
+                        }
+                      >
+                        <option value="metadata-box">Metadata Box</option>
+                        <option value="model-units">Model Units</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Rotation X (°)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.rotationOffsetX}
+                        onChange={(event) => setItemEditor({ ...itemEditor, rotationOffsetX: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Rotation Y (°)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.rotationOffsetY}
+                        onChange={(event) => setItemEditor({ ...itemEditor, rotationOffsetY: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Rotation Z (°)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.rotationOffsetZ}
+                        onChange={(event) => setItemEditor({ ...itemEditor, rotationOffsetZ: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset X (mm)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.positionOffsetXMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, positionOffsetXMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset Y (mm)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.positionOffsetYMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, positionOffsetYMm: event.target.value })}
+                      />
+                    </label>
+                    <label>
+                      <span>Offset Z (mm)</span>
+                      <input
+                        disabled={!editable}
+                        type="number"
+                        step="1"
+                        value={itemEditor.positionOffsetZMm}
+                        onChange={(event) => setItemEditor({ ...itemEditor, positionOffsetZMm: event.target.value })}
+                      />
+                    </label>
+                  </div>
+                </details>
                 <div className="manager-capabilities">
                   {(["canConvey", "canPalletize", "canWrap", "hasFlowDirection"] as const).map((key) => (
                     <label key={key}>
