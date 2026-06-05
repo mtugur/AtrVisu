@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { LibraryManager } from "./LibraryManager";
+import { TaxonomyManager } from "./TaxonomyManager";
 import type {
   LibraryGroup,
   LibraryMachineItem,
@@ -25,7 +26,12 @@ type MachineLibraryProps = {
 const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
   id: item.id,
   name: item.name,
-  category: item.type,
+  category: item.category,
+  machineType: item.machineType,
+  variant: item.variant,
+  productFamilyCode: item.productFamilyCode,
+  tags: item.tags,
+  placeholderVisualType: item.placeholderVisualType,
   widthMm: item.widthMm,
   depthMm: item.depthMm,
   heightMm: item.heightMm,
@@ -109,7 +115,7 @@ function GroupNode({
                 </span>
                 <span className="machine-content">
                   <strong>{item.name}</strong>
-                  <span>{item.type}</span>
+                  <span>{item.category} / {item.machineType ?? item.type}</span>
                   <small>{formatDimensions(item)}</small>
                 </span>
               </button>
@@ -127,7 +133,9 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
   const [warnings, setWarnings] = useState<LibraryValidationWarning[]>([]);
   const [loadError, setLoadError] = useState<string>("");
   const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
+  const [taxonomyReloadToken, setTaxonomyReloadToken] = useState(0);
 
   useEffect(() => {
     let isCancelled = false;
@@ -219,13 +227,23 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
         <button className="manager-open-button" type="button" onClick={() => setIsManagerOpen(true)}>
           Open Library Manager
         </button>
+        <button className="manager-open-button" type="button" onClick={() => setIsTaxonomyManagerOpen(true)}>
+          Open Taxonomy Manager
+        </button>
       </section>
 
       {isManagerOpen ? (
         <LibraryManager
           libraries={libraries}
+          taxonomyReloadToken={taxonomyReloadToken}
           onClose={() => setIsManagerOpen(false)}
           onLibrariesChanged={() => setReloadToken((current) => current + 1)}
+        />
+      ) : null}
+      {isTaxonomyManagerOpen ? (
+        <TaxonomyManager
+          onClose={() => setIsTaxonomyManagerOpen(false)}
+          onChanged={() => setTaxonomyReloadToken((current) => current + 1)}
         />
       ) : null}
     </section>
