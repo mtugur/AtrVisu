@@ -47,7 +47,14 @@ describe("library validation", () => {
       unit: "m",
       scaleMode: "metadata-box",
       rotationOffsetDeg: { x: 0, y: 0, z: 0 },
-      positionOffsetMm: { xMm: 0, yMm: 0, zMm: 0 }
+      positionOffsetMm: { xMm: 0, yMm: 0, zMm: 0 },
+      calibration: {
+        centerOnFootprint: true,
+        bottomOnFloor: true,
+        preserveAspectRatio: true,
+        forwardAxis: "z+",
+        upAxis: "y+"
+      }
     });
   });
 

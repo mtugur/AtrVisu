@@ -37,5 +37,6 @@ describe("visual diagnostics", () => {
     expect(diagnostics.metadataBoundsMm.widthMm).toBe(2876);
     expect(diagnostics.placeholderVisualType).toBe("forklift-proxy");
     expect(diagnostics.modelUnit).toBe("m");
+    expect(diagnostics.calibration.centerOnFootprint).toBe(true);
   });
 });

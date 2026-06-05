@@ -69,6 +69,11 @@ type ItemEditorState = {
   positionOffsetXMm: string;
   positionOffsetYMm: string;
   positionOffsetZMm: string;
+  centerOnFootprint: boolean;
+  bottomOnFloor: boolean;
+  preserveAspectRatio: boolean;
+  forwardAxis: "x+" | "x-" | "z+" | "z-";
+  upAxis: "y+" | "z+" | "x+";
 };
 
 const cloneLibrary = (library: LoadedMachineLibrary): MachineLibraryDocument => ({
@@ -242,7 +247,12 @@ const toEditorState = (
     rotationOffsetZ: String(visualModel?.rotationOffsetDeg.z ?? 0),
     positionOffsetXMm: String(visualModel?.positionOffsetMm.xMm ?? 0),
     positionOffsetYMm: String(visualModel?.positionOffsetMm.yMm ?? 0),
-    positionOffsetZMm: String(visualModel?.positionOffsetMm.zMm ?? 0)
+    positionOffsetZMm: String(visualModel?.positionOffsetMm.zMm ?? 0),
+    centerOnFootprint: visualModel?.calibration.centerOnFootprint ?? true,
+    bottomOnFloor: visualModel?.calibration.bottomOnFloor ?? true,
+    preserveAspectRatio: visualModel?.calibration.preserveAspectRatio ?? true,
+    forwardAxis: visualModel?.calibration.forwardAxis ?? "z+",
+    upAxis: visualModel?.calibration.upAxis ?? "y+"
   };
 };
 
@@ -648,6 +658,13 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
           xMm: positionOffsetXMm,
           yMm: positionOffsetYMm,
           zMm: positionOffsetZMm
+        },
+        calibration: {
+          centerOnFootprint: itemEditor.centerOnFootprint,
+          bottomOnFloor: itemEditor.bottomOnFloor,
+          preserveAspectRatio: itemEditor.preserveAspectRatio,
+          forwardAxis: itemEditor.forwardAxis,
+          upAxis: itemEditor.upAxis
         }
       },
       thumbnailPath: null,
@@ -1079,6 +1096,75 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                         value={itemEditor.positionOffsetZMm}
                         onChange={(event) => setItemEditor({ ...itemEditor, positionOffsetZMm: event.target.value })}
                       />
+                    </label>
+                  </div>
+                </details>
+                <details className="manager-visual-model" data-testid="visual-model-calibration-section" open>
+                  <summary>Visual Model Calibration</summary>
+                  <div className="manager-capabilities">
+                    <label>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor.centerOnFootprint}
+                        onChange={(event) => setItemEditor({ ...itemEditor, centerOnFootprint: event.target.checked })}
+                      />
+                      <span>Center on Footprint</span>
+                    </label>
+                    <label>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor.bottomOnFloor}
+                        onChange={(event) => setItemEditor({ ...itemEditor, bottomOnFloor: event.target.checked })}
+                      />
+                      <span>Bottom on Floor</span>
+                    </label>
+                    <label>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor.preserveAspectRatio}
+                        onChange={(event) => setItemEditor({ ...itemEditor, preserveAspectRatio: event.target.checked })}
+                      />
+                      <span>Preserve Aspect Ratio</span>
+                    </label>
+                  </div>
+                  <div className="manager-editor-grid">
+                    <label>
+                      <span>Forward Axis</span>
+                      <select
+                        disabled={!editable}
+                        value={itemEditor.forwardAxis}
+                        onChange={(event) =>
+                          setItemEditor({
+                            ...itemEditor,
+                            forwardAxis: event.target.value as "x+" | "x-" | "z+" | "z-"
+                          })
+                        }
+                      >
+                        <option value="x+">X+</option>
+                        <option value="x-">X-</option>
+                        <option value="z+">Z+</option>
+                        <option value="z-">Z-</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Up Axis</span>
+                      <select
+                        disabled={!editable}
+                        value={itemEditor.upAxis}
+                        onChange={(event) =>
+                          setItemEditor({
+                            ...itemEditor,
+                            upAxis: event.target.value as "y+" | "z+" | "x+"
+                          })
+                        }
+                      >
+                        <option value="y+">Y+</option>
+                        <option value="z+">Z+</option>
+                        <option value="x+">X+</option>
+                      </select>
                     </label>
                   </div>
                 </details>
