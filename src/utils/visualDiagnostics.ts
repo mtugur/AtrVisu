@@ -23,7 +23,9 @@ export const createBaseVisualDiagnostics = (
   definition: MachineDefinition,
   visualStatus: VisualModelStatus,
   fallbackReason?: string,
-  visualBoundsMm?: VisualModelDiagnostics["visualBoundsMm"]
+  visualBoundsMm?: VisualModelDiagnostics["visualBoundsMm"],
+  appliedScale?: VisualModelDiagnostics["appliedScale"],
+  extraWarnings: string[] = []
 ): VisualModelDiagnostics => {
   const visualModel = normalizeVisualModel(definition.visualModel, definition.modelPath);
   const metadataBoundsMm = getMachineDimensionsMm(definition);
@@ -36,6 +38,21 @@ export const createBaseVisualDiagnostics = (
         : visualStatus === "proxy"
           ? "proxy"
           : "none";
+
+  const boundsDifferenceMm = calculateBoundsDifferenceMm(metadataBoundsMm, visualBoundsMm);
+  const warnings = [...extraWarnings];
+  if (boundsDifferenceMm && visualBoundsMm) {
+    const exceedsTolerance =
+      Math.abs(boundsDifferenceMm.widthMm) > metadataBoundsMm.widthMm * 0.1 ||
+      Math.abs(boundsDifferenceMm.depthMm) > metadataBoundsMm.depthMm * 0.1 ||
+      Math.abs(boundsDifferenceMm.heightMm) > metadataBoundsMm.heightMm * 0.1;
+    if (exceedsTolerance) {
+      warnings.push("Visual bounds differ from metadata bounds by more than 10%.");
+    }
+  }
+  if (visualStatus === "failed" && visualModel.modelPath) {
+    warnings.push("Model path is configured but loading failed.");
+  }
 
   return {
     instanceId,
@@ -51,8 +68,11 @@ export const createBaseVisualDiagnostics = (
     productFamilyCode: definition.productFamilyCode,
     metadataBoundsMm,
     visualBoundsMm,
-    boundsDifferenceMm: calculateBoundsDifferenceMm(metadataBoundsMm, visualBoundsMm),
+    boundsDifferenceMm,
+    calibration: visualModel.calibration,
+    appliedScale,
     rotationOffsetDeg: visualModel.rotationOffsetDeg,
-    positionOffsetMm: visualModel.positionOffsetMm
+    positionOffsetMm: visualModel.positionOffsetMm,
+    warnings
   };
 };

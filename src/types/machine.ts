@@ -23,6 +23,13 @@ export type VisualModelDefinition = {
     yMm: number;
     zMm: number;
   };
+  calibration: {
+    centerOnFootprint: boolean;
+    bottomOnFloor: boolean;
+    preserveAspectRatio: boolean;
+    forwardAxis: "x+" | "x-" | "z+" | "z-";
+    upAxis: "y+" | "z+" | "x+";
+  };
 };
 
 export type MachineDefinition = {

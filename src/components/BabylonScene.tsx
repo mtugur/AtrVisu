@@ -27,7 +27,7 @@ import { getMachineDimensionsMeters } from "../utils/machineDimensions";
 import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
 import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
-import { DEFAULT_VISUAL_MODEL, normalizeVisualModel } from "../utils/visualModel";
+import { calculateMetadataBoxScale, DEFAULT_VISUAL_MODEL, normalizeVisualModel } from "../utils/visualModel";
 
 const GRID_SIZE = 42;
 const GRID_MAJOR_STEP = 6;
@@ -405,10 +405,6 @@ const applyMetadataToHierarchy = (mesh: AbstractMesh, instanceId: string) => {
   });
 };
 
-const getSafeScale = (target: number, source: number) => {
-  return source > 0.0001 ? target / source : 1;
-};
-
 const loadVisualModel = async (
   scene: Scene,
   machine: PlacedMachine,
@@ -439,25 +435,36 @@ const loadVisualModel = async (
     const bounds = visualRoot.getHierarchyBoundingVectors(true);
     const size = bounds.max.subtract(bounds.min);
     const center = bounds.min.add(size.scale(0.5));
+    const calibration = visualModel.calibration;
+    let appliedScale = { x: 1, y: 1, z: 1 };
 
     // metadata-box intentionally uses non-uniform visual scaling so engineering metadata remains authoritative.
-    // This is a visual fit, not a collision or machine envelope calculation.
+    // When preserveAspectRatio is true, uniform scaling uses the limiting dimension to keep the model inside metadata bounds.
     if (visualModel.scaleMode === "metadata-box") {
-      visualRoot.scaling = new Vector3(
-        getSafeScale(dimensions.width, size.x),
-        getSafeScale(dimensions.height, size.y),
-        getSafeScale(dimensions.depth, size.z)
+      appliedScale = calculateMetadataBoxScale(
+        dimensions,
+        { width: size.x, depth: size.z, height: size.y },
+        calibration.preserveAspectRatio
       );
+      visualRoot.scaling = new Vector3(appliedScale.x, appliedScale.y, appliedScale.z);
     } else if (visualModel.unit === "mm") {
       const unitScale = mmToMeters(1);
+      appliedScale = { x: unitScale, y: unitScale, z: unitScale };
       visualRoot.scaling = new Vector3(unitScale, unitScale, unitScale);
+    } else {
+      appliedScale = { x: visualRoot.scaling.x, y: visualRoot.scaling.y, z: visualRoot.scaling.z };
     }
 
     visualRoot.parent = rootBox;
+    const calibratedX = calibration.centerOnFootprint ? -center.x * visualRoot.scaling.x : 0;
+    const calibratedZ = calibration.centerOnFootprint ? -center.z * visualRoot.scaling.z : 0;
+    const calibratedY = calibration.bottomOnFloor
+      ? -dimensions.height / 2 - bounds.min.y * visualRoot.scaling.y
+      : 0;
     visualRoot.position = new Vector3(
-      -center.x * visualRoot.scaling.x + mmToMeters(visualModel.positionOffsetMm.xMm),
-      -dimensions.height / 2 - bounds.min.y * visualRoot.scaling.y + mmToMeters(visualModel.positionOffsetMm.yMm),
-      -center.z * visualRoot.scaling.z + mmToMeters(visualModel.positionOffsetMm.zMm)
+      calibratedX + mmToMeters(visualModel.positionOffsetMm.xMm),
+      calibratedY + mmToMeters(visualModel.positionOffsetMm.yMm),
+      calibratedZ + mmToMeters(visualModel.positionOffsetMm.zMm)
     );
     visualRoot.rotation = new Vector3(
       radiansFromDegrees(visualModel.rotationOffsetDeg.x),
@@ -472,11 +479,23 @@ const loadVisualModel = async (
       heightMm: metersToMm(size.y * visualRoot.scaling.y),
       depthMm: metersToMm(size.z * visualRoot.scaling.z)
     };
+    const bottomLocal = bounds.min.y * visualRoot.scaling.y + visualRoot.position.y;
+    const floorLocal = -dimensions.height / 2;
+    const bottomDeltaMm = metersToMm(bottomLocal - floorLocal);
+    const calibrationWarnings: string[] = [];
+    if (calibration.bottomOnFloor && bottomDeltaMm < -1) {
+      calibrationWarnings.push("Visual model appears below the floor after calibration.");
+    }
+    if (calibration.bottomOnFloor && bottomDeltaMm > 20) {
+      calibrationWarnings.push("Visual model appears above the floor after calibration.");
+    }
 
     return {
       visualRoot,
       loadedVisualMeshes: result.meshes,
-      visualBoundsMm: scaledBoundsMm
+      visualBoundsMm: scaledBoundsMm,
+      appliedScale,
+      calibrationWarnings
     };
   } catch (error) {
     console.warn(
@@ -928,7 +947,15 @@ export function BabylonScene({
           currentNode.visualRoot = loadedModel.visualRoot;
           currentNode.loadedVisualMeshes = loadedModel.loadedVisualMeshes;
           onVisualDiagnosticsChange(
-            createBaseVisualDiagnostics(instanceId, definition, "loaded", undefined, loadedModel.visualBoundsMm)
+            createBaseVisualDiagnostics(
+              instanceId,
+              definition,
+              "loaded",
+              undefined,
+              loadedModel.visualBoundsMm,
+              loadedModel.appliedScale,
+              loadedModel.calibrationWarnings
+            )
           );
           currentNode.placeholderMeshes.forEach((mesh) => {
             mesh.isVisible = false;

@@ -98,6 +98,9 @@ export function MachineProperties({
     offset ? `X ${formatMm(offset.xMm)}, Y ${formatMm(offset.yMm)}, Z ${formatMm(offset.zMm)}` : "Not available";
   const formatRotationOffset = (offset?: { x: number; y: number; z: number }) =>
     offset ? `X ${offset.x} deg, Y ${offset.y} deg, Z ${offset.z} deg` : "Not available";
+  const formatYesNo = (value?: boolean) => (typeof value === "boolean" ? (value ? "Yes" : "No") : "Not available");
+  const formatScale = (scale?: { x: number; y: number; z: number }) =>
+    scale ? `X ${scale.x.toFixed(4)}, Y ${scale.y.toFixed(4)}, Z ${scale.z.toFixed(4)}` : "Not available";
 
   return (
     <section className="properties-section" aria-label="Selected machine properties">
@@ -183,6 +186,20 @@ export function MachineProperties({
               <strong>{visualDiagnostics?.modelUnit ?? selectedMachine.definition.visualModel?.unit ?? "m"}</strong>
               <span>Product Family Code</span>
               <strong>{visualDiagnostics?.productFamilyCode || selectedMachine.definition.productFamilyCode || "None"}</strong>
+              <span>Calibration Mode</span>
+              <strong>{visualDiagnostics?.scaleMode === "metadata-box" ? "Metadata box fit" : "Model units"}</strong>
+              <span>Center on Footprint</span>
+              <strong>{formatYesNo(visualDiagnostics?.calibration.centerOnFootprint)}</strong>
+              <span>Bottom on Floor</span>
+              <strong>{formatYesNo(visualDiagnostics?.calibration.bottomOnFloor)}</strong>
+              <span>Preserve Aspect Ratio</span>
+              <strong>{formatYesNo(visualDiagnostics?.calibration.preserveAspectRatio)}</strong>
+              <span>Forward Axis</span>
+              <strong>{visualDiagnostics?.calibration.forwardAxis ?? "Not available"}</strong>
+              <span>Up Axis</span>
+              <strong>{visualDiagnostics?.calibration.upAxis ?? "Not available"}</strong>
+              <span>Applied Scale X / Y / Z</span>
+              <strong>{formatScale(visualDiagnostics?.appliedScale)}</strong>
               <span>Metadata Width / Depth / Height</span>
               <strong>
                 {visualDiagnostics
@@ -211,6 +228,12 @@ export function MachineProperties({
                 <>
                   <span>Fallback Reason</span>
                   <strong>{visualDiagnostics.fallbackReason}</strong>
+                </>
+              ) : null}
+              {visualDiagnostics?.warnings.length ? (
+                <>
+                  <span>Calibration Warnings</span>
+                  <strong>{visualDiagnostics.warnings.join(" ")}</strong>
                 </>
               ) : null}
             </div>

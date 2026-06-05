@@ -34,6 +34,18 @@ export type VisualModelDiagnostics = {
     depthMm: number;
     heightMm: number;
   };
+  calibration: {
+    centerOnFootprint: boolean;
+    bottomOnFloor: boolean;
+    preserveAspectRatio: boolean;
+    forwardAxis: "x+" | "x-" | "z+" | "z-";
+    upAxis: "y+" | "z+" | "x+";
+  };
+  appliedScale?: {
+    x: number;
+    y: number;
+    z: number;
+  };
   rotationOffsetDeg: {
     x: number;
     y: number;
@@ -44,4 +56,5 @@ export type VisualModelDiagnostics = {
     yMm: number;
     zMm: number;
   };
+  warnings: string[];
 };
