@@ -22,6 +22,11 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await expect(page.getByTestId("machine-library-panel")).toBeVisible();
   await expect(page.getByRole("button", { name: /Atara Standard Library/i }).first()).toBeVisible();
 
+  await page.getByRole("button", { name: /Display \/ Overlay Controls/i }).click();
+  await expect(page.getByTestId("overlay-controls")).toBeVisible();
+  await page.getByLabel("Show Labels").uncheck();
+  await page.getByLabel("Show Labels").check();
+
   await page.getByTestId("open-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await page.getByTestId("close-library-manager").click();

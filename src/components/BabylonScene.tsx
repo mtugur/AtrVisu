@@ -22,8 +22,11 @@ import {
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import type { PlacedMachine } from "../types/machine";
+import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
-import { mmToMeters } from "../utils/units";
+import { metersToMm, mmToMeters } from "../utils/units";
+import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
+import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
 import { DEFAULT_VISUAL_MODEL, normalizeVisualModel } from "../utils/visualModel";
 
 const GRID_SIZE = 42;
@@ -40,6 +43,8 @@ type BabylonSceneProps = {
   ) => void;
   isSimulationRunning: boolean;
   simulationSpeed: number;
+  overlaySettings: OverlaySettings;
+  onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
 };
 
 type PlacedMachineNode = {
@@ -49,6 +54,8 @@ type PlacedMachineNode = {
   material: StandardMaterial;
   selectionFrame: LinesMesh;
   flowArrow?: LinesMesh;
+  metadataFrame: LinesMesh;
+  clearanceFrame?: LinesMesh;
   products: Mesh[];
   placeholderMeshes: Mesh[];
   visualRoot?: Mesh;
@@ -122,6 +129,78 @@ const createSelectionFrame = (scene: Scene, machine: PlacedMachine) => {
   frame.isVisible = false;
 
   return frame;
+};
+
+const createWireBoxFrame = (
+  scene: Scene,
+  name: string,
+  size: { width: number; depth: number; height: number },
+  color: Color3
+) => {
+  const yMin = -size.height / 2;
+  const yMax = size.height / 2;
+  const xMin = -size.width / 2;
+  const xMax = size.width / 2;
+  const zMin = -size.depth / 2;
+  const zMax = size.depth / 2;
+  const corners = {
+    topA: new Vector3(xMin, yMax, zMin),
+    topB: new Vector3(xMax, yMax, zMin),
+    topC: new Vector3(xMax, yMax, zMax),
+    topD: new Vector3(xMin, yMax, zMax),
+    bottomA: new Vector3(xMin, yMin, zMin),
+    bottomB: new Vector3(xMax, yMin, zMin),
+    bottomC: new Vector3(xMax, yMin, zMax),
+    bottomD: new Vector3(xMin, yMin, zMax)
+  };
+  const frame = MeshBuilder.CreateLineSystem(
+    name,
+    {
+      lines: [
+        [corners.topA, corners.topB, corners.topC, corners.topD, corners.topA],
+        [corners.bottomA, corners.bottomB, corners.bottomC, corners.bottomD, corners.bottomA],
+        [corners.topA, corners.bottomA],
+        [corners.topB, corners.bottomB],
+        [corners.topC, corners.bottomC],
+        [corners.topD, corners.bottomD]
+      ]
+    },
+    scene
+  );
+  frame.color = color;
+  frame.isPickable = false;
+  frame.isVisible = false;
+  return frame;
+};
+
+const createMetadataFrame = (scene: Scene, machine: PlacedMachine) => {
+  return createWireBoxFrame(
+    scene,
+    `metadata-frame-${machine.instanceId}`,
+    getMachineDimensionsMeters(machine.definition),
+    new Color3(0.25, 0.78, 1)
+  );
+};
+
+const createClearanceFrame = (scene: Scene, machine: PlacedMachine) => {
+  const clearance = machine.definition.clearance;
+  if (!clearance) {
+    return undefined;
+  }
+
+  const dimensions = getMachineDimensionsMeters(machine.definition);
+  const width = dimensions.width + Math.max(0, clearance.left) + Math.max(0, clearance.right);
+  const depth = dimensions.depth + Math.max(0, clearance.front) + Math.max(0, clearance.back);
+  if (width <= dimensions.width && depth <= dimensions.depth) {
+    return undefined;
+  }
+
+  return createWireBoxFrame(
+    scene,
+    `clearance-frame-${machine.instanceId}`,
+    { width, depth, height: dimensions.height },
+    new Color3(1, 0.56, 0.22)
+  );
 };
 
 const hasFlowDirection = (machine: PlacedMachine) => {
@@ -388,16 +467,26 @@ const loadVisualModel = async (
 
     placeholderMaterial.alpha = 0.98;
 
+    const scaledBoundsMm = {
+      widthMm: metersToMm(size.x * visualRoot.scaling.x),
+      heightMm: metersToMm(size.y * visualRoot.scaling.y),
+      depthMm: metersToMm(size.z * visualRoot.scaling.z)
+    };
+
     return {
       visualRoot,
-      loadedVisualMeshes: result.meshes
+      loadedVisualMeshes: result.meshes,
+      visualBoundsMm: scaledBoundsMm
     };
   } catch (error) {
     console.warn(
       `[AtrVisu visual model] Could not load "${modelPath}" for "${machine.definition.name}". Placeholder box was used.`,
       error
     );
-    return null;
+    return {
+      failed: true,
+      fallbackReason: error instanceof Error ? error.message : "Visual model failed to load."
+    };
   }
 };
 
@@ -407,7 +496,9 @@ export function BabylonScene({
   onSelectMachine,
   onUpdateMachine,
   isSimulationRunning,
-  simulationSpeed
+  simulationSpeed,
+  overlaySettings,
+  onVisualDiagnosticsChange
 }: BabylonSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -418,6 +509,7 @@ export function BabylonScene({
   const selectedMachineIdRef = useRef<string | null>(selectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
+  const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<{
     instanceId: string;
@@ -433,10 +525,27 @@ export function BabylonScene({
     selectedMachineIdRef.current = selectedMachineId;
     machineNodesRef.current.forEach((node, instanceId) => {
       const isSelected = instanceId === selectedMachineId;
-      node.selectionFrame.isVisible = isSelected;
+      node.selectionFrame.isVisible = isSelected && overlaySettingsRef.current.showSelectionBox;
+      node.metadataFrame.isVisible = isSelected && overlaySettingsRef.current.showMetadataBox;
+      if (node.clearanceFrame) {
+        node.clearanceFrame.isVisible = isSelected && overlaySettingsRef.current.showClearanceEnvelope;
+      }
       node.material.emissiveColor = isSelected ? new Color3(0.24, 0.2, 0.05) : Color3.Black();
     });
   }, [selectedMachineId]);
+
+  useEffect(() => {
+    overlaySettingsRef.current = overlaySettings;
+    machineNodesRef.current.forEach((node, instanceId) => {
+      const isSelected = instanceId === selectedMachineIdRef.current;
+      node.label.isVisible = overlaySettings.showLabels;
+      node.selectionFrame.isVisible = isSelected && overlaySettings.showSelectionBox;
+      node.metadataFrame.isVisible = isSelected && overlaySettings.showMetadataBox;
+      if (node.clearanceFrame) {
+        node.clearanceFrame.isVisible = isSelected && overlaySettings.showClearanceEnvelope;
+      }
+    });
+  }, [overlaySettings]);
 
   useEffect(() => {
     isSimulationRunningRef.current = isSimulationRunning;
@@ -640,6 +749,8 @@ export function BabylonScene({
         node.material.dispose();
         node.selectionFrame.dispose();
         node.flowArrow?.dispose();
+        node.metadataFrame.dispose();
+        node.clearanceFrame?.dispose();
         node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
         node.visualRoot?.dispose(false, true);
         node.loadedVisualMeshes.forEach((mesh) => {
@@ -676,6 +787,8 @@ export function BabylonScene({
         node.material.dispose();
         node.selectionFrame.dispose();
         node.flowArrow?.dispose();
+        node.metadataFrame.dispose();
+        node.clearanceFrame?.dispose();
         node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
         node.visualRoot?.dispose(false, true);
         node.loadedVisualMeshes.forEach((mesh) => {
@@ -724,10 +837,24 @@ export function BabylonScene({
       const { label, texture } = createLabel(scene, instanceId, definition.name, dimensions.height + 0.85);
       label.position.x = position.x;
       label.position.z = position.z;
+      label.isVisible = overlaySettingsRef.current.showLabels;
 
       const selectionFrame = createSelectionFrame(scene, machine);
       selectionFrame.parent = box;
-      selectionFrame.isVisible = selectedMachineIdRef.current === instanceId;
+      selectionFrame.isVisible =
+        selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showSelectionBox;
+
+      const metadataFrame = createMetadataFrame(scene, machine);
+      metadataFrame.parent = box;
+      metadataFrame.isVisible =
+        selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showMetadataBox;
+
+      const clearanceFrame = createClearanceFrame(scene, machine);
+      if (clearanceFrame) {
+        clearanceFrame.parent = box;
+        clearanceFrame.isVisible =
+          selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showClearanceEnvelope;
+      }
 
       const flowArrow = hasFlowDirection(machine) ? createFlowArrow(scene, machine) : undefined;
       if (flowArrow) {
@@ -739,6 +866,14 @@ export function BabylonScene({
         product.parent = box;
       });
       const placeholderMeshes = createPlaceholderMeshes(scene, machine, box, material);
+      const proxyStatus = definition.placeholderVisualType === "box-generic" ? "fallback" : "proxy";
+      onVisualDiagnosticsChange(
+        createBaseVisualDiagnostics(instanceId, definition, proxyStatus, undefined, {
+          widthMm: metersToMm(dimensions.width),
+          depthMm: metersToMm(dimensions.depth),
+          heightMm: metersToMm(dimensions.height)
+        })
+      );
 
       machineNodesRef.current.set(instanceId, {
         box,
@@ -747,6 +882,8 @@ export function BabylonScene({
         material,
         selectionFrame,
         flowArrow,
+        metadataFrame,
+        clearanceFrame,
         products,
         placeholderMeshes,
         loadedVisualMeshes: []
@@ -754,8 +891,26 @@ export function BabylonScene({
 
       const visualModel = definition.visualModel ?? DEFAULT_VISUAL_MODEL;
       if (visualModel.modelPath || definition.modelPath) {
+        onVisualDiagnosticsChange(createBaseVisualDiagnostics(instanceId, definition, "loading"));
         void loadVisualModel(scene, machine, box, material).then((loadedModel) => {
           if (!loadedModel) {
+            return;
+          }
+
+          if ("failed" in loadedModel) {
+            onVisualDiagnosticsChange(
+              createBaseVisualDiagnostics(
+                instanceId,
+                definition,
+                "failed",
+                loadedModel.fallbackReason,
+                {
+                  widthMm: metersToMm(dimensions.width),
+                  depthMm: metersToMm(dimensions.depth),
+                  heightMm: metersToMm(dimensions.height)
+                }
+              )
+            );
             return;
           }
 
@@ -772,6 +927,9 @@ export function BabylonScene({
 
           currentNode.visualRoot = loadedModel.visualRoot;
           currentNode.loadedVisualMeshes = loadedModel.loadedVisualMeshes;
+          onVisualDiagnosticsChange(
+            createBaseVisualDiagnostics(instanceId, definition, "loaded", undefined, loadedModel.visualBoundsMm)
+          );
           currentNode.placeholderMeshes.forEach((mesh) => {
             mesh.isVisible = false;
           });
@@ -796,7 +954,14 @@ export function BabylonScene({
       node.label.position.x = machine.position.x;
       node.label.position.y = dimensions.height + 0.85;
       node.label.position.z = machine.position.z;
-      node.selectionFrame.isVisible = machine.instanceId === selectedMachineIdRef.current;
+      node.selectionFrame.isVisible =
+        machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showSelectionBox;
+      node.metadataFrame.isVisible =
+        machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showMetadataBox;
+      if (node.clearanceFrame) {
+        node.clearanceFrame.isVisible =
+          machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showClearanceEnvelope;
+      }
       node.material.emissiveColor =
         machine.instanceId === selectedMachineIdRef.current ? new Color3(0.24, 0.2, 0.05) : Color3.Black();
     });
