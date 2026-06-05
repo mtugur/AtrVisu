@@ -5,20 +5,21 @@ import type {
   LibraryGroup,
   LibraryMachineItem,
   LoadedMachineLibrary,
-  MachineCategory,
   MachineLibraryDocument
 } from "../types/machine";
+import type { MachineTaxonomy } from "../types/taxonomy";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import {
   CUSTOM_LIBRARY_STORAGE_KEY,
-  MACHINE_CATEGORIES,
   PROJECT_CUSTOM_LIBRARY_ID,
   validateProjectCustomLibraryDocument
 } from "../utils/libraryValidation";
+import { inferPlaceholderVisualType, loadMachineTaxonomy, normalizeTags } from "../utils/taxonomy";
 import { mmToMeters } from "../utils/units";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
+  taxonomyReloadToken: number;
   onClose: () => void;
   onLibrariesChanged: () => void;
 };
@@ -33,7 +34,12 @@ type ItemEditorState = {
   originalId?: string;
   id: string;
   name: string;
-  type: MachineCategory;
+  category: string;
+  machineType: string;
+  variant: string;
+  productFamilyCode: string;
+  tags: string;
+  placeholderVisualType: string;
   widthMm: string;
   depthMm: string;
   heightMm: string;
@@ -42,6 +48,18 @@ type ItemEditorState = {
   canPalletize: boolean;
   canWrap: boolean;
   hasFlowDirection: boolean;
+  canWeigh: boolean;
+  canDose: boolean;
+  canInspect: boolean;
+  canStore: boolean;
+  canElevate: boolean;
+  connectsLevels: boolean;
+  mobileEquipment: boolean;
+  collisionRelevant: boolean;
+  requiresTravelPath: boolean;
+  buildingObstacle: boolean;
+  safetyEquipment: boolean;
+  instrumentation: boolean;
   visualModelPath: string;
   visualModelUnit: "m" | "mm";
   visualModelScaleMode: "metadata-box" | "model-units";
@@ -190,7 +208,12 @@ const toEditorState = (
     originalId: item?.id,
     id: item?.id ?? "",
     name: item?.name ?? "",
-    type: item?.type ?? "Packaging Machine",
+  category: item?.category ?? "Custom",
+  machineType: item?.machineType ?? item?.type ?? "Custom Machine",
+  variant: item?.variant ?? "",
+  productFamilyCode: item?.productFamilyCode ?? "",
+  tags: item?.tags?.join(", ") ?? "",
+  placeholderVisualType: item?.placeholderVisualType ?? inferPlaceholderVisualType(item?.category ?? "", item?.machineType ?? item?.type ?? ""),
     widthMm: dimensionsMm ? String(dimensionsMm.widthMm) : "1000",
     depthMm: dimensionsMm ? String(dimensionsMm.depthMm) : "1000",
     heightMm: dimensionsMm ? String(dimensionsMm.heightMm) : "1000",
@@ -199,6 +222,18 @@ const toEditorState = (
     canPalletize: item?.capabilities?.canPalletize ?? false,
     canWrap: item?.capabilities?.canWrap ?? false,
     hasFlowDirection: item?.capabilities?.hasFlowDirection ?? false,
+    canWeigh: item?.capabilities?.canWeigh ?? false,
+    canDose: item?.capabilities?.canDose ?? false,
+    canInspect: item?.capabilities?.canInspect ?? false,
+    canStore: item?.capabilities?.canStore ?? false,
+    canElevate: item?.capabilities?.canElevate ?? false,
+    connectsLevels: item?.capabilities?.connectsLevels ?? false,
+    mobileEquipment: item?.capabilities?.mobileEquipment ?? false,
+    collisionRelevant: item?.capabilities?.collisionRelevant ?? true,
+    requiresTravelPath: item?.capabilities?.requiresTravelPath ?? false,
+    buildingObstacle: item?.capabilities?.buildingObstacle ?? false,
+    safetyEquipment: item?.capabilities?.safetyEquipment ?? false,
+    instrumentation: item?.capabilities?.instrumentation ?? false,
     visualModelPath: visualModel?.modelPath ?? item?.modelPath ?? "",
     visualModelUnit: visualModel?.unit ?? "m",
     visualModelScaleMode: visualModel?.scaleMode ?? "metadata-box",
@@ -313,7 +348,7 @@ function ManagerTreeNode({
   );
 }
 
-export function LibraryManager({ libraries, onClose, onLibrariesChanged }: LibraryManagerProps) {
+export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibrariesChanged }: LibraryManagerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedLibraryId, setSelectedLibraryId] = useState(PROJECT_CUSTOM_LIBRARY_ID);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
@@ -321,6 +356,7 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
   const [itemEditor, setItemEditor] = useState<ItemEditorState | null>(null);
   const [message, setMessage] = useState("");
   const [validationError, setValidationError] = useState("");
+  const [taxonomy, setTaxonomy] = useState<MachineTaxonomy | null>(null);
 
   const selectedLibrary = useMemo(
     () => libraries.find((library) => library.libraryId === selectedLibraryId) ?? libraries[0],
@@ -347,6 +383,26 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       setValidationError("");
     }
   }, [activeRoot?.id, selectedLibraryId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadMachineTaxonomy().then((loaded) => {
+      if (!cancelled) {
+        setTaxonomy(loaded);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [taxonomyReloadToken]);
+
+  const machineTypeOptions = useMemo(
+    () => {
+      const categoryId = taxonomy?.categories.find((category) => category.name === itemEditor?.category)?.id;
+      return taxonomy?.machineTypes.filter((type) => type.categoryId === categoryId) ?? [];
+    },
+    [itemEditor?.category, taxonomy?.categories, taxonomy?.machineTypes]
+  );
 
   const persistLibrary = (library: MachineLibraryDocument, statusText: string) => {
     window.localStorage.setItem(CUSTOM_LIBRARY_STORAGE_KEY, JSON.stringify(library, null, 2));
@@ -524,8 +580,12 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
       setValidationError("Machine item name is required.");
       return;
     }
-    if (!MACHINE_CATEGORIES.includes(itemEditor.type)) {
-      setValidationError("Machine item type is required.");
+    if (!itemEditor.category.trim()) {
+      setValidationError("Machine category is required.");
+      return;
+    }
+    if (!itemEditor.machineType.trim()) {
+      setValidationError("Machine type is required.");
       return;
     }
     if (
@@ -560,7 +620,13 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
     const item: LibraryMachineItem = {
       id: itemEditor.id.trim(),
       name: itemEditor.name.trim(),
-      type: itemEditor.type,
+      type: itemEditor.machineType.trim(),
+      category: itemEditor.category.trim(),
+      machineType: itemEditor.machineType.trim(),
+      variant: itemEditor.variant.trim(),
+      productFamilyCode: itemEditor.productFamilyCode.trim().toUpperCase(),
+      tags: normalizeTags(itemEditor.tags),
+      placeholderVisualType: itemEditor.placeholderVisualType || inferPlaceholderVisualType(itemEditor.category, itemEditor.machineType),
       widthMm,
       depthMm,
       heightMm,
@@ -596,7 +662,19 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
         canConvey: itemEditor.canConvey,
         canPalletize: itemEditor.canPalletize,
         canWrap: itemEditor.canWrap,
-        hasFlowDirection: itemEditor.hasFlowDirection
+        hasFlowDirection: itemEditor.hasFlowDirection,
+        canWeigh: itemEditor.canWeigh,
+        canDose: itemEditor.canDose,
+        canInspect: itemEditor.canInspect,
+        canStore: itemEditor.canStore,
+        canElevate: itemEditor.canElevate,
+        connectsLevels: itemEditor.connectsLevels,
+        mobileEquipment: itemEditor.mobileEquipment,
+        collisionRelevant: itemEditor.collisionRelevant,
+        requiresTravelPath: itemEditor.requiresTravelPath,
+        buildingObstacle: itemEditor.buildingObstacle,
+        safetyEquipment: itemEditor.safetyEquipment,
+        instrumentation: itemEditor.instrumentation
       }
     };
 
@@ -771,20 +849,94 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
                     />
                   </label>
                   <label>
-                    <span>Type</span>
+                    <span>Category</span>
                     <select
                       disabled={!editable}
-                      value={itemEditor.type}
-                      onChange={(event) =>
-                        setItemEditor({ ...itemEditor, type: event.target.value as MachineCategory })
-                      }
+                      value={itemEditor.category}
+                      onChange={(event) => {
+                        const category = event.target.value;
+                        const categoryId = taxonomy?.categories.find((item) => item.name === category)?.id;
+                        const firstType = taxonomy?.machineTypes.find((type) => type.categoryId === categoryId);
+                        setItemEditor({
+                          ...itemEditor,
+                          category,
+                          machineType: firstType?.name ?? "Custom Machine",
+                          placeholderVisualType: inferPlaceholderVisualType(category, firstType?.name ?? "")
+                        });
+                      }}
                     >
-                      {MACHINE_CATEGORIES.map((category) => (
-                        <option key={category} value={category}>
-                          {category}
+                      {(taxonomy?.categories ?? []).map((category) => (
+                        <option key={category.id} value={category.name}>
+                          {category.name}
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label>
+                    <span>Machine Type</span>
+                    <input
+                      disabled={!editable}
+                      list="taxonomy-machine-types"
+                      value={itemEditor.machineType}
+                      onChange={(event) =>
+                        setItemEditor({
+                          ...itemEditor,
+                          machineType: event.target.value,
+                          placeholderVisualType: inferPlaceholderVisualType(itemEditor.category, event.target.value)
+                        })
+                      }
+                    />
+                    <datalist id="taxonomy-machine-types">
+                      {machineTypeOptions.map((type) => (
+                        <option key={type.id} value={type.name} />
+                      ))}
+                    </datalist>
+                  </label>
+                  <label>
+                    <span>Variant</span>
+                    <input
+                      disabled={!editable}
+                      value={itemEditor.variant}
+                      onChange={(event) => setItemEditor({ ...itemEditor, variant: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    <span>Product Family Code</span>
+                    <select
+                      disabled={!editable}
+                      value={itemEditor.productFamilyCode}
+                      onChange={(event) => setItemEditor({ ...itemEditor, productFamilyCode: event.target.value })}
+                    >
+                      <option value="">None</option>
+                      {(taxonomy?.productFamilyCodes ?? []).map((family) => (
+                        <option key={family.code} value={family.code}>
+                          {family.code} - {family.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Placeholder Visual</span>
+                    <select
+                      disabled={!editable}
+                      value={itemEditor.placeholderVisualType}
+                      onChange={(event) => setItemEditor({ ...itemEditor, placeholderVisualType: event.target.value })}
+                    >
+                      {(taxonomy?.placeholderVisualTypes ?? []).map((placeholder) => (
+                        <option key={placeholder.id} value={placeholder.id}>
+                          {placeholder.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Tags</span>
+                    <input
+                      disabled={!editable}
+                      placeholder="comma, separated, tags"
+                      value={itemEditor.tags}
+                      onChange={(event) => setItemEditor({ ...itemEditor, tags: event.target.value })}
+                    />
                   </label>
                   <label>
                     <span>Width (mm)</span>
@@ -931,7 +1083,24 @@ export function LibraryManager({ libraries, onClose, onLibrariesChanged }: Libra
                   </div>
                 </details>
                 <div className="manager-capabilities">
-                  {(["canConvey", "canPalletize", "canWrap", "hasFlowDirection"] as const).map((key) => (
+                  {([
+                    "canConvey",
+                    "canPalletize",
+                    "canWrap",
+                    "hasFlowDirection",
+                    "canWeigh",
+                    "canDose",
+                    "canInspect",
+                    "canStore",
+                    "canElevate",
+                    "connectsLevels",
+                    "mobileEquipment",
+                    "collisionRelevant",
+                    "requiresTravelPath",
+                    "buildingObstacle",
+                    "safetyEquipment",
+                    "instrumentation"
+                  ] as const).map((key) => (
                     <label key={key}>
                       <input
                         disabled={!editable}

@@ -4,9 +4,10 @@ import type {
   LibraryMachineItem,
   LibraryValidationWarning,
   LoadedMachineLibrary,
-  MachineCategory,
   MachineLibraryDocument
 } from "../types/machine";
+import type { MachineCapabilities } from "../types/taxonomy";
+import { DEFAULT_CAPABILITIES, getLegacyTaxonomyHints, inferPlaceholderVisualType, normalizeTags } from "./taxonomy";
 import { metersToMm, mmToMeters } from "./units";
 import { normalizeVisualModel } from "./visualModel";
 
@@ -23,14 +24,22 @@ type LoadMachineLibrariesResult = {
 export const PROJECT_CUSTOM_LIBRARY_ID = "project-custom";
 export const CUSTOM_LIBRARY_STORAGE_KEY = "atrvisu.projectCustomLibrary.v1";
 
-export const MACHINE_CATEGORIES: MachineCategory[] = [
-  "Packaging Machine",
-  "Conveyor",
-  "Robot Palletizer",
-  "High Level Palletizer",
-  "Stretch Wrapper",
-  "Pallet",
-  "Safety Fence"
+export const MACHINE_CATEGORIES = [
+  "Packaging",
+  "Palletizing",
+  "Wrapping / Hooding",
+  "Conveying",
+  "Elevating",
+  "Weighing / Dosing",
+  "Inspection / Quality Control",
+  "Storage / Buffer",
+  "Material Handling",
+  "Process Equipment",
+  "Utility Systems",
+  "Safety",
+  "Building / Civil",
+  "Sensor / Instrumentation",
+  "Custom"
 ];
 
 const DEFAULT_CLEARANCE = {
@@ -38,13 +47,6 @@ const DEFAULT_CLEARANCE = {
   back: 0,
   left: 0,
   right: 0
-};
-
-const DEFAULT_CAPABILITIES = {
-  canConvey: false,
-  canPalletize: false,
-  canWrap: false,
-  hasFlowDirection: false
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -71,10 +73,6 @@ const readDimensionMm = (item: Record<string, unknown>, mmKey: string, meterKey:
   }
 
   return null;
-};
-
-const isMachineCategory = (value: unknown): value is MachineCategory => {
-  return MACHINE_CATEGORIES.includes(value as MachineCategory);
 };
 
 const createWarning = (
@@ -165,7 +163,7 @@ const readCapabilities = (
   value: unknown,
   warnings: LibraryValidationWarning[],
   path: string
-): LibraryMachineItem["capabilities"] => {
+): MachineCapabilities => {
   if (value === undefined) {
     createWarning(warnings, path, "Missing capabilities; safe disabled capability defaults were applied.");
     return DEFAULT_CAPABILITIES;
@@ -180,7 +178,19 @@ const readCapabilities = (
     canConvey: value.canConvey === true,
     canPalletize: value.canPalletize === true,
     canWrap: value.canWrap === true,
-    hasFlowDirection: value.hasFlowDirection === true
+    hasFlowDirection: value.hasFlowDirection === true,
+    canWeigh: value.canWeigh === true,
+    canDose: value.canDose === true,
+    canInspect: value.canInspect === true,
+    canStore: value.canStore === true,
+    canElevate: value.canElevate === true,
+    connectsLevels: value.connectsLevels === true,
+    mobileEquipment: value.mobileEquipment === true,
+    collisionRelevant: value.collisionRelevant !== false,
+    requiresTravelPath: value.requiresTravelPath === true,
+    buildingObstacle: value.buildingObstacle === true,
+    safetyEquipment: value.safetyEquipment === true,
+    instrumentation: value.instrumentation === true
   };
 };
 
@@ -197,6 +207,14 @@ const validateMachineItem = (
   const id = item.id;
   const name = item.name;
   const type = item.type;
+  const legacyHints = getLegacyTaxonomyHints(isNonEmptyString(type) ? type : "", isNonEmptyString(name) ? name : "");
+  const category = isNonEmptyString(item.category) ? item.category : legacyHints.category;
+  const machineType = isNonEmptyString(item.machineType)
+    ? item.machineType
+    : legacyHints.machineType;
+  const placeholderVisualType = isNonEmptyString(item.placeholderVisualType)
+    ? item.placeholderVisualType
+    : inferPlaceholderVisualType(category, machineType, legacyHints.placeholder);
   const widthMm = readDimensionMm(item, "widthMm", "width");
   const depthMm = readDimensionMm(item, "depthMm", "depth");
   const heightMm = readDimensionMm(item, "heightMm", "height");
@@ -206,7 +224,9 @@ const validateMachineItem = (
   const invalidReasons = [
     !isNonEmptyString(id) ? "id" : "",
     !isNonEmptyString(name) ? "name" : "",
-    !isMachineCategory(type) ? "type" : "",
+    !isNonEmptyString(type) && !isNonEmptyString(machineType) ? "type/machineType" : "",
+    !isNonEmptyString(category) ? "category" : "",
+    !isNonEmptyString(machineType) ? "machineType" : "",
     widthMm === null ? "widthMm/width" : "",
     depthMm === null ? "depthMm/depth" : "",
     heightMm === null ? "heightMm/height" : "",
@@ -222,7 +242,9 @@ const validateMachineItem = (
   if (
     !isNonEmptyString(id) ||
     !isNonEmptyString(name) ||
-    !isMachineCategory(type) ||
+    (!isNonEmptyString(type) && !isNonEmptyString(machineType)) ||
+    !isNonEmptyString(category) ||
+    !isNonEmptyString(machineType) ||
     widthMm === null ||
     depthMm === null ||
     heightMm === null ||
@@ -235,7 +257,13 @@ const validateMachineItem = (
   return {
     id,
     name,
-    type,
+    type: machineType,
+    category,
+    machineType,
+    variant: isNonEmptyString(item.variant) ? item.variant : "",
+    productFamilyCode: isNonEmptyString(item.productFamilyCode) ? item.productFamilyCode.trim().toUpperCase() : "",
+    tags: normalizeTags(item.tags),
+    placeholderVisualType,
     widthMm,
     depthMm,
     heightMm,

@@ -1,11 +1,4 @@
-export type MachineCategory =
-  | "Packaging Machine"
-  | "Conveyor"
-  | "Robot Palletizer"
-  | "High Level Palletizer"
-  | "Stretch Wrapper"
-  | "Pallet"
-  | "Safety Fence";
+export type MachineCategory = string;
 
 export type ConnectionPoint = {
   id: string;
@@ -36,6 +29,11 @@ export type MachineDefinition = {
   id: string;
   name: string;
   category: MachineCategory;
+  machineType?: string;
+  variant?: string;
+  productFamilyCode?: string;
+  tags?: string[];
+  placeholderVisualType?: string;
   widthMm?: number;
   depthMm?: number;
   heightMm?: number;
@@ -59,6 +57,18 @@ export type MachineDefinition = {
     canPalletize: boolean;
     canWrap: boolean;
     hasFlowDirection: boolean;
+    canWeigh?: boolean;
+    canDose?: boolean;
+    canInspect?: boolean;
+    canStore?: boolean;
+    canElevate?: boolean;
+    connectsLevels?: boolean;
+    mobileEquipment?: boolean;
+    collisionRelevant?: boolean;
+    requiresTravelPath?: boolean;
+    buildingObstacle?: boolean;
+    safetyEquipment?: boolean;
+    instrumentation?: boolean;
   };
 };
 
@@ -128,7 +138,7 @@ export type LibraryIndexEntry = {
   enabled: boolean;
 };
 
-export type LibraryMachineItem = Omit<MachineDefinition, "category"> & {
+export type LibraryMachineItem = MachineDefinition & {
   type: MachineCategory;
 };
 
