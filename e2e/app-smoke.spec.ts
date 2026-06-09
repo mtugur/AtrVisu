@@ -59,6 +59,12 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await page.getByTestId("close-project-manager").click();
   await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
 
+  await page.getByRole("button", { name: /Performance Benchmark/i }).click();
+  await page.getByTestId("open-performance-benchmark").click();
+  await expect(page.getByTestId("performance-benchmark-modal")).toBeVisible();
+  await page.getByTestId("close-performance-benchmark").click();
+  await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
+
   await page.getByTestId("open-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await page.getByRole("dialog", { name: "Library Manager" }).getByRole("button", { name: "Add Item" }).last().click();

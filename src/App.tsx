@@ -9,11 +9,13 @@ import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
 import { PanelSection } from "./components/PanelSection";
 import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
+import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModal";
 import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 import type { VisualModelDiagnostics } from "./types/overlays";
 import type { AtrVisuProject } from "./types/project";
+import type { ScenePerformanceMetrics } from "./types/performance";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
@@ -55,6 +57,9 @@ export function App() {
     }
   });
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
+  const [isPerformanceBenchmarkOpen, setIsPerformanceBenchmarkOpen] = useState(false);
+  const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
+  const [latestPerformanceMetrics, setLatestPerformanceMetrics] = useState<ScenePerformanceMetrics | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
   const [currentRevisionId, setCurrentRevisionId] = useState<string | null>(null);
@@ -79,6 +84,7 @@ export function App() {
   });
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
   const placementSettingsRef = useRef(placementSettings);
+  const isBenchmarkModeRef = useRef(isBenchmarkMode);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
   const selectedVisualDiagnostics = selectedMachineId ? visualDiagnostics[selectedMachineId] : undefined;
@@ -123,6 +129,10 @@ export function App() {
     }
     placementSettingsRef.current = placementSettings;
   }, [placementSettings]);
+
+  useEffect(() => {
+    isBenchmarkModeRef.current = isBenchmarkMode;
+  }, [isBenchmarkMode]);
 
   useEffect(() => {
     try {
@@ -224,7 +234,9 @@ export function App() {
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
     options: { snapPosition?: boolean; snapRotation?: boolean } = {}
   ) => {
-    setHasUnsavedProjectChanges(true);
+    if (!isBenchmarkModeRef.current) {
+      setHasUnsavedProjectChanges(true);
+    }
     setPlacedMachines((current) =>
       current.map((machine) => {
         if (machine.instanceId !== instanceId) {
@@ -290,6 +302,26 @@ export function App() {
     setHasUnsavedProjectChanges(true);
   }, []);
 
+  const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
+    setIsBenchmarkMode(true);
+    setPlacedMachines(machines);
+    setSelectedMachineId(null);
+  }, []);
+
+  const restoreBenchmarkSnapshot = useCallback((snapshot: AtrVisuLayout) => {
+    const importedMachines = placedMachinesFromLayout(snapshot);
+    setPlacedMachines(importedMachines);
+    setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
+    setIsBenchmarkMode(false);
+    setHasUnsavedProjectChanges(false);
+  }, []);
+
+  const clearBenchmarkScene = useCallback(() => {
+    setPlacedMachines([]);
+    setSelectedMachineId(null);
+    setIsBenchmarkMode(true);
+  }, []);
+
   const loadRevisionSnapshot = useCallback((
     projectId: string,
     layoutId: string,
@@ -347,6 +379,9 @@ export function App() {
     if (!autosaveReady) {
       return;
     }
+    if (isBenchmarkMode) {
+      return;
+    }
 
     const autosaveId = window.setTimeout(() => {
       try {
@@ -364,7 +399,7 @@ export function App() {
     return () => {
       window.clearTimeout(autosaveId);
     };
-  }, [autosaveReady, createLayoutSnapshot, placedMachines.length]);
+  }, [autosaveReady, createLayoutSnapshot, isBenchmarkMode, placedMachines.length]);
 
   const restoreAutosavedLayout = () => {
     if (!recoveryLayout) {
@@ -427,6 +462,7 @@ export function App() {
             [diagnostics.instanceId]: diagnostics
           }))
         }
+        onPerformanceMetricsChange={setLatestPerformanceMetrics}
       />
       {isPanelCollapsed ? (
         <button
@@ -519,6 +555,26 @@ export function App() {
             </section>
           </PanelSection>
           <PanelSection
+            title="Performance Benchmark"
+            storageKey="atrvisu.panelSection.performanceBenchmark.v1"
+            defaultExpanded={false}
+            badge={isBenchmarkMode ? "Benchmark" : undefined}
+          >
+            <section className="project-status-panel" aria-label="Performance benchmark entry">
+              <p className="collision-note">
+                Optional scene diagnostics for FPS, mesh counts, and snapshot size.
+              </p>
+              <button
+                className="manager-open-button"
+                data-testid="open-performance-benchmark"
+                type="button"
+                onClick={() => setIsPerformanceBenchmarkOpen(true)}
+              >
+                Performance Benchmark
+              </button>
+            </section>
+          </PanelSection>
+          <PanelSection
             title="Simulation Controls"
             storageKey="atrvisu.panelSection.simulationControls.v1"
             defaultExpanded={false}
@@ -606,6 +662,16 @@ export function App() {
           setProjects(listProjects());
           setHasUnsavedProjectChanges(false);
         }}
+      />
+    ) : null}
+    {isPerformanceBenchmarkOpen ? (
+      <PerformanceBenchmarkModal
+        currentSnapshot={createLayoutSnapshot()}
+        latestMetrics={latestPerformanceMetrics}
+        onApplyBenchmarkScene={applyBenchmarkMachines}
+        onRestoreScene={restoreBenchmarkSnapshot}
+        onClearBenchmarkScene={clearBenchmarkScene}
+        onClose={() => setIsPerformanceBenchmarkOpen(false)}
       />
     ) : null}
     </>
