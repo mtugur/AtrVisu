@@ -8,14 +8,17 @@ import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
 import { PanelSection } from "./components/PanelSection";
+import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 import type { VisualModelDiagnostics } from "./types/overlays";
+import type { AtrVisuProject } from "./types/project";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
 import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
+import { listProjects } from "./utils/projectStorage";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 
@@ -40,6 +43,18 @@ export function App() {
   const [overlaySettings, setOverlaySettings] = useState(loadOverlaySettings);
   const [collisionSettings, setCollisionSettings] = useState(loadCollisionSettings);
   const [visualDiagnostics, setVisualDiagnostics] = useState<Record<string, VisualModelDiagnostics>>({});
+  const [projects, setProjects] = useState<AtrVisuProject[]>(() => {
+    try {
+      return listProjects();
+    } catch {
+      return [];
+    }
+  });
+  const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
+  const [currentRevisionId, setCurrentRevisionId] = useState<string | null>(null);
+  const [hasUnsavedProjectChanges, setHasUnsavedProjectChanges] = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
       const rawSavedWidth = window.localStorage.getItem(PANEL_WIDTH_KEY);
@@ -62,6 +77,13 @@ export function App() {
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
   const selectedVisualDiagnostics = selectedMachineId ? visualDiagnostics[selectedMachineId] : undefined;
+  const currentProject = currentProjectId ? projects.find((project) => project.projectId === currentProjectId) : null;
+  const currentLayout = currentProject && currentLayoutId
+    ? currentProject.layouts.find((layout) => layout.layoutId === currentLayoutId)
+    : null;
+  const currentRevision = currentLayout && currentRevisionId
+    ? currentLayout.revisions.find((revision) => revision.revisionId === currentRevisionId)
+    : null;
   const collisionResult = useMemo(
     () => checkAllObjectCollisions(placedMachines, collisionSettings.enabled),
     [collisionSettings.enabled, placedMachines]
@@ -180,12 +202,14 @@ export function App() {
       ];
     });
     setSelectedMachineId(instanceId);
+    setHasUnsavedProjectChanges(true);
   }, []);
 
   const updateMachine = useCallback((
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => {
+    setHasUnsavedProjectChanges(true);
     setPlacedMachines((current) =>
       current.map((machine) => {
         if (machine.instanceId !== instanceId) {
@@ -232,6 +256,23 @@ export function App() {
 
     setPlacedMachines(importedMachines);
     setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
+    setHasUnsavedProjectChanges(true);
+  }, []);
+
+  const loadRevisionSnapshot = useCallback((
+    projectId: string,
+    layoutId: string,
+    revisionId: string,
+    snapshot: AtrVisuLayout
+  ) => {
+    const importedMachines = placedMachinesFromLayout(snapshot);
+    setPlacedMachines(importedMachines);
+    setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
+    setCurrentProjectId(projectId);
+    setCurrentLayoutId(layoutId);
+    setCurrentRevisionId(revisionId);
+    setProjects(listProjects());
+    setHasUnsavedProjectChanges(false);
   }, []);
 
   const deleteSelectedMachine = useCallback(() => {
@@ -246,6 +287,7 @@ export function App() {
 
     setPlacedMachines((current) => current.filter((machine) => machine.instanceId !== selectedMachine.instanceId));
     setSelectedMachineId(null);
+    setHasUnsavedProjectChanges(true);
   }, [selectedMachine]);
 
   useEffect(() => {
@@ -337,6 +379,7 @@ export function App() {
   }, [deleteSelectedMachine, selectedMachine]);
 
   return (
+    <>
     <main className="app-shell" data-testid="app-root">
       <BabylonScene
         placedMachines={placedMachines}
@@ -410,6 +453,41 @@ export function App() {
             <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
           </PanelSection>
           <PanelSection
+            title="Project Manager"
+            storageKey="atrvisu.panelSection.projectManager.v1"
+            defaultExpanded
+            badge={hasUnsavedProjectChanges ? "Unsaved" : currentRevision?.revisionCode ?? "None"}
+          >
+            <section className="project-status-panel" aria-label="Current project status">
+              <div className="property-readout">
+                <span>Current Project</span>
+                <strong>{currentProject?.projectName ?? "None"}</strong>
+              </div>
+              <div className="property-readout">
+                <span>Current Layout</span>
+                <strong>{currentLayout?.layoutName ?? "None"}</strong>
+              </div>
+              <div className="property-readout">
+                <span>Current Revision</span>
+                <strong>{currentRevision?.revisionCode ?? "None"}</strong>
+              </div>
+              <div className={`project-dirty-state${hasUnsavedProjectChanges ? " is-dirty" : ""}`}>
+                {hasUnsavedProjectChanges ? "Unsaved changes" : "No unsaved project changes"}
+              </div>
+              <button
+                className="manager-open-button"
+                data-testid="open-project-manager"
+                type="button"
+                onClick={() => {
+                  setProjects(listProjects());
+                  setIsProjectManagerOpen(true);
+                }}
+              >
+                Project Manager
+              </button>
+            </section>
+          </PanelSection>
+          <PanelSection
             title="Simulation Controls"
             storageKey="atrvisu.panelSection.simulationControls.v1"
             defaultExpanded={false}
@@ -458,5 +536,32 @@ export function App() {
         </aside>
       )}
     </main>
+    {isProjectManagerOpen ? (
+      <ProjectManager
+        projects={projects}
+        currentProjectId={currentProjectId}
+        currentLayoutId={currentLayoutId}
+        currentRevisionId={currentRevisionId}
+        currentSnapshot={createLayoutSnapshot()}
+        hasSceneObjects={placedMachines.length > 0}
+        isDirty={hasUnsavedProjectChanges}
+        onClose={() => setIsProjectManagerOpen(false)}
+        onProjectsChanged={setProjects}
+        onCurrentSelectionChange={(projectId, layoutId, revisionId) => {
+          setCurrentProjectId(projectId);
+          setCurrentLayoutId(layoutId);
+          setCurrentRevisionId(revisionId);
+        }}
+        onLoadRevision={loadRevisionSnapshot}
+        onSavedRevision={(projectId, layoutId, revisionId) => {
+          setCurrentProjectId(projectId);
+          setCurrentLayoutId(layoutId);
+          setCurrentRevisionId(revisionId);
+          setProjects(listProjects());
+          setHasUnsavedProjectChanges(false);
+        }}
+      />
+    ) : null}
+    </>
   );
 }
