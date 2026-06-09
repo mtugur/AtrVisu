@@ -8,6 +8,7 @@ import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
 import { PanelSection } from "./components/PanelSection";
+import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
 import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
@@ -18,6 +19,8 @@ import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionS
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
 import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
+import { applyPositionSnap, applyRotationSnap } from "./utils/placement";
+import { loadPlacementSettings, savePlacementSettings } from "./utils/placementSettings";
 import { listProjects } from "./utils/projectStorage";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
@@ -42,6 +45,7 @@ export function App() {
   const [simulationSpeed, setSimulationSpeed] = useState(1);
   const [overlaySettings, setOverlaySettings] = useState(loadOverlaySettings);
   const [collisionSettings, setCollisionSettings] = useState(loadCollisionSettings);
+  const [placementSettings, setPlacementSettings] = useState(loadPlacementSettings);
   const [visualDiagnostics, setVisualDiagnostics] = useState<Record<string, VisualModelDiagnostics>>({});
   const [projects, setProjects] = useState<AtrVisuProject[]>(() => {
     try {
@@ -74,6 +78,7 @@ export function App() {
     }
   });
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
+  const placementSettingsRef = useRef(placementSettings);
 
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
   const selectedVisualDiagnostics = selectedMachineId ? visualDiagnostics[selectedMachineId] : undefined;
@@ -109,6 +114,15 @@ export function App() {
       // Collision preferences are best-effort only.
     }
   }, [collisionSettings]);
+
+  useEffect(() => {
+    try {
+      savePlacementSettings(placementSettings);
+    } catch {
+      // Placement preferences are best-effort only.
+    }
+    placementSettingsRef.current = placementSettings;
+  }, [placementSettings]);
 
   useEffect(() => {
     try {
@@ -207,7 +221,8 @@ export function App() {
 
   const updateMachine = useCallback((
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
+    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
+    options: { snapPosition?: boolean; snapRotation?: boolean } = {}
   ) => {
     setHasUnsavedProjectChanges(true);
     setPlacedMachines((current) =>
@@ -216,23 +231,39 @@ export function App() {
           return machine;
         }
 
-        const nextPosition = updates.position ?? (
-          updates.positionMm
-            ? { x: mmToMeters(updates.positionMm.xMm), z: mmToMeters(updates.positionMm.yMm) }
-            : machine.position
+        const positionChanged = updates.position !== undefined || updates.positionMm !== undefined;
+        const rawPositionMm = updates.positionMm ?? (
+          updates.position
+            ? { xMm: metersToMm(updates.position.x), yMm: metersToMm(updates.position.z) }
+            : machine.positionMm ?? {
+                xMm: metersToMm(machine.position.x),
+                yMm: metersToMm(machine.position.z)
+              }
         );
-        const nextRotationY = updates.rotationY ?? updates.rotationDeg ?? machine.rotationY;
+        const nextPositionMm = positionChanged
+          ? options.snapPosition === false
+            ? rawPositionMm
+            : applyPositionSnap(rawPositionMm, placementSettingsRef.current)
+          : rawPositionMm;
+        const nextPosition = {
+          x: mmToMeters(nextPositionMm.xMm),
+          z: mmToMeters(nextPositionMm.yMm)
+        };
+        const rotationChanged = updates.rotationY !== undefined || updates.rotationDeg !== undefined;
+        const rawRotation = updates.rotationY ?? updates.rotationDeg ?? machine.rotationDeg ?? machine.rotationY;
+        const nextRotationY = rotationChanged
+          ? options.snapRotation === false
+            ? applyRotationSnap(rawRotation, { ...placementSettingsRef.current, rotationSnapEnabled: false })
+            : applyRotationSnap(rawRotation, placementSettingsRef.current)
+          : rawRotation;
 
         return {
           ...machine,
           ...updates,
           position: nextPosition,
-          positionMm: updates.positionMm ?? {
-            xMm: metersToMm(nextPosition.x),
-            yMm: metersToMm(nextPosition.z)
-          },
+          positionMm: nextPositionMm,
           rotationY: nextRotationY,
-          rotationDeg: updates.rotationDeg ?? updates.rotationY ?? machine.rotationDeg ?? machine.rotationY
+          rotationDeg: nextRotationY
         };
       })
     );
@@ -501,6 +532,20 @@ export function App() {
             />
           </PanelSection>
           <PanelSection
+            title="Precision Placement"
+            storageKey="atrvisu.panelSection.precisionPlacement.v1"
+            defaultExpanded
+            badge={placementSettings.gridSnapEnabled ? `${placementSettings.gridSnapStepMm} mm` : "Free"}
+          >
+            <PrecisionPlacementPanel
+              settings={placementSettings}
+              placedMachines={placedMachines}
+              selectedMachine={selectedMachine}
+              onChangeSettings={setPlacementSettings}
+              onUpdateMachine={updateMachine}
+            />
+          </PanelSection>
+          <PanelSection
             title="Display / Overlay Controls"
             storageKey="atrvisu.panelSection.overlayControls.v1"
             defaultExpanded={false}
@@ -527,6 +572,7 @@ export function App() {
           >
             <MachineProperties
               selectedMachine={selectedMachine}
+              placementSettings={placementSettings}
               visualDiagnostics={selectedVisualDiagnostics}
               collisionPairs={selectedCollisionPairs}
               onUpdateMachine={updateMachine}

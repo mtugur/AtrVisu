@@ -759,9 +759,13 @@ export function BabylonScene({
         }
 
         onUpdateMachine(dragState.instanceId, {
+          positionMm: {
+            xMm: metersToMm(floorPoint.x + dragState.offsetX),
+            yMm: metersToMm(floorPoint.z + dragState.offsetZ)
+          },
           position: {
-            x: Number((floorPoint.x + dragState.offsetX).toFixed(2)),
-            z: Number((floorPoint.z + dragState.offsetZ).toFixed(2))
+            x: floorPoint.x + dragState.offsetX,
+            z: floorPoint.z + dragState.offsetZ
           }
         });
       }

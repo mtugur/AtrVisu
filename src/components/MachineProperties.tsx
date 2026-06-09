@@ -1,17 +1,22 @@
+import { useEffect, useState } from "react";
 import type { CollisionPair } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
 import type { VisualModelDiagnostics } from "../types/overlays";
+import type { PlacementSettings } from "../types/placement";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
+import { commitRotationAngle } from "../utils/placement";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
+  placementSettings: PlacementSettings;
   visualDiagnostics?: VisualModelDiagnostics;
   collisionPairs: CollisionPair[];
   onUpdateMachine: (
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
+    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
+    options?: { snapPosition?: boolean; snapRotation?: boolean }
   ) => void;
   onDeleteSelected: () => void;
 };
@@ -20,11 +25,19 @@ const formatMm = (value: number) => formatLength(value, "mm", 0);
 
 export function MachineProperties({
   selectedMachine,
+  placementSettings,
   visualDiagnostics,
   collisionPairs,
   onUpdateMachine,
   onDeleteSelected
 }: MachinePropertiesProps) {
+  const currentRotation = selectedMachine?.rotationDeg ?? selectedMachine?.rotationY ?? 0;
+  const [rotationDraft, setRotationDraft] = useState(String(currentRotation));
+
+  useEffect(() => {
+    setRotationDraft(String(currentRotation));
+  }, [currentRotation, selectedMachine?.instanceId]);
+
   const updatePosition = (axis: "x" | "z", value: string) => {
     if (!selectedMachine) {
       return;
@@ -79,20 +92,23 @@ export function MachineProperties({
     };
   };
 
-  const updateRotation = (value: string) => {
+  const commitRotation = () => {
     if (!selectedMachine) {
       return;
     }
 
-    const numericValue = Number(value);
+    const numericValue = Number(rotationDraft);
     if (!Number.isFinite(numericValue)) {
+      setRotationDraft(String(currentRotation));
       return;
     }
 
+    const committedRotation = commitRotationAngle(numericValue, placementSettings);
+    setRotationDraft(String(committedRotation));
     onUpdateMachine(selectedMachine.instanceId, {
-      rotationY: numericValue,
-      rotationDeg: numericValue
-    });
+      rotationY: committedRotation,
+      rotationDeg: committedRotation
+    }, { snapRotation: false });
   };
 
   const positionMm = getPositionMm();
@@ -161,9 +177,16 @@ export function MachineProperties({
             <span>Rotation Angle (&deg;)</span>
             <input
               type="number"
-              step="1"
-              value={selectedMachine.rotationDeg ?? selectedMachine.rotationY}
-              onChange={(event) => updateRotation(event.target.value)}
+              step={placementSettings.rotationSnapEnabled ? placementSettings.rotationSnapStepDeg : 1}
+              value={rotationDraft}
+              onChange={(event) => setRotationDraft(event.target.value)}
+              onBlur={commitRotation}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  commitRotation();
+                  event.currentTarget.blur();
+                }
+              }}
             />
           </label>
 
