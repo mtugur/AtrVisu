@@ -24,8 +24,10 @@ import "@babylonjs/loaders/glTF";
 import type { CollisionCheckResult } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
+import type { ScenePerformanceMetrics } from "../types/performance";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
+import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
 import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
 import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
@@ -48,6 +50,7 @@ type BabylonSceneProps = {
   overlaySettings: OverlaySettings;
   collisionResult: CollisionCheckResult;
   onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
+  onPerformanceMetricsChange?: (metrics: ScenePerformanceMetrics) => void;
 };
 
 type PlacedMachineNode = {
@@ -542,7 +545,8 @@ export function BabylonScene({
   simulationSpeed,
   overlaySettings,
   collisionResult,
-  onVisualDiagnosticsChange
+  onVisualDiagnosticsChange,
+  onPerformanceMetricsChange
 }: BabylonSceneProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -555,6 +559,7 @@ export function BabylonScene({
   const simulationSpeedRef = useRef(simulationSpeed);
   const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
   const collisionResultRef = useRef<CollisionCheckResult>(collisionResult);
+  const onPerformanceMetricsChangeRef = useRef(onPerformanceMetricsChange);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<{
     instanceId: string;
@@ -618,6 +623,10 @@ export function BabylonScene({
           : Color3.Black();
     });
   }, [collisionResult]);
+
+  useEffect(() => {
+    onPerformanceMetricsChangeRef.current = onPerformanceMetricsChange;
+  }, [onPerformanceMetricsChange]);
 
   useEffect(() => {
     isSimulationRunningRef.current = isSimulationRunning;
@@ -808,6 +817,9 @@ export function BabylonScene({
         });
       });
       scene.render();
+      if (onPerformanceMetricsChangeRef.current) {
+        onPerformanceMetricsChangeRef.current(collectScenePerformanceMetrics(scene, engine));
+      }
     });
 
     const handleResize = () => {
