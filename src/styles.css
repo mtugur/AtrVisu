@@ -1114,6 +1114,111 @@ textarea {
   margin: 0;
 }
 
+.precision-section {
+  display: grid;
+  gap: 12px;
+}
+
+.precision-settings,
+.precision-actions,
+.measurement-section {
+  display: grid;
+  gap: 8px;
+}
+
+.precision-settings label,
+.measurement-section label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.precision-settings label:has(input[type="checkbox"]) {
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.precision-settings span,
+.measurement-section span {
+  color: rgba(237, 243, 240, 0.62);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.precision-settings input[type="number"],
+.measurement-section select {
+  min-height: 36px;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(164, 190, 178, 0.22);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+  padding: 0 10px;
+}
+
+.precision-actions button,
+.rotation-button-grid button {
+  min-height: 34px;
+  border: 1px solid rgba(164, 190, 178, 0.22);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.precision-actions button:hover,
+.rotation-button-grid button:hover,
+.precision-actions button:focus-visible,
+.rotation-button-grid button:focus-visible {
+  border-color: rgba(168, 201, 120, 0.72);
+  outline: none;
+}
+
+.rotation-button-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.measurement-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 7px 10px;
+  padding: 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.76rem;
+}
+
+.measurement-grid span {
+  color: rgba(237, 243, 240, 0.58);
+}
+
+.measurement-grid strong,
+.measurement-readout strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #f4f7f2;
+}
+
+.measurement-readout {
+  margin: 0;
+  color: rgba(237, 243, 240, 0.66);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .diagnostics-section {
   display: grid;
   gap: 10px;

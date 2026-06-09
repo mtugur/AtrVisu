@@ -33,6 +33,22 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await page.getByLabel("Enable Collision Check").uncheck();
   await page.getByLabel("Enable Collision Check").check();
 
+  await expect(page.getByRole("button", { name: /Precision Placement/i })).toBeVisible();
+  await expect(page.getByTestId("precision-placement-panel")).toBeVisible();
+  await page.getByLabel("Grid Snap", { exact: true }).uncheck();
+  await page.getByLabel("Grid Snap", { exact: true }).check();
+  await page.getByLabel("Grid Snap Step").fill("250");
+  await page.getByLabel("Rotation Snap", { exact: true }).uncheck();
+  await page.getByLabel("Rotation Snap", { exact: true }).check();
+  await page.getByLabel("Rotation Snap Step").fill("45");
+
+  await page.locator(".machine-card").first().click();
+  await page.getByRole("button", { name: /Selected Object Properties/i }).click();
+  const rotationInput = page.getByLabel(/Rotation Angle/i);
+  await rotationInput.fill("50");
+  await rotationInput.press("Enter");
+  await expect(rotationInput).toHaveValue("45");
+
   await page.getByTestId("open-project-manager").click();
   await expect(page.getByTestId("project-manager-modal")).toBeVisible();
   await page.getByTestId("new-project-name").fill("Paketleme Hatti");
