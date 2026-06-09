@@ -33,6 +33,16 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await page.getByLabel("Enable Collision Check").uncheck();
   await page.getByLabel("Enable Collision Check").check();
 
+  await page.getByTestId("open-project-manager").click();
+  await expect(page.getByTestId("project-manager-modal")).toBeVisible();
+  await page.getByTestId("new-project-name").fill("Paketleme Hatti");
+  await page.getByTestId("new-customer-name").fill("ABC Un");
+  await page.getByTestId("create-project").click();
+  await expect(page.getByRole("dialog", { name: "Project Manager" }).getByText("Paketleme Hatti").first()).toBeVisible();
+  await expect(page.getByTestId("save-scene-revision")).toBeVisible();
+  await page.getByTestId("close-project-manager").click();
+  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
+
   await page.getByTestId("open-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await page.getByRole("dialog", { name: "Library Manager" }).getByRole("button", { name: "Add Item" }).last().click();
