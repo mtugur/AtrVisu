@@ -24,6 +24,7 @@ import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySetting
 import { applyPositionSnap, applyRotationSnap } from "./utils/placement";
 import { loadPlacementSettings, savePlacementSettings } from "./utils/placementSettings";
 import { listProjects } from "./utils/projectStorage";
+import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 
@@ -49,13 +50,9 @@ export function App() {
   const [collisionSettings, setCollisionSettings] = useState(loadCollisionSettings);
   const [placementSettings, setPlacementSettings] = useState(loadPlacementSettings);
   const [visualDiagnostics, setVisualDiagnostics] = useState<Record<string, VisualModelDiagnostics>>({});
-  const [projects, setProjects] = useState<AtrVisuProject[]>(() => {
-    try {
-      return listProjects();
-    } catch {
-      return [];
-    }
-  });
+  const [projects, setProjects] = useState<AtrVisuProject[]>([]);
+  const [isProjectStorageLoading, setIsProjectStorageLoading] = useState(true);
+  const [projectStorageError, setProjectStorageError] = useState("");
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const [isPerformanceBenchmarkOpen, setIsPerformanceBenchmarkOpen] = useState(false);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
@@ -133,6 +130,45 @@ export function App() {
   useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
   }, [isBenchmarkMode]);
+
+  const refreshProjects = useCallback(async () => {
+    const nextProjects = await listProjects();
+    setProjects(nextProjects);
+    return nextProjects;
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProjects = async () => {
+      setIsProjectStorageLoading(true);
+      try {
+        const migrationResult = await initializeProjectStorage();
+        if (migrationResult.warnings.length > 0) {
+          console.warn("AtrVisu project storage migration warnings:", migrationResult.warnings);
+        }
+        const nextProjects = await listProjects();
+        if (isMounted) {
+          setProjects(nextProjects);
+          setProjectStorageError("");
+        }
+      } catch (caught) {
+        if (isMounted) {
+          setProjectStorageError(caught instanceof Error ? caught.message : "Project storage could not be loaded.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsProjectStorageLoading(false);
+        }
+      }
+    };
+
+    void loadProjects();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -334,9 +370,9 @@ export function App() {
     setCurrentProjectId(projectId);
     setCurrentLayoutId(layoutId);
     setCurrentRevisionId(revisionId);
-    setProjects(listProjects());
+    void refreshProjects();
     setHasUnsavedProjectChanges(false);
-  }, []);
+  }, [refreshProjects]);
 
   const deleteSelectedMachine = useCallback(() => {
     if (!selectedMachine) {
@@ -539,14 +575,22 @@ export function App() {
                 <strong>{currentRevision?.revisionCode ?? "None"}</strong>
               </div>
               <div className={`project-dirty-state${hasUnsavedProjectChanges ? " is-dirty" : ""}`}>
-                {hasUnsavedProjectChanges ? "Unsaved changes" : "No unsaved project changes"}
+                {isProjectStorageLoading
+                  ? "Loading project storage"
+                  : projectStorageError
+                    ? "Project storage unavailable"
+                    : hasUnsavedProjectChanges
+                      ? "Unsaved changes"
+                      : "No unsaved project changes"}
               </div>
+              {projectStorageError ? <p className="manager-validation">{projectStorageError}</p> : null}
               <button
                 className="manager-open-button"
                 data-testid="open-project-manager"
                 type="button"
+                disabled={isProjectStorageLoading}
                 onClick={() => {
-                  setProjects(listProjects());
+                  void refreshProjects();
                   setIsProjectManagerOpen(true);
                 }}
               >
@@ -659,7 +703,7 @@ export function App() {
           setCurrentProjectId(projectId);
           setCurrentLayoutId(layoutId);
           setCurrentRevisionId(revisionId);
-          setProjects(listProjects());
+          void refreshProjects();
           setHasUnsavedProjectChanges(false);
         }}
       />

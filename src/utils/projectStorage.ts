@@ -1,8 +1,10 @@
 import type { AtrVisuLayout } from "../types/machine";
 import type { AtrVisuProject, AtrVisuProjectLayout, AtrVisuRevision, LayoutSnapshot, ProjectMetadata } from "../types/project";
 import { ATRVISU_UNIT_SYSTEM } from "./machineDimensions";
+import { openAtrVisuDatabase } from "./storage/indexedDb";
 
 export const PROJECTS_STORAGE_KEY = "atrvisu.projects.v1";
+export const PROJECTS_INDEXEDDB_MIGRATION_KEY = "atrvisu.projects.indexeddb.migrated.v1";
 
 const EMPTY_LAYOUT_SNAPSHOT: LayoutSnapshot = {
   appName: "AtrVisu",
@@ -125,48 +127,41 @@ export const normalizeProject = (value: unknown): AtrVisuProject | null => {
   };
 };
 
-const readProjects = (): AtrVisuProject[] => {
-  try {
-    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (!raw) {
+const sortProjects = (projects: AtrVisuProject[]) => projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+export const listProjects = async () => {
+  const database = await openAtrVisuDatabase();
+  const records = await database.getAll("projects");
+  const projects = records.flatMap((record) => {
+    const project = normalizeProject(record);
+    if (!project) {
+      console.warn("AtrVisu skipped a corrupted IndexedDB project record.", record);
       return [];
     }
-    const parsed = JSON.parse(raw) as unknown;
-    const items = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed.projects) ? parsed.projects : [];
-    return items.flatMap((item) => {
-      const project = normalizeProject(item);
-      return project ? [project] : [];
-    });
-  } catch {
-    return [];
-  }
+    return [project];
+  });
+  return sortProjects(projects);
 };
 
-const writeProjects = (projects: AtrVisuProject[]) => {
-  window.localStorage.setItem(
-    PROJECTS_STORAGE_KEY,
-    JSON.stringify(projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), null, 2)
-  );
+export const getProject = async (projectId: string) => {
+  const database = await openAtrVisuDatabase();
+  const record = await database.get("projects", projectId);
+  return record ? normalizeProject(record) : null;
 };
 
-export const listProjects = () => readProjects();
-
-export const getProject = (projectId: string) => {
-  return readProjects().find((project) => project.projectId === projectId) ?? null;
-};
-
-export const saveProject = (project: AtrVisuProject) => {
+export const saveProject = async (project: AtrVisuProject) => {
   const normalized = normalizeProject(project);
   if (!normalized) {
     throw new Error("Project is missing required metadata.");
   }
-  const projects = readProjects().filter((item) => item.projectId !== normalized.projectId);
-  writeProjects([normalized, ...projects]);
+  const database = await openAtrVisuDatabase();
+  await database.put("projects", normalized);
   return normalized;
 };
 
-export const deleteProject = (projectId: string) => {
-  writeProjects(readProjects().filter((project) => project.projectId !== projectId));
+export const deleteProject = async (projectId: string) => {
+  const database = await openAtrVisuDatabase();
+  await database.delete("projects", projectId);
 };
 
 export const nextRevisionCode = (layout: AtrVisuProjectLayout) => {
@@ -196,7 +191,7 @@ export const createRevisionObject = (
   }
 });
 
-export const createProject = (
+export const createProject = async (
   metadata: ProjectMetadata,
   snapshot: AtrVisuLayout = { ...EMPTY_LAYOUT_SNAPSHOT, exportedAt: nowIso() },
   timestamp = nowIso()
@@ -227,8 +222,8 @@ export const createProject = (
   return saveProject(project);
 };
 
-export const updateProjectMetadata = (projectId: string, metadata: ProjectMetadata) => {
-  const project = getProject(projectId);
+export const updateProjectMetadata = async (projectId: string, metadata: ProjectMetadata) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -272,16 +267,27 @@ const remapProjectIds = (project: AtrVisuProject, projectName = `${project.proje
   };
 };
 
-export const duplicateProject = (projectId: string) => {
-  const project = getProject(projectId);
+const remapImportedProjectId = (project: AtrVisuProject, projectName = `${project.projectName} Imported`): AtrVisuProject => {
+  const timestamp = nowIso();
+  return {
+    ...clone(project),
+    projectId: createProjectId("project"),
+    projectName,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+};
+
+export const duplicateProject = async (projectId: string) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
   return saveProject(remapProjectIds(project));
 };
 
-export const createLayout = (projectId: string, layoutName = "New Layout", snapshot?: AtrVisuLayout) => {
-  const project = getProject(projectId);
+export const createLayout = async (projectId: string, layoutName = "New Layout", snapshot?: AtrVisuLayout) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -303,8 +309,8 @@ export const createLayout = (projectId: string, layoutName = "New Layout", snaps
   });
 };
 
-export const renameLayout = (projectId: string, layoutId: string, layoutName: string, description = "") => {
-  const project = getProject(projectId);
+export const renameLayout = async (projectId: string, layoutId: string, layoutName: string, description = "") => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -320,8 +326,8 @@ export const renameLayout = (projectId: string, layoutId: string, layoutName: st
   });
 };
 
-export const deleteLayout = (projectId: string, layoutId: string) => {
-  const project = getProject(projectId);
+export const deleteLayout = async (projectId: string, layoutId: string) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -338,7 +344,7 @@ export const deleteLayout = (projectId: string, layoutId: string) => {
   });
 };
 
-export const createRevision = (
+export const createRevision = async (
   projectId: string,
   layoutId: string,
   snapshot: AtrVisuLayout,
@@ -346,7 +352,7 @@ export const createRevision = (
   notes = "",
   revisionName = ""
 ) => {
-  const project = getProject(projectId);
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -373,8 +379,8 @@ export const createRevision = (
   });
 };
 
-export const duplicateRevision = (projectId: string, layoutId: string, revisionId: string) => {
-  const project = getProject(projectId);
+export const duplicateRevision = async (projectId: string, layoutId: string, revisionId: string) => {
+  const project = await getProject(projectId);
   const layout = project?.layouts.find((item) => item.layoutId === layoutId);
   const revision = layout?.revisions.find((item) => item.revisionId === revisionId);
   if (!project || !layout || !revision) {
@@ -383,8 +389,8 @@ export const duplicateRevision = (projectId: string, layoutId: string, revisionI
   return createRevision(projectId, layoutId, revision.layoutSnapshot, nextRevisionCode(layout), revision.notes ?? "", `${revision.revisionName ?? revision.revisionCode} Copy`);
 };
 
-export const deleteRevision = (projectId: string, layoutId: string, revisionId: string) => {
-  const project = getProject(projectId);
+export const deleteRevision = async (projectId: string, layoutId: string, revisionId: string) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -413,14 +419,14 @@ export const deleteRevision = (projectId: string, layoutId: string, revisionId: 
   });
 };
 
-export const getActiveRevision = (projectId: string, layoutId: string) => {
-  const project = getProject(projectId);
+export const getActiveRevision = async (projectId: string, layoutId: string) => {
+  const project = await getProject(projectId);
   const layout = project?.layouts.find((item) => item.layoutId === layoutId);
   return layout?.revisions.find((revision) => revision.revisionId === layout.activeRevisionId) ?? null;
 };
 
-export const setActiveRevision = (projectId: string, layoutId: string, revisionId: string) => {
-  const project = getProject(projectId);
+export const setActiveRevision = async (projectId: string, layoutId: string, revisionId: string) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
@@ -437,19 +443,19 @@ export const setActiveRevision = (projectId: string, layoutId: string, revisionI
   });
 };
 
-export const exportProject = (projectId: string) => {
-  const project = getProject(projectId);
+export const exportProject = async (projectId: string) => {
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error("Project not found.");
   }
   return clone(project);
 };
 
-export const importProject = (data: unknown) => {
+export const importProject = async (data: unknown) => {
   const normalized = normalizeProject(data);
   if (!normalized) {
     throw new Error("Selected file is not an AtrVisu project.");
   }
-  const existingIds = new Set(readProjects().map((project) => project.projectId));
-  return saveProject(existingIds.has(normalized.projectId) ? remapProjectIds(normalized, `${normalized.projectName} Imported`) : normalized);
+  const existingIds = new Set((await listProjects()).map((project) => project.projectId));
+  return saveProject(existingIds.has(normalized.projectId) ? remapImportedProjectId(normalized) : normalized);
 };

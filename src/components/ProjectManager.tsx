@@ -81,8 +81,8 @@ export function ProjectManager({
 
   const nextCode = useMemo(() => (selectedLayout ? nextRevisionCode(selectedLayout) : "R00"), [selectedLayout]);
 
-  const refreshProjects = () => {
-    const nextProjects = listProjects();
+  const refreshProjects = async () => {
+    const nextProjects = await listProjects();
     onProjectsChanged(nextProjects);
     return nextProjects;
   };
@@ -101,9 +101,9 @@ export function ProjectManager({
     setSelectedRevisionId(revision?.revisionId ?? "");
   };
 
-  const runAction = (action: () => void, message?: string) => {
+  const runAction = async (action: () => void | Promise<void>, message?: string) => {
     try {
-      action();
+      await action();
       if (message) {
         setStatus(message);
       }
@@ -114,8 +114,8 @@ export function ProjectManager({
   };
 
   const createNewProject = () => {
-    runAction(() => {
-      const project = createProject(
+    void runAction(async () => {
+      const project = await createProject(
         {
           projectName: newProjectName,
           customerName: newCustomerName,
@@ -124,7 +124,7 @@ export function ProjectManager({
         },
         currentSnapshot
       );
-      const nextProjects = refreshProjects();
+      const nextProjects = await refreshProjects();
       selectProject(nextProjects.find((item) => item.projectId === project.projectId) ?? project);
       onCurrentSelectionChange(project.projectId, project.activeLayoutId, project.layouts[0]?.activeRevisionId ?? null);
       onSavedRevision(project.projectId, project.activeLayoutId, project.layouts[0]?.activeRevisionId ?? "");
@@ -144,11 +144,11 @@ export function ProjectManager({
     const revisionCode = window.prompt("Revision code", nextCode)?.trim() || nextCode;
     const notes = window.prompt("Revision notes", "") ?? "";
 
-    runAction(() => {
-      const updated = createRevision(selectedProject.projectId, selectedLayout.layoutId, currentSnapshot, revisionCode, notes);
+    void runAction(async () => {
+      const updated = await createRevision(selectedProject.projectId, selectedLayout.layoutId, currentSnapshot, revisionCode, notes);
       const layout = updated.layouts.find((item) => item.layoutId === selectedLayout.layoutId);
       const revision = layout?.revisions[0];
-      refreshProjects();
+      await refreshProjects();
       setSelectedProjectId(updated.projectId);
       setSelectedLayoutId(layout?.layoutId ?? "");
       setSelectedRevisionId(revision?.revisionId ?? "");
@@ -166,9 +166,9 @@ export function ProjectManager({
       return;
     }
 
-    runAction(() => {
-      setActiveRevision(selectedProject.projectId, selectedLayout.layoutId, selectedRevision.revisionId);
-      refreshProjects();
+    void runAction(async () => {
+      await setActiveRevision(selectedProject.projectId, selectedLayout.layoutId, selectedRevision.revisionId);
+      await refreshProjects();
       onLoadRevision(
         selectedProject.projectId,
         selectedLayout.layoutId,
@@ -182,9 +182,9 @@ export function ProjectManager({
     if ((hasSceneObjects || isDirty) && !window.confirm("Load this revision and replace the current scene?")) {
       return;
     }
-    runAction(() => {
-      setActiveRevision(project.projectId, layoutId, revisionId);
-      refreshProjects();
+    void runAction(async () => {
+      await setActiveRevision(project.projectId, layoutId, revisionId);
+      await refreshProjects();
       onLoadRevision(project.projectId, layoutId, revisionId, snapshot);
     }, "Revision loaded.");
   };
@@ -193,8 +193,8 @@ export function ProjectManager({
     if (!selectedProject) {
       return;
     }
-    runAction(() => {
-      const project = exportProject(selectedProject.projectId);
+    void runAction(async () => {
+      const project = await exportProject(selectedProject.projectId);
       const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -213,8 +213,8 @@ export function ProjectManager({
     }
     try {
       const parsed = JSON.parse(await file.text()) as unknown;
-      const imported = importProject(parsed);
-      const nextProjects = refreshProjects();
+      const imported = await importProject(parsed);
+      const nextProjects = await refreshProjects();
       selectProject(nextProjects.find((project) => project.projectId === imported.projectId) ?? imported);
       setStatus("Project imported.");
       setError("");
@@ -302,6 +302,19 @@ export function ProjectManager({
             </div>
             {status ? <p className="manager-status">{status}</p> : null}
             {error ? <p className="manager-validation">{error}</p> : null}
+            <div className="project-action-grid">
+              <button type="button" onClick={() => fileInputRef.current?.click()}>
+                Import Project JSON
+              </button>
+              <input
+                ref={fileInputRef}
+                className="file-input"
+                data-testid="import-project-file"
+                type="file"
+                accept="application/json,.json"
+                onChange={(event) => void importProjectFile(event.target.files?.[0])}
+              />
+            </div>
             {selectedProject ? (
               <div className="project-action-grid">
                 <button type="button" onClick={() => {
@@ -310,22 +323,22 @@ export function ProjectManager({
                   if (!name || !customer) {
                     return;
                   }
-                  runAction(() => {
-                    const updated = updateProjectMetadata(selectedProject.projectId, {
+                  void runAction(async () => {
+                    const updated = await updateProjectMetadata(selectedProject.projectId, {
                       projectName: name,
                       customerName: customer,
                       customerLocation: selectedProject.customerLocation,
                       description: selectedProject.description
                     });
-                    refreshProjects();
+                    await refreshProjects();
                     setSelectedProjectId(updated.projectId);
                   }, "Project updated.");
                 }}>
                   Edit Project
                 </button>
-                <button type="button" onClick={() => runAction(() => {
-                  const duplicated = duplicateProject(selectedProject.projectId);
-                  const nextProjects = refreshProjects();
+                <button type="button" onClick={() => void runAction(async () => {
+                  const duplicated = await duplicateProject(selectedProject.projectId);
+                  const nextProjects = await refreshProjects();
                   selectProject(nextProjects.find((project) => project.projectId === duplicated.projectId) ?? duplicated);
                 }, "Project duplicated.")}>
                   Duplicate Project
@@ -334,9 +347,9 @@ export function ProjectManager({
                   if (!window.confirm(`Delete project "${selectedProject.projectName}"?`)) {
                     return;
                   }
-                  runAction(() => {
-                    deleteProject(selectedProject.projectId);
-                    const nextProjects = refreshProjects();
+                  void runAction(async () => {
+                    await deleteProject(selectedProject.projectId);
+                    const nextProjects = await refreshProjects();
                     selectProject(nextProjects[0]);
                     if (currentProjectId === selectedProject.projectId) {
                       onCurrentSelectionChange(null, null, null);
@@ -345,11 +358,11 @@ export function ProjectManager({
                 }}>
                   Delete Project
                 </button>
-                <button type="button" onClick={() => runAction(() => {
+                <button type="button" onClick={() => void runAction(async () => {
                   const name = window.prompt("Layout name", `Layout-${selectedProject.layouts.length + 1}`) ?? "";
-                  const updated = createLayout(selectedProject.projectId, name, currentSnapshot);
+                  const updated = await createLayout(selectedProject.projectId, name, currentSnapshot);
                   const layout = updated.layouts[0];
-                  refreshProjects();
+                  await refreshProjects();
                   setSelectedLayoutId(layout.layoutId);
                   setSelectedRevisionId(layout.activeRevisionId);
                 }, "Layout created.")}>
@@ -358,16 +371,6 @@ export function ProjectManager({
                 <button type="button" onClick={exportSelectedProject}>
                   Export Project JSON
                 </button>
-                <button type="button" onClick={() => fileInputRef.current?.click()}>
-                  Import Project JSON
-                </button>
-                <input
-                  ref={fileInputRef}
-                  className="file-input"
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={(event) => void importProjectFile(event.target.files?.[0])}
-                />
               </div>
             ) : (
               <p className="empty-selection">Create or import a project to begin.</p>
@@ -410,9 +413,9 @@ export function ProjectManager({
                   if (!name) {
                     return;
                   }
-                  runAction(() => {
-                    renameLayout(selectedProject?.projectId ?? "", selectedLayout.layoutId, name);
-                    refreshProjects();
+                  void runAction(async () => {
+                    await renameLayout(selectedProject?.projectId ?? "", selectedLayout.layoutId, name);
+                    await refreshProjects();
                   }, "Layout renamed.");
                 }}>
                   Rename Layout
@@ -421,9 +424,9 @@ export function ProjectManager({
                   if (!selectedProject || !window.confirm(`Delete layout "${selectedLayout.layoutName}"?`)) {
                     return;
                   }
-                  runAction(() => {
-                    const updated = deleteLayout(selectedProject.projectId, selectedLayout.layoutId);
-                    refreshProjects();
+                  void runAction(async () => {
+                    const updated = await deleteLayout(selectedProject.projectId, selectedLayout.layoutId);
+                    await refreshProjects();
                     setSelectedLayoutId(updated.activeLayoutId);
                   }, "Layout deleted.");
                 }}>
@@ -450,9 +453,9 @@ export function ProjectManager({
                     }}>
                       Load
                     </button>
-                    <button type="button" onClick={() => selectedProject && selectedLayout && runAction(() => {
-                      duplicateRevision(selectedProject.projectId, selectedLayout.layoutId, revision.revisionId);
-                      refreshProjects();
+                    <button type="button" onClick={() => selectedProject && selectedLayout && void runAction(async () => {
+                      await duplicateRevision(selectedProject.projectId, selectedLayout.layoutId, revision.revisionId);
+                      await refreshProjects();
                     }, "Revision duplicated.")}>
                       Duplicate
                     </button>
@@ -460,10 +463,10 @@ export function ProjectManager({
                       if (!selectedProject || !selectedLayout || !window.confirm(`Delete revision "${revision.revisionCode}"?`)) {
                         return;
                       }
-                      runAction(() => {
-                        const updated = deleteRevision(selectedProject.projectId, selectedLayout.layoutId, revision.revisionId);
+                      void runAction(async () => {
+                        const updated = await deleteRevision(selectedProject.projectId, selectedLayout.layoutId, revision.revisionId);
                         const layout = updated.layouts.find((item) => item.layoutId === selectedLayout.layoutId);
-                        refreshProjects();
+                        await refreshProjects();
                         setSelectedRevisionId(layout?.activeRevisionId ?? "");
                       }, "Revision deleted.");
                     }}>
