@@ -7,6 +7,7 @@ import type {
   LoadedMachineLibrary,
   MachineLibraryDocument
 } from "../types/machine";
+import type { AtaraMachineData, MachineConnectionPoint } from "../types/ataraMachineData";
 import type { MachineTaxonomy } from "../types/taxonomy";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import {
@@ -17,6 +18,7 @@ import {
 import { inferPlaceholderVisualType, loadMachineTaxonomy, normalizeTags } from "../utils/taxonomy";
 import { mmToMeters } from "../utils/units";
 import { normalizeCollisionEnvelope } from "../utils/collision";
+import { normalizeAtaraMachineData } from "../utils/ataraMachineData";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
@@ -82,6 +84,43 @@ type ItemEditorState = {
   collisionOffsetXMm: string;
   collisionOffsetYMm: string;
   collisionOffsetZMm: string;
+  ataraIsProduct: boolean;
+  ataraAtrId: string;
+  ataraMachineCode: string;
+  ataraProductFamilyCode: string;
+  ataraPdnCode: string;
+  ataraDisplayName: string;
+  ataraRevision: string;
+  ataraWeightKg: string;
+  ataraOperatingWeightKg: string;
+  ataraMaintenanceOpenWidthMm: string;
+  ataraMaintenanceOpenDepthMm: string;
+  ataraMaintenanceOpenHeightMm: string;
+  ataraClearanceFrontMm: string;
+  ataraClearanceBackMm: string;
+  ataraClearanceLeftMm: string;
+  ataraClearanceRightMm: string;
+  ataraClearanceTopMm: string;
+  ataraClearanceNotes: string;
+  ataraCapacityMin: string;
+  ataraCapacityNominal: string;
+  ataraCapacityMax: string;
+  ataraCapacityUnit: string;
+  ataraProductTypes: string;
+  ataraNoiseDb: string;
+  ataraVibrationClass: string;
+  ataraOperationalNotes: string;
+  ataraElectricalPowerKw: string;
+  ataraVoltage: string;
+  ataraPhase: string;
+  ataraFrequencyHz: string;
+  ataraPneumaticPressureBar: string;
+  ataraAirConsumptionNlMin: string;
+  ataraNetworkProtocols: string;
+  ataraAspirationRequired: boolean;
+  ataraAspirationAirflowM3h: string;
+  ataraUtilityNotes: string;
+  ataraConnectionPointsJson: string;
 };
 
 const cloneLibrary = (library: LoadedMachineLibrary): MachineLibraryDocument => ({
@@ -217,6 +256,8 @@ const toEditorState = (
   const collisionEnvelope = item
     ? normalizeCollisionEnvelope(item.collisionEnvelope, dimensionsMm ?? { widthMm: 1000, depthMm: 1000, heightMm: 1000 })
     : null;
+  const ataraData = normalizeAtaraMachineData(item?.ataraMachineData, dimensionsMm ?? undefined);
+  const connectionPoints = ataraData?.connectionPoints ?? [];
 
   return {
     mode: item ? "edit" : "add",
@@ -270,8 +311,286 @@ const toEditorState = (
     collisionHeightMm: collisionEnvelope ? String(collisionEnvelope.heightMm) : "",
     collisionOffsetXMm: String(collisionEnvelope?.offsetMm?.xMm ?? 0),
     collisionOffsetYMm: String(collisionEnvelope?.offsetMm?.yMm ?? 0),
-    collisionOffsetZMm: String(collisionEnvelope?.offsetMm?.zMm ?? 0)
+    collisionOffsetZMm: String(collisionEnvelope?.offsetMm?.zMm ?? 0),
+    ataraIsProduct: ataraData?.identity?.isAtaraProduct ?? false,
+    ataraAtrId: ataraData?.identity?.atrId ?? "",
+    ataraMachineCode: ataraData?.identity?.machineCode ?? "",
+    ataraProductFamilyCode: ataraData?.identity?.productFamilyCode ?? item?.productFamilyCode ?? "",
+    ataraPdnCode: ataraData?.identity?.pdnCode ?? "",
+    ataraDisplayName: ataraData?.identity?.displayName ?? "",
+    ataraRevision: ataraData?.identity?.revision ?? "",
+    ataraWeightKg: ataraData?.physical?.weightKg !== undefined ? String(ataraData.physical.weightKg) : "",
+    ataraOperatingWeightKg: ataraData?.physical?.operatingWeightKg !== undefined ? String(ataraData.physical.operatingWeightKg) : "",
+    ataraMaintenanceOpenWidthMm: ataraData?.physical?.maintenanceOpenDimensionsMm?.widthMm !== undefined ? String(ataraData.physical.maintenanceOpenDimensionsMm.widthMm) : "",
+    ataraMaintenanceOpenDepthMm: ataraData?.physical?.maintenanceOpenDimensionsMm?.depthMm !== undefined ? String(ataraData.physical.maintenanceOpenDimensionsMm.depthMm) : "",
+    ataraMaintenanceOpenHeightMm: ataraData?.physical?.maintenanceOpenDimensionsMm?.heightMm !== undefined ? String(ataraData.physical.maintenanceOpenDimensionsMm.heightMm) : "",
+    ataraClearanceFrontMm: String(ataraData?.maintenanceClearance?.frontMm ?? 0),
+    ataraClearanceBackMm: String(ataraData?.maintenanceClearance?.backMm ?? 0),
+    ataraClearanceLeftMm: String(ataraData?.maintenanceClearance?.leftMm ?? 0),
+    ataraClearanceRightMm: String(ataraData?.maintenanceClearance?.rightMm ?? 0),
+    ataraClearanceTopMm: String(ataraData?.maintenanceClearance?.topMm ?? 0),
+    ataraClearanceNotes: ataraData?.maintenanceClearance?.notes ?? "",
+    ataraCapacityMin: ataraData?.operationalData?.capacityMin !== undefined ? String(ataraData.operationalData.capacityMin) : "",
+    ataraCapacityNominal: ataraData?.operationalData?.capacityNominal !== undefined ? String(ataraData.operationalData.capacityNominal) : "",
+    ataraCapacityMax: ataraData?.operationalData?.capacityMax !== undefined ? String(ataraData.operationalData.capacityMax) : "",
+    ataraCapacityUnit: ataraData?.operationalData?.capacityUnit ?? "",
+    ataraProductTypes: ataraData?.operationalData?.productTypes?.join(", ") ?? "",
+    ataraNoiseDb: ataraData?.operationalData?.noiseDb !== undefined ? String(ataraData.operationalData.noiseDb) : "",
+    ataraVibrationClass: ataraData?.operationalData?.vibrationClass ?? "",
+    ataraOperationalNotes: ataraData?.operationalData?.notes ?? "",
+    ataraElectricalPowerKw: ataraData?.utilityRequirements?.electrical?.powerKw !== undefined ? String(ataraData.utilityRequirements.electrical.powerKw) : "",
+    ataraVoltage: ataraData?.utilityRequirements?.electrical?.voltage !== undefined ? String(ataraData.utilityRequirements.electrical.voltage) : "",
+    ataraPhase: ataraData?.utilityRequirements?.electrical?.phase ?? "",
+    ataraFrequencyHz: ataraData?.utilityRequirements?.electrical?.frequencyHz !== undefined ? String(ataraData.utilityRequirements.electrical.frequencyHz) : "",
+    ataraPneumaticPressureBar: ataraData?.utilityRequirements?.pneumatic?.pressureBar !== undefined ? String(ataraData.utilityRequirements.pneumatic.pressureBar) : "",
+    ataraAirConsumptionNlMin: ataraData?.utilityRequirements?.pneumatic?.airConsumptionNlMin !== undefined ? String(ataraData.utilityRequirements.pneumatic.airConsumptionNlMin) : "",
+    ataraNetworkProtocols: ataraData?.utilityRequirements?.network?.protocols?.join(", ") ?? "",
+    ataraAspirationRequired: ataraData?.utilityRequirements?.aspiration?.required ?? false,
+    ataraAspirationAirflowM3h: ataraData?.utilityRequirements?.aspiration?.airflowM3h !== undefined ? String(ataraData.utilityRequirements.aspiration.airflowM3h) : "",
+    ataraUtilityNotes: ataraData?.utilityRequirements?.electrical?.notes ?? ataraData?.utilityRequirements?.pneumatic?.notes ?? ataraData?.utilityRequirements?.network?.notes ?? ataraData?.utilityRequirements?.aspiration?.notes ?? "",
+    ataraConnectionPointsJson: JSON.stringify(connectionPoints, null, 2)
   };
+};
+
+const optionalNumber = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const numericValue = Number(trimmed);
+  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : undefined;
+};
+
+const csvList = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
+
+const numericEditorKeys = new Set<keyof ItemEditorState>([
+  "widthMm",
+  "depthMm",
+  "heightMm",
+  "rotationOffsetX",
+  "rotationOffsetY",
+  "rotationOffsetZ",
+  "positionOffsetXMm",
+  "positionOffsetYMm",
+  "positionOffsetZMm",
+  "collisionWidthMm",
+  "collisionDepthMm",
+  "collisionHeightMm",
+  "collisionOffsetXMm",
+  "collisionOffsetYMm",
+  "collisionOffsetZMm",
+  "ataraWeightKg",
+  "ataraOperatingWeightKg",
+  "ataraMaintenanceOpenWidthMm",
+  "ataraMaintenanceOpenDepthMm",
+  "ataraMaintenanceOpenHeightMm",
+  "ataraClearanceFrontMm",
+  "ataraClearanceBackMm",
+  "ataraClearanceLeftMm",
+  "ataraClearanceRightMm",
+  "ataraClearanceTopMm",
+  "ataraCapacityMin",
+  "ataraCapacityNominal",
+  "ataraCapacityMax",
+  "ataraNoiseDb",
+  "ataraElectricalPowerKw",
+  "ataraVoltage",
+  "ataraFrequencyHz",
+  "ataraPneumaticPressureBar",
+  "ataraAirConsumptionNlMin",
+  "ataraAspirationAirflowM3h"
+]);
+
+const csvEditorKeys = new Set<keyof ItemEditorState>([
+  "tags",
+  "ataraProductTypes",
+  "ataraNetworkProtocols"
+]);
+
+const normalizeEditorString = (key: keyof ItemEditorState, value: string) => {
+  const trimmed = value.trim();
+  if (numericEditorKeys.has(key)) {
+    if (!trimmed) {
+      return "";
+    }
+    const numericValue = Number(trimmed);
+    return Number.isFinite(numericValue) ? numericValue : trimmed;
+  }
+  if (csvEditorKeys.has(key)) {
+    return csvList(trimmed);
+  }
+  return trimmed;
+};
+
+const normalizeConnectionPointsDraft = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return normalizeAtaraMachineData({ connectionPoints: parsed })?.connectionPoints ?? [];
+  } catch {
+    return trimmed;
+  }
+};
+
+export const getItemEditorDirtyKey = (editor: ItemEditorState | null) => {
+  if (!editor) {
+    return "";
+  }
+
+  const normalizedEntries = (Object.entries(editor) as [keyof ItemEditorState, ItemEditorState[keyof ItemEditorState]][])
+    .map(([key, value]) => {
+      if (key === "ataraConnectionPointsJson") {
+        return [key, normalizeConnectionPointsDraft(String(value))] as const;
+      }
+      if (typeof value === "string") {
+        return [key, normalizeEditorString(key, value)] as const;
+      }
+      return [key, value] as const;
+    })
+    .sort(([left], [right]) => left.localeCompare(right));
+
+  return JSON.stringify(normalizedEntries);
+};
+
+const buildAtaraMachineData = (
+  editor: ItemEditorState,
+  dimensionsMm: { widthMm: number; depthMm: number; heightMm: number }
+): AtaraMachineData | undefined => {
+  let connectionPoints: MachineConnectionPoint[] = [];
+  const rawConnectionPoints = editor.ataraConnectionPointsJson.trim();
+  if (rawConnectionPoints) {
+    const parsed = JSON.parse(rawConnectionPoints) as unknown;
+    if (!Array.isArray(parsed)) {
+      throw new Error("ATARA connection points must be a JSON array.");
+    }
+    connectionPoints = parsed as MachineConnectionPoint[];
+  }
+
+  const hasIdentity =
+    editor.ataraIsProduct ||
+    editor.ataraAtrId.trim() ||
+    editor.ataraMachineCode.trim() ||
+    editor.ataraProductFamilyCode.trim() ||
+    editor.ataraPdnCode.trim() ||
+    editor.ataraDisplayName.trim() ||
+    editor.ataraRevision.trim();
+  const hasEngineering =
+    editor.ataraWeightKg.trim() ||
+    editor.ataraOperatingWeightKg.trim() ||
+    editor.ataraMaintenanceOpenWidthMm.trim() ||
+    editor.ataraMaintenanceOpenDepthMm.trim() ||
+    editor.ataraMaintenanceOpenHeightMm.trim();
+  const hasClearance =
+    Number(editor.ataraClearanceFrontMm) > 0 ||
+    Number(editor.ataraClearanceBackMm) > 0 ||
+    Number(editor.ataraClearanceLeftMm) > 0 ||
+    Number(editor.ataraClearanceRightMm) > 0 ||
+    Number(editor.ataraClearanceTopMm) > 0 ||
+    editor.ataraClearanceNotes.trim();
+  const hasOperational =
+    editor.ataraCapacityMin.trim() ||
+    editor.ataraCapacityNominal.trim() ||
+    editor.ataraCapacityMax.trim() ||
+    editor.ataraCapacityUnit.trim() ||
+    editor.ataraProductTypes.trim() ||
+    editor.ataraNoiseDb.trim() ||
+    editor.ataraVibrationClass.trim() ||
+    editor.ataraOperationalNotes.trim();
+  const hasUtilities =
+    editor.ataraElectricalPowerKw.trim() ||
+    editor.ataraVoltage.trim() ||
+    editor.ataraPhase.trim() ||
+    editor.ataraFrequencyHz.trim() ||
+    editor.ataraPneumaticPressureBar.trim() ||
+    editor.ataraAirConsumptionNlMin.trim() ||
+    editor.ataraNetworkProtocols.trim() ||
+    editor.ataraAspirationRequired ||
+    editor.ataraAspirationAirflowM3h.trim() ||
+    editor.ataraUtilityNotes.trim();
+
+  if (!hasIdentity && !hasEngineering && !hasClearance && !hasOperational && !hasUtilities && connectionPoints.length === 0) {
+    return undefined;
+  }
+
+  return normalizeAtaraMachineData(
+    {
+      identity: hasIdentity
+        ? {
+            isAtaraProduct: editor.ataraIsProduct,
+            atrId: editor.ataraAtrId,
+            machineCode: editor.ataraMachineCode,
+            productFamilyCode: editor.ataraProductFamilyCode,
+            pdnCode: editor.ataraPdnCode,
+            displayName: editor.ataraDisplayName,
+            revision: editor.ataraRevision
+          }
+        : undefined,
+      physical: hasEngineering
+        ? {
+            ...dimensionsMm,
+            weightKg: optionalNumber(editor.ataraWeightKg),
+            operatingWeightKg: optionalNumber(editor.ataraOperatingWeightKg),
+            maintenanceOpenDimensionsMm: {
+              widthMm: optionalNumber(editor.ataraMaintenanceOpenWidthMm),
+              depthMm: optionalNumber(editor.ataraMaintenanceOpenDepthMm),
+              heightMm: optionalNumber(editor.ataraMaintenanceOpenHeightMm)
+            }
+          }
+        : undefined,
+      maintenanceClearance: hasClearance
+        ? {
+            frontMm: optionalNumber(editor.ataraClearanceFrontMm) ?? 0,
+            backMm: optionalNumber(editor.ataraClearanceBackMm) ?? 0,
+            leftMm: optionalNumber(editor.ataraClearanceLeftMm) ?? 0,
+            rightMm: optionalNumber(editor.ataraClearanceRightMm) ?? 0,
+            topMm: optionalNumber(editor.ataraClearanceTopMm) ?? 0,
+            notes: editor.ataraClearanceNotes
+          }
+        : undefined,
+      operationalData: hasOperational
+        ? {
+            capacityMin: optionalNumber(editor.ataraCapacityMin),
+            capacityNominal: optionalNumber(editor.ataraCapacityNominal),
+            capacityMax: optionalNumber(editor.ataraCapacityMax),
+            capacityUnit: editor.ataraCapacityUnit,
+            productTypes: csvList(editor.ataraProductTypes),
+            noiseDb: optionalNumber(editor.ataraNoiseDb),
+            vibrationClass: editor.ataraVibrationClass,
+            notes: editor.ataraOperationalNotes
+          }
+        : undefined,
+      utilityRequirements: hasUtilities
+        ? {
+            electrical: {
+              powerKw: optionalNumber(editor.ataraElectricalPowerKw),
+              voltage: optionalNumber(editor.ataraVoltage),
+              phase: editor.ataraPhase,
+              frequencyHz: optionalNumber(editor.ataraFrequencyHz),
+              notes: editor.ataraUtilityNotes
+            },
+            pneumatic: {
+              pressureBar: optionalNumber(editor.ataraPneumaticPressureBar),
+              airConsumptionNlMin: optionalNumber(editor.ataraAirConsumptionNlMin),
+              notes: editor.ataraUtilityNotes
+            },
+            network: {
+              protocols: csvList(editor.ataraNetworkProtocols),
+              notes: editor.ataraUtilityNotes
+            },
+            aspiration: {
+              required: editor.ataraAspirationRequired,
+              airflowM3h: optionalNumber(editor.ataraAspirationAirflowM3h),
+              notes: editor.ataraUtilityNotes
+            }
+          }
+        : undefined,
+      connectionPoints
+    },
+    dimensionsMm
+  );
 };
 
 function ManagerTreeNode({
@@ -382,6 +701,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
   const [draftLibrary, setDraftLibrary] = useState<MachineLibraryDocument | null>(null);
   const [itemEditor, setItemEditor] = useState<ItemEditorState | null>(null);
+  const [itemEditorBaseline, setItemEditorBaseline] = useState("");
   const [message, setMessage] = useState("");
   const [validationError, setValidationError] = useState("");
   const [taxonomy, setTaxonomy] = useState<MachineTaxonomy | null>(null);
@@ -397,6 +717,11 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
   const selectedItem =
     activeRoot && selectedNode?.type === "item" ? findItem(activeRoot, selectedNode.itemId) : null;
 
+  const clearItemEditor = () => {
+    setItemEditor(null);
+    setItemEditorBaseline("");
+  };
+
   useEffect(() => {
     const customLibrary = libraries.find((library) => library.libraryId === PROJECT_CUSTOM_LIBRARY_ID);
     if (customLibrary) {
@@ -407,7 +732,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
   useEffect(() => {
     if (activeRoot) {
       setSelectedNode({ type: "group", groupId: activeRoot.id });
-      setItemEditor(null);
+      clearItemEditor();
       setValidationError("");
     }
   }, [activeRoot?.id, selectedLibraryId]);
@@ -441,7 +766,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
   };
 
   const requestClose = () => {
-    if (itemEditor) {
+    if (getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline) {
       const confirmed = window.confirm("Close Library Manager and discard the current item editor changes?");
       if (!confirmed) {
         return;
@@ -466,14 +791,28 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
   });
 
   const selectGroup = (groupId: string) => {
+    if (getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline) {
+      const confirmed = window.confirm("Discard the current item editor changes?");
+      if (!confirmed) {
+        return;
+      }
+    }
     setSelectedNode({ type: "group", groupId });
-    setItemEditor(null);
+    clearItemEditor();
     setValidationError("");
   };
 
   const selectItem = (groupId: string, item: LibraryMachineItem) => {
+    if (getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline) {
+      const confirmed = window.confirm("Discard the current item editor changes?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    const nextEditor = toEditorState(groupId, item);
     setSelectedNode({ type: "item", groupId, itemId: item.id });
-    setItemEditor(toEditorState(groupId, item));
+    setItemEditor(nextEditor);
+    setItemEditorBaseline(getItemEditorDirtyKey(nextEditor));
     setValidationError("");
   };
 
@@ -568,7 +907,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
       },
       "Machine item deleted."
     );
-    setItemEditor(null);
+    clearItemEditor();
     setSelectedNode({ type: "group", groupId: draftLibrary.root.id });
   };
 
@@ -576,8 +915,16 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
     if (!editable) {
       return;
     }
+    if (getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline) {
+      const confirmed = window.confirm("Discard the current item editor changes?");
+      if (!confirmed) {
+        return;
+      }
+    }
+    const nextEditor = toEditorState(groupId);
     setSelectedNode({ type: "group", groupId });
-    setItemEditor(toEditorState(groupId));
+    setItemEditor(nextEditor);
+    setItemEditorBaseline(getItemEditorDirtyKey(nextEditor));
     setValidationError("");
   };
 
@@ -664,6 +1011,13 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
     }
 
     const visualModelPath = itemEditor.visualModelPath.trim();
+    let ataraMachineData: AtaraMachineData | undefined;
+    try {
+      ataraMachineData = buildAtaraMachineData(itemEditor, { widthMm, depthMm, heightMm });
+    } catch (caught) {
+      setValidationError(caught instanceof Error ? caught.message : "ATARA machine data could not be saved.");
+      return;
+    }
 
     const item: LibraryMachineItem = {
       id: itemEditor.id.trim(),
@@ -727,6 +1081,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
         },
         { widthMm, depthMm, heightMm }
       ),
+      ...(ataraMachineData ? { ataraMachineData } : {}),
       capabilities: {
         canConvey: itemEditor.canConvey,
         canPalletize: itemEditor.canPalletize,
@@ -760,7 +1115,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
 
     persistLibrary(nextLibrary, `Machine item "${item.name}" saved.`);
     setSelectedNode({ type: "item", groupId: itemEditor.parentGroupId, itemId: item.id });
-    setItemEditor(toEditorState(itemEditor.parentGroupId, item));
+    clearItemEditor();
   };
 
   const exportCustomLibrary = () => {
@@ -804,7 +1159,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
         root: library.root
       };
       persistLibrary(importedLibrary, "Custom library imported.");
-      setItemEditor(null);
+      clearItemEditor();
       setSelectedNode({ type: "group", groupId: importedLibrary.root.id });
     } catch {
       setValidationError("Could not import custom library JSON.");
@@ -822,7 +1177,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
     }
 
     window.localStorage.removeItem(CUSTOM_LIBRARY_STORAGE_KEY);
-    setItemEditor(null);
+    clearItemEditor();
     setMessage("Custom library reset.");
     setValidationError("");
     onLibrariesChanged();
@@ -1047,6 +1402,192 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                     />
                   </label>
                 </div>
+                <details className="manager-visual-model" data-testid="atara-machine-data-section">
+                  <summary>ATARA Identity</summary>
+                  <div className="manager-capabilities">
+                    <label>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor.ataraIsProduct}
+                        onChange={(event) => setItemEditor({ ...itemEditor, ataraIsProduct: event.target.checked })}
+                      />
+                      <span>Is ATARA Product</span>
+                    </label>
+                  </div>
+                  <div className="manager-editor-grid">
+                    {([
+                      ["ataraAtrId", "ATR ID"],
+                      ["ataraMachineCode", "Machine Code"],
+                      ["ataraProductFamilyCode", "Product Family Code"],
+                      ["ataraPdnCode", "PDN Code"],
+                      ["ataraDisplayName", "Display Name"],
+                      ["ataraRevision", "Revision"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                <details className="manager-visual-model">
+                  <summary>Engineering Data</summary>
+                  <div className="manager-editor-grid">
+                    {([
+                      ["ataraWeightKg", "Weight (kg)"],
+                      ["ataraOperatingWeightKg", "Operating Weight (kg)"],
+                      ["ataraMaintenanceOpenWidthMm", "Maintenance Open Width (mm)"],
+                      ["ataraMaintenanceOpenDepthMm", "Maintenance Open Depth (mm)"],
+                      ["ataraMaintenanceOpenHeightMm", "Maintenance Open Height (mm)"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          type="number"
+                          step="1"
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                <details className="manager-visual-model">
+                  <summary>Maintenance Clearance</summary>
+                  <div className="manager-editor-grid">
+                    {([
+                      ["ataraClearanceFrontMm", "Front (mm)"],
+                      ["ataraClearanceBackMm", "Back (mm)"],
+                      ["ataraClearanceLeftMm", "Left (mm)"],
+                      ["ataraClearanceRightMm", "Right (mm)"],
+                      ["ataraClearanceTopMm", "Top (mm)"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          type="number"
+                          step="1"
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                    <label>
+                      <span>Notes</span>
+                      <input
+                        disabled={!editable}
+                        value={itemEditor.ataraClearanceNotes}
+                        onChange={(event) => setItemEditor({ ...itemEditor, ataraClearanceNotes: event.target.value })}
+                      />
+                    </label>
+                  </div>
+                </details>
+                <details className="manager-visual-model">
+                  <summary>Operational Data</summary>
+                  <div className="manager-editor-grid">
+                    {([
+                      ["ataraCapacityMin", "Capacity Min"],
+                      ["ataraCapacityNominal", "Capacity Nominal"],
+                      ["ataraCapacityMax", "Capacity Max"],
+                      ["ataraNoiseDb", "Noise (dB)"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          type="number"
+                          step="1"
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                    {([
+                      ["ataraCapacityUnit", "Capacity Unit"],
+                      ["ataraProductTypes", "Product Types"],
+                      ["ataraVibrationClass", "Vibration Class"],
+                      ["ataraOperationalNotes", "Notes"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          placeholder={key === "ataraProductTypes" ? "comma, separated" : undefined}
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                <details className="manager-visual-model">
+                  <summary>Utility Requirements</summary>
+                  <div className="manager-capabilities">
+                    <label>
+                      <input
+                        disabled={!editable}
+                        type="checkbox"
+                        checked={itemEditor.ataraAspirationRequired}
+                        onChange={(event) => setItemEditor({ ...itemEditor, ataraAspirationRequired: event.target.checked })}
+                      />
+                      <span>Aspiration Required</span>
+                    </label>
+                  </div>
+                  <div className="manager-editor-grid">
+                    {([
+                      ["ataraElectricalPowerKw", "Electrical Power (kW)"],
+                      ["ataraVoltage", "Voltage"],
+                      ["ataraFrequencyHz", "Frequency (Hz)"],
+                      ["ataraPneumaticPressureBar", "Pneumatic Pressure (bar)"],
+                      ["ataraAirConsumptionNlMin", "Air Consumption (Nl/min)"],
+                      ["ataraAspirationAirflowM3h", "Aspiration Airflow (m3/h)"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          type="number"
+                          step="0.1"
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                    {([
+                      ["ataraPhase", "Phase"],
+                      ["ataraNetworkProtocols", "Network Protocols"],
+                      ["ataraUtilityNotes", "Notes"]
+                    ] as const).map(([key, label]) => (
+                      <label key={key}>
+                        <span>{label}</span>
+                        <input
+                          disabled={!editable}
+                          placeholder={key === "ataraNetworkProtocols" ? "comma, separated" : undefined}
+                          value={itemEditor[key]}
+                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                <details className="manager-visual-model">
+                  <summary>Connection Points</summary>
+                  <label>
+                    <span>Connection Points JSON</span>
+                    <textarea
+                      disabled={!editable}
+                      value={itemEditor.ataraConnectionPointsJson}
+                      onChange={(event) => setItemEditor({ ...itemEditor, ataraConnectionPointsJson: event.target.value })}
+                    />
+                  </label>
+                </details>
                 <details className="manager-visual-model" open>
                   <summary>Visual Model</summary>
                   <div className="manager-editor-grid">
@@ -1335,7 +1876,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                   <button className="primary-action" disabled={!editable} type="button" onClick={saveItem}>
                     Save Item
                   </button>
-                  <button type="button" onClick={() => setItemEditor(null)}>
+                  <button type="button" onClick={clearItemEditor}>
                     Cancel
                   </button>
                   {itemEditor.mode === "edit" && itemEditor.originalId ? (

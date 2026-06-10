@@ -1,0 +1,51 @@
+{
+  "_note": "Sample/template data only. Plausible placeholder values; not a real ATARA specification.",
+  "identity": {
+    "isAtaraProduct": true,
+    "atrId": "ATR-SAMPLE-BAG-001",
+    "machineCode": "SAMPLE-BAGGER",
+    "productFamilyCode": "BAG",
+    "pdnCode": "PDN-SAMPLE",
+    "displayName": "Sample Open Mouth Bagging Machine",
+    "revision": "TEMPLATE"
+  },
+  "physical": {
+    "widthMm": 2200,
+    "depthMm": 1800,
+    "heightMm": 2600,
+    "weightKg": 1800,
+    "operatingWeightKg": 2100,
+    "footprintNotes": "Template footprint for schema testing only.",
+    "maintenanceOpenDimensionsMm": {
+      "widthMm": 3000,
+      "depthMm": 2400,
+      "heightMm": 2800
+    }
+  },
+  "maintenanceClearance": {
+    "frontMm": 900,
+    "backMm": 600,
+    "leftMm": 700,
+    "rightMm": 700,
+    "topMm": 300,
+    "notes": "Placeholder clearance."
+  },
+  "connectionPoints": [
+    {
+      "id": "product-out-1",
+      "name": "Bag discharge",
+      "type": "product-out",
+      "positionMm": { "xMm": 0, "yMm": 900, "zMm": 900 },
+      "direction": "z+"
+    }
+  ],
+  "utilityRequirements": {
+    "electrical": { "powerKw": 12, "voltage": 400, "phase": "3P", "frequencyHz": 50 },
+    "pneumatic": { "pressureBar": 6, "airConsumptionNlMin": 450 }
+  },
+  "operationalData": {
+    "capacityNominal": 900,
+    "capacityUnit": "bags/hour",
+    "productTypes": ["sample powder", "sample granular"]
+  }
+}

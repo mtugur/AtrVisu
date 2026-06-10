@@ -1,0 +1,36 @@
+{
+  "_note": "Template only. This is not a real ATARA machine specification.",
+  "identity": {
+    "isAtaraProduct": true,
+    "atrId": "ATR-TEMPLATE-000",
+    "machineCode": "MACHINE-CODE",
+    "productFamilyCode": "FAMILY",
+    "pdnCode": "PDN-PLACEHOLDER",
+    "displayName": "Template Machine",
+    "revision": "TEMPLATE"
+  },
+  "physical": {
+    "widthMm": 1000,
+    "depthMm": 1000,
+    "heightMm": 1000,
+    "weightKg": 0,
+    "operatingWeightKg": 0,
+    "footprintNotes": "Placeholder values only.",
+    "maintenanceOpenDimensionsMm": {
+      "widthMm": 1200,
+      "depthMm": 1200,
+      "heightMm": 1100
+    }
+  },
+  "maintenanceClearance": {
+    "frontMm": 0,
+    "backMm": 0,
+    "leftMm": 0,
+    "rightMm": 0,
+    "topMm": 0,
+    "notes": "Replace with engineering-approved clearances."
+  },
+  "connectionPoints": [],
+  "utilityRequirements": {},
+  "operationalData": {}
+}

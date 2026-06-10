@@ -107,6 +107,51 @@ describe("library validation", () => {
     expect(warnings.some((warning) => warning.message.includes("collisionEnvelope"))).toBe(true);
   });
 
+  it("normalizes optional ATARA machine data without breaking existing item validation", () => {
+    const warnings: LibraryValidationWarning[] = [];
+    const library = validateLibraryDocument(
+      entry,
+      createLibrary({
+        ataraMachineData: {
+          identity: {
+            isAtaraProduct: true,
+            atrId: "ATR-SAMPLE"
+          },
+          physical: {
+            widthMm: -1,
+            depthMm: 900,
+            heightMm: 700,
+            weightKg: 120
+          },
+          maintenanceClearance: {
+            frontMm: 500,
+            backMm: 400,
+            leftMm: 300,
+            rightMm: 300,
+            topMm: 100
+          },
+          connectionPoints: [
+            {
+              id: "electrical-1",
+              name: "Electrical",
+              type: "electrical",
+              positionMm: { xMm: 10, yMm: 20, zMm: 30 },
+              direction: "x+"
+            }
+          ]
+        }
+      }),
+      warnings
+    );
+    const item = library.root.items[0];
+
+    expect(item.ataraMachineData?.identity?.atrId).toBe("ATR-SAMPLE");
+    expect(item.ataraMachineData?.physical?.widthMm).toBe(2876);
+    expect(item.ataraMachineData?.physical?.depthMm).toBe(900);
+    expect(item.ataraMachineData?.maintenanceClearance?.frontMm).toBe(500);
+    expect(item.ataraMachineData?.connectionPoints?.[0].type).toBe("electrical");
+  });
+
   it("falls back when placeholderVisualType is not renderable", () => {
     const warnings: LibraryValidationWarning[] = [];
     const library = validateLibraryDocument(entry, createLibrary({ placeholderVisualType: "not-rendered-yet" }), warnings);
