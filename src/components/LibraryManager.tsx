@@ -639,7 +639,12 @@ function ManagerTreeNode({
             <button type="button" onClick={() => onAddChildGroup(group.id)} title="Add Child Group">
               Group
             </button>
-            <button type="button" onClick={() => onAddItem(group.id)} title="Add Item">
+            <button
+              data-testid={isRoot ? "library-manager-add-item-button" : undefined}
+              type="button"
+              onClick={() => onAddItem(group.id)}
+              title="Add Item"
+            >
               Item
             </button>
             {!isRoot ? (
@@ -1207,6 +1212,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
             {libraries.map((library) => (
               <button
                 className={library.libraryId === selectedLibraryId ? "is-selected" : ""}
+                data-testid={library.libraryId === PROJECT_CUSTOM_LIBRARY_ID ? "library-manager-custom-library-selector" : undefined}
                 key={library.libraryId}
                 type="button"
                 onClick={() => setSelectedLibraryId(library.libraryId)}
@@ -1217,7 +1223,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
             ))}
           </aside>
 
-          <section className="manager-tree-panel" aria-label="Library group and item tree">
+          <section className="manager-tree-panel" data-testid="library-manager-tree-panel" aria-label="Library group and item tree">
             <div className="manager-column-header">
               <span>Library Tree</span>
               {activeRoot ? <strong>{countItems(activeRoot)} items</strong> : null}
@@ -1254,7 +1260,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
             {!selectedLibrary ? (
               <p className="empty-selection">No libraries are loaded.</p>
             ) : itemEditor ? (
-              <div className="manager-editor" aria-label="Machine item editor">
+              <div className="manager-editor" data-testid="library-manager-selected-item-editor" aria-label="Machine item editor">
                 <div className="manager-editor-grid">
                   <label>
                     <span>ID</span>

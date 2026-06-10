@@ -106,7 +106,13 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
 
   await page.getByTestId("open-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
-  await page.getByRole("dialog", { name: "Library Manager" }).getByRole("button", { name: "Add Item" }).last().click();
+  await expect(page.getByTestId("library-manager-custom-library-selector")).toBeVisible();
+  await page.getByTestId("library-manager-custom-library-selector").click();
+  await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
+  await expect(page.getByTestId("library-manager-add-item-button")).toBeVisible();
+  await expect(page.getByTestId("library-manager-add-item-button")).toBeEnabled();
+  await page.getByTestId("library-manager-add-item-button").click();
+  await expect(page.getByTestId("library-manager-selected-item-editor")).toBeVisible();
   await expect(page.getByTestId("atara-machine-data-section")).toBeVisible();
   await expect(page.getByTestId("visual-model-calibration-section")).toBeVisible();
   await expect(page.getByTestId("collision-envelope-editor-section")).toBeVisible();
