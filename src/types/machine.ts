@@ -1,4 +1,5 @@
 import type { CollisionEnvelope } from "./collision";
+import type { AtaraMachineData } from "./ataraMachineData";
 
 export type MachineCategory = string;
 
@@ -62,6 +63,7 @@ export type MachineDefinition = {
     right: number;
   };
   collisionEnvelope?: CollisionEnvelope;
+  ataraMachineData?: AtaraMachineData;
   capabilities?: {
     canConvey: boolean;
     canPalletize: boolean;

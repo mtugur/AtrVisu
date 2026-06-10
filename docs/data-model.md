@@ -1,5 +1,11 @@
 # Data Model
 
+## ATARA Machine Data
+
+Machine definitions can optionally include `ataraMachineData`, described in [ATARA Machine Data Schema](./atara-machine-data-schema.md). This layer stores ATARA-specific engineering metadata such as identity fields, physical data, maintenance clearances, connection points, utility requirements, operational capacity, and engineering envelopes.
+
+Generic `MachineDefinition` dimensions remain required for library compatibility and rendering. `ataraMachineData` enriches those definitions; it does not replace project/layout/revision storage or GLB visual model metadata.
+
 This document describes the target future AtrVisu data model. The current app has not fully migrated to this model yet.
 
 ## Project

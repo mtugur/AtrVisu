@@ -23,7 +23,7 @@ type MachineLibraryProps = {
   onAddMachine: (selection: LibrarySelection) => void;
 };
 
-const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
+export const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
   id: item.id,
   name: item.name,
   category: item.category,
@@ -45,6 +45,7 @@ const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => nor
   connectionPoints: item.connectionPoints,
   clearance: item.clearance,
   collisionEnvelope: item.collisionEnvelope,
+  ataraMachineData: item.ataraMachineData,
   capabilities: item.capabilities
 }));
 

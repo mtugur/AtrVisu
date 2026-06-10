@@ -19,7 +19,19 @@ const createMachine = (): PlacedMachine => ({
     depth: 1.2,
     height: 2.1,
     defaultColor: "#f0a23a",
-    connectionPoints: []
+    connectionPoints: [],
+    ataraMachineData: {
+      identity: {
+        atrId: "ATR-LAYOUT",
+        machineCode: "FORKLIFT-TEST"
+      },
+      physical: {
+        widthMm: 2876,
+        depthMm: 1200,
+        heightMm: 2100,
+        weightKg: 1500
+      }
+    }
   },
   definition: {
     id: "forklift-test",
@@ -60,6 +72,8 @@ describe("layout serialization", () => {
       offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
       enabled: true
     });
+    expect(object.definitionSnapshot?.ataraMachineData?.identity?.atrId).toBe("ATR-LAYOUT");
+    expect(object.definitionSnapshot?.ataraMachineData?.physical?.weightKg).toBe(1500);
   });
 
   it("normalizes legacy layouts without unit metadata", () => {

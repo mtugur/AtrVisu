@@ -11,6 +11,7 @@ import { DEFAULT_CAPABILITIES, getLegacyTaxonomyHints, inferPlaceholderVisualTyp
 import { metersToMm, mmToMeters } from "./units";
 import { normalizeVisualModel } from "./visualModel";
 import { normalizeCollisionEnvelope } from "./collision";
+import { normalizeAtaraMachineData } from "./ataraMachineData";
 
 type LibraryIndexDocument = {
   libraries?: unknown;
@@ -283,6 +284,9 @@ const validateMachineItem = (
     return null;
   }
 
+  const dimensionsMm = { widthMm, depthMm, heightMm };
+  const ataraMachineData = normalizeAtaraMachineData(item.ataraMachineData, dimensionsMm);
+
   return {
     id,
     name,
@@ -305,7 +309,8 @@ const validateMachineItem = (
     thumbnailPath: isNonEmptyString(item.thumbnailPath) ? item.thumbnailPath : null,
     connectionPoints,
     clearance: readClearance(item.clearance, warnings, path),
-    collisionEnvelope: readCollisionEnvelope(item.collisionEnvelope, { widthMm, depthMm, heightMm }, warnings, path),
+    collisionEnvelope: readCollisionEnvelope(item.collisionEnvelope, dimensionsMm, warnings, path),
+    ...(ataraMachineData ? { ataraMachineData } : {}),
     capabilities: readCapabilities(item.capabilities, warnings, path)
   };
 };

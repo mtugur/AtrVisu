@@ -1,0 +1,50 @@
+{
+  "_note": "Sample/template data only. Plausible placeholder values; not a real ATARA specification.",
+  "identity": {
+    "isAtaraProduct": true,
+    "atrId": "ATR-SAMPLE-CONV-001",
+    "machineCode": "SAMPLE-BELT-CONVEYOR",
+    "productFamilyCode": "CONV",
+    "pdnCode": "PDN-SAMPLE",
+    "displayName": "Sample Belt Conveyor",
+    "revision": "TEMPLATE"
+  },
+  "physical": {
+    "widthMm": 800,
+    "depthMm": 3000,
+    "heightMm": 850,
+    "weightKg": 350,
+    "operatingWeightKg": 450
+  },
+  "maintenanceClearance": {
+    "frontMm": 500,
+    "backMm": 500,
+    "leftMm": 400,
+    "rightMm": 400,
+    "topMm": 200,
+    "notes": "Placeholder conveyor clearance."
+  },
+  "connectionPoints": [
+    {
+      "id": "product-in-1",
+      "name": "Product infeed",
+      "type": "product-in",
+      "positionMm": { "xMm": 0, "yMm": 850, "zMm": -1500 },
+      "direction": "z-"
+    },
+    {
+      "id": "product-out-1",
+      "name": "Product discharge",
+      "type": "product-out",
+      "positionMm": { "xMm": 0, "yMm": 850, "zMm": 1500 },
+      "direction": "z+"
+    }
+  ],
+  "utilityRequirements": {
+    "electrical": { "powerKw": 1.5, "voltage": 400, "phase": "3P", "frequencyHz": 50 }
+  },
+  "operationalData": {
+    "capacityNominal": 20,
+    "capacityUnit": "m/min"
+  }
+}
