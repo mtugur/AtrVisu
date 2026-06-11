@@ -4,6 +4,8 @@ export type OverlaySettings = {
   showMetadataBox: boolean;
   showCollisionEnvelope: boolean;
   showClearanceEnvelope: boolean;
+  showConnectionPoints: boolean;
+  connectionPointDisplayMode: "selected" | "all";
 };
 
 export type VisualModelStatus = "none" | "loading" | "loaded" | "proxy" | "fallback" | "failed";

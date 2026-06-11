@@ -49,14 +49,16 @@ describe("ATARA machine data helpers", () => {
     expect(normalized?.physical?.weightKg).toBeUndefined();
   });
 
-  it("normalizes connection point type and defaults position", () => {
+  it("normalizes connection point type and supports negative local plan coordinates", () => {
     const normalized = normalizeAtaraMachineData({
       connectionPoints: [
         {
           id: "cp-1",
           name: "Bad type point",
           type: "invalid-type",
-          direction: "bad"
+          direction: "bad",
+          positionMm: { xMm: -200, yMm: -300, zMm: -10 },
+          sizeMm: { widthMm: -1, diameterMm: 50 }
         }
       ]
     });
@@ -67,7 +69,8 @@ describe("ATARA machine data helpers", () => {
       id: "cp-1",
       name: "Bad type point",
       type: "other",
-      positionMm: { xMm: 0, yMm: 0, zMm: 0 },
+      positionMm: { xMm: -200, yMm: -300, zMm: 0 },
+      sizeMm: { diameterMm: 50 },
       direction: "z+"
     });
   });

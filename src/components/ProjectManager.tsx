@@ -244,7 +244,7 @@ export function ProjectManager({
           </button>
         </header>
 
-        <div className="project-manager-layout">
+        <div className="project-manager-layout" data-testid="project-manager-ready">
           <aside className="project-column" aria-label="Projects">
             <div className="manager-column-header">
               <span>Projects</span>
@@ -279,7 +279,7 @@ export function ProjectManager({
                 New Project
               </button>
             </div>
-            <div className="project-list">
+            <div className="project-list" data-testid="project-manager-project-list">
               {projects.map((project) => (
                 <button
                   className={project.projectId === selectedProject?.projectId ? "is-selected" : ""}
@@ -373,7 +373,9 @@ export function ProjectManager({
                 </button>
               </div>
             ) : (
-              <p className="empty-selection">Create or import a project to begin.</p>
+              <p className="empty-selection" data-testid="project-manager-empty-state">
+                Create or import a project to begin.
+              </p>
             )}
 
             <div className="project-list">

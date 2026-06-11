@@ -33,12 +33,27 @@
       "direction": "x-"
     },
     {
+      "id": "product-out-1",
+      "name": "Sample pallet out zone",
+      "type": "product-out",
+      "positionMm": { "xMm": 1800, "yMm": 1000, "zMm": 0 },
+      "direction": "y+"
+    },
+    {
       "id": "electrical-1",
       "name": "Main electrical cabinet",
       "type": "electrical",
-      "positionMm": { "xMm": 1800, "yMm": 1200, "zMm": -1800 },
-      "direction": "z-",
+      "positionMm": { "xMm": 1800, "yMm": -1800, "zMm": 1200 },
+      "direction": "y-",
       "metadata": { "voltage": 400, "powerKw": 18 }
+    },
+    {
+      "id": "network-1",
+      "name": "Sample network interface",
+      "type": "network",
+      "positionMm": { "xMm": 1800, "yMm": -1700, "zMm": 1300 },
+      "direction": "y-",
+      "metadata": { "protocol": "Profinet", "description": "Template value only." }
     }
   ],
   "utilityRequirements": {

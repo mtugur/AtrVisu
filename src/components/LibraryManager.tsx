@@ -19,6 +19,13 @@ import { inferPlaceholderVisualType, loadMachineTaxonomy, normalizeTags } from "
 import { mmToMeters } from "../utils/units";
 import { normalizeCollisionEnvelope } from "../utils/collision";
 import { normalizeAtaraMachineData } from "../utils/ataraMachineData";
+import {
+  CONNECTION_POINT_DIRECTIONS,
+  CONNECTION_POINT_TYPES,
+  getConnectionPointAnchorPosition,
+  getConnectionPointDirectionLabel,
+  getConnectionPointTypeLabel
+} from "../utils/connectionPoints";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
@@ -435,6 +442,339 @@ const normalizeConnectionPointsDraft = (value: string) => {
   }
 };
 
+const readConnectionPointsDraft = (value: string): MachineConnectionPoint[] => {
+  const normalized = normalizeConnectionPointsDraft(value);
+  return Array.isArray(normalized) ? normalized : [];
+};
+
+const writeConnectionPointsDraft = (points: MachineConnectionPoint[]) => JSON.stringify(points, null, 2);
+
+const createDraftConnectionPoint = (index: number): MachineConnectionPoint => ({
+  id: `connection-${Date.now()}-${index + 1}`,
+  name: `Connection ${index + 1}`,
+  type: "other",
+  positionMm: {
+    xMm: 0,
+    yMm: 0,
+    zMm: 0
+  },
+  direction: "x+"
+});
+
+type ConnectionAnchorName =
+  | "center"
+  | "leftCenter"
+  | "rightCenter"
+  | "frontCenter"
+  | "backCenter"
+  | "frontLeft"
+  | "frontRight"
+  | "backLeft"
+  | "backRight";
+
+const connectionAnchorButtons: Array<{ key: ConnectionAnchorName; label: string }> = [
+  { key: "center", label: "Center" },
+  { key: "leftCenter", label: "Left Center" },
+  { key: "rightCenter", label: "Right Center" },
+  { key: "frontCenter", label: "Front Center" },
+  { key: "backCenter", label: "Back Center" },
+  { key: "frontLeft", label: "Front Left" },
+  { key: "frontRight", label: "Front Right" },
+  { key: "backLeft", label: "Back Left" },
+  { key: "backRight", label: "Back Right" }
+];
+
+function DraftNumberInput({
+  value,
+  disabled,
+  allowNegative,
+  min,
+  step,
+  onCommit
+}: {
+  value: number | "";
+  disabled: boolean;
+  allowNegative?: boolean;
+  min?: number;
+  step?: string;
+  onCommit: (value: number | undefined) => void;
+}) {
+  const [draft, setDraft] = useState(value === "" ? "" : String(value));
+
+  useEffect(() => {
+    setDraft(value === "" ? "" : String(value));
+  }, [value]);
+
+  const commit = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed || trimmed === "-" || trimmed === "." || trimmed === "-.") {
+      onCommit(undefined);
+      return;
+    }
+
+    const numericValue = Number(trimmed);
+    if (!Number.isFinite(numericValue)) {
+      return;
+    }
+
+    onCommit(allowNegative ? numericValue : Math.max(min ?? 0, numericValue));
+  };
+
+  return (
+    <input
+      disabled={disabled}
+      type="text"
+      inputMode="decimal"
+      step={step}
+      value={draft}
+      onChange={(event) => {
+        const nextValue = event.target.value;
+        if (!allowNegative && nextValue.trim().startsWith("-")) {
+          return;
+        }
+        setDraft(nextValue);
+        if (!["", "-", ".", "-."].includes(nextValue.trim()) && Number.isFinite(Number(nextValue))) {
+          commit(nextValue);
+        }
+      }}
+      onBlur={() => commit(draft)}
+    />
+  );
+}
+
+const updateConnectionPointAt = (
+  editor: ItemEditorState,
+  index: number,
+  updater: (point: MachineConnectionPoint) => MachineConnectionPoint
+): ItemEditorState => {
+  const points = readConnectionPointsDraft(editor.ataraConnectionPointsJson);
+  const nextPoints = points.map((point, pointIndex) => (pointIndex === index ? updater(point) : point));
+  return {
+    ...editor,
+    ataraConnectionPointsJson: writeConnectionPointsDraft(nextPoints)
+  };
+};
+
+function ConnectionPointEditor({
+  editor,
+  editable,
+  onChange
+}: {
+  editor: ItemEditorState;
+  editable: boolean;
+  onChange: (editor: ItemEditorState) => void;
+}) {
+  const points = readConnectionPointsDraft(editor.ataraConnectionPointsJson);
+  const editorDimensions = {
+    widthMm: Number(editor.widthMm) || 0,
+    depthMm: Number(editor.depthMm) || 0,
+    heightMm: Number(editor.heightMm) || 0
+  };
+  const setPoints = (nextPoints: MachineConnectionPoint[]) => {
+    onChange({
+      ...editor,
+      ataraConnectionPointsJson: writeConnectionPointsDraft(nextPoints)
+    });
+  };
+  const updatePoint = (index: number, updater: (point: MachineConnectionPoint) => MachineConnectionPoint) => {
+    onChange(updateConnectionPointAt(editor, index, updater));
+  };
+  const getPointWarnings = (point: MachineConnectionPoint) => {
+    const warnings: string[] = [];
+    if (Math.abs(point.positionMm.xMm) > editorDimensions.widthMm / 2) {
+      warnings.push("Point is outside machine footprint on local X.");
+    }
+    if (Math.abs(point.positionMm.yMm) > editorDimensions.depthMm / 2) {
+      warnings.push("Point is outside machine footprint on local Plan Y.");
+    }
+    if (point.positionMm.zMm < 0 || point.positionMm.zMm > editorDimensions.heightMm) {
+      warnings.push("Point elevation is outside machine height.");
+    }
+    return warnings;
+  };
+
+  return (
+    <div className="connection-editor" data-testid="library-manager-connection-point-editor">
+      <div className="connection-coordinate-help">
+        <strong>Connection point coordinates</strong>
+        <span>xMm = local Plan X from machine center. yMm = local Plan Y from machine center. zMm = elevation from machine bottom.</span>
+        <span>Direction is the facing, flow, or connection direction, not the point position.</span>
+        <span>X- &lt;- Plan X -&gt; X+ | Y- &lt;- Plan Y -&gt; Y+ | Z+ = up</span>
+      </div>
+      <div className="manager-detail-actions">
+        <button
+          type="button"
+          disabled={!editable}
+          onClick={() => setPoints([...points, createDraftConnectionPoint(points.length)])}
+        >
+          Add Connection Point
+        </button>
+      </div>
+      {points.length === 0 ? <p className="manager-readonly-note">No connection points assigned.</p> : null}
+      {points.map((point, index) => (
+        <article className="connection-editor-card" key={`${point.id}-${index}`}>
+          <div className="manager-column-header">
+            <div>
+              <strong>{point.name || point.id || `Connection ${index + 1}`}</strong>
+              <span>{point.type}</span>
+            </div>
+            <button
+              className="danger-action"
+              type="button"
+              disabled={!editable}
+              onClick={() => setPoints(points.filter((_, pointIndex) => pointIndex !== index))}
+            >
+              Delete
+            </button>
+          </div>
+          {getPointWarnings(point).length > 0 ? (
+            <p className="manager-validation">{getPointWarnings(point).join(" ")}</p>
+          ) : null}
+          <div className="connection-anchor-actions" aria-label="Quick connection point anchor positions">
+            {connectionAnchorButtons.map((anchor) => (
+              <button
+                key={anchor.key}
+                type="button"
+                disabled={!editable}
+                onClick={() => {
+                  const anchorPosition = getConnectionPointAnchorPosition(anchor.key, editorDimensions);
+                  updatePoint(index, (current) => ({
+                    ...current,
+                    positionMm: {
+                      ...current.positionMm,
+                      xMm: anchorPosition.xMm,
+                      yMm: anchorPosition.yMm
+                    }
+                  }));
+                }}
+              >
+                {anchor.label}
+              </button>
+            ))}
+          </div>
+          <div className="manager-editor-grid">
+            <label>
+              <span>ID</span>
+              <input
+                disabled={!editable}
+                value={point.id}
+                onChange={(event) => updatePoint(index, (current) => ({ ...current, id: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>Name</span>
+              <input
+                disabled={!editable}
+                value={point.name}
+                onChange={(event) => updatePoint(index, (current) => ({ ...current, name: event.target.value }))}
+              />
+            </label>
+            <label>
+              <span>Type</span>
+              <select
+                disabled={!editable}
+                value={point.type}
+                onChange={(event) =>
+                  updatePoint(index, (current) => ({
+                    ...current,
+                    type: event.target.value as MachineConnectionPoint["type"]
+                  }))
+                }
+              >
+                {CONNECTION_POINT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {getConnectionPointTypeLabel(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Direction</span>
+              <select
+                disabled={!editable}
+                value={point.direction}
+                onChange={(event) =>
+                  updatePoint(index, (current) => ({
+                    ...current,
+                    direction: event.target.value as MachineConnectionPoint["direction"]
+                  }))
+                }
+              >
+                {CONNECTION_POINT_DIRECTIONS.map((direction) => (
+                  <option key={direction} value={direction}>
+                    {getConnectionPointDirectionLabel(direction)}
+                  </option>
+                ))}
+              </select>
+              <small>Direction is the facing/flow/connection direction. Product in/out directions will support future snap and routing.</small>
+            </label>
+            {(["xMm", "yMm", "zMm"] as const).map((axis) => (
+              <label key={axis}>
+                <span>{axis === "xMm" ? "Local X (mm)" : axis === "yMm" ? "Local Plan Y (mm)" : "Elevation (mm)"}</span>
+                <DraftNumberInput
+                  disabled={!editable}
+                  step="10"
+                  min={axis === "zMm" ? 0 : undefined}
+                  value={point.positionMm[axis]}
+                  allowNegative={axis !== "zMm"}
+                  onCommit={(nextValue) => {
+                    if (nextValue === undefined) {
+                      return;
+                    }
+                    updatePoint(index, (current) => ({
+                      ...current,
+                      positionMm: {
+                        ...current.positionMm,
+                        [axis]: axis === "zMm" ? Math.max(0, nextValue) : nextValue
+                      }
+                    }));
+                  }}
+                />
+              </label>
+            ))}
+            {(["widthMm", "heightMm", "diameterMm"] as const).map((key) => (
+              <label key={key}>
+                <span>{key.replace("Mm", " (mm)")}</span>
+                <DraftNumberInput
+                  disabled={!editable}
+                  min={0}
+                  step="1"
+                  value={point.sizeMm?.[key] ?? ""}
+                  onCommit={(nextValue) =>
+                    updatePoint(index, (current) => ({
+                      ...current,
+                      sizeMm: {
+                        ...current.sizeMm,
+                        [key]: nextValue
+                      }
+                    }))
+                  }
+                />
+              </label>
+            ))}
+            <label>
+              <span>Description</span>
+              <input
+                disabled={!editable}
+                value={point.metadata?.description ?? ""}
+                onChange={(event) =>
+                  updatePoint(index, (current) => ({
+                    ...current,
+                    metadata: {
+                      ...current.metadata,
+                      description: event.target.value
+                    }
+                  }))
+                }
+              />
+            </label>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export const getItemEditorDirtyKey = (editor: ItemEditorState | null) => {
   if (!editor) {
     return "";
@@ -627,7 +967,12 @@ function ManagerTreeNode({
         className={`manager-tree-row${isSelected ? " is-selected" : ""}`}
         style={{ "--tree-depth": depth } as CSSProperties}
       >
-        <button className="manager-row-toggle" type="button" onClick={() => setIsOpen((current) => !current)}>
+        <button
+          className="manager-row-toggle"
+          data-testid={`library-manager-group-toggle-${group.id}`}
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+        >
           {isOpen ? "-" : "+"}
         </button>
         <button className="manager-tree-label" type="button" onClick={() => onSelectGroup(group.id)}>
@@ -683,6 +1028,7 @@ function ManagerTreeNode({
             return (
               <button
                 className={`manager-item-row${itemSelected ? " is-selected" : ""}`}
+                data-testid={`library-manager-item-${item.id}`}
                 key={item.id}
                 style={{ "--tree-depth": depth + 1 } as CSSProperties}
                 type="button"
@@ -1207,12 +1553,16 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
           </button>
         </header>
 
-        <div className="manager-layout">
+        <div className="manager-layout" data-testid="library-manager-ready">
           <aside className="manager-library-list" aria-label="Available libraries">
             {libraries.map((library) => (
               <button
                 className={library.libraryId === selectedLibraryId ? "is-selected" : ""}
-                data-testid={library.libraryId === PROJECT_CUSTOM_LIBRARY_ID ? "library-manager-custom-library-selector" : undefined}
+                data-testid={
+                  library.libraryId === PROJECT_CUSTOM_LIBRARY_ID
+                    ? "library-manager-custom-library-button"
+                    : "library-manager-atara-standard-library-button"
+                }
                 key={library.libraryId}
                 type="button"
                 onClick={() => setSelectedLibraryId(library.libraryId)}
@@ -1583,16 +1933,9 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                     ))}
                   </div>
                 </details>
-                <details className="manager-visual-model">
+                <details className="manager-visual-model" data-testid="connection-point-editor-section">
                   <summary>Connection Points</summary>
-                  <label>
-                    <span>Connection Points JSON</span>
-                    <textarea
-                      disabled={!editable}
-                      value={itemEditor.ataraConnectionPointsJson}
-                      onChange={(event) => setItemEditor({ ...itemEditor, ataraConnectionPointsJson: event.target.value })}
-                    />
-                  </label>
+                  <ConnectionPointEditor editor={itemEditor} editable={editable} onChange={setItemEditor} />
                 </details>
                 <details className="manager-visual-model" open>
                   <summary>Visual Model</summary>

@@ -55,6 +55,39 @@ export function DisplayOverlayControls({ settings, onChange }: DisplayOverlayCon
         />
         <span>Show Clearance Envelope</span>
       </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={settings.showConnectionPoints}
+          onChange={(event) => updateSetting("showConnectionPoints", event.target.checked)}
+        />
+        <span>Show Connection Points</span>
+      </label>
+      <label className="overlay-select-field">
+        <span>Connection Point Display Mode</span>
+        <select
+          value={settings.connectionPointDisplayMode}
+          disabled={!settings.showConnectionPoints}
+          onChange={(event) =>
+            onChange({
+              ...settings,
+              connectionPointDisplayMode: event.target.value === "all" ? "all" : "selected"
+            })
+          }
+        >
+          <option value="selected">Selected object only</option>
+          <option value="all">All objects</option>
+        </select>
+      </label>
+      <p className="overlay-help">
+        Connection points are shown for the selected object by default. Position is local point location; direction is
+        where the port, flow, or connection faces.
+      </p>
+      <div className="axis-help" aria-label="Plan coordinate legend">
+        <span>X- &lt;- Plan X -&gt; X+</span>
+        <span>Y- &lt;- Plan Y -&gt; Y+</span>
+        <span>Z+ = elevation up</span>
+      </div>
     </section>
   );
 }

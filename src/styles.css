@@ -29,6 +29,17 @@ textarea {
   font: inherit;
 }
 
+select option {
+  color: #f4f7f2;
+  background: #101619;
+}
+
+select option:checked,
+select option:hover {
+  color: #11170f;
+  background: #a8c978;
+}
+
 .app-shell {
   position: relative;
   width: 100vw;
@@ -415,6 +426,86 @@ textarea {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.connection-point-list,
+.connection-editor {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.connection-coordinate-help,
+.overlay-help,
+.axis-help {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(168, 201, 120, 0.2);
+  border-radius: 8px;
+  color: rgba(237, 243, 240, 0.76);
+  background: rgba(168, 201, 120, 0.07);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.overlay-help {
+  margin: 0;
+}
+
+.axis-help span,
+.connection-coordinate-help span {
+  overflow-wrap: anywhere;
+}
+
+.connection-anchor-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.connection-anchor-actions button {
+  min-height: 32px;
+  border: 1px solid rgba(164, 190, 178, 0.18);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.055);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.connection-anchor-actions button:hover:not(:disabled),
+.connection-anchor-actions button:focus-visible {
+  border-color: rgba(168, 201, 120, 0.72);
+  background: rgba(168, 201, 120, 0.12);
+  outline: none;
+}
+
+.connection-point-card,
+.connection-editor-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.connection-point-card strong,
+.connection-point-card span,
+.connection-editor-card strong,
+.connection-editor-card span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-point-card span {
+  color: rgba(237, 243, 240, 0.72);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .library-tools {
@@ -1129,6 +1220,42 @@ textarea {
   color: rgba(237, 243, 240, 0.78);
   background: rgba(255, 255, 255, 0.04);
   font-size: 0.8rem;
+}
+
+.overlay-controls .overlay-select-field {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
+}
+
+.overlay-select-field span {
+  color: rgba(237, 243, 240, 0.76);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.overlay-select-field select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid rgba(164, 190, 178, 0.22);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(12, 18, 17, 0.92);
+  font: inherit;
+  cursor: pointer;
+}
+
+.overlay-select-field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.overlay-select-field select:focus-visible {
+  border-color: rgba(168, 201, 120, 0.78);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(168, 201, 120, 0.16);
 }
 
 .collision-section {

@@ -34,3 +34,9 @@ Primary, secondary, and dangerous actions should be visually distinct.
 - Undo/redo controls should be visible but secondary, and keyboard shortcuts must not run while the user is typing.
 - Pair snap labels should state that the primary object moves and the secondary object stays fixed.
 
+## Connection Point UI
+
+- Connection point overlays should be opt-in to avoid clutter.
+- Markers must be compact, readable, and non-blocking for object selection.
+- Selected Object Properties should separate connection point diagnostics from compact ATARA Machine Data diagnostics.
+

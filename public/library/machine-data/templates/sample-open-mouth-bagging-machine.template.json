@@ -32,11 +32,34 @@
   },
   "connectionPoints": [
     {
+      "id": "product-in-1",
+      "name": "Sample hopper infeed",
+      "type": "product-in",
+      "positionMm": { "xMm": 0, "yMm": -400, "zMm": 2500 },
+      "direction": "z+"
+    },
+    {
       "id": "product-out-1",
       "name": "Bag discharge",
       "type": "product-out",
       "positionMm": { "xMm": 0, "yMm": 900, "zMm": 900 },
-      "direction": "z+"
+      "direction": "y+"
+    },
+    {
+      "id": "electrical-1",
+      "name": "Sample electrical panel",
+      "type": "electrical",
+      "positionMm": { "xMm": 1100, "yMm": 0, "zMm": 1200 },
+      "direction": "x+",
+      "metadata": { "voltage": 400, "description": "Template value only." }
+    },
+    {
+      "id": "pneumatic-1",
+      "name": "Sample pneumatic port",
+      "type": "pneumatic",
+      "positionMm": { "xMm": -1100, "yMm": 0, "zMm": 1000 },
+      "direction": "x-",
+      "metadata": { "airPressureBar": 6, "description": "Template value only." }
     }
   ],
   "utilityRequirements": {

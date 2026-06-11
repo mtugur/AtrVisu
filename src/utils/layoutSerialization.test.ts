@@ -20,18 +20,27 @@ const createMachine = (): PlacedMachine => ({
     height: 2.1,
     defaultColor: "#f0a23a",
     connectionPoints: [],
-    ataraMachineData: {
-      identity: {
-        atrId: "ATR-LAYOUT",
-        machineCode: "FORKLIFT-TEST"
-      },
+      ataraMachineData: {
+        identity: {
+          atrId: "ATR-LAYOUT",
+          machineCode: "FORKLIFT-TEST"
+        },
       physical: {
         widthMm: 2876,
         depthMm: 1200,
-        heightMm: 2100,
-        weightKg: 1500
+          heightMm: 2100,
+          weightKg: 1500
+        },
+        connectionPoints: [
+          {
+            id: "electrical-1",
+            name: "Electrical",
+            type: "electrical",
+            positionMm: { xMm: 100, yMm: -200, zMm: 900 },
+            direction: "x+"
+          }
+        ]
       }
-    }
   },
   definition: {
     id: "forklift-test",
@@ -74,6 +83,7 @@ describe("layout serialization", () => {
     });
     expect(object.definitionSnapshot?.ataraMachineData?.identity?.atrId).toBe("ATR-LAYOUT");
     expect(object.definitionSnapshot?.ataraMachineData?.physical?.weightKg).toBe(1500);
+    expect(object.definitionSnapshot?.ataraMachineData?.connectionPoints?.[0].id).toBe("electrical-1");
   });
 
   it("normalizes legacy layouts without unit metadata", () => {
