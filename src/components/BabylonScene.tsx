@@ -39,12 +39,18 @@ const GRID_MINOR_STEP = 1;
 
 type BabylonSceneProps = {
   placedMachines: PlacedMachine[];
-  selectedMachineId: string | null;
-  onSelectMachine: (instanceId: string | null) => void;
+  selectedMachineIds: string[];
+  primarySelectedMachineId: string | null;
+  onSelectMachine: (instanceId: string | null, mode?: "replace" | "toggle" | "clear") => void;
   onUpdateMachine: (
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => void;
+  onSetMachinePositions: (
+    updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
+    options?: { recordHistory?: boolean }
+  ) => void;
+  onBeginObjectDrag: () => void;
   isSimulationRunning: boolean;
   simulationSpeed: number;
   overlaySettings: OverlaySettings;
@@ -538,9 +544,12 @@ const loadVisualModel = async (
 
 export function BabylonScene({
   placedMachines,
-  selectedMachineId,
+  selectedMachineIds,
+  primarySelectedMachineId,
   onSelectMachine,
   onUpdateMachine,
+  onSetMachinePositions,
+  onBeginObjectDrag,
   isSimulationRunning,
   simulationSpeed,
   overlaySettings,
@@ -554,7 +563,8 @@ export function BabylonScene({
   const floorRef = useRef<Mesh | null>(null);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
-  const selectedMachineIdRef = useRef<string | null>(selectedMachineId);
+  const selectedMachineIdsRef = useRef<string[]>(selectedMachineIds);
+  const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
   const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
@@ -562,9 +572,13 @@ export function BabylonScene({
   const onPerformanceMetricsChangeRef = useRef(onPerformanceMetricsChange);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<{
-    instanceId: string;
-    offsetX: number;
-    offsetZ: number;
+    instanceIds: string[];
+    startFloorX: number;
+    startFloorZ: number;
+    startPositions: Record<string, { xMm: number; yMm: number }>;
+  } | null>(null);
+  const panStateRef = useRef<{
+    lastFloorPoint: Vector3;
   } | null>(null);
 
   useEffect(() => {
@@ -572,11 +586,14 @@ export function BabylonScene({
   }, [placedMachines]);
 
   useEffect(() => {
-    selectedMachineIdRef.current = selectedMachineId;
+    selectedMachineIdsRef.current = selectedMachineIds;
+    primarySelectedMachineIdRef.current = primarySelectedMachineId;
     machineNodesRef.current.forEach((node, instanceId) => {
-      const isSelected = instanceId === selectedMachineId;
+      const isSelected = selectedMachineIds.includes(instanceId);
+      const isPrimary = instanceId === primarySelectedMachineId;
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(instanceId);
       node.selectionFrame.isVisible = isSelected && overlaySettingsRef.current.showSelectionBox;
+      node.selectionFrame.color = isPrimary ? new Color3(1, 0.86, 0.28) : new Color3(0.37, 0.78, 1);
       node.metadataFrame.isVisible = isSelected && overlaySettingsRef.current.showMetadataBox;
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
       node.collisionFrame.color = isColliding ? new Color3(1, 0.22, 0.16) : new Color3(0.35, 0.72, 1);
@@ -591,12 +608,12 @@ export function BabylonScene({
           ? new Color3(0.18, 0.03, 0.02)
           : Color3.Black();
     });
-  }, [selectedMachineId]);
+  }, [primarySelectedMachineId, selectedMachineIds]);
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings;
     machineNodesRef.current.forEach((node, instanceId) => {
-      const isSelected = instanceId === selectedMachineIdRef.current;
+      const isSelected = selectedMachineIdsRef.current.includes(instanceId);
       node.label.isVisible = overlaySettings.showLabels;
       node.selectionFrame.isVisible = isSelected && overlaySettings.showSelectionBox;
       node.metadataFrame.isVisible = isSelected && overlaySettings.showMetadataBox;
@@ -610,7 +627,7 @@ export function BabylonScene({
   useEffect(() => {
     collisionResultRef.current = collisionResult;
     machineNodesRef.current.forEach((node, instanceId) => {
-      const isSelected = instanceId === selectedMachineIdRef.current;
+      const isSelected = selectedMachineIdsRef.current.includes(instanceId);
       const isColliding = collisionResult.collidingObjectIds.includes(instanceId);
       node.collisionFrame.color = isColliding ? new Color3(1, 0.22, 0.16) : new Color3(0.35, 0.72, 1);
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
@@ -668,6 +685,17 @@ export function BabylonScene({
     camera.upperRadiusLimit = 78;
     camera.wheelPrecision = 35;
     camera.panningSensibility = 75;
+    camera.panningInertia = 0.18;
+    camera.inertia = 0.65;
+
+    const pointerInput = camera.inputs.attached.pointers as unknown as {
+      buttons?: number[];
+      panningMouseButton?: number;
+    };
+    if (pointerInput) {
+      pointerInput.buttons = [0];
+      pointerInput.panningMouseButton = 1;
+    }
 
     const keyLight = new HemisphericLight("key-light", new Vector3(0.2, 1, 0.35), scene);
     keyLight.intensity = 0.88;
@@ -730,33 +758,97 @@ export function BabylonScene({
       return pick?.hit ? pick.pickedPoint : null;
     };
 
+    const isPanPointer = (event: PointerEvent | undefined) =>
+      Boolean(event && (event.button === 1 || event.button === 2 || (event.button === 0 && event.shiftKey)));
+
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+
+    const handleWheel = () => {
+      const beforePoint = pickFloorPoint();
+      const activeCamera = cameraRef.current;
+      if (!beforePoint || !activeCamera) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        const afterPoint = pickFloorPoint();
+        const currentCamera = cameraRef.current;
+        if (!afterPoint || !currentCamera) {
+          return;
+        }
+
+        currentCamera.target.addInPlace(beforePoint.subtract(afterPoint));
+      });
+    };
+
+    canvas.addEventListener("contextmenu", handleContextMenu);
+    canvas.addEventListener("wheel", handleWheel, { passive: true });
+
     const pointerObserver: Nullable<Observer<PointerInfo>> = scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         const pick = pointerInfo.pickInfo;
         const instanceId = pick?.pickedMesh?.metadata?.instanceId as string | undefined;
+        const sourceEvent = pointerInfo.event as PointerEvent | undefined;
+        const isToggleSelection = Boolean(sourceEvent?.ctrlKey || sourceEvent?.shiftKey);
+        const panPoint = pickFloorPoint();
+
+        if (isPanPointer(sourceEvent) && panPoint) {
+          sourceEvent?.preventDefault();
+          panStateRef.current = { lastFloorPoint: panPoint.clone() };
+          dragStateRef.current = null;
+          cameraRef.current?.detachControl();
+          return;
+        }
 
         if (instanceId) {
           const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
           const floorPoint = pickFloorPoint();
           if (machine && floorPoint) {
+            onBeginObjectDrag();
+            const currentSelection = selectedMachineIdsRef.current;
+            const draggedIds = currentSelection.includes(instanceId) && !isToggleSelection ? currentSelection : [instanceId];
+            const startPositions = draggedIds.reduce<Record<string, { xMm: number; yMm: number }>>((positions, id) => {
+              const draggedMachine = placedMachinesRef.current.find((item) => item.instanceId === id);
+              if (draggedMachine) {
+                positions[id] = {
+                  xMm: draggedMachine.positionMm?.xMm ?? metersToMm(draggedMachine.position.x),
+                  yMm: draggedMachine.positionMm?.yMm ?? metersToMm(draggedMachine.position.z)
+                };
+              }
+              return positions;
+            }, {});
             dragStateRef.current = {
-              instanceId,
-              offsetX: machine.position.x - floorPoint.x,
-              offsetZ: machine.position.z - floorPoint.z
+              instanceIds: draggedIds,
+              startFloorX: floorPoint.x,
+              startFloorZ: floorPoint.z,
+              startPositions
             };
             cameraRef.current?.detachControl();
           }
-          onSelectMachine(instanceId);
+          onSelectMachine(instanceId, isToggleSelection ? "toggle" : "replace");
           return;
         }
 
         if (pick?.pickedMesh === floorRef.current) {
           dragStateRef.current = null;
-          onSelectMachine(null);
+          onSelectMachine(null, "clear");
         }
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
+        const panState = panStateRef.current;
+        if (panState) {
+          const floorPoint = pickFloorPoint();
+          const activeCamera = cameraRef.current;
+          if (floorPoint && activeCamera) {
+            const delta = panState.lastFloorPoint.subtract(floorPoint);
+            activeCamera.target.addInPlace(delta);
+          }
+          return;
+        }
+
         const dragState = dragStateRef.current;
         if (!dragState) {
           return;
@@ -767,21 +859,27 @@ export function BabylonScene({
           return;
         }
 
-        onUpdateMachine(dragState.instanceId, {
-          positionMm: {
-            xMm: metersToMm(floorPoint.x + dragState.offsetX),
-            yMm: metersToMm(floorPoint.z + dragState.offsetZ)
-          },
-          position: {
-            x: floorPoint.x + dragState.offsetX,
-            z: floorPoint.z + dragState.offsetZ
-          }
-        });
+        const deltaXMm = metersToMm(floorPoint.x - dragState.startFloorX);
+        const deltaYMm = metersToMm(floorPoint.z - dragState.startFloorZ);
+        onSetMachinePositions(
+          dragState.instanceIds.flatMap((instanceId) => {
+            const startPosition = dragState.startPositions[instanceId];
+            return startPosition
+              ? [{
+                  instanceId,
+                  xMm: startPosition.xMm + deltaXMm,
+                  yMm: startPosition.yMm + deltaYMm
+                }]
+              : [];
+          }),
+          { recordHistory: false }
+        );
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERUP) {
-        if (dragStateRef.current) {
+        if (dragStateRef.current || panStateRef.current) {
           dragStateRef.current = null;
+          panStateRef.current = null;
           cameraRef.current?.attachControl(canvasRef.current, true);
         }
       }
@@ -829,6 +927,8 @@ export function BabylonScene({
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      canvas.removeEventListener("contextmenu", handleContextMenu);
+      canvas.removeEventListener("wheel", handleWheel);
       if (pointerObserver) {
         scene.onPointerObservable.remove(pointerObserver);
       }
@@ -861,7 +961,7 @@ export function BabylonScene({
       scene.dispose();
       engine.dispose();
     };
-  }, [onSelectMachine, onUpdateMachine]);
+  }, [onBeginObjectDrag, onSelectMachine, onSetMachinePositions, onUpdateMachine]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -932,12 +1032,14 @@ export function BabylonScene({
       const selectionFrame = createSelectionFrame(scene, machine);
       selectionFrame.parent = box;
       selectionFrame.isVisible =
-        selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showSelectionBox;
+        selectedMachineIdsRef.current.includes(instanceId) && overlaySettingsRef.current.showSelectionBox;
+      selectionFrame.color =
+        primarySelectedMachineIdRef.current === instanceId ? new Color3(1, 0.86, 0.28) : new Color3(0.37, 0.78, 1);
 
       const metadataFrame = createMetadataFrame(scene, machine);
       metadataFrame.parent = box;
       metadataFrame.isVisible =
-        selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showMetadataBox;
+        selectedMachineIdsRef.current.includes(instanceId) && overlaySettingsRef.current.showMetadataBox;
 
       const collisionFrame = createCollisionFrame(scene, machine);
       collisionFrame.parent = box;
@@ -950,7 +1052,7 @@ export function BabylonScene({
       if (clearanceFrame) {
         clearanceFrame.parent = box;
         clearanceFrame.isVisible =
-          selectedMachineIdRef.current === instanceId && overlaySettingsRef.current.showClearanceEnvelope;
+          selectedMachineIdsRef.current.includes(instanceId) && overlaySettingsRef.current.showClearanceEnvelope;
       }
 
       const flowArrow = hasFlowDirection(machine) ? createFlowArrow(scene, machine) : undefined;
@@ -1061,18 +1163,22 @@ export function BabylonScene({
       node.label.position.y = dimensions.height + 0.85;
       node.label.position.z = machine.position.z;
       node.selectionFrame.isVisible =
-        machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showSelectionBox;
+        selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showSelectionBox;
+      node.selectionFrame.color =
+        machine.instanceId === primarySelectedMachineIdRef.current
+          ? new Color3(1, 0.86, 0.28)
+          : new Color3(0.37, 0.78, 1);
       node.metadataFrame.isVisible =
-        machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showMetadataBox;
+        selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showMetadataBox;
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
       node.collisionFrame.color = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId)
         ? new Color3(1, 0.22, 0.16)
         : new Color3(0.35, 0.72, 1);
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible =
-          machine.instanceId === selectedMachineIdRef.current && overlaySettingsRef.current.showClearanceEnvelope;
+          selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showClearanceEnvelope;
       }
-      const isSelected = machine.instanceId === selectedMachineIdRef.current;
+      const isSelected = selectedMachineIdsRef.current.includes(machine.instanceId);
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId);
       node.material.emissiveColor = isSelected
         ? isColliding
