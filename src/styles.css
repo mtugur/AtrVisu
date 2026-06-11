@@ -483,6 +483,40 @@ select option:hover {
   outline: none;
 }
 
+.connection-snap-panel {
+  gap: 10px;
+}
+
+.connection-snap-summary,
+.connection-snap-compatibility {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  color: rgba(237, 243, 240, 0.76);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.connection-snap-summary strong {
+  color: #f4f7f2;
+  overflow-wrap: anywhere;
+}
+
+.connection-snap-compatibility.is-good {
+  border-color: rgba(168, 201, 120, 0.28);
+  background: rgba(168, 201, 120, 0.08);
+}
+
+.connection-snap-compatibility.is-warning,
+.connection-snap-compatibility.is-invalid {
+  border-color: rgba(233, 176, 96, 0.42);
+  background: rgba(233, 176, 96, 0.1);
+}
+
 .connection-point-card,
 .connection-editor-card {
   display: grid;

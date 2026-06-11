@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene } from "./components/BabylonScene";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
+import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
@@ -20,6 +21,7 @@ import type { NudgeSettings, SelectionMode } from "./types/selection";
 import type { VisualModelDiagnostics } from "./types/overlays";
 import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
+import type { MachineConnectionPoint } from "./types/ataraMachineData";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
@@ -42,6 +44,7 @@ import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 import { getSelectionPlanBounds } from "./utils/selectionBounds";
+import { applyConnectionPointSnap, type ConnectionPointSnapSelection } from "./utils/connectionPointSnap";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -637,6 +640,15 @@ export function App() {
     );
   }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
 
+  const applyConnectionSnap = useCallback((
+    selection: ConnectionPointSnapSelection,
+    movingPoint: MachineConnectionPoint,
+    fixedPoint: MachineConnectionPoint
+  ) => {
+    markLayoutChanged();
+    setPlacedMachines((current) => applyConnectionPointSnap(current, selection, movingPoint, fixedPoint));
+  }, [markLayoutChanged]);
+
   const deleteSelectedMachines = useCallback(() => {
     if (selectedMachineIds.length === 0) {
       return;
@@ -987,6 +999,21 @@ export function App() {
               onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
+          {selectedMachineIds.length === 2 ? (
+            <PanelSection
+              title="Connection Point Snap"
+              storageKey="atrvisu.panelSection.connectionPointSnap.v1"
+              defaultExpanded
+              badge="2"
+            >
+              <ConnectionPointSnapPanel
+                selectedMachines={selectedMachines}
+                primarySelectedMachine={selectedMachine}
+                onSnap={applyConnectionSnap}
+                onClearSelection={clearSelection}
+              />
+            </PanelSection>
+          ) : null}
           <PanelSection
             title="Display / Overlay Controls"
             storageKey="atrvisu.panelSection.overlayControls.v1"
