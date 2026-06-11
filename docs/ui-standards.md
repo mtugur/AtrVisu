@@ -26,3 +26,11 @@ Dangerous actions require confirmation, including object deletion, group deletio
 
 Primary, secondary, and dangerous actions should be visually distinct.
 
+## Multi-Selection Controls
+
+- Multi-selection should show a compact summary instead of the full single-object editor.
+- Alignment tools should stay grouped by action type: edge alignment, distribution, pair alignment, and keyboard nudge.
+- Keyboard nudging must not interfere with typing in inputs, textareas, selects, or editable text.
+- Undo/redo controls should be visible but secondary, and keyboard shortcuts must not run while the user is typing.
+- Pair snap labels should state that the primary object moves and the secondary object stays fixed.
+

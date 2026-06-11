@@ -69,10 +69,15 @@ textarea {
 
 .panel-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   min-height: 38px;
+}
+
+.toolbar-button-group {
+  display: flex;
+  gap: 6px;
 }
 
 .panel-toolbar span {
@@ -97,6 +102,11 @@ textarea {
 .panel-toolbar button {
   min-height: 34px;
   padding: 0 10px;
+}
+
+.panel-toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .panel-toolbar button:hover,
@@ -329,6 +339,82 @@ textarea {
   border-color: rgba(168, 201, 120, 0.78);
   background: rgba(168, 201, 120, 0.2);
   outline: none;
+}
+
+.multi-selection-panel .properties-body,
+.alignment-tools {
+  gap: 12px;
+}
+
+.compact-grid {
+  font-size: 0.82rem;
+}
+
+.selection-actions,
+.alignment-group,
+.alignment-button-grid {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.selection-actions {
+  grid-template-columns: 1fr;
+}
+
+.selection-actions button,
+.alignment-tools button {
+  min-height: 36px;
+  border: 1px solid rgba(164, 190, 178, 0.18);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.055);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.selection-actions button:hover:not(:disabled),
+.alignment-tools button:hover:not(:disabled),
+.selection-actions button:focus-visible,
+.alignment-tools button:focus-visible {
+  border-color: rgba(168, 201, 120, 0.72);
+  background: rgba(168, 201, 120, 0.12);
+  outline: none;
+}
+
+.selection-actions button:disabled,
+.alignment-tools button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.alignment-group {
+  padding: 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.alignment-group > strong {
+  color: #f4f7f2;
+  font-size: 0.88rem;
+}
+
+.alignment-button-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.alignment-button-grid button {
+  min-width: 0;
+  padding: 8px;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.pair-anchor-grid {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 .library-tools {

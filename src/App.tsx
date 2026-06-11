@@ -4,15 +4,19 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene } from "./components/BabylonScene";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
+import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
+import { MultiSelectionProperties } from "./components/MultiSelectionProperties";
 import { PanelSection } from "./components/PanelSection";
 import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
 import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModal";
 import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
+import type { AlignmentAction, DistributionAction, EqualGapAction, FootprintAnchor, PairAlignmentAction } from "./types/alignment";
+import type { NudgeSettings, SelectionMode } from "./types/selection";
 import type { VisualModelDiagnostics } from "./types/overlays";
 import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
@@ -21,12 +25,23 @@ import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionS
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
 import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
-import { applyPositionSnap, applyRotationSnap } from "./utils/placement";
+import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
+import {
+  alignObjectsToAnchor,
+  applyMachinePositionUpdates,
+  applyPairAlignment,
+  distributeObjectsByCenter,
+  equalizeGaps,
+  moveObjectsByDelta,
+  snapPrimaryAnchorToSecondaryAnchor
+} from "./utils/alignment";
+import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./utils/layoutHistory";
 import { loadPlacementSettings, savePlacementSettings } from "./utils/placementSettings";
 import { listProjects } from "./utils/projectStorage";
 import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
+import { getSelectionPlanBounds } from "./utils/selectionBounds";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -35,13 +50,41 @@ const AUTOSAVE_KEY = "atrvisu.autosavedLayout.v1";
 const AUTOSAVE_DELAY_MS = 500;
 const PANEL_WIDTH_KEY = "atrvisu.rightPanelWidth.v1";
 const PANEL_COLLAPSED_KEY = "atrvisu.rightPanelCollapsed.v1";
+const NUDGE_SETTINGS_KEY = "atrvisu.nudgeSettings.v1";
 const MIN_PANEL_WIDTH = 280;
 const MAX_PANEL_WIDTH = 600;
 const DEFAULT_PANEL_WIDTH = 360;
+const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
+  nudgeStepMm: 100,
+  largeNudgeStepMm: 1000,
+  smallNudgeStepMm: 10
+};
+
+const isTextEntryTarget = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  target instanceof HTMLSelectElement ||
+  (target instanceof HTMLElement && target.isContentEditable);
+
+const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined): NudgeSettings => ({
+  nudgeStepMm:
+    typeof value?.nudgeStepMm === "number" && Number.isFinite(value.nudgeStepMm) && value.nudgeStepMm > 0
+      ? value.nudgeStepMm
+      : DEFAULT_NUDGE_SETTINGS.nudgeStepMm,
+  largeNudgeStepMm:
+    typeof value?.largeNudgeStepMm === "number" && Number.isFinite(value.largeNudgeStepMm) && value.largeNudgeStepMm > 0
+      ? value.largeNudgeStepMm
+      : DEFAULT_NUDGE_SETTINGS.largeNudgeStepMm,
+  smallNudgeStepMm:
+    typeof value?.smallNudgeStepMm === "number" && Number.isFinite(value.smallNudgeStepMm) && value.smallNudgeStepMm > 0
+      ? value.smallNudgeStepMm
+      : DEFAULT_NUDGE_SETTINGS.smallNudgeStepMm
+});
 
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
-  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
+  const [selectedMachineIds, setSelectedMachineIds] = useState<string[]>([]);
+  const [primarySelectedMachineId, setPrimarySelectedMachineId] = useState<string | null>(null);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
@@ -49,6 +92,13 @@ export function App() {
   const [overlaySettings, setOverlaySettings] = useState(loadOverlaySettings);
   const [collisionSettings, setCollisionSettings] = useState(loadCollisionSettings);
   const [placementSettings, setPlacementSettings] = useState(loadPlacementSettings);
+  const [nudgeSettings, setNudgeSettings] = useState<NudgeSettings>(() => {
+    try {
+      return normalizeNudgeSettings(JSON.parse(window.localStorage.getItem(NUDGE_SETTINGS_KEY) ?? "null"));
+    } catch {
+      return DEFAULT_NUDGE_SETTINGS;
+    }
+  });
   const [visualDiagnostics, setVisualDiagnostics] = useState<Record<string, VisualModelDiagnostics>>({});
   const [projects, setProjects] = useState<AtrVisuProject[]>([]);
   const [isProjectStorageLoading, setIsProjectStorageLoading] = useState(true);
@@ -61,6 +111,7 @@ export function App() {
   const [currentLayoutId, setCurrentLayoutId] = useState<string | null>(null);
   const [currentRevisionId, setCurrentRevisionId] = useState<string | null>(null);
   const [hasUnsavedProjectChanges, setHasUnsavedProjectChanges] = useState(false);
+  const [layoutHistory, setLayoutHistory] = useState(() => createLayoutHistory());
   const [panelWidth, setPanelWidth] = useState(() => {
     try {
       const rawSavedWidth = window.localStorage.getItem(PANEL_WIDTH_KEY);
@@ -82,8 +133,19 @@ export function App() {
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
   const placementSettingsRef = useRef(placementSettings);
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
+  const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
 
+  const selectedMachineId = primarySelectedMachineId;
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
+  const singleSelectedMachine = selectedMachineIds.length === 1 ? selectedMachine : undefined;
+  const selectedMachineIdSet = useMemo(() => new Set(selectedMachineIds), [selectedMachineIds]);
+  const selectedMachines = useMemo(
+    () => placedMachines.filter((machine) => selectedMachineIdSet.has(machine.instanceId)),
+    [placedMachines, selectedMachineIdSet]
+  );
+  const selectionBounds = useMemo(() => getSelectionPlanBounds(selectedMachines), [selectedMachines]);
+  const canUndo = layoutHistory.undoStack.length > 0;
+  const canRedo = layoutHistory.redoStack.length > 0;
   const selectedVisualDiagnostics = selectedMachineId ? visualDiagnostics[selectedMachineId] : undefined;
   const currentProject = currentProjectId ? projects.find((project) => project.projectId === currentProjectId) : null;
   const currentLayout = currentProject && currentLayoutId
@@ -128,8 +190,79 @@ export function App() {
   }, [placementSettings]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(NUDGE_SETTINGS_KEY, JSON.stringify(nudgeSettings));
+    } catch {
+      // Precision preferences are best-effort only.
+    }
+  }, [nudgeSettings]);
+
+  useEffect(() => {
+    const activeIds = new Set(placedMachines.map((machine) => machine.instanceId));
+    const nextSelection = selectedMachineIds.filter((id) => activeIds.has(id));
+    const nextPrimary = primarySelectedMachineId && activeIds.has(primarySelectedMachineId)
+      ? primarySelectedMachineId
+      : nextSelection[nextSelection.length - 1] ?? null;
+
+    if (nextSelection.length !== selectedMachineIds.length) {
+      setSelectedMachineIds(nextSelection);
+    }
+    if (nextPrimary !== primarySelectedMachineId) {
+      setPrimarySelectedMachineId(nextPrimary);
+    }
+  }, [placedMachines, primarySelectedMachineId, selectedMachineIds]);
+
+  useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
   }, [isBenchmarkMode]);
+
+  useEffect(() => {
+    placedMachinesRef.current = placedMachines;
+  }, [placedMachines]);
+
+  const recordLayoutHistory = useCallback(() => {
+    if (isBenchmarkModeRef.current) {
+      return;
+    }
+    setLayoutHistory((current) => pushHistorySnapshot(current, placedMachinesRef.current));
+  }, []);
+
+  const clearLayoutHistory = useCallback(() => {
+    setLayoutHistory(createLayoutHistory());
+  }, []);
+
+  const markLayoutChanged = useCallback((options: { recordHistory?: boolean } = {}) => {
+    if (options.recordHistory !== false) {
+      recordLayoutHistory();
+    }
+    if (!isBenchmarkModeRef.current) {
+      setHasUnsavedProjectChanges(true);
+    }
+  }, [recordLayoutHistory]);
+
+  const undoLayoutChange = useCallback(() => {
+    setLayoutHistory((current) => {
+      const result = undoHistory(current, placedMachinesRef.current);
+      if (!result) {
+        return current;
+      }
+      setPlacedMachines(result.machines);
+      setHasUnsavedProjectChanges(true);
+      return result.history;
+    });
+  }, []);
+
+  const redoLayoutChange = useCallback(() => {
+    setLayoutHistory((current) => {
+      const result = redoHistory(current, placedMachinesRef.current);
+      if (!result) {
+        return current;
+      }
+      setPlacedMachines(result.machines);
+      setHasUnsavedProjectChanges(true);
+      return result.history;
+    });
+  }, []);
 
   const refreshProjects = useCallback(async () => {
     const nextProjects = await listProjects();
@@ -226,11 +359,44 @@ export function App() {
     [placedMachines]
   );
 
+  const clearSelection = useCallback(() => {
+    setSelectedMachineIds([]);
+    setPrimarySelectedMachineId(null);
+  }, []);
+
+  const selectMachine = useCallback((instanceId: string | null, mode: SelectionMode = "replace") => {
+    if (!instanceId || mode === "clear") {
+      clearSelection();
+      return;
+    }
+
+    if (mode === "toggle") {
+      setSelectedMachineIds((current) => {
+        const isAlreadySelected = current.includes(instanceId);
+        const nextSelection = isAlreadySelected
+          ? current.filter((id) => id !== instanceId)
+          : [...current, instanceId];
+        setPrimarySelectedMachineId(isAlreadySelected ? nextSelection[nextSelection.length - 1] ?? null : instanceId);
+        return nextSelection;
+      });
+      return;
+    }
+
+    setSelectedMachineIds([instanceId]);
+    setPrimarySelectedMachineId(instanceId);
+  }, [clearSelection]);
+
+  const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[ids.length - 1] ?? null) => {
+    setSelectedMachineIds(ids);
+    setPrimarySelectedMachineId(primaryId);
+  }, []);
+
   const addMachine = useCallback((selection: { libraryId: string; definition: MachineDefinition }) => {
     const { libraryId } = selection;
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(selection.definition));
     const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
 
+    markLayoutChanged();
     setPlacedMachines((current) => {
       const index = current.length;
       const column = index % PLACEMENT_COLUMNS;
@@ -261,18 +427,15 @@ export function App() {
         }
       ];
     });
-    setSelectedMachineId(instanceId);
-    setHasUnsavedProjectChanges(true);
-  }, []);
+    replaceSelection([instanceId], instanceId);
+  }, [markLayoutChanged, replaceSelection]);
 
   const updateMachine = useCallback((
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
     options: { snapPosition?: boolean; snapRotation?: boolean } = {}
   ) => {
-    if (!isBenchmarkModeRef.current) {
-      setHasUnsavedProjectChanges(true);
-    }
+    markLayoutChanged();
     setPlacedMachines((current) =>
       current.map((machine) => {
         if (machine.instanceId !== instanceId) {
@@ -333,30 +496,33 @@ export function App() {
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(layout);
 
+    markLayoutChanged();
     setPlacedMachines(importedMachines);
-    setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
-    setHasUnsavedProjectChanges(true);
-  }, []);
+    clearSelection();
+  }, [clearSelection, markLayoutChanged]);
 
   const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
     setIsBenchmarkMode(true);
     setPlacedMachines(machines);
-    setSelectedMachineId(null);
-  }, []);
+    clearSelection();
+    clearLayoutHistory();
+  }, [clearLayoutHistory, clearSelection]);
 
   const restoreBenchmarkSnapshot = useCallback((snapshot: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
     setPlacedMachines(importedMachines);
-    setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
+    clearSelection();
     setIsBenchmarkMode(false);
     setHasUnsavedProjectChanges(false);
-  }, []);
+    clearLayoutHistory();
+  }, [clearLayoutHistory, clearSelection]);
 
   const clearBenchmarkScene = useCallback(() => {
     setPlacedMachines([]);
-    setSelectedMachineId(null);
+    clearSelection();
     setIsBenchmarkMode(true);
-  }, []);
+    clearLayoutHistory();
+  }, [clearLayoutHistory, clearSelection]);
 
   const loadRevisionSnapshot = useCallback((
     projectId: string,
@@ -366,28 +532,130 @@ export function App() {
   ) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
     setPlacedMachines(importedMachines);
-    setSelectedMachineId(importedMachines[0]?.instanceId ?? null);
+    clearSelection();
     setCurrentProjectId(projectId);
     setCurrentLayoutId(layoutId);
     setCurrentRevisionId(revisionId);
     void refreshProjects();
     setHasUnsavedProjectChanges(false);
-  }, [refreshProjects]);
+    clearLayoutHistory();
+  }, [clearLayoutHistory, clearSelection, refreshProjects]);
 
-  const deleteSelectedMachine = useCallback(() => {
-    if (!selectedMachine) {
+  const setMachinePositions = useCallback((
+    updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    if (updates.length === 0) {
       return;
     }
 
-    const confirmed = window.confirm(`Delete ${selectedMachine.definition.name} from the layout?`);
+    markLayoutChanged(options);
+    setPlacedMachines((current) => {
+      if (!placementSettingsRef.current.gridSnapEnabled || updates.length === 1) {
+        const snappedUpdates = updates.map((update) => ({
+          ...update,
+          ...applyPositionSnap({ xMm: update.xMm, yMm: update.yMm }, placementSettingsRef.current)
+        }));
+        return applyMachinePositionUpdates(current, snappedUpdates);
+      }
+
+      const firstUpdate = updates[0];
+      const firstMachine = current.find((machine) => machine.instanceId === firstUpdate.instanceId);
+      if (!firstMachine) {
+        return applyMachinePositionUpdates(current, updates);
+      }
+
+      const firstPosition = getMachinePlanPositionMm(firstMachine);
+      const snappedFirstPosition = applyPositionSnap({ xMm: firstUpdate.xMm, yMm: firstUpdate.yMm }, placementSettingsRef.current);
+      const snappedDeltaXMm = snappedFirstPosition.xMm - firstPosition.xMm;
+      const snappedDeltaYMm = snappedFirstPosition.yMm - firstPosition.yMm;
+      const updateIds = new Set(updates.map((update) => update.instanceId));
+
+      return current.map((machine) => {
+        if (!updateIds.has(machine.instanceId)) {
+          return machine;
+        }
+
+        const position = getMachinePlanPositionMm(machine);
+        return applyMachinePositionUpdates(
+          [machine],
+          [{
+            instanceId: machine.instanceId,
+            xMm: position.xMm + snappedDeltaXMm,
+            yMm: position.yMm + snappedDeltaYMm
+          }]
+        )[0];
+      });
+    });
+  }, [markLayoutChanged]);
+
+  const moveSelectedByDelta = useCallback((
+    deltaXMm: number,
+    deltaYMm: number,
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    if (selectedMachineIds.length === 0) {
+      return;
+    }
+
+    markLayoutChanged(options);
+    setPlacedMachines((current) => moveObjectsByDelta(current, selectedMachineIds, deltaXMm, deltaYMm));
+  }, [markLayoutChanged, selectedMachineIds]);
+
+  const applyAlignmentAction = useCallback((action: AlignmentAction) => {
+    markLayoutChanged();
+    setPlacedMachines((current) => alignObjectsToAnchor(current, selectedMachineIds, primarySelectedMachineId, action));
+  }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
+
+  const applyDistributionAction = useCallback((action: DistributionAction) => {
+    markLayoutChanged();
+    setPlacedMachines((current) => distributeObjectsByCenter(current, selectedMachineIds, action));
+  }, [markLayoutChanged, selectedMachineIds]);
+
+  const applyEqualGapAction = useCallback((action: EqualGapAction) => {
+    markLayoutChanged();
+    setPlacedMachines((current) => equalizeGaps(current, selectedMachineIds, action));
+  }, [markLayoutChanged, selectedMachineIds]);
+
+  const applyPairAlignmentAction = useCallback((action: PairAlignmentAction, gapMm = 0) => {
+    markLayoutChanged();
+    setPlacedMachines((current) =>
+      applyPairAlignment(current, selectedMachineIds, primarySelectedMachineId, action, gapMm)
+    );
+  }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
+
+  const applyPairAnchorSnap = useCallback((primaryAnchor: FootprintAnchor, secondaryAnchor: FootprintAnchor) => {
+    markLayoutChanged();
+    setPlacedMachines((current) =>
+      snapPrimaryAnchorToSecondaryAnchor(
+        current,
+        selectedMachineIds,
+        primarySelectedMachineId,
+        primaryAnchor,
+        secondaryAnchor
+      )
+    );
+  }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
+
+  const deleteSelectedMachines = useCallback(() => {
+    if (selectedMachineIds.length === 0) {
+      return;
+    }
+
+    const selectedNames = selectedMachines.map((machine) => machine.definition.name);
+    const label = selectedMachineIds.length === 1
+      ? selectedNames[0] ?? "the selected object"
+      : `${selectedMachineIds.length} selected objects`;
+    const confirmed = window.confirm(`Delete ${label} from the layout?`);
     if (!confirmed) {
       return;
     }
 
-    setPlacedMachines((current) => current.filter((machine) => machine.instanceId !== selectedMachine.instanceId));
-    setSelectedMachineId(null);
-    setHasUnsavedProjectChanges(true);
-  }, [selectedMachine]);
+    markLayoutChanged();
+    const ids = new Set(selectedMachineIds);
+    setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
+    clearSelection();
+  }, [clearSelection, markLayoutChanged, selectedMachineIds, selectedMachines]);
 
   useEffect(() => {
     try {
@@ -455,22 +723,59 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Delete" || !selectedMachine) {
+      if (isTextEntryTarget(event.target)) {
         return;
       }
 
-      const target = event.target;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        (target instanceof HTMLElement && target.isContentEditable)
-      ) {
+      const key = event.key.toLowerCase();
+      if ((event.ctrlKey || event.metaKey) && key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redoLayoutChange();
+        } else {
+          undoLayoutChange();
+        }
         return;
       }
 
-      event.preventDefault();
-      deleteSelectedMachine();
+      if ((event.ctrlKey || event.metaKey) && key === "y") {
+        event.preventDefault();
+        redoLayoutChange();
+        return;
+      }
+
+      if (event.key === "Escape" && selectedMachineIds.length > 0) {
+        event.preventDefault();
+        clearSelection();
+        return;
+      }
+
+      if (event.key === "Delete" && selectedMachineIds.length > 0) {
+        event.preventDefault();
+        deleteSelectedMachines();
+        return;
+      }
+
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) || selectedMachineIds.length === 0) {
+        return;
+      }
+
+      const step = event.shiftKey
+        ? nudgeSettings.largeNudgeStepMm
+        : event.altKey || event.ctrlKey
+          ? nudgeSettings.smallNudgeStepMm
+          : nudgeSettings.nudgeStepMm;
+      const delta = {
+        ArrowLeft: { x: -step, y: 0 },
+        ArrowRight: { x: step, y: 0 },
+        ArrowUp: { x: 0, y: -step },
+        ArrowDown: { x: 0, y: step }
+      }[event.key];
+
+      if (delta) {
+        event.preventDefault();
+        moveSelectedByDelta(delta.x, delta.y);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -478,16 +783,27 @@ export function App() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [deleteSelectedMachine, selectedMachine]);
+  }, [
+    clearSelection,
+    deleteSelectedMachines,
+    moveSelectedByDelta,
+    nudgeSettings,
+    redoLayoutChange,
+    selectedMachineIds.length,
+    undoLayoutChange
+  ]);
 
   return (
     <>
     <main className="app-shell" data-testid="app-root">
       <BabylonScene
         placedMachines={placedMachines}
-        selectedMachineId={selectedMachineId}
-        onSelectMachine={setSelectedMachineId}
+        selectedMachineIds={selectedMachineIds}
+        primarySelectedMachineId={primarySelectedMachineId}
+        onSelectMachine={selectMachine}
         onUpdateMachine={updateMachine}
+        onSetMachinePositions={setMachinePositions}
+        onBeginObjectDrag={recordLayoutHistory}
         isSimulationRunning={isSimulationRunning}
         simulationSpeed={simulationSpeed}
         overlaySettings={overlaySettings}
@@ -524,6 +840,14 @@ export function App() {
           />
           <div className="panel-toolbar">
             <span>AtrVisu Tools</span>
+            <div className="toolbar-button-group" aria-label="Undo and redo">
+              <button type="button" disabled={!canUndo} onClick={undoLayoutChange}>
+                Undo
+              </button>
+              <button type="button" disabled={!canRedo} onClick={redoLayoutChange}>
+                Redo
+              </button>
+            </div>
             <button type="button" onClick={() => setIsPanelCollapsed(true)}>
               Collapse
             </button>
@@ -640,9 +964,27 @@ export function App() {
             <PrecisionPlacementPanel
               settings={placementSettings}
               placedMachines={placedMachines}
-              selectedMachine={selectedMachine}
+              selectedMachine={singleSelectedMachine}
               onChangeSettings={setPlacementSettings}
               onUpdateMachine={updateMachine}
+            />
+          </PanelSection>
+          <PanelSection
+            title="Alignment Tools"
+            storageKey="atrvisu.panelSection.alignmentTools.v1"
+            defaultExpanded={false}
+            badge={selectedMachineIds.length >= 2 ? `${selectedMachineIds.length}` : undefined}
+          >
+            <AlignmentToolsPanel
+              selectedMachines={selectedMachines}
+              primarySelectedMachine={selectedMachine}
+              nudgeSettings={nudgeSettings}
+              onAlign={applyAlignmentAction}
+              onDistribute={applyDistributionAction}
+              onEqualGap={applyEqualGapAction}
+              onPairAlign={applyPairAlignmentAction}
+              onPairAnchorSnap={applyPairAnchorSnap}
+              onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
           <PanelSection
@@ -665,19 +1007,29 @@ export function App() {
             />
           </PanelSection>
           <PanelSection
-            title="Selected Object Properties"
+            title={selectedMachineIds.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
             storageKey="atrvisu.panelSection.properties.v1"
-            defaultExpanded={Boolean(selectedMachine)}
-            badge={selectedMachine ? selectedMachine.definition.name : "None"}
+            defaultExpanded={selectedMachineIds.length > 0}
+            badge={selectedMachineIds.length > 1 ? `${selectedMachineIds.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
           >
-            <MachineProperties
-              selectedMachine={selectedMachine}
-              placementSettings={placementSettings}
-              visualDiagnostics={selectedVisualDiagnostics}
-              collisionPairs={selectedCollisionPairs}
-              onUpdateMachine={updateMachine}
-              onDeleteSelected={deleteSelectedMachine}
-            />
+            {selectedMachineIds.length > 1 ? (
+              <MultiSelectionProperties
+                selectedMachines={selectedMachines}
+                primarySelectedMachine={selectedMachine}
+                selectionBounds={selectionBounds}
+                onClearSelection={clearSelection}
+                onDeleteSelected={deleteSelectedMachines}
+              />
+            ) : (
+              <MachineProperties
+                selectedMachine={singleSelectedMachine}
+                placementSettings={placementSettings}
+                visualDiagnostics={selectedVisualDiagnostics}
+                collisionPairs={selectedCollisionPairs}
+                onUpdateMachine={updateMachine}
+                onDeleteSelected={deleteSelectedMachines}
+              />
+            )}
           </PanelSection>
         </aside>
       )}

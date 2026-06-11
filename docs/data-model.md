@@ -74,6 +74,8 @@ Future layout objects should support:
 - `clearance`
 - `connectionPoints`
 
+Selection state is not part of the layout data model. Multi-select state is transient UI state and should be cleared when loading/importing layouts or project revisions.
+
 ## MachineDefinition
 
 Machine definitions describe reusable machines in a library.
