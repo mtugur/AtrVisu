@@ -28,6 +28,12 @@ export type ConnectionPointWorldPosition = {
   zMm: number;
 };
 
+export type ConnectionPointBoxLocalPositionMeters = {
+  x: number;
+  y: number;
+  z: number;
+};
+
 export type ConnectionPointDiagnostics = {
   warnings: string[];
   errors: string[];
@@ -153,6 +159,20 @@ export const getConnectionPointWorldPosition = (
     xMm: machinePosition.xMm + rotated.xMm,
     yMm: machinePosition.yMm + rotated.yMm,
     zMm: (machine.elevationMm ?? 0) + point.positionMm.zMm
+  };
+};
+
+export const getConnectionPointBoxLocalPositionMeters = (
+  machine: PlacedMachine,
+  point: MachineConnectionPoint,
+  markerOffsetMm = 0
+): ConnectionPointBoxLocalPositionMeters => {
+  const dimensions = getMachineDimensionsMm(machine.definitionSnapshot ?? machine.definition);
+
+  return {
+    x: point.positionMm.xMm / 1000,
+    y: (point.positionMm.zMm - dimensions.heightMm / 2 + markerOffsetMm) / 1000,
+    z: point.positionMm.yMm / 1000
   };
 };
 

@@ -34,6 +34,12 @@ Legacy library-level `connectionPoints` are converted for display as a compatibi
 
 Negative `xMm` and `yMm` values are valid because points can be left/right or front/back from the machine center. `zMm` is elevation and should normally be between `0` and the machine height.
 
+Babylon placeholder boxes are parent meshes with their local Y origin at the machine center, while connection point `zMm` is bottom/floor based engineering data. Visualization must convert elevation before placing child marker meshes:
+
+`localY = (zMm - heightMm / 2) / 1000`
+
+Small marker or label offsets may be added after this conversion for readability, but the engineering marker position should remain close to the converted connection point.
+
 ## Direction
 
 Direction values are local machine directions: `x+`, `x-`, `y+`, `y-`, `z+`, and `z-`.

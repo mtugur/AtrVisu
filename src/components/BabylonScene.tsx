@@ -33,6 +33,7 @@ import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
 import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
 import { calculateMetadataBoxScale, DEFAULT_VISUAL_MODEL, normalizeVisualModel } from "../utils/visualModel";
 import {
+  getConnectionPointBoxLocalPositionMeters,
   getConnectionPointDisplayLabel,
   getConnectionPointMarkerLabel,
   getConnectionPointsForObject
@@ -41,6 +42,8 @@ import {
 const GRID_SIZE = 42;
 const GRID_MAJOR_STEP = 6;
 const GRID_MINOR_STEP = 1;
+const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
+const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
 
 type BabylonSceneProps = {
   placedMachines: PlacedMachine[];
@@ -200,11 +203,12 @@ const positionConnectionPointMarker = (
     return;
   }
 
-  markerSet.marker.position.x = point.positionMm.xMm / 1000;
-  markerSet.marker.position.y = point.positionMm.zMm / 1000 + 0.04;
-  markerSet.marker.position.z = point.positionMm.yMm / 1000;
+  const localPosition = getConnectionPointBoxLocalPositionMeters(machine, point, CONNECTION_POINT_MARKER_OFFSET_MM);
+  markerSet.marker.position.x = localPosition.x;
+  markerSet.marker.position.y = localPosition.y;
+  markerSet.marker.position.z = localPosition.z;
   markerSet.label.position.x = markerSet.marker.position.x + 0.14;
-  markerSet.label.position.y = markerSet.marker.position.y + 0.72;
+  markerSet.label.position.y = markerSet.marker.position.y + CONNECTION_POINT_LABEL_OFFSET_METERS;
   markerSet.label.position.z = markerSet.marker.position.z + 0.14;
 };
 

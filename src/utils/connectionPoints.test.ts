@@ -5,6 +5,7 @@ import {
   getConnectionPointDisplayLabel,
   getConnectionPointDirectionLabel,
   getConnectionPointAnchorPosition,
+  getConnectionPointBoxLocalPositionMeters,
   getConnectionPointMarkerLabel,
   getConnectionPointShortLabel,
   getConnectionPointsByType,
@@ -78,6 +79,21 @@ describe("connection point helpers", () => {
 
   it("transforms local to world position without rotation", () => {
     expect(getConnectionPointWorldPosition(machine([point]), point)).toEqual({ xMm: 1500, yMm: 2000, zMm: 400 });
+  });
+
+  it("converts bottom-based elevation to box-centered Babylon local position", () => {
+    expect(getConnectionPointBoxLocalPositionMeters(machine([point]), {
+      ...point,
+      positionMm: { xMm: 500, yMm: -250, zMm: 0 }
+    })).toEqual({ x: 0.5, y: -0.6, z: -0.25 });
+    expect(getConnectionPointBoxLocalPositionMeters(machine([point]), {
+      ...point,
+      positionMm: { xMm: 500, yMm: -250, zMm: 1200 }
+    })).toEqual({ x: 0.5, y: 0.6, z: -0.25 });
+    expect(getConnectionPointBoxLocalPositionMeters(machine([point]), {
+      ...point,
+      positionMm: { xMm: 500, yMm: -250, zMm: 0 }
+    }, 40)).toEqual({ x: 0.5, y: -0.56, z: -0.25 });
   });
 
   it("transforms local to world position with 90 degree rotation", () => {
