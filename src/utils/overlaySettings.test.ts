@@ -12,7 +12,9 @@ describe("overlay settings", () => {
       showSelectionBox: true,
       showMetadataBox: true,
       showCollisionEnvelope: false,
-      showClearanceEnvelope: false
+      showClearanceEnvelope: false,
+      showConnectionPoints: false,
+      connectionPointDisplayMode: "selected"
     });
   });
 
@@ -22,7 +24,19 @@ describe("overlay settings", () => {
       showSelectionBox: false,
       showMetadataBox: false,
       showCollisionEnvelope: false,
-      showClearanceEnvelope: false
+      showClearanceEnvelope: false,
+      showConnectionPoints: false,
+      connectionPointDisplayMode: "selected"
+    });
+  });
+
+  it("normalizes connection point display mode", () => {
+    expect(normalizeOverlaySettings({ showConnectionPoints: true, connectionPointDisplayMode: "all" })).toMatchObject({
+      showConnectionPoints: true,
+      connectionPointDisplayMode: "all"
+    });
+    expect(normalizeOverlaySettings({ connectionPointDisplayMode: "bad" })).toMatchObject({
+      connectionPointDisplayMode: "selected"
     });
   });
 });

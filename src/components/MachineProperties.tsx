@@ -8,6 +8,11 @@ import { getEffectiveMaintenanceClearance, normalizeAtaraMachineData, summarizeU
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import { commitRotationAngle } from "../utils/placement";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
+import {
+  getConnectionPointsForObject,
+  getConnectionPointDisplayLabel,
+  validateConnectionPointsForObject
+} from "../utils/connectionPoints";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
@@ -23,6 +28,26 @@ type MachinePropertiesProps = {
 };
 
 const formatMm = (value: number) => formatLength(value, "mm", 0);
+
+const summarizeConnectionPointMetadata = (metadata?: {
+  voltage?: number;
+  powerKw?: number;
+  airPressureBar?: number;
+  airConsumptionNlMin?: number;
+  protocol?: string;
+  description?: string;
+}) => {
+  const parts = [
+    metadata?.voltage !== undefined ? `${metadata.voltage} V` : "",
+    metadata?.powerKw !== undefined ? `${metadata.powerKw} kW` : "",
+    metadata?.airPressureBar !== undefined ? `${metadata.airPressureBar} bar` : "",
+    metadata?.airConsumptionNlMin !== undefined ? `${metadata.airConsumptionNlMin} Nl/min` : "",
+    metadata?.protocol ? `Protocol: ${metadata.protocol}` : "",
+    metadata?.description ?? ""
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" | ") : "No metadata";
+};
 
 export const getSelectedAtaraMachineDataState = (selectedMachine?: PlacedMachine) => {
   const dimensionsMm = selectedMachine ? getMachineDimensionsMm(selectedMachine.definition) : null;
@@ -140,6 +165,12 @@ export function MachineProperties({
     scale ? `X ${scale.x.toFixed(4)}, Y ${scale.y.toFixed(4)}, Z ${scale.z.toFixed(4)}` : "Not available";
   const collisionEnvelope = selectedMachine ? getCollisionEnvelopeForMachine(selectedMachine) : null;
   const { ataraMachineData, hasNewerLibraryAtaraData, ataraClearance } = getSelectedAtaraMachineDataState(selectedMachine);
+  const connectionPoints = selectedMachine ? getConnectionPointsForObject(selectedMachine) : [];
+  const connectionPointDiagnostics = selectedMachine ? validateConnectionPointsForObject(selectedMachine) : null;
+  const connectionPointTypeCounts = connectionPoints.reduce<Record<string, number>>((counts, point) => {
+    counts[point.type] = (counts[point.type] ?? 0) + 1;
+    return counts;
+  }, {});
   const collidingNames = selectedMachine
     ? collisionPairs.map((pair) =>
         pair.objectAId === selectedMachine.instanceId ? pair.objectBName : pair.objectAName
@@ -255,6 +286,43 @@ export function MachineProperties({
               </div>
             ) : (
               <p className="empty-selection">No ATARA machine data assigned.</p>
+            )}
+          </details>
+
+          <details className="diagnostics-section" data-testid="connection-point-diagnostics" open>
+            <summary>Connection Points</summary>
+            {connectionPoints.length > 0 ? (
+              <div className="connection-point-list">
+                <div className="diagnostics-grid">
+                  <span>Total</span>
+                  <strong>{connectionPoints.length}</strong>
+                  <span>Count by Type</span>
+                  <strong>
+                    {Object.entries(connectionPointTypeCounts)
+                      .map(([type, count]) => `${type}: ${count}`)
+                      .join(", ")}
+                  </strong>
+                  <span>Diagnostics</span>
+                  <strong>
+                    {connectionPointDiagnostics &&
+                    (connectionPointDiagnostics.errors.length || connectionPointDiagnostics.warnings.length)
+                      ? [...connectionPointDiagnostics.errors, ...connectionPointDiagnostics.warnings].join(" ")
+                      : "No issues found"}
+                  </strong>
+                </div>
+                {connectionPoints.map((point) => (
+                  <article className="connection-point-card" key={point.id}>
+                    <strong>{getConnectionPointDisplayLabel(point)}</strong>
+                    <span>
+                      Local X {formatMm(point.positionMm.xMm)}, Plan Y {formatMm(point.positionMm.yMm)}, Elevation{" "}
+                      {formatMm(point.positionMm.zMm)}
+                    </span>
+                    <span>{summarizeConnectionPointMetadata(point.metadata)}</span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-selection">No connection points assigned.</p>
             )}
           </details>
 

@@ -27,6 +27,8 @@ Babylon.js rendering still uses meters. GLB visual scale is not the engineering 
 
 `connectionPoints` describes machine-side points for product flow, electrical, pneumatic, network, aspiration, dust collection, compressed air, and other connections. v0.1 stores and validates these points, but it does not snap or route connections.
 
+Connection point local coordinates use millimeters: `xMm` is local Plan X, `yMm` is local Plan Y, and `zMm` is elevation from the machine bottom/floor reference.
+
 `utilityRequirements` stores electrical, pneumatic, network, and aspiration requirements.
 
 `operationalData` stores capacity ranges, capacity unit, product types, noise, vibration class, and notes.

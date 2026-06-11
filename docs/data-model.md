@@ -106,3 +106,5 @@ Engineering envelopes and connection points should be metadata-driven:
 
 Visual meshes are not the authoritative source for engineering dimensions or collisions.
 
+Connection points are stored in machine definition snapshots through `ataraMachineData.connectionPoints` and use machine-local millimeter coordinates. They are persisted with layouts and revisions; marker hover or selection UI state is not persisted.
+

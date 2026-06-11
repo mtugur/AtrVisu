@@ -29,6 +29,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
 const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
 const bool = (value: unknown) => (typeof value === "boolean" ? value : undefined);
 const nonNegative = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined);
+const finite = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
 const positive = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined);
 const stringList = (value: unknown) =>
   Array.isArray(value) ? value.flatMap((item) => (text(item) ? [text(item) as string] : [])) : undefined;
@@ -80,8 +81,8 @@ const normalizeConnectionPoint = (value: unknown, index: number): MachineConnect
     name,
     type: normalizeConnectionPointType(value.type),
     positionMm: {
-      xMm: nonNegative(position.xMm) ?? 0,
-      yMm: nonNegative(position.yMm) ?? 0,
+      xMm: finite(position.xMm) ?? 0,
+      yMm: finite(position.yMm) ?? 0,
       zMm: nonNegative(position.zMm) ?? 0
     },
     direction: direction as MachineConnectionPoint["direction"],

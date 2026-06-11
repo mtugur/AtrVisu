@@ -32,6 +32,11 @@ import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
 import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
 import { calculateMetadataBoxScale, DEFAULT_VISUAL_MODEL, normalizeVisualModel } from "../utils/visualModel";
+import {
+  getConnectionPointDisplayLabel,
+  getConnectionPointMarkerLabel,
+  getConnectionPointsForObject
+} from "../utils/connectionPoints";
 
 const GRID_SIZE = 42;
 const GRID_MAJOR_STEP = 6;
@@ -69,6 +74,13 @@ type PlacedMachineNode = {
   metadataFrame: LinesMesh;
   collisionFrame: LinesMesh;
   clearanceFrame?: LinesMesh;
+  connectionPointMarkers: Array<{
+    marker: Mesh;
+    label: Mesh;
+    texture: DynamicTexture;
+    material: StandardMaterial;
+    labelMaterial: StandardMaterial;
+  }>;
   products: Mesh[];
   placeholderMeshes: Mesh[];
   visualRoot?: Mesh;
@@ -103,6 +115,108 @@ const createLabel = (scene: Scene, textureKey: string, text: string, y: number) 
 
   return { label, texture };
 };
+
+const connectionPointColor = (type: string) => {
+  switch (type) {
+    case "product-in":
+      return new Color3(0.45, 0.82, 1);
+    case "product-out":
+      return new Color3(0.7, 1, 0.48);
+    case "electrical":
+      return new Color3(1, 0.82, 0.2);
+    case "pneumatic":
+    case "compressed-air":
+      return new Color3(0.55, 0.72, 1);
+    case "network":
+      return new Color3(0.75, 0.55, 1);
+    case "aspiration":
+    case "dust-collection":
+      return new Color3(0.95, 0.62, 0.42);
+    default:
+      return new Color3(0.92, 0.92, 0.92);
+  }
+};
+
+const createConnectionPointMarker = (
+  scene: Scene,
+  machine: PlacedMachine,
+  pointIndex: number
+) => {
+  const point = getConnectionPointsForObject(machine)[pointIndex];
+  const markerMaterial = new StandardMaterial(`connection-point-material-${machine.instanceId}-${point.id}`, scene);
+  markerMaterial.diffuseColor = connectionPointColor(point.type);
+  markerMaterial.emissiveColor = markerMaterial.diffuseColor.scale(0.48);
+  markerMaterial.specularColor = new Color3(0.08, 0.1, 0.1);
+
+  const marker = MeshBuilder.CreateSphere(
+    `connection-point-${machine.instanceId}-${point.id}`,
+    { diameter: 0.18, segments: 12 },
+    scene
+  );
+  marker.material = markerMaterial;
+  marker.isPickable = false;
+  marker.renderingGroupId = 2;
+  marker.metadata = {
+    instanceId: machine.instanceId,
+    connectionPointId: point.id,
+    connectionPointLabel: getConnectionPointDisplayLabel(point)
+  };
+
+  const texture = new DynamicTexture(
+    `connection-point-texture-${machine.instanceId}-${point.id}`,
+    { width: 768, height: 144 },
+    scene
+  );
+  texture.hasAlpha = true;
+  const markerText = getConnectionPointMarkerLabel(point);
+  const trimmedText = markerText.length > 28 ? `${markerText.slice(0, 25)}...` : markerText;
+  texture.drawText(trimmedText, null, 86, "bold 42px Arial", "#f8fbf6", "transparent", true, true);
+  const labelMaterial = new StandardMaterial(`connection-point-label-material-${machine.instanceId}-${point.id}`, scene);
+  labelMaterial.diffuseTexture = texture;
+  labelMaterial.opacityTexture = texture;
+  labelMaterial.emissiveColor = new Color3(1, 1, 1);
+  labelMaterial.disableLighting = true;
+  labelMaterial.backFaceCulling = false;
+  const label = MeshBuilder.CreatePlane(
+    `connection-point-label-${machine.instanceId}-${point.id}`,
+    { width: 2.4, height: 0.45 },
+    scene
+  );
+  label.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  label.material = labelMaterial;
+  label.isPickable = false;
+  label.renderingGroupId = 2;
+
+  return { marker, label, texture, material: markerMaterial, labelMaterial };
+};
+
+const positionConnectionPointMarker = (
+  markerSet: ReturnType<typeof createConnectionPointMarker>,
+  machine: PlacedMachine,
+  pointIndex: number
+) => {
+  const point = getConnectionPointsForObject(machine)[pointIndex];
+  if (!point) {
+    return;
+  }
+
+  markerSet.marker.position.x = point.positionMm.xMm / 1000;
+  markerSet.marker.position.y = point.positionMm.zMm / 1000 + 0.04;
+  markerSet.marker.position.z = point.positionMm.yMm / 1000;
+  markerSet.label.position.x = markerSet.marker.position.x + 0.14;
+  markerSet.label.position.y = markerSet.marker.position.y + 0.72;
+  markerSet.label.position.z = markerSet.marker.position.z + 0.14;
+};
+
+const shouldShowConnectionPointMarker = (
+  isSelected: boolean,
+  overlaySettings: OverlaySettings
+) => overlaySettings.showConnectionPoints && (isSelected || overlaySettings.connectionPointDisplayMode === "all");
+
+const shouldShowConnectionPointLabel = (
+  isSelected: boolean,
+  overlaySettings: OverlaySettings
+) => overlaySettings.showConnectionPoints && (isSelected || (overlaySettings.connectionPointDisplayMode === "all" && overlaySettings.showLabels));
 
 const createSelectionFrame = (scene: Scene, machine: PlacedMachine) => {
   const { width, depth, height } = getMachineDimensionsMeters(machine.definition);
@@ -600,6 +714,10 @@ export function BabylonScene({
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible = isSelected && overlaySettingsRef.current.showClearanceEnvelope;
       }
+      node.connectionPointMarkers.forEach((markerSet) => {
+        markerSet.marker.isVisible = shouldShowConnectionPointMarker(isSelected, overlaySettingsRef.current);
+        markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettingsRef.current);
+      });
       node.material.emissiveColor = isSelected
         ? isColliding
           ? new Color3(0.42, 0.08, 0.04)
@@ -621,6 +739,10 @@ export function BabylonScene({
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible = isSelected && overlaySettings.showClearanceEnvelope;
       }
+      node.connectionPointMarkers.forEach((markerSet) => {
+        markerSet.marker.isVisible = shouldShowConnectionPointMarker(isSelected, overlaySettings);
+        markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettings);
+      });
     });
   }, [overlaySettings]);
 
@@ -940,6 +1062,13 @@ export function BabylonScene({
         node.metadataFrame.dispose();
         node.collisionFrame.dispose();
         node.clearanceFrame?.dispose();
+        node.connectionPointMarkers.forEach((markerSet) => {
+          markerSet.texture.dispose();
+          markerSet.material.dispose();
+          markerSet.labelMaterial.dispose();
+          markerSet.label.dispose();
+          markerSet.marker.dispose();
+        });
         node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
         node.visualRoot?.dispose(false, true);
         node.loadedVisualMeshes.forEach((mesh) => {
@@ -979,6 +1108,13 @@ export function BabylonScene({
         node.metadataFrame.dispose();
         node.collisionFrame.dispose();
         node.clearanceFrame?.dispose();
+        node.connectionPointMarkers.forEach((markerSet) => {
+          markerSet.texture.dispose();
+          markerSet.material.dispose();
+          markerSet.labelMaterial.dispose();
+          markerSet.label.dispose();
+          markerSet.marker.dispose();
+        });
         node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
         node.visualRoot?.dispose(false, true);
         node.loadedVisualMeshes.forEach((mesh) => {
@@ -1064,6 +1200,16 @@ export function BabylonScene({
       products.forEach((product) => {
         product.parent = box;
       });
+      const connectionPointMarkers = getConnectionPointsForObject(machine).map((_, pointIndex) => {
+        const markerSet = createConnectionPointMarker(scene, machine, pointIndex);
+        markerSet.marker.parent = box;
+        markerSet.label.parent = box;
+        positionConnectionPointMarker(markerSet, machine, pointIndex);
+        const isSelected = selectedMachineIdsRef.current.includes(instanceId);
+        markerSet.marker.isVisible = shouldShowConnectionPointMarker(isSelected, overlaySettingsRef.current);
+        markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettingsRef.current);
+        return markerSet;
+      });
       const placeholderMeshes = createPlaceholderMeshes(scene, machine, box, material);
       const proxyStatus = definition.placeholderVisualType === "box-generic" ? "fallback" : "proxy";
       onVisualDiagnosticsChange(
@@ -1084,6 +1230,7 @@ export function BabylonScene({
         metadataFrame,
         collisionFrame,
         clearanceFrame,
+        connectionPointMarkers,
         products,
         placeholderMeshes,
         loadedVisualMeshes: []
@@ -1152,6 +1299,22 @@ export function BabylonScene({
       }
 
       const dimensions = getMachineDimensionsMeters(machine.definition);
+      const connectionPoints = getConnectionPointsForObject(machine);
+      if (node.connectionPointMarkers.length !== connectionPoints.length) {
+        node.connectionPointMarkers.forEach((markerSet) => {
+          markerSet.texture.dispose();
+          markerSet.material.dispose();
+          markerSet.labelMaterial.dispose();
+          markerSet.label.dispose();
+          markerSet.marker.dispose();
+        });
+        node.connectionPointMarkers = connectionPoints.map((_, pointIndex) => {
+          const markerSet = createConnectionPointMarker(scene, machine, pointIndex);
+          markerSet.marker.parent = node.box;
+          markerSet.label.parent = node.box;
+          return markerSet;
+        });
+      }
       node.box.position.x = machine.position.x;
       node.box.position.y = dimensions.height / 2;
       node.box.position.z = machine.position.z;
@@ -1179,6 +1342,11 @@ export function BabylonScene({
           selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showClearanceEnvelope;
       }
       const isSelected = selectedMachineIdsRef.current.includes(machine.instanceId);
+      node.connectionPointMarkers.forEach((markerSet, pointIndex) => {
+        positionConnectionPointMarker(markerSet, machine, pointIndex);
+        markerSet.marker.isVisible = shouldShowConnectionPointMarker(isSelected, overlaySettingsRef.current);
+        markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettingsRef.current);
+      });
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId);
       node.material.emissiveColor = isSelected
         ? isColliding

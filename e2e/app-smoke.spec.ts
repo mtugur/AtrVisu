@@ -109,14 +109,25 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await expect(page.getByTestId("library-manager-custom-library-selector")).toBeVisible();
   await page.getByTestId("library-manager-custom-library-selector").click();
   await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
-  await expect(page.getByTestId("library-manager-add-item-button")).toBeVisible();
-  await expect(page.getByTestId("library-manager-add-item-button")).toBeEnabled();
-  await page.getByTestId("library-manager-add-item-button").click();
+  const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
+  if (!(await customLibraryItem.isVisible().catch(() => false))) {
+    await page.getByTestId("library-manager-group-toggle-safety").click();
+  }
+  if (!(await customLibraryItem.isVisible().catch(() => false))) {
+    await page.getByTestId("library-manager-group-toggle-fencing").click();
+  }
+  await expect(customLibraryItem).toBeVisible();
+  await customLibraryItem.click();
   await expect(page.getByTestId("library-manager-selected-item-editor")).toBeVisible();
   await expect(page.getByTestId("atara-machine-data-section")).toBeVisible();
   await expect(page.getByTestId("visual-model-calibration-section")).toBeVisible();
   await expect(page.getByTestId("collision-envelope-editor-section")).toBeVisible();
-  await page.getByTestId("close-library-manager").click();
+  await page.getByTestId("connection-point-editor-section").locator("summary").click();
+  await expect(page.getByTestId("library-manager-connection-point-editor")).toBeVisible();
+  const closeLibraryManager = page.getByTestId("close-library-manager");
+  await expect(closeLibraryManager).toBeVisible();
+  await expect(closeLibraryManager).toBeEnabled();
+  await closeLibraryManager.click();
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
 
   await page.getByTestId("open-taxonomy-manager").click();

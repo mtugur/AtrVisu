@@ -29,15 +29,15 @@
       "id": "product-in-1",
       "name": "Product infeed",
       "type": "product-in",
-      "positionMm": { "xMm": 0, "yMm": 850, "zMm": -1500 },
-      "direction": "z-"
+      "positionMm": { "xMm": 0, "yMm": -1500, "zMm": 850 },
+      "direction": "y-"
     },
     {
       "id": "product-out-1",
       "name": "Product discharge",
       "type": "product-out",
-      "positionMm": { "xMm": 0, "yMm": 850, "zMm": 1500 },
-      "direction": "z+"
+      "positionMm": { "xMm": 0, "yMm": 1500, "zMm": 850 },
+      "direction": "y+"
     }
   ],
   "utilityRequirements": {
