@@ -1553,12 +1553,16 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
           </button>
         </header>
 
-        <div className="manager-layout">
+        <div className="manager-layout" data-testid="library-manager-ready">
           <aside className="manager-library-list" aria-label="Available libraries">
             {libraries.map((library) => (
               <button
                 className={library.libraryId === selectedLibraryId ? "is-selected" : ""}
-                data-testid={library.libraryId === PROJECT_CUSTOM_LIBRARY_ID ? "library-manager-custom-library-selector" : undefined}
+                data-testid={
+                  library.libraryId === PROJECT_CUSTOM_LIBRARY_ID
+                    ? "library-manager-custom-library-button"
+                    : "library-manager-atara-standard-library-button"
+                }
                 key={library.libraryId}
                 type="button"
                 onClick={() => setSelectedLibraryId(library.libraryId)}

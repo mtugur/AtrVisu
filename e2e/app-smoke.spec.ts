@@ -106,10 +106,16 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
 
   await page.getByTestId("open-library-manager").click();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
-  await expect(page.getByTestId("library-manager-custom-library-selector")).toBeVisible();
-  await page.getByTestId("library-manager-custom-library-selector").click();
+  await expect(page.getByTestId("library-manager-ready")).toBeVisible();
   await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
   const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
+  if (!(await customLibraryItem.isVisible().catch(() => false))) {
+    const customLibraryButton = page.getByTestId("library-manager-custom-library-button");
+    await expect(customLibraryButton).toBeVisible();
+    await expect(customLibraryButton).toBeEnabled();
+    await customLibraryButton.click();
+    await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
+  }
   if (!(await customLibraryItem.isVisible().catch(() => false))) {
     await page.getByTestId("library-manager-group-toggle-safety").click();
   }
