@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene } from "./components/BabylonScene";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
+import { AnnotationsPanel } from "./components/AnnotationsPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
@@ -22,10 +23,11 @@ import type { VisualModelDiagnostics } from "./types/overlays";
 import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
 import type { MachineConnectionPoint } from "./types/ataraMachineData";
+import type { AnnotationObject, AnnotationType } from "./types/annotations";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
-import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
 import {
@@ -45,6 +47,12 @@ import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 import { getSelectionPlanBounds } from "./utils/selectionBounds";
 import { applyConnectionPointSnap, type ConnectionPointSnapSelection } from "./utils/connectionPointSnap";
+import {
+  createAnnotation,
+  deleteAnnotation,
+  detachAnnotationsForDeletedObjects,
+  updateAnnotation
+} from "./utils/annotations";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -86,6 +94,10 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
+  const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
+  const [annotationSelectionSignal, setAnnotationSelectionSignal] = useState(0);
   const [selectedMachineIds, setSelectedMachineIds] = useState<string[]>([]);
   const [primarySelectedMachineId, setPrimarySelectedMachineId] = useState<string | null>(null);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
@@ -137,6 +149,8 @@ export function App() {
   const placementSettingsRef = useRef(placementSettings);
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
+  const annotationsRef = useRef<AnnotationObject[]>(annotations);
+  const annotationEditHistoryRecordedRef = useRef(false);
 
   const selectedMachineId = primarySelectedMachineId;
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
@@ -223,11 +237,28 @@ export function App() {
     placedMachinesRef.current = placedMachines;
   }, [placedMachines]);
 
+  useEffect(() => {
+    annotationsRef.current = annotations;
+  }, [annotations]);
+
+  useEffect(() => {
+    if (!selectedAnnotationId && !editingAnnotationId) {
+      return;
+    }
+    const annotationIds = new Set(annotations.map((annotation) => annotation.id));
+    if (selectedAnnotationId && !annotationIds.has(selectedAnnotationId)) {
+      setSelectedAnnotationId(null);
+    }
+    if (editingAnnotationId && !annotationIds.has(editingAnnotationId)) {
+      setEditingAnnotationId(null);
+    }
+  }, [annotations, editingAnnotationId, selectedAnnotationId]);
+
   const recordLayoutHistory = useCallback(() => {
     if (isBenchmarkModeRef.current) {
       return;
     }
-    setLayoutHistory((current) => pushHistorySnapshot(current, placedMachinesRef.current));
+    setLayoutHistory((current) => pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current));
   }, []);
 
   const clearLayoutHistory = useCallback(() => {
@@ -245,11 +276,13 @@ export function App() {
 
   const undoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = undoHistory(current, placedMachinesRef.current);
+      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
+      setAnnotations(result.annotations);
+      setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
       return result.history;
     });
@@ -257,11 +290,13 @@ export function App() {
 
   const redoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = redoHistory(current, placedMachinesRef.current);
+      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
+      setAnnotations(result.annotations);
+      setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
       return result.history;
     });
@@ -358,13 +393,15 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt),
-    [placedMachines]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations),
+    [annotations, placedMachines]
   );
 
   const clearSelection = useCallback(() => {
     setSelectedMachineIds([]);
     setPrimarySelectedMachineId(null);
+    setSelectedAnnotationId(null);
+    setEditingAnnotationId(null);
   }, []);
 
   const selectMachine = useCallback((instanceId: string | null, mode: SelectionMode = "replace") => {
@@ -372,6 +409,9 @@ export function App() {
       clearSelection();
       return;
     }
+
+    setSelectedAnnotationId(null);
+    setEditingAnnotationId(null);
 
     if (mode === "toggle") {
       setSelectedMachineIds((current) => {
@@ -388,6 +428,17 @@ export function App() {
     setSelectedMachineIds([instanceId]);
     setPrimarySelectedMachineId(instanceId);
   }, [clearSelection]);
+
+  const selectAnnotationForEditing = useCallback((annotationId: string | null) => {
+    setSelectedAnnotationId(annotationId);
+    setEditingAnnotationId(annotationId);
+    if (annotationId) {
+      setAnnotationSelectionSignal((current) => current + 1);
+      setIsPanelCollapsed(false);
+      setSelectedMachineIds([]);
+      setPrimarySelectedMachineId(null);
+    }
+  }, []);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[ids.length - 1] ?? null) => {
     setSelectedMachineIds(ids);
@@ -498,22 +549,27 @@ export function App() {
 
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(layout);
+    const importedAnnotations = annotationsFromLayout(layout);
 
     markLayoutChanged();
     setPlacedMachines(importedMachines);
+    setAnnotations(importedAnnotations);
     clearSelection();
   }, [clearSelection, markLayoutChanged]);
 
   const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
     setIsBenchmarkMode(true);
     setPlacedMachines(machines);
+    setAnnotations([]);
     clearSelection();
     clearLayoutHistory();
   }, [clearLayoutHistory, clearSelection]);
 
   const restoreBenchmarkSnapshot = useCallback((snapshot: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
+    const importedAnnotations = annotationsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
+    setAnnotations(importedAnnotations);
     clearSelection();
     setIsBenchmarkMode(false);
     setHasUnsavedProjectChanges(false);
@@ -522,6 +578,7 @@ export function App() {
 
   const clearBenchmarkScene = useCallback(() => {
     setPlacedMachines([]);
+    setAnnotations([]);
     clearSelection();
     setIsBenchmarkMode(true);
     clearLayoutHistory();
@@ -534,7 +591,9 @@ export function App() {
     snapshot: AtrVisuLayout
   ) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
+    const importedAnnotations = annotationsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
+    setAnnotations(importedAnnotations);
     clearSelection();
     setCurrentProjectId(projectId);
     setCurrentLayoutId(layoutId);
@@ -649,6 +708,67 @@ export function App() {
     setPlacedMachines((current) => applyConnectionPointSnap(current, selection, movingPoint, fixedPoint));
   }, [markLayoutChanged]);
 
+  const addAnnotation = useCallback((type: AnnotationType) => {
+    markLayoutChanged();
+    const annotation = createAnnotation({
+      type,
+      selectedMachine: type === "callout" ? selectedMachine : undefined
+    });
+    setAnnotations((current) => [...current, annotation]);
+    setSelectedAnnotationId(annotation.id);
+    setEditingAnnotationId(annotation.id);
+    setAnnotationSelectionSignal((current) => current + 1);
+    setIsPanelCollapsed(false);
+    setSelectedMachineIds([]);
+    setPrimarySelectedMachineId(null);
+  }, [markLayoutChanged, selectedMachine]);
+
+  const updateSelectedAnnotation = useCallback((
+    annotationId: string,
+    updates: Partial<AnnotationObject>,
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    if (options.recordHistory !== false) {
+      markLayoutChanged();
+      annotationEditHistoryRecordedRef.current = false;
+    } else if (!isBenchmarkModeRef.current) {
+      if (!annotationEditHistoryRecordedRef.current) {
+        recordLayoutHistory();
+        annotationEditHistoryRecordedRef.current = true;
+      }
+      setHasUnsavedProjectChanges(true);
+    }
+    setAnnotations((current) => updateAnnotation(current, annotationId, updates));
+  }, [markLayoutChanged, recordLayoutHistory]);
+
+  const setAnnotationPosition = useCallback((
+    annotationId: string,
+    positionMm: { xMm: number; yMm: number },
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    markLayoutChanged(options);
+    setAnnotations((current) =>
+      updateAnnotation(current, annotationId, {
+        positionMm: {
+          ...(current.find((annotation) => annotation.id === annotationId)?.positionMm ?? { zMm: 1600 }),
+          xMm: positionMm.xMm,
+          yMm: positionMm.yMm
+        }
+      })
+    );
+  }, [markLayoutChanged]);
+
+  const commitAnnotationEdit = useCallback(() => {
+    annotationEditHistoryRecordedRef.current = false;
+  }, []);
+
+  const removeAnnotation = useCallback((annotationId: string) => {
+    markLayoutChanged();
+    setAnnotations((current) => deleteAnnotation(current, annotationId));
+    setSelectedAnnotationId((current) => current === annotationId ? null : current);
+    setEditingAnnotationId((current) => current === annotationId ? null : current);
+  }, [markLayoutChanged]);
+
   const deleteSelectedMachines = useCallback(() => {
     if (selectedMachineIds.length === 0) {
       return;
@@ -666,6 +786,7 @@ export function App() {
     markLayoutChanged();
     const ids = new Set(selectedMachineIds);
     setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
+    setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
     clearSelection();
   }, [clearSelection, markLayoutChanged, selectedMachineIds, selectedMachines]);
 
@@ -678,7 +799,11 @@ export function App() {
       }
 
       const parsedLayout = JSON.parse(rawLayout) as AtrVisuLayout;
-      if (parsedLayout.appName === "AtrVisu" && parsedLayout.version === 1 && parsedLayout.objects.length > 0) {
+      if (
+        parsedLayout.appName === "AtrVisu" &&
+        parsedLayout.version === 1 &&
+        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0)
+      ) {
         setRecoveryLayout(parsedLayout);
         return;
       }
@@ -701,7 +826,7 @@ export function App() {
 
     const autosaveId = window.setTimeout(() => {
       try {
-        if (placedMachines.length === 0) {
+        if (placedMachines.length === 0 && annotations.length === 0) {
           window.localStorage.removeItem(AUTOSAVE_KEY);
           return;
         }
@@ -715,7 +840,7 @@ export function App() {
     return () => {
       window.clearTimeout(autosaveId);
     };
-  }, [autosaveReady, createLayoutSnapshot, isBenchmarkMode, placedMachines.length]);
+  }, [annotations.length, autosaveReady, createLayoutSnapshot, isBenchmarkMode, placedMachines.length]);
 
   const restoreAutosavedLayout = () => {
     if (!recoveryLayout) {
@@ -756,9 +881,15 @@ export function App() {
         return;
       }
 
-      if (event.key === "Escape" && selectedMachineIds.length > 0) {
+      if (event.key === "Escape" && (selectedMachineIds.length > 0 || selectedAnnotationId || editingAnnotationId)) {
         event.preventDefault();
         clearSelection();
+        return;
+      }
+
+      if (event.key === "Delete" && (editingAnnotationId || selectedAnnotationId)) {
+        event.preventDefault();
+        removeAnnotation(editingAnnotationId ?? selectedAnnotationId ?? "");
         return;
       }
 
@@ -800,7 +931,10 @@ export function App() {
     deleteSelectedMachines,
     moveSelectedByDelta,
     nudgeSettings,
+    removeAnnotation,
     redoLayoutChange,
+    editingAnnotationId,
+    selectedAnnotationId,
     selectedMachineIds.length,
     undoLayoutChange
   ]);
@@ -810,11 +944,15 @@ export function App() {
     <main className="app-shell" data-testid="app-root">
       <BabylonScene
         placedMachines={placedMachines}
+        annotations={annotations}
         selectedMachineIds={selectedMachineIds}
         primarySelectedMachineId={primarySelectedMachineId}
+        selectedAnnotationId={selectedAnnotationId}
         onSelectMachine={selectMachine}
+        onSelectAnnotation={selectAnnotationForEditing}
         onUpdateMachine={updateMachine}
         onSetMachinePositions={setMachinePositions}
+        onSetAnnotationPosition={setAnnotationPosition}
         onBeginObjectDrag={recordLayoutHistory}
         isSimulationRunning={isSimulationRunning}
         simulationSpeed={simulationSpeed}
@@ -968,6 +1106,24 @@ export function App() {
             />
           </PanelSection>
           <PanelSection
+            title="Annotations"
+            storageKey="atrvisu.panelSection.annotations.v1"
+            defaultExpanded={false}
+            badge={annotations.length > 0 ? `${annotations.length}` : undefined}
+            expandSignal={editingAnnotationId ? annotationSelectionSignal : null}
+          >
+            <AnnotationsPanel
+              annotations={annotations}
+              selectedAnnotationId={editingAnnotationId}
+              placedMachines={placedMachines}
+              onAddAnnotation={addAnnotation}
+              onSelectAnnotation={selectAnnotationForEditing}
+              onUpdateAnnotation={updateSelectedAnnotation}
+              onCommitAnnotationEdit={commitAnnotationEdit}
+              onDeleteAnnotation={removeAnnotation}
+            />
+          </PanelSection>
+          <PanelSection
             title="Precision Placement"
             storageKey="atrvisu.panelSection.precisionPlacement.v1"
             defaultExpanded
@@ -1033,31 +1189,33 @@ export function App() {
               onChange={setCollisionSettings}
             />
           </PanelSection>
-          <PanelSection
-            title={selectedMachineIds.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
-            storageKey="atrvisu.panelSection.properties.v1"
-            defaultExpanded={selectedMachineIds.length > 0}
-            badge={selectedMachineIds.length > 1 ? `${selectedMachineIds.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
-          >
-            {selectedMachineIds.length > 1 ? (
-              <MultiSelectionProperties
-                selectedMachines={selectedMachines}
-                primarySelectedMachine={selectedMachine}
-                selectionBounds={selectionBounds}
-                onClearSelection={clearSelection}
-                onDeleteSelected={deleteSelectedMachines}
-              />
-            ) : (
-              <MachineProperties
-                selectedMachine={singleSelectedMachine}
-                placementSettings={placementSettings}
-                visualDiagnostics={selectedVisualDiagnostics}
-                collisionPairs={selectedCollisionPairs}
-                onUpdateMachine={updateMachine}
-                onDeleteSelected={deleteSelectedMachines}
-              />
-            )}
-          </PanelSection>
+          {!editingAnnotationId ? (
+            <PanelSection
+              title={selectedMachineIds.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
+              storageKey="atrvisu.panelSection.properties.v1"
+              defaultExpanded={selectedMachineIds.length > 0}
+              badge={selectedMachineIds.length > 1 ? `${selectedMachineIds.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+            >
+              {selectedMachineIds.length > 1 ? (
+                <MultiSelectionProperties
+                  selectedMachines={selectedMachines}
+                  primarySelectedMachine={selectedMachine}
+                  selectionBounds={selectionBounds}
+                  onClearSelection={clearSelection}
+                  onDeleteSelected={deleteSelectedMachines}
+                />
+              ) : (
+                <MachineProperties
+                  selectedMachine={singleSelectedMachine}
+                  placementSettings={placementSettings}
+                  visualDiagnostics={selectedVisualDiagnostics}
+                  collisionPairs={selectedCollisionPairs}
+                  onUpdateMachine={updateMachine}
+                  onDeleteSelected={deleteSelectedMachines}
+                />
+              )}
+            </PanelSection>
+          ) : null}
         </aside>
       )}
     </main>

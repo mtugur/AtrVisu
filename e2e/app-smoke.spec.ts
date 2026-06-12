@@ -66,6 +66,22 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await expect(page.getByLabel("Selected machine properties").getByText("Selection")).toBeVisible();
   await expect(page.getByLabel("Selected machine properties").getByText(/Packaging|Machine/i).first()).toBeVisible();
 
+  await page.getByRole("button", { name: /Annotations/i }).click();
+  await expect(page.getByTestId("annotations-panel")).toBeVisible();
+  await page.getByTestId("add-note-annotation").click();
+  await expect(page.getByTestId("annotation-properties")).toBeVisible();
+  await page.getByTestId("annotation-text-input").fill("Forklift access required");
+  await page.getByTestId("annotation-text-input").blur();
+  await page.getByTestId("annotation-plan-x-input").fill("-200");
+  await page.getByTestId("annotation-plan-x-input").blur();
+  await page.getByTestId("annotation-size-scale-input").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = "6";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.getByRole("button", { name: /Forklift access required/ })).toBeVisible();
+
   await page.getByRole("button", { name: /Performance Benchmark/i }).click();
   await page.getByTestId("open-performance-benchmark").click();
   await expect(page.getByTestId("performance-benchmark-modal")).toBeVisible();
@@ -98,7 +114,7 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await expect(page.getByTestId("collision-envelope-editor-section")).toBeVisible();
   await page.getByTestId("connection-point-editor-section").locator("summary").click();
   await expect(page.getByTestId("library-manager-connection-point-editor")).toBeVisible();
-  const closeLibraryManager = page.getByTestId("close-library-manager");
+  const closeLibraryManager = page.getByTestId("close-library-manager-header");
   await expect(closeLibraryManager).toBeVisible();
   await expect(closeLibraryManager).toBeEnabled();
   await closeLibraryManager.click();

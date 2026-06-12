@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 type PanelSectionProps = {
@@ -7,6 +7,7 @@ type PanelSectionProps = {
   defaultExpanded: boolean;
   children: ReactNode;
   badge?: string;
+  expandSignal?: string | number | null;
 };
 
 export function PanelSection({
@@ -14,8 +15,10 @@ export function PanelSection({
   title,
   defaultExpanded,
   children,
-  badge
+  badge,
+  expandSignal
 }: PanelSectionProps) {
+  const sectionRef = useRef<HTMLElement | null>(null);
   const [isExpanded, setIsExpanded] = useState(() => {
     try {
       const savedValue = window.localStorage.getItem(storageKey);
@@ -33,8 +36,17 @@ export function PanelSection({
     }
   }, [isExpanded, storageKey]);
 
+  useEffect(() => {
+    if (expandSignal) {
+      setIsExpanded(true);
+      window.requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      });
+    }
+  }, [expandSignal]);
+
   return (
-    <section className="panel-section">
+    <section className="panel-section" ref={sectionRef}>
       <button
         className="panel-section-header"
         type="button"

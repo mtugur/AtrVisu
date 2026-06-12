@@ -1,5 +1,6 @@
 import type { CollisionEnvelope } from "./collision";
 import type { AtaraMachineData } from "./ataraMachineData";
+import type { AnnotationObject } from "./annotations";
 
 export type MachineCategory = string;
 
@@ -141,6 +142,7 @@ export type AtrVisuLayout = {
   };
   exportedAt: string;
   objects: LayoutObject[];
+  annotations?: AnnotationObject[];
 };
 
 export type LibraryIndexEntry = {

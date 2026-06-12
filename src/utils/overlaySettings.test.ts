@@ -14,7 +14,9 @@ describe("overlay settings", () => {
       showCollisionEnvelope: false,
       showClearanceEnvelope: false,
       showConnectionPoints: false,
-      connectionPointDisplayMode: "selected"
+      connectionPointDisplayMode: "selected",
+      showAnnotations: true,
+      showAnnotationLeaderLines: true
     });
   });
 
@@ -26,7 +28,9 @@ describe("overlay settings", () => {
       showCollisionEnvelope: false,
       showClearanceEnvelope: false,
       showConnectionPoints: false,
-      connectionPointDisplayMode: "selected"
+      connectionPointDisplayMode: "selected",
+      showAnnotations: true,
+      showAnnotationLeaderLines: true
     });
   });
 
@@ -37,6 +41,17 @@ describe("overlay settings", () => {
     });
     expect(normalizeOverlaySettings({ connectionPointDisplayMode: "bad" })).toMatchObject({
       connectionPointDisplayMode: "selected"
+    });
+  });
+
+  it("normalizes annotation overlay flags", () => {
+    expect(normalizeOverlaySettings({ showAnnotations: false, showAnnotationLeaderLines: false })).toMatchObject({
+      showAnnotations: false,
+      showAnnotationLeaderLines: false
+    });
+    expect(normalizeOverlaySettings({ showAnnotations: "bad", showAnnotationLeaderLines: "bad" })).toMatchObject({
+      showAnnotations: true,
+      showAnnotationLeaderLines: true
     });
   });
 });

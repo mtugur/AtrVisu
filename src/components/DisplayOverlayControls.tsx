@@ -63,6 +63,23 @@ export function DisplayOverlayControls({ settings, onChange }: DisplayOverlayCon
         />
         <span>Show Connection Points</span>
       </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={settings.showAnnotations}
+          onChange={(event) => updateSetting("showAnnotations", event.target.checked)}
+        />
+        <span>Show Annotations</span>
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={settings.showAnnotationLeaderLines}
+          disabled={!settings.showAnnotations}
+          onChange={(event) => updateSetting("showAnnotationLeaderLines", event.target.checked)}
+        />
+        <span>Show Annotation Leader Lines</span>
+      </label>
       <label className="overlay-select-field">
         <span>Connection Point Display Mode</span>
         <select

@@ -1548,7 +1548,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
               {editable ? "Editable" : "Read-only"}
             </span>
           </div>
-          <button data-testid="close-library-manager" type="button" onClick={requestClose}>
+          <button data-testid="close-library-manager-header" type="button" onClick={requestClose}>
             Close
           </button>
         </header>
@@ -2314,7 +2314,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
             <button className="danger-action" disabled={!editable || !draftLibrary} type="button" onClick={resetCustomLibrary}>
               Reset Custom Library
             </button>
-            <button type="button" onClick={requestClose}>
+            <button data-testid="close-library-manager" type="button" onClick={requestClose}>
               Close
             </button>
           </div>

@@ -9,7 +9,9 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   showCollisionEnvelope: false,
   showClearanceEnvelope: false,
   showConnectionPoints: false,
-  connectionPointDisplayMode: "selected"
+  connectionPointDisplayMode: "selected",
+  showAnnotations: true,
+  showAnnotationLeaderLines: true
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -44,7 +46,15 @@ export const normalizeOverlaySettings = (value: unknown): OverlaySettings => {
     connectionPointDisplayMode:
       value.connectionPointDisplayMode === "all" || value.connectionPointDisplayMode === "selected"
         ? value.connectionPointDisplayMode
-        : DEFAULT_OVERLAY_SETTINGS.connectionPointDisplayMode
+        : DEFAULT_OVERLAY_SETTINGS.connectionPointDisplayMode,
+    showAnnotations:
+      typeof value.showAnnotations === "boolean"
+        ? value.showAnnotations
+        : DEFAULT_OVERLAY_SETTINGS.showAnnotations,
+    showAnnotationLeaderLines:
+      typeof value.showAnnotationLeaderLines === "boolean"
+        ? value.showAnnotationLeaderLines
+        : DEFAULT_OVERLAY_SETTINGS.showAnnotationLeaderLines
   };
 };
 

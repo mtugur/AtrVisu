@@ -1,4 +1,5 @@
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "../types/machine";
+import type { AnnotationObject } from "../types/annotations";
 import {
   ATRVISU_UNIT_SYSTEM,
   getMachineDimensionsMm,
@@ -8,12 +9,14 @@ import { DEFAULT_CAPABILITIES } from "./taxonomy";
 import { metersToMm, mmToMeters } from "./units";
 import { normalizeMachineVisualModel } from "./visualModel";
 import { normalizeCollisionEnvelope } from "./collision";
+import { normalizeAnnotations } from "./annotations";
 
 const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
 
 export const createLayoutSnapshotFromMachines = (
   placedMachines: PlacedMachine[],
-  exportedAt = new Date().toISOString()
+  exportedAt = new Date().toISOString(),
+  annotations: AnnotationObject[] = []
 ): AtrVisuLayout => ({
   appName: "AtrVisu",
   version: 1,
@@ -50,8 +53,12 @@ export const createLayoutSnapshotFromMachines = (
       collisionEnvelope: normalizeCollisionEnvelope(definition.collisionEnvelope, dimensionsMm),
       flowDirection: machine.flowDirection
     };
-  })
+  }),
+  annotations: normalizeAnnotations(annotations)
 });
+
+export const annotationsFromLayout = (layout: AtrVisuLayout): AnnotationObject[] =>
+  normalizeAnnotations(layout.annotations);
 
 export const placedMachinesFromLayout = (layout: AtrVisuLayout): PlacedMachine[] => {
   return layout.objects.map((object) => {
