@@ -31,6 +31,9 @@ Target fields may include:
 - `revisionId`
 - `levels`
 - `objects`
+- `annotations`
+
+Annotations are lightweight layout communication objects. They are described in [Annotation / Label Foundation](./annotation-label-foundation.md) and are stored in layout snapshots alongside placed objects.
 
 ## Revision
 

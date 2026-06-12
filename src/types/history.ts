@@ -1,7 +1,13 @@
 import type { PlacedMachine } from "./machine";
+import type { AnnotationObject } from "./annotations";
+
+export type LayoutHistorySnapshot = {
+  machines: PlacedMachine[];
+  annotations: AnnotationObject[];
+};
 
 export type LayoutHistoryState = {
-  undoStack: PlacedMachine[][];
-  redoStack: PlacedMachine[][];
+  undoStack: LayoutHistorySnapshot[];
+  redoStack: LayoutHistorySnapshot[];
   limit: number;
 };

@@ -8,6 +8,7 @@ import {
   Engine,
   HemisphericLight,
   LinesMesh,
+  Matrix,
   Mesh,
   MeshBuilder,
   Nullable,
@@ -25,6 +26,7 @@ import type { CollisionCheckResult } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
 import type { ScenePerformanceMetrics } from "../types/performance";
+import type { AnnotationObject } from "../types/annotations";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
 import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
@@ -38,24 +40,40 @@ import {
   getConnectionPointMarkerLabel,
   getConnectionPointsForObject
 } from "../utils/connectionPoints";
+import {
+  calculateAnnotationDragPosition,
+  getAnnotationPickMetadata,
+  getAnnotationReadableScale,
+  getAnnotationVisualStyle,
+  getRayPlanePlanPointMm
+} from "../utils/annotations";
 
 const GRID_SIZE = 42;
 const GRID_MAJOR_STEP = 6;
 const GRID_MINOR_STEP = 1;
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
+const ANNOTATION_LABEL_OFFSET_METERS = new Vector3(0.78, 0.42, 0);
 
 type BabylonSceneProps = {
   placedMachines: PlacedMachine[];
+  annotations: AnnotationObject[];
   selectedMachineIds: string[];
   primarySelectedMachineId: string | null;
+  selectedAnnotationId: string | null;
   onSelectMachine: (instanceId: string | null, mode?: "replace" | "toggle" | "clear") => void;
+  onSelectAnnotation: (annotationId: string | null) => void;
   onUpdateMachine: (
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => void;
   onSetMachinePositions: (
     updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
+    options?: { recordHistory?: boolean }
+  ) => void;
+  onSetAnnotationPosition: (
+    annotationId: string,
+    positionMm: { xMm: number; yMm: number },
     options?: { recordHistory?: boolean }
   ) => void;
   onBeginObjectDrag: () => void;
@@ -90,6 +108,19 @@ type PlacedMachineNode = {
   loadedVisualMeshes: AbstractMesh[];
 };
 
+type AnnotationNode = {
+  plane: Mesh;
+  hitTarget: Mesh;
+  anchor: Mesh;
+  texture: DynamicTexture;
+  material: StandardMaterial;
+  hitMaterial: StandardMaterial;
+  anchorMaterial: StandardMaterial;
+  handleStem: LinesMesh;
+  leader?: LinesMesh;
+  sizeScale: number;
+};
+
 const hexToColor3 = (hex: string) => {
   return Color3.FromHexString(hex);
 };
@@ -117,6 +148,191 @@ const createLabel = (scene: Scene, textureKey: string, text: string, y: number) 
   label.isPickable = false;
 
   return { label, texture };
+};
+
+const normalizeAnnotationText = (text: string) => {
+  const normalized = text.trim().replace(/\s+/g, " ") || "Annotation";
+  return normalized.length > 44 ? `${normalized.slice(0, 41)}...` : normalized;
+};
+
+const wrapAnnotationText = (text: string, maxCharsPerLine: number) => {
+  const words = normalizeAnnotationText(text).split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (nextLine.length <= maxCharsPerLine) {
+      currentLine = nextLine;
+      return;
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+    currentLine = word.length > maxCharsPerLine ? `${word.slice(0, maxCharsPerLine - 1)}...` : word;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines.slice(0, 3);
+};
+
+const fillRoundedRect = (
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) => {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.lineTo(x + width - radius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + radius);
+  context.lineTo(x + width, y + height - radius);
+  context.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  context.lineTo(x + radius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - radius);
+  context.lineTo(x, y + radius);
+  context.quadraticCurveTo(x, y, x + radius, y);
+  context.closePath();
+};
+
+const createAnnotationNode = (scene: Scene, annotation: AnnotationObject, selected: boolean): AnnotationNode => {
+  const visualStyle = getAnnotationVisualStyle(annotation);
+  const lines = wrapAnnotationText(annotation.text, visualStyle.maxCharsPerLine);
+  const texture = new DynamicTexture(`annotation-texture-${annotation.id}`, { width: 1024, height: 256 }, scene);
+  texture.hasAlpha = true;
+  const context = texture.getContext() as unknown as CanvasRenderingContext2D;
+  context.clearRect(0, 0, 1024, 256);
+  context.font = `${visualStyle.fontWeight} ${visualStyle.fontSizePx}px Arial`;
+  context.textBaseline = "top";
+
+  const badgeFont = `800 ${Math.max(18, visualStyle.fontSizePx - 12)}px Arial`;
+  context.font = badgeFont;
+  const badgeWidth = Math.ceil(context.measureText(visualStyle.indicator).width) + 28;
+  context.font = `${visualStyle.fontWeight} ${visualStyle.fontSizePx}px Arial`;
+  const textWidth = Math.max(...lines.map((line) => context.measureText(line).width), 1);
+  const contentWidth = Math.min(900, Math.ceil(visualStyle.paddingPx * 3 + badgeWidth + textWidth));
+  const contentHeight = Math.ceil(visualStyle.paddingPx * 2 + lines.length * visualStyle.lineHeightPx);
+  const originX = 24;
+  const originY = 24;
+  const borderColor = selected ? "#ffe58a" : visualStyle.borderColor;
+  const textColor = selected ? "#fff2a8" : visualStyle.textColor;
+  const backgroundColor = selected ? "rgba(48, 43, 20, 0.94)" : visualStyle.backgroundColor;
+
+  if (visualStyle.filledBackground) {
+    fillRoundedRect(context, originX, originY, contentWidth, contentHeight, 22);
+    context.fillStyle = backgroundColor;
+    context.fill();
+  }
+
+  fillRoundedRect(context, originX, originY, contentWidth, contentHeight, 22);
+  context.lineWidth = visualStyle.borderWidthPx;
+  context.strokeStyle = borderColor;
+  context.stroke();
+
+  context.fillStyle = selected ? "#ffe58a" : visualStyle.accentColor;
+  context.fillRect(originX, originY + 10, Math.max(6, visualStyle.borderWidthPx + 1), contentHeight - 20);
+
+  context.font = badgeFont;
+  context.fillStyle = selected ? "#ffe58a" : visualStyle.accentColor;
+  context.fillText(visualStyle.indicator, originX + visualStyle.paddingPx, originY + visualStyle.paddingPx + 3);
+
+  context.font = `${visualStyle.fontWeight} ${visualStyle.fontSizePx}px Arial`;
+  context.fillStyle = textColor;
+  lines.forEach((line, index) => {
+    context.fillText(
+      line,
+      originX + visualStyle.paddingPx * 2 + badgeWidth,
+      originY + visualStyle.paddingPx + index * visualStyle.lineHeightPx
+    );
+  });
+  texture.update();
+
+  const material = new StandardMaterial(`annotation-material-${annotation.id}`, scene);
+  material.diffuseTexture = texture;
+  material.opacityTexture = texture;
+  material.emissiveColor = new Color3(1, 1, 1);
+  material.disableLighting = true;
+  material.backFaceCulling = false;
+
+  const hitMaterial = new StandardMaterial(`annotation-hit-material-${annotation.id}`, scene);
+  hitMaterial.alpha = 0;
+  hitMaterial.disableLighting = true;
+  hitMaterial.backFaceCulling = false;
+
+  const anchorMaterial = new StandardMaterial(`annotation-anchor-material-${annotation.id}`, scene);
+  anchorMaterial.diffuseColor = selected ? new Color3(1, 0.86, 0.28) : visualStyle.accentColor ? Color3.FromHexString(visualStyle.accentColor) : new Color3(0.7, 0.85, 0.76);
+  anchorMaterial.emissiveColor = anchorMaterial.diffuseColor.scale(selected ? 0.75 : 0.45);
+  anchorMaterial.specularColor = new Color3(0.08, 0.08, 0.08);
+
+  const planeSize = {
+    width: Math.max(2.15, contentWidth / 155),
+    height: Math.max(0.68, contentHeight / 155)
+  };
+  const plane = MeshBuilder.CreatePlane(
+    `annotation-${annotation.id}`,
+    planeSize,
+    scene
+  );
+  plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  plane.material = material;
+  plane.isPickable = true;
+  plane.renderingGroupId = 2;
+  plane.metadata = getAnnotationPickMetadata(annotation.id, "label");
+
+  const hitTarget = MeshBuilder.CreatePlane(
+    `annotation-hit-${annotation.id}`,
+    { width: planeSize.width * 1.08, height: planeSize.height * 1.18 },
+    scene
+  );
+  hitTarget.billboardMode = Mesh.BILLBOARDMODE_ALL;
+  hitTarget.material = hitMaterial;
+  hitTarget.isPickable = true;
+  hitTarget.renderingGroupId = 3;
+  hitTarget.metadata = getAnnotationPickMetadata(annotation.id, "hit-target");
+
+  const anchor = MeshBuilder.CreateBox(
+    `annotation-anchor-${annotation.id}`,
+    {
+      width: selected ? 0.58 : 0.46,
+      height: 0.08,
+      depth: selected ? 0.58 : 0.46
+    },
+    scene
+  );
+  anchor.material = anchorMaterial;
+  anchor.isPickable = true;
+  anchor.renderingGroupId = 2;
+  anchor.rotation.y = Math.PI / 4;
+  anchor.metadata = getAnnotationPickMetadata(annotation.id, "handle");
+
+  const handleStem = MeshBuilder.CreateLines(
+    `annotation-handle-stem-${annotation.id}`,
+    { points: [Vector3.Zero(), Vector3.Zero()] },
+    scene
+  );
+  handleStem.color = selected ? new Color3(1, 0.86, 0.28) : Color3.FromHexString(visualStyle.accentColor);
+  handleStem.isPickable = false;
+  handleStem.renderingGroupId = 2;
+
+  return { plane, hitTarget, anchor, texture, material, hitMaterial, anchorMaterial, handleStem, sizeScale: visualStyle.sizeScale };
+};
+
+const disposeAnnotationNode = (node: AnnotationNode) => {
+  node.leader?.dispose();
+  node.handleStem.dispose();
+  node.texture.dispose();
+  node.material.dispose();
+  node.hitMaterial.dispose();
+  node.anchorMaterial.dispose();
+  node.plane.dispose();
+  node.hitTarget.dispose();
+  node.anchor.dispose();
 };
 
 const connectionPointColor = (type: string) => {
@@ -662,11 +878,15 @@ const loadVisualModel = async (
 
 export function BabylonScene({
   placedMachines,
+  annotations,
   selectedMachineIds,
   primarySelectedMachineId,
+  selectedAnnotationId,
   onSelectMachine,
+  onSelectAnnotation,
   onUpdateMachine,
   onSetMachinePositions,
+  onSetAnnotationPosition,
   onBeginObjectDrag,
   isSimulationRunning,
   simulationSpeed,
@@ -680,7 +900,9 @@ export function BabylonScene({
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const floorRef = useRef<Mesh | null>(null);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
+  const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
+  const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const selectedMachineIdsRef = useRef<string[]>(selectedMachineIds);
   const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
@@ -695,6 +917,12 @@ export function BabylonScene({
     startFloorZ: number;
     startPositions: Record<string, { xMm: number; yMm: number }>;
   } | null>(null);
+  const annotationDragStateRef = useRef<{
+    annotationId: string;
+    planeElevationMeters: number;
+    initialPointerPosition: { xMm: number; yMm: number };
+    initialAnnotationPosition: { xMm: number; yMm: number };
+  } | null>(null);
   const panStateRef = useRef<{
     lastFloorPoint: Vector3;
   } | null>(null);
@@ -702,6 +930,10 @@ export function BabylonScene({
   useEffect(() => {
     placedMachinesRef.current = placedMachines;
   }, [placedMachines]);
+
+  useEffect(() => {
+    annotationsRef.current = annotations;
+  }, [annotations]);
 
   useEffect(() => {
     selectedMachineIdsRef.current = selectedMachineIds;
@@ -749,6 +981,76 @@ export function BabylonScene({
       });
     });
   }, [overlaySettings]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) {
+      return;
+    }
+
+    const activeIds = new Set(annotations.map((annotation) => annotation.id));
+    annotationNodesRef.current.forEach((node, annotationId) => {
+      if (!activeIds.has(annotationId)) {
+        disposeAnnotationNode(node);
+        annotationNodesRef.current.delete(annotationId);
+      }
+    });
+
+    annotations.forEach((annotation) => {
+      const isSelected = annotation.id === selectedAnnotationId;
+      const existing = annotationNodesRef.current.get(annotation.id);
+      if (existing) {
+        disposeAnnotationNode(existing);
+      }
+
+      const node = createAnnotationNode(scene, annotation, isSelected);
+      const anchorPosition = new Vector3(
+        annotation.positionMm.xMm / 1000,
+        (annotation.positionMm.zMm ?? 1600) / 1000,
+        annotation.positionMm.yMm / 1000
+      );
+      node.anchor.position = anchorPosition.clone();
+      node.plane.position = anchorPosition.add(ANNOTATION_LABEL_OFFSET_METERS);
+      node.hitTarget.position = node.plane.position.clone();
+      node.handleStem = MeshBuilder.CreateLines(
+        node.handleStem.name,
+        {
+          points: [
+            node.anchor.position.clone(),
+            node.plane.position.clone()
+          ],
+          instance: node.handleStem
+        }
+      );
+      node.plane.isVisible = overlaySettings.showAnnotations;
+      node.hitTarget.isVisible = overlaySettings.showAnnotations;
+      node.anchor.isVisible = overlaySettings.showAnnotations;
+      node.handleStem.isVisible = overlaySettings.showAnnotations;
+      node.plane.actionManager = null;
+
+      if (annotation.targetObjectId && overlaySettings.showAnnotationLeaderLines) {
+        const targetNode = machineNodesRef.current.get(annotation.targetObjectId);
+        if (targetNode) {
+          node.leader = MeshBuilder.CreateLines(
+            `annotation-leader-${annotation.id}`,
+            {
+              points: [
+                node.anchor.position.clone(),
+                targetNode.box.position.clone()
+              ]
+            },
+            scene
+          );
+          node.leader.color = isSelected ? new Color3(1, 0.86, 0.28) : new Color3(0.74, 0.86, 0.78);
+          node.leader.isPickable = false;
+          node.leader.isVisible = overlaySettings.showAnnotations;
+          node.leader.renderingGroupId = 2;
+        }
+      }
+
+      annotationNodesRef.current.set(annotation.id, node);
+    });
+  }, [annotations, overlaySettings.showAnnotationLeaderLines, overlaySettings.showAnnotations, placedMachines, selectedAnnotationId]);
 
   useEffect(() => {
     collisionResultRef.current = collisionResult;
@@ -807,7 +1109,7 @@ export function BabylonScene({
     );
     cameraRef.current = camera;
     camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 12;
+    camera.lowerRadiusLimit = 8;
     camera.upperRadiusLimit = 78;
     camera.wheelPrecision = 35;
     camera.panningSensibility = 75;
@@ -873,15 +1175,50 @@ export function BabylonScene({
     floor.isPickable = true;
     floorRef.current = floor;
 
-    const pickFloorPoint = () => {
-      const floorMesh = floorRef.current;
+    const createPointerRay = () => {
       const activeScene = sceneRef.current;
-      if (!floorMesh || !activeScene) {
+      const activeCamera = cameraRef.current;
+      if (!activeScene || !activeCamera) {
         return null;
       }
 
-      const pick = activeScene.pick(activeScene.pointerX, activeScene.pointerY, (mesh) => mesh === floorMesh);
-      return pick?.hit ? pick.pickedPoint : null;
+      return activeScene.createPickingRay(
+        activeScene.pointerX,
+        activeScene.pointerY,
+        Matrix.Identity(),
+        activeCamera
+      );
+    };
+
+    const pickPlanePoint = (planeElevationMeters: number) => {
+      const ray = createPointerRay();
+      if (!ray) {
+        return null;
+      }
+
+      if (Math.abs(ray.direction.y) < 0.0001) {
+        return null;
+      }
+
+      const distance = (planeElevationMeters - ray.origin.y) / ray.direction.y;
+      if (!Number.isFinite(distance) || distance < 0) {
+        return null;
+      }
+
+      return ray.origin.add(ray.direction.scale(distance));
+    };
+
+    const pickFloorPoint = () => pickPlanePoint(0);
+
+    const pickPlanPointMm = (planeElevationMeters: number) => {
+      const ray = createPointerRay();
+      return ray
+        ? getRayPlanePlanPointMm({
+            rayOrigin: ray.origin,
+            rayDirection: ray.direction,
+            planeElevationMeters
+          })
+        : null;
     };
 
     const isPanPointer = (event: PointerEvent | undefined) =>
@@ -905,7 +1242,11 @@ export function BabylonScene({
           return;
         }
 
-        currentCamera.target.addInPlace(beforePoint.subtract(afterPoint));
+        const targetDelta = beforePoint.subtract(afterPoint);
+        targetDelta.y = 0;
+        if (targetDelta.length() <= 5) {
+          currentCamera.target.addInPlace(targetDelta);
+        }
       });
     };
 
@@ -916,6 +1257,7 @@ export function BabylonScene({
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         const pick = pointerInfo.pickInfo;
         const instanceId = pick?.pickedMesh?.metadata?.instanceId as string | undefined;
+        const annotationId = pick?.pickedMesh?.metadata?.annotationId as string | undefined;
         const sourceEvent = pointerInfo.event as PointerEvent | undefined;
         const isToggleSelection = Boolean(sourceEvent?.ctrlKey || sourceEvent?.shiftKey);
         const panPoint = pickFloorPoint();
@@ -924,7 +1266,36 @@ export function BabylonScene({
           sourceEvent?.preventDefault();
           panStateRef.current = { lastFloorPoint: panPoint.clone() };
           dragStateRef.current = null;
+          annotationDragStateRef.current = null;
           cameraRef.current?.detachControl();
+          return;
+        }
+
+        if (annotationId) {
+          sourceEvent?.preventDefault();
+          dragStateRef.current = null;
+          panStateRef.current = null;
+          const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+          if (annotation) {
+            const planeElevationMeters = (annotation.positionMm.zMm ?? 1600) / 1000;
+            const pointerPlanPoint = pickPlanPointMm(planeElevationMeters);
+            if (!pointerPlanPoint) {
+              onSelectAnnotation(annotationId);
+              return;
+            }
+            onBeginObjectDrag();
+            annotationDragStateRef.current = {
+              annotationId,
+              planeElevationMeters,
+              initialPointerPosition: pointerPlanPoint,
+              initialAnnotationPosition: {
+                xMm: annotation.positionMm.xMm,
+                yMm: annotation.positionMm.yMm
+              }
+            };
+            cameraRef.current?.detachControl();
+          }
+          onSelectAnnotation(annotationId);
           return;
         }
 
@@ -953,12 +1324,15 @@ export function BabylonScene({
             };
             cameraRef.current?.detachControl();
           }
+          onSelectAnnotation(null);
           onSelectMachine(instanceId, isToggleSelection ? "toggle" : "replace");
           return;
         }
 
         if (pick?.pickedMesh === floorRef.current) {
           dragStateRef.current = null;
+          annotationDragStateRef.current = null;
+          onSelectAnnotation(null);
           onSelectMachine(null, "clear");
         }
       }
@@ -970,18 +1344,44 @@ export function BabylonScene({
           const activeCamera = cameraRef.current;
           if (floorPoint && activeCamera) {
             const delta = panState.lastFloorPoint.subtract(floorPoint);
+            delta.y = 0;
             activeCamera.target.addInPlace(delta);
+            panStateRef.current = { lastFloorPoint: floorPoint.clone() };
           }
           return;
         }
 
         const dragState = dragStateRef.current;
-        if (!dragState) {
+        const annotationDragState = annotationDragStateRef.current;
+        if (!dragState && !annotationDragState) {
           return;
         }
 
         const floorPoint = pickFloorPoint();
+        if (annotationDragState) {
+          const pointerPlanPoint = pickPlanPointMm(annotationDragState.planeElevationMeters);
+          if (!pointerPlanPoint) {
+            return;
+          }
+
+          const nextPosition = calculateAnnotationDragPosition({
+            initialAnnotationPosition: annotationDragState.initialAnnotationPosition,
+            initialPointerPosition: annotationDragState.initialPointerPosition,
+            currentPointerPosition: pointerPlanPoint
+          });
+          onSetAnnotationPosition(
+            annotationDragState.annotationId,
+            nextPosition,
+            { recordHistory: false }
+          );
+          return;
+        }
+
         if (!floorPoint) {
+          return;
+        }
+
+        if (!dragState) {
           return;
         }
 
@@ -1003,8 +1403,9 @@ export function BabylonScene({
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERUP) {
-        if (dragStateRef.current || panStateRef.current) {
+        if (dragStateRef.current || annotationDragStateRef.current || panStateRef.current) {
           dragStateRef.current = null;
+          annotationDragStateRef.current = null;
           panStateRef.current = null;
           cameraRef.current?.attachControl(canvasRef.current, true);
         }
@@ -1040,6 +1441,18 @@ export function BabylonScene({
           product.position.z = 0;
         });
       });
+      const activeCamera = cameraRef.current;
+      if (activeCamera) {
+        annotationNodesRef.current.forEach((node) => {
+          const distance = Vector3.Distance(activeCamera.position, node.plane.position);
+          const readableScale = getAnnotationReadableScale({
+            cameraDistanceMeters: distance,
+            sizeScale: node.sizeScale
+          });
+          node.plane.scaling.setAll(readableScale);
+          node.hitTarget.scaling.setAll(readableScale);
+        });
+      }
       scene.render();
       if (onPerformanceMetricsChangeRef.current) {
         onPerformanceMetricsChangeRef.current(collectScenePerformanceMetrics(scene, engine));
@@ -1088,13 +1501,15 @@ export function BabylonScene({
         node.box.dispose();
       });
       machineNodesRef.current.clear();
+      annotationNodesRef.current.forEach(disposeAnnotationNode);
+      annotationNodesRef.current.clear();
       cameraRef.current = null;
       floorRef.current = null;
       sceneRef.current = null;
       scene.dispose();
       engine.dispose();
     };
-  }, [onBeginObjectDrag, onSelectMachine, onSetMachinePositions, onUpdateMachine]);
+  }, [onBeginObjectDrag, onSelectAnnotation, onSelectMachine, onSetAnnotationPosition, onSetMachinePositions, onUpdateMachine]);
 
   useEffect(() => {
     const scene = sceneRef.current;

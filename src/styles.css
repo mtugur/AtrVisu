@@ -517,6 +517,44 @@ select option:hover {
   background: rgba(233, 176, 96, 0.1);
 }
 
+.annotations-panel,
+.annotation-editor,
+.annotation-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.annotation-list-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  color: rgba(237, 243, 240, 0.76);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.annotation-list-item strong,
+.annotation-list-item span {
+  overflow-wrap: anywhere;
+}
+
+.annotation-list-item strong {
+  color: #f4f7f2;
+}
+
+.annotation-list-item.is-selected,
+.annotation-list-item:hover,
+.annotation-list-item:focus-visible {
+  border-color: rgba(168, 201, 120, 0.68);
+  background: rgba(168, 201, 120, 0.12);
+  outline: none;
+}
+
 .connection-point-card,
 .connection-editor-card {
   display: grid;

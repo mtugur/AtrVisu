@@ -6,6 +6,8 @@ export type OverlaySettings = {
   showClearanceEnvelope: boolean;
   showConnectionPoints: boolean;
   connectionPointDisplayMode: "selected" | "all";
+  showAnnotations: boolean;
+  showAnnotationLeaderLines: boolean;
 };
 
 export type VisualModelStatus = "none" | "loading" | "loaded" | "proxy" | "fallback" | "failed";

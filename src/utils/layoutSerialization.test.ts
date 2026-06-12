@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
-import { createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./layoutSerialization";
 
 const createMachine = (): PlacedMachine => ({
   instanceId: "machine-1",
@@ -67,7 +67,14 @@ const createMachine = (): PlacedMachine => ({
 
 describe("layout serialization", () => {
   it("exports unit metadata and preserves millimeter dimensions", () => {
-    const layout = createLayoutSnapshotFromMachines([createMachine()], "2026-06-05T00:00:00.000Z");
+    const layout = createLayoutSnapshotFromMachines([createMachine()], "2026-06-05T00:00:00.000Z", [{
+      id: "annotation-1",
+      type: "warning",
+      text: "Leave 800 mm maintenance space",
+      positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
+      targetObjectId: "machine-1",
+      style: { sizeScale: 8, emphasis: "critical", background: true }
+    }]);
     const object = layout.objects[0];
 
     expect(layout.unitSystem).toEqual({ canonicalUnit: "mm", renderUnit: "m", version: "1.0" });
@@ -84,6 +91,16 @@ describe("layout serialization", () => {
     expect(object.definitionSnapshot?.ataraMachineData?.identity?.atrId).toBe("ATR-LAYOUT");
     expect(object.definitionSnapshot?.ataraMachineData?.physical?.weightKg).toBe(1500);
     expect(object.definitionSnapshot?.ataraMachineData?.connectionPoints?.[0].id).toBe("electrical-1");
+    expect(layout.annotations?.[0]).toMatchObject({
+      id: "annotation-1",
+      text: "Leave 800 mm maintenance space",
+      targetObjectId: "machine-1"
+    });
+    expect(annotationsFromLayout(layout)[0]).toMatchObject({
+      positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
+      targetObjectId: "machine-1",
+      style: { sizeScale: 8 }
+    });
   });
 
   it("normalizes legacy layouts without unit metadata", () => {
