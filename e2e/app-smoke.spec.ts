@@ -114,7 +114,7 @@ test("AtrVisu app smoke flow has no red console errors", async ({ page }) => {
   await expect(page.getByTestId("collision-envelope-editor-section")).toBeVisible();
   await page.getByTestId("connection-point-editor-section").locator("summary").click();
   await expect(page.getByTestId("library-manager-connection-point-editor")).toBeVisible();
-  const closeLibraryManager = page.getByTestId("close-library-manager");
+  const closeLibraryManager = page.getByTestId("close-library-manager-header");
   await expect(closeLibraryManager).toBeVisible();
   await expect(closeLibraryManager).toBeEnabled();
   await closeLibraryManager.click();
