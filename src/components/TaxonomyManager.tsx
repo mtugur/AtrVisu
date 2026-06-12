@@ -241,13 +241,13 @@ export function TaxonomyManager({ onClose, onChanged }: TaxonomyManagerProps) {
             <span className="panel-kicker">AtrVisu</span>
             <h2>Taxonomy Manager</h2>
           </div>
-          <button data-testid="close-taxonomy-manager" type="button" onClick={onClose}>Close</button>
+          <button data-testid="close-taxonomy-manager-header" type="button" onClick={onClose}>Close</button>
         </header>
 
         {message ? <p className="manager-status">{message}</p> : null}
 
         {taxonomy ? (
-          <div className="taxonomy-layout">
+          <div className="taxonomy-layout" data-testid="taxonomy-manager-ready">
             <section className="taxonomy-column">
               <div className="manager-column-header">
                 <span>Categories</span>
@@ -345,7 +345,7 @@ export function TaxonomyManager({ onClose, onChanged }: TaxonomyManagerProps) {
           </div>
           <div className="manager-footer-right">
             <button className="danger-action" type="button" onClick={resetTaxonomy}>Reset Custom Taxonomy</button>
-            <button type="button" onClick={onClose}>Close</button>
+            <button data-testid="close-taxonomy-manager" type="button" onClick={onClose}>Close</button>
           </div>
         </footer>
       </section>
