@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import type { KeyboardEvent } from "react";
 import type { AnnotationObject, AnnotationType } from "../types/annotations";
 import type { PlacedMachine } from "../types/machine";
-import { normalizeAnnotationCoordinateInput, normalizeAnnotationSizeScale } from "../utils/annotations";
+import { normalizeAnnotationSizeScale } from "../utils/annotations";
+import { createNumericFieldRule } from "../utils/numericFieldRules";
+import { NumericInput } from "./common/NumericInput";
 
 type AnnotationsPanelProps = {
   annotations: AnnotationObject[];
@@ -24,6 +24,39 @@ const annotationTypes: Array<{ value: AnnotationType; label: string }> = [
   { value: "area-note", label: "Area Note" }
 ];
 
+const annotationPlanXRule = createNumericFieldRule({
+  key: "annotation.planX",
+  label: "Annotation Plan X",
+  unit: "mm",
+  numericKind: "signed-coordinate",
+  optional: false,
+  allowDecimal: true,
+  zeroPolicy: "zero-allowed",
+  invalidInputBehavior: "keep-invalid"
+});
+
+const annotationPlanYRule = createNumericFieldRule({
+  key: "annotation.planY",
+  label: "Annotation Plan Y",
+  unit: "mm",
+  numericKind: "signed-coordinate",
+  optional: false,
+  allowDecimal: true,
+  zeroPolicy: "zero-allowed",
+  invalidInputBehavior: "keep-invalid"
+});
+
+const annotationElevationRule = createNumericFieldRule({
+  key: "annotation.elevation",
+  label: "Annotation Elevation",
+  unit: "mm",
+  numericKind: "non-negative-physical",
+  optional: false,
+  allowDecimal: true,
+  zeroPolicy: "zero-allowed",
+  invalidInputBehavior: "keep-invalid"
+});
+
 export function AnnotationsPanel({
   annotations,
   selectedAnnotationId,
@@ -38,53 +71,30 @@ export function AnnotationsPanel({
   const targetMachine = selectedAnnotation?.targetObjectId
     ? placedMachines.find((machine) => machine.instanceId === selectedAnnotation.targetObjectId)
     : undefined;
-  const [positionDraft, setPositionDraft] = useState({ xMm: "0", yMm: "0", zMm: "1600" });
-
-  useEffect(() => {
-    if (!selectedAnnotation) {
-      setPositionDraft({ xMm: "0", yMm: "0", zMm: "1600" });
-      return;
-    }
-
-    setPositionDraft({
-      xMm: String(selectedAnnotation.positionMm.xMm),
-      yMm: String(selectedAnnotation.positionMm.yMm),
-      zMm: String(selectedAnnotation.positionMm.zMm ?? 1600)
-    });
-  }, [selectedAnnotation?.id, selectedAnnotation?.positionMm.xMm, selectedAnnotation?.positionMm.yMm, selectedAnnotation?.positionMm.zMm]);
-
-  const commitPosition = (axis: "xMm" | "yMm" | "zMm") => {
+  const updatePosition = (axis: "xMm" | "yMm" | "zMm", value: number, recordHistory = false) => {
     if (!selectedAnnotation) {
       return;
     }
-
-    const fallback = axis === "zMm"
-      ? selectedAnnotation.positionMm.zMm ?? 1600
-      : selectedAnnotation.positionMm[axis];
-    const numericValue = normalizeAnnotationCoordinateInput(
-      positionDraft[axis],
-      fallback,
-      { allowNegative: axis !== "zMm" }
-    );
 
     onUpdateAnnotation(
       selectedAnnotation.id,
       {
         positionMm: {
           ...selectedAnnotation.positionMm,
-          [axis]: numericValue
+          [axis]: axis === "zMm" ? Math.max(0, value) : value
         }
       },
-      { recordHistory: false }
+      { recordHistory }
     );
-    setPositionDraft((current) => ({ ...current, [axis]: String(numericValue) }));
-    onCommitAnnotationEdit();
   };
 
-  const handleCommitKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.currentTarget.blur();
+  const commitPosition = (axis: "xMm" | "yMm" | "zMm", value: number | undefined) => {
+    if (value === undefined) {
+      return;
     }
+
+    updatePosition(axis, value, false);
+    onCommitAnnotationEdit();
   };
 
   return (
@@ -144,37 +154,37 @@ export function AnnotationsPanel({
           </label>
           <label className="property-field">
             <span>Plan X (mm)</span>
-            <input
-              type="number"
-              step="10"
+            <NumericInput
+              ariaLabel="Annotation Plan X"
               data-testid="annotation-plan-x-input"
-              value={positionDraft.xMm}
-              onChange={(event) => setPositionDraft((current) => ({ ...current, xMm: event.target.value }))}
-              onBlur={() => commitPosition("xMm")}
-              onKeyDown={handleCommitKey}
+              rule={annotationPlanXRule}
+              step="10"
+              value={selectedAnnotation.positionMm.xMm}
+              onChange={(value) => updatePosition("xMm", value, false)}
+              onCommit={(value) => commitPosition("xMm", value)}
             />
           </label>
           <label className="property-field">
             <span>Plan Y (mm)</span>
-            <input
-              type="number"
-              step="10"
+            <NumericInput
+              ariaLabel="Annotation Plan Y"
               data-testid="annotation-plan-y-input"
-              value={positionDraft.yMm}
-              onChange={(event) => setPositionDraft((current) => ({ ...current, yMm: event.target.value }))}
-              onBlur={() => commitPosition("yMm")}
-              onKeyDown={handleCommitKey}
+              rule={annotationPlanYRule}
+              step="10"
+              value={selectedAnnotation.positionMm.yMm}
+              onChange={(value) => updatePosition("yMm", value, false)}
+              onCommit={(value) => commitPosition("yMm", value)}
             />
           </label>
           <label className="property-field">
             <span>Elevation (mm)</span>
-            <input
-              type="number"
+            <NumericInput
+              ariaLabel="Annotation Elevation"
+              rule={annotationElevationRule}
               step="10"
-              value={positionDraft.zMm}
-              onChange={(event) => setPositionDraft((current) => ({ ...current, zMm: event.target.value }))}
-              onBlur={() => commitPosition("zMm")}
-              onKeyDown={handleCommitKey}
+              value={selectedAnnotation.positionMm.zMm ?? 1600}
+              onChange={(value) => updatePosition("zMm", value, false)}
+              onCommit={(value) => commitPosition("zMm", value)}
             />
           </label>
           <div className="property-readout">

@@ -26,6 +26,12 @@ import {
   getConnectionPointDirectionLabel,
   getConnectionPointTypeLabel
 } from "../utils/connectionPoints";
+import {
+  createNumericFieldRule,
+  validateNumericValue,
+  type NumericFieldRule
+} from "../utils/numericFieldRules";
+import { NumericInput } from "./common/NumericInput";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
@@ -359,14 +365,240 @@ const toEditorState = (
   };
 };
 
-const optionalNumber = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
+const createRule = (rule: Omit<NumericFieldRule, "invalidInputBehavior"> & { invalidInputBehavior?: NumericFieldRule["invalidInputBehavior"] }) => createNumericFieldRule({
+  invalidInputBehavior: "keep-invalid",
+  ...rule
+});
+
+const libraryNumericRules = {
+  widthMm: createRule({
+    key: "libraryItem.widthMm",
+    label: "Width",
+    unit: "mm",
+    numericKind: "positive-physical",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  depthMm: createRule({
+    key: "libraryItem.depthMm",
+    label: "Depth",
+    unit: "mm",
+    numericKind: "positive-physical",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  heightMm: createRule({
+    key: "libraryItem.heightMm",
+    label: "Height",
+    unit: "mm",
+    numericKind: "positive-physical",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  connectionLocalX: createRule({
+    key: "connectionPoint.localX",
+    label: "Connection Point Local X",
+    unit: "mm",
+    numericKind: "signed-coordinate",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  connectionLocalY: createRule({
+    key: "connectionPoint.localPlanY",
+    label: "Connection Point Local Plan Y",
+    unit: "mm",
+    numericKind: "signed-coordinate",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  connectionElevation: createRule({
+    key: "connectionPoint.elevation",
+    label: "Connection Point Elevation",
+    unit: "mm",
+    numericKind: "non-negative-physical",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  connectionSize: createRule({
+    key: "connectionPoint.size",
+    label: "Connection Point Size",
+    unit: "mm",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  visualRotationAngle: createRule({
+    key: "visualModel.rotationOffset",
+    label: "Visual Rotation Offset",
+    unit: "deg",
+    numericKind: "angle",
+    optional: false,
+    allowDecimal: true,
+    allowNegative: true,
+    zeroPolicy: "zero-allowed",
+    reason: "Visual calibration rotation offsets may be signed."
+  }),
+  visualPositionOffset: createRule({
+    key: "visualModel.positionOffset",
+    label: "Visual Position Offset",
+    unit: "mm",
+    numericKind: "signed-coordinate",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  collisionDimension: createRule({
+    key: "collisionEnvelope.dimension",
+    label: "Collision Envelope Dimension",
+    unit: "mm",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  collisionOffset: createRule({
+    key: "collisionEnvelope.offset",
+    label: "Collision Envelope Offset",
+    unit: "mm",
+    numericKind: "signed-coordinate",
+    optional: false,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  ataraWeightKg: createRule({
+    key: "atara.weightKg",
+    label: "Weight",
+    unit: "kg",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  ataraOperatingWeightKg: createRule({
+    key: "atara.operatingWeightKg",
+    label: "Operating Weight",
+    unit: "kg",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  ataraMaintenanceOpenDimension: createRule({
+    key: "atara.maintenanceOpenDimension",
+    label: "Maintenance Open Dimension",
+    unit: "mm",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  ataraClearance: createRule({
+    key: "atara.clearance",
+    label: "Maintenance Clearance",
+    unit: "mm",
+    numericKind: "non-negative-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  ataraCapacity: createRule({
+    key: "atara.capacity",
+    label: "Capacity",
+    unit: "units/h",
+    numericKind: "non-negative-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  ataraNoiseDb: createRule({
+    key: "atara.noiseDb",
+    label: "Noise",
+    unit: "dB",
+    numericKind: "non-negative-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  ataraElectricalPowerKw: createRule({
+    key: "atara.electricalPowerKw",
+    label: "Electrical Power",
+    unit: "kW",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  ataraVoltage: createRule({
+    key: "atara.voltage",
+    label: "Voltage",
+    unit: "V",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  ataraFrequencyHz: createRule({
+    key: "atara.frequencyHz",
+    label: "Frequency",
+    unit: "Hz",
+    numericKind: "positive-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "greater-than-zero"
+  }),
+  ataraPneumaticPressureBar: createRule({
+    key: "atara.pneumaticPressureBar",
+    label: "Pneumatic Pressure",
+    unit: "bar",
+    numericKind: "non-negative-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  ataraAirConsumptionNlMin: createRule({
+    key: "atara.airConsumptionNlMin",
+    label: "Air Consumption",
+    unit: "Nl/min",
+    numericKind: "non-negative-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  }),
+  ataraAspirationAirflowM3h: createRule({
+    key: "atara.aspirationAirflowM3h",
+    label: "Aspiration Airflow",
+    unit: "m3/h",
+    numericKind: "non-negative-physical",
+    optional: true,
+    allowDecimal: true,
+    zeroPolicy: "zero-allowed"
+  })
+} as const;
+
+const validateEditorNumber = (value: string, rule: NumericFieldRule) => {
+  const result = validateNumericValue(value, rule);
+  if (!result.valid) {
+    throw new Error(result.message);
   }
-  const numericValue = Number(trimmed);
-  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : undefined;
+  return result.value;
 };
+
+const parseEditorNumber = (value: string, rule: NumericFieldRule) => {
+  const result = validateNumericValue(value, rule);
+  if (!result.valid) {
+    throw new Error(result.message);
+  }
+  return result.value ?? 0;
+};
+
+const optionalNumber = (value: string, rule: NumericFieldRule) => validateEditorNumber(value, rule);
 
 const csvList = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
 
@@ -483,64 +715,6 @@ const connectionAnchorButtons: Array<{ key: ConnectionAnchorName; label: string 
   { key: "backLeft", label: "Back Left" },
   { key: "backRight", label: "Back Right" }
 ];
-
-function DraftNumberInput({
-  value,
-  disabled,
-  allowNegative,
-  min,
-  step,
-  onCommit
-}: {
-  value: number | "";
-  disabled: boolean;
-  allowNegative?: boolean;
-  min?: number;
-  step?: string;
-  onCommit: (value: number | undefined) => void;
-}) {
-  const [draft, setDraft] = useState(value === "" ? "" : String(value));
-
-  useEffect(() => {
-    setDraft(value === "" ? "" : String(value));
-  }, [value]);
-
-  const commit = (rawValue: string) => {
-    const trimmed = rawValue.trim();
-    if (!trimmed || trimmed === "-" || trimmed === "." || trimmed === "-.") {
-      onCommit(undefined);
-      return;
-    }
-
-    const numericValue = Number(trimmed);
-    if (!Number.isFinite(numericValue)) {
-      return;
-    }
-
-    onCommit(allowNegative ? numericValue : Math.max(min ?? 0, numericValue));
-  };
-
-  return (
-    <input
-      disabled={disabled}
-      type="text"
-      inputMode="decimal"
-      step={step}
-      value={draft}
-      onChange={(event) => {
-        const nextValue = event.target.value;
-        if (!allowNegative && nextValue.trim().startsWith("-")) {
-          return;
-        }
-        setDraft(nextValue);
-        if (!["", "-", ".", "-."].includes(nextValue.trim()) && Number.isFinite(Number(nextValue))) {
-          commit(nextValue);
-        }
-      }}
-      onBlur={() => commit(draft)}
-    />
-  );
-}
 
 const updateConnectionPointAt = (
   editor: ItemEditorState,
@@ -711,12 +885,24 @@ function ConnectionPointEditor({
             {(["xMm", "yMm", "zMm"] as const).map((axis) => (
               <label key={axis}>
                 <span>{axis === "xMm" ? "Local X (mm)" : axis === "yMm" ? "Local Plan Y (mm)" : "Elevation (mm)"}</span>
-                <DraftNumberInput
+                <NumericInput
                   disabled={!editable}
+                  rule={axis === "xMm"
+                    ? libraryNumericRules.connectionLocalX
+                    : axis === "yMm"
+                      ? libraryNumericRules.connectionLocalY
+                      : libraryNumericRules.connectionElevation}
                   step="10"
-                  min={axis === "zMm" ? 0 : undefined}
                   value={point.positionMm[axis]}
-                  allowNegative={axis !== "zMm"}
+                  onChange={(nextValue) => {
+                    updatePoint(index, (current) => ({
+                      ...current,
+                      positionMm: {
+                        ...current.positionMm,
+                        [axis]: axis === "zMm" ? Math.max(0, nextValue) : nextValue
+                      }
+                    }));
+                  }}
                   onCommit={(nextValue) => {
                     if (nextValue === undefined) {
                       return;
@@ -735,9 +921,9 @@ function ConnectionPointEditor({
             {(["widthMm", "heightMm", "diameterMm"] as const).map((key) => (
               <label key={key}>
                 <span>{key.replace("Mm", " (mm)")}</span>
-                <DraftNumberInput
+                <NumericInput
                   disabled={!editable}
-                  min={0}
+                  rule={libraryNumericRules.connectionSize}
                   step="1"
                   value={point.sizeMm?.[key] ?? ""}
                   onCommit={(nextValue) =>
@@ -871,33 +1057,33 @@ const buildAtaraMachineData = (
       physical: hasEngineering
         ? {
             ...dimensionsMm,
-            weightKg: optionalNumber(editor.ataraWeightKg),
-            operatingWeightKg: optionalNumber(editor.ataraOperatingWeightKg),
+            weightKg: optionalNumber(editor.ataraWeightKg, libraryNumericRules.ataraWeightKg),
+            operatingWeightKg: optionalNumber(editor.ataraOperatingWeightKg, libraryNumericRules.ataraOperatingWeightKg),
             maintenanceOpenDimensionsMm: {
-              widthMm: optionalNumber(editor.ataraMaintenanceOpenWidthMm),
-              depthMm: optionalNumber(editor.ataraMaintenanceOpenDepthMm),
-              heightMm: optionalNumber(editor.ataraMaintenanceOpenHeightMm)
+              widthMm: optionalNumber(editor.ataraMaintenanceOpenWidthMm, libraryNumericRules.ataraMaintenanceOpenDimension),
+              depthMm: optionalNumber(editor.ataraMaintenanceOpenDepthMm, libraryNumericRules.ataraMaintenanceOpenDimension),
+              heightMm: optionalNumber(editor.ataraMaintenanceOpenHeightMm, libraryNumericRules.ataraMaintenanceOpenDimension)
             }
           }
         : undefined,
       maintenanceClearance: hasClearance
         ? {
-            frontMm: optionalNumber(editor.ataraClearanceFrontMm) ?? 0,
-            backMm: optionalNumber(editor.ataraClearanceBackMm) ?? 0,
-            leftMm: optionalNumber(editor.ataraClearanceLeftMm) ?? 0,
-            rightMm: optionalNumber(editor.ataraClearanceRightMm) ?? 0,
-            topMm: optionalNumber(editor.ataraClearanceTopMm) ?? 0,
+            frontMm: optionalNumber(editor.ataraClearanceFrontMm, libraryNumericRules.ataraClearance) ?? 0,
+            backMm: optionalNumber(editor.ataraClearanceBackMm, libraryNumericRules.ataraClearance) ?? 0,
+            leftMm: optionalNumber(editor.ataraClearanceLeftMm, libraryNumericRules.ataraClearance) ?? 0,
+            rightMm: optionalNumber(editor.ataraClearanceRightMm, libraryNumericRules.ataraClearance) ?? 0,
+            topMm: optionalNumber(editor.ataraClearanceTopMm, libraryNumericRules.ataraClearance) ?? 0,
             notes: editor.ataraClearanceNotes
           }
         : undefined,
       operationalData: hasOperational
         ? {
-            capacityMin: optionalNumber(editor.ataraCapacityMin),
-            capacityNominal: optionalNumber(editor.ataraCapacityNominal),
-            capacityMax: optionalNumber(editor.ataraCapacityMax),
+            capacityMin: optionalNumber(editor.ataraCapacityMin, libraryNumericRules.ataraCapacity),
+            capacityNominal: optionalNumber(editor.ataraCapacityNominal, libraryNumericRules.ataraCapacity),
+            capacityMax: optionalNumber(editor.ataraCapacityMax, libraryNumericRules.ataraCapacity),
             capacityUnit: editor.ataraCapacityUnit,
             productTypes: csvList(editor.ataraProductTypes),
-            noiseDb: optionalNumber(editor.ataraNoiseDb),
+            noiseDb: optionalNumber(editor.ataraNoiseDb, libraryNumericRules.ataraNoiseDb),
             vibrationClass: editor.ataraVibrationClass,
             notes: editor.ataraOperationalNotes
           }
@@ -905,15 +1091,15 @@ const buildAtaraMachineData = (
       utilityRequirements: hasUtilities
         ? {
             electrical: {
-              powerKw: optionalNumber(editor.ataraElectricalPowerKw),
-              voltage: optionalNumber(editor.ataraVoltage),
+              powerKw: optionalNumber(editor.ataraElectricalPowerKw, libraryNumericRules.ataraElectricalPowerKw),
+              voltage: optionalNumber(editor.ataraVoltage, libraryNumericRules.ataraVoltage),
               phase: editor.ataraPhase,
-              frequencyHz: optionalNumber(editor.ataraFrequencyHz),
+              frequencyHz: optionalNumber(editor.ataraFrequencyHz, libraryNumericRules.ataraFrequencyHz),
               notes: editor.ataraUtilityNotes
             },
             pneumatic: {
-              pressureBar: optionalNumber(editor.ataraPneumaticPressureBar),
-              airConsumptionNlMin: optionalNumber(editor.ataraAirConsumptionNlMin),
+              pressureBar: optionalNumber(editor.ataraPneumaticPressureBar, libraryNumericRules.ataraPneumaticPressureBar),
+              airConsumptionNlMin: optionalNumber(editor.ataraAirConsumptionNlMin, libraryNumericRules.ataraAirConsumptionNlMin),
               notes: editor.ataraUtilityNotes
             },
             network: {
@@ -922,7 +1108,7 @@ const buildAtaraMachineData = (
             },
             aspiration: {
               required: editor.ataraAspirationRequired,
-              airflowM3h: optionalNumber(editor.ataraAspirationAirflowM3h),
+              airflowM3h: optionalNumber(editor.ataraAspirationAirflowM3h, libraryNumericRules.ataraAspirationAirflowM3h),
               notes: editor.ataraUtilityNotes
             }
           }
@@ -1284,21 +1470,47 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
       return;
     }
 
-    const widthMm = Number(itemEditor.widthMm);
-    const depthMm = Number(itemEditor.depthMm);
-    const heightMm = Number(itemEditor.heightMm);
-    const rotationOffsetX = Number(itemEditor.rotationOffsetX);
-    const rotationOffsetY = Number(itemEditor.rotationOffsetY);
-    const rotationOffsetZ = Number(itemEditor.rotationOffsetZ);
-    const positionOffsetXMm = Number(itemEditor.positionOffsetXMm);
-    const positionOffsetYMm = Number(itemEditor.positionOffsetYMm);
-    const positionOffsetZMm = Number(itemEditor.positionOffsetZMm);
-    const collisionWidthMm = itemEditor.collisionWidthMm.trim() ? Number(itemEditor.collisionWidthMm) : widthMm;
-    const collisionDepthMm = itemEditor.collisionDepthMm.trim() ? Number(itemEditor.collisionDepthMm) : depthMm;
-    const collisionHeightMm = itemEditor.collisionHeightMm.trim() ? Number(itemEditor.collisionHeightMm) : heightMm;
-    const collisionOffsetXMm = Number(itemEditor.collisionOffsetXMm);
-    const collisionOffsetYMm = Number(itemEditor.collisionOffsetYMm);
-    const collisionOffsetZMm = Number(itemEditor.collisionOffsetZMm);
+    let widthMm = 0;
+    let depthMm = 0;
+    let heightMm = 0;
+    let rotationOffsetX = 0;
+    let rotationOffsetY = 0;
+    let rotationOffsetZ = 0;
+    let positionOffsetXMm = 0;
+    let positionOffsetYMm = 0;
+    let positionOffsetZMm = 0;
+    let collisionWidthMm = 0;
+    let collisionDepthMm = 0;
+    let collisionHeightMm = 0;
+    let collisionOffsetXMm = 0;
+    let collisionOffsetYMm = 0;
+    let collisionOffsetZMm = 0;
+    try {
+      widthMm = parseEditorNumber(itemEditor.widthMm, libraryNumericRules.widthMm);
+      depthMm = parseEditorNumber(itemEditor.depthMm, libraryNumericRules.depthMm);
+      heightMm = parseEditorNumber(itemEditor.heightMm, libraryNumericRules.heightMm);
+      rotationOffsetX = parseEditorNumber(itemEditor.rotationOffsetX, libraryNumericRules.visualRotationAngle);
+      rotationOffsetY = parseEditorNumber(itemEditor.rotationOffsetY, libraryNumericRules.visualRotationAngle);
+      rotationOffsetZ = parseEditorNumber(itemEditor.rotationOffsetZ, libraryNumericRules.visualRotationAngle);
+      positionOffsetXMm = parseEditorNumber(itemEditor.positionOffsetXMm, libraryNumericRules.visualPositionOffset);
+      positionOffsetYMm = parseEditorNumber(itemEditor.positionOffsetYMm, libraryNumericRules.visualPositionOffset);
+      positionOffsetZMm = parseEditorNumber(itemEditor.positionOffsetZMm, libraryNumericRules.visualPositionOffset);
+      collisionWidthMm = itemEditor.collisionWidthMm.trim()
+        ? parseEditorNumber(itemEditor.collisionWidthMm, libraryNumericRules.collisionDimension)
+        : widthMm;
+      collisionDepthMm = itemEditor.collisionDepthMm.trim()
+        ? parseEditorNumber(itemEditor.collisionDepthMm, libraryNumericRules.collisionDimension)
+        : depthMm;
+      collisionHeightMm = itemEditor.collisionHeightMm.trim()
+        ? parseEditorNumber(itemEditor.collisionHeightMm, libraryNumericRules.collisionDimension)
+        : heightMm;
+      collisionOffsetXMm = parseEditorNumber(itemEditor.collisionOffsetXMm, libraryNumericRules.collisionOffset);
+      collisionOffsetYMm = parseEditorNumber(itemEditor.collisionOffsetYMm, libraryNumericRules.collisionOffset);
+      collisionOffsetZMm = parseEditorNumber(itemEditor.collisionOffsetZMm, libraryNumericRules.collisionOffset);
+    } catch (caught) {
+      setValidationError(caught instanceof Error ? caught.message : "Numeric field validation failed.");
+      return;
+    }
     const ids = collectItemIds(draftLibrary.root);
     if (itemEditor.originalId) {
       ids.delete(itemEditor.originalId);
@@ -1320,44 +1532,8 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
       setValidationError("Machine type is required.");
       return;
     }
-    if (
-      !Number.isFinite(widthMm) ||
-      widthMm <= 0 ||
-      !Number.isFinite(depthMm) ||
-      depthMm <= 0 ||
-      !Number.isFinite(heightMm) ||
-      heightMm <= 0
-    ) {
-      setValidationError("Width, depth, and height must be positive millimeter values.");
-      return;
-    }
     if (ids.has(itemEditor.id.trim())) {
       setValidationError("Machine item id must be unique inside Project Custom Library.");
-      return;
-    }
-    if (
-      !Number.isFinite(rotationOffsetX) ||
-      !Number.isFinite(rotationOffsetY) ||
-      !Number.isFinite(rotationOffsetZ) ||
-      !Number.isFinite(positionOffsetXMm) ||
-      !Number.isFinite(positionOffsetYMm) ||
-      !Number.isFinite(positionOffsetZMm)
-    ) {
-      setValidationError("Visual model offsets must be valid numbers.");
-      return;
-    }
-    if (
-      !Number.isFinite(collisionWidthMm) ||
-      collisionWidthMm <= 0 ||
-      !Number.isFinite(collisionDepthMm) ||
-      collisionDepthMm <= 0 ||
-      !Number.isFinite(collisionHeightMm) ||
-      collisionHeightMm <= 0 ||
-      !Number.isFinite(collisionOffsetXMm) ||
-      !Number.isFinite(collisionOffsetYMm) ||
-      !Number.isFinite(collisionOffsetZMm)
-    ) {
-      setValidationError("Collision envelope dimensions must be positive and offsets must be valid millimeter values.");
       return;
     }
 
@@ -1720,32 +1896,47 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                   </label>
                   <label>
                     <span>Width (mm)</span>
-                    <input
+                    <NumericInput
                       disabled={!editable}
-                      type="number"
+                      rule={libraryNumericRules.widthMm}
                       step="1"
                       value={itemEditor.widthMm}
-                      onChange={(event) => setItemEditor({ ...itemEditor, widthMm: event.target.value })}
+                      onDraftChange={(value) => setItemEditor({ ...itemEditor, widthMm: value })}
+                      onCommit={(value) => {
+                        if (value !== undefined) {
+                          setItemEditor({ ...itemEditor, widthMm: String(value) });
+                        }
+                      }}
                     />
                   </label>
                   <label>
                     <span>Depth (mm)</span>
-                    <input
+                    <NumericInput
                       disabled={!editable}
-                      type="number"
+                      rule={libraryNumericRules.depthMm}
                       step="1"
                       value={itemEditor.depthMm}
-                      onChange={(event) => setItemEditor({ ...itemEditor, depthMm: event.target.value })}
+                      onDraftChange={(value) => setItemEditor({ ...itemEditor, depthMm: value })}
+                      onCommit={(value) => {
+                        if (value !== undefined) {
+                          setItemEditor({ ...itemEditor, depthMm: String(value) });
+                        }
+                      }}
                     />
                   </label>
                   <label>
                     <span>Height (mm)</span>
-                    <input
+                    <NumericInput
                       disabled={!editable}
-                      type="number"
+                      rule={libraryNumericRules.heightMm}
                       step="1"
                       value={itemEditor.heightMm}
-                      onChange={(event) => setItemEditor({ ...itemEditor, heightMm: event.target.value })}
+                      onDraftChange={(value) => setItemEditor({ ...itemEditor, heightMm: value })}
+                      onCommit={(value) => {
+                        if (value !== undefined) {
+                          setItemEditor({ ...itemEditor, heightMm: String(value) });
+                        }
+                      }}
                     />
                   </label>
                   <label>
@@ -1795,20 +1986,25 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                   <summary>Engineering Data</summary>
                   <div className="manager-editor-grid">
                     {([
-                      ["ataraWeightKg", "Weight (kg)"],
-                      ["ataraOperatingWeightKg", "Operating Weight (kg)"],
-                      ["ataraMaintenanceOpenWidthMm", "Maintenance Open Width (mm)"],
-                      ["ataraMaintenanceOpenDepthMm", "Maintenance Open Depth (mm)"],
-                      ["ataraMaintenanceOpenHeightMm", "Maintenance Open Height (mm)"]
-                    ] as const).map(([key, label]) => (
+                      ["ataraWeightKg", "Weight (kg)", libraryNumericRules.ataraWeightKg],
+                      ["ataraOperatingWeightKg", "Operating Weight (kg)", libraryNumericRules.ataraOperatingWeightKg],
+                      ["ataraMaintenanceOpenWidthMm", "Maintenance Open Width (mm)", libraryNumericRules.ataraMaintenanceOpenDimension],
+                      ["ataraMaintenanceOpenDepthMm", "Maintenance Open Depth (mm)", libraryNumericRules.ataraMaintenanceOpenDimension],
+                      ["ataraMaintenanceOpenHeightMm", "Maintenance Open Height (mm)", libraryNumericRules.ataraMaintenanceOpenDimension]
+                    ] as const).map(([key, label, rule]) => (
                       <label key={key}>
                         <span>{label}</span>
-                        <input
+                        <NumericInput
                           disabled={!editable}
-                          type="number"
+                          rule={rule}
                           step="1"
                           value={itemEditor[key]}
-                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                          onDraftChange={(value) => setItemEditor({ ...itemEditor, [key]: value })}
+                          onCommit={(value) => {
+                            if (value !== undefined) {
+                              setItemEditor({ ...itemEditor, [key]: String(value) });
+                            }
+                          }}
                         />
                       </label>
                     ))}
@@ -1818,20 +2014,23 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                   <summary>Maintenance Clearance</summary>
                   <div className="manager-editor-grid">
                     {([
-                      ["ataraClearanceFrontMm", "Front (mm)"],
-                      ["ataraClearanceBackMm", "Back (mm)"],
-                      ["ataraClearanceLeftMm", "Left (mm)"],
-                      ["ataraClearanceRightMm", "Right (mm)"],
-                      ["ataraClearanceTopMm", "Top (mm)"]
-                    ] as const).map(([key, label]) => (
+                      ["ataraClearanceFrontMm", "Front (mm)", libraryNumericRules.ataraClearance],
+                      ["ataraClearanceBackMm", "Back (mm)", libraryNumericRules.ataraClearance],
+                      ["ataraClearanceLeftMm", "Left (mm)", libraryNumericRules.ataraClearance],
+                      ["ataraClearanceRightMm", "Right (mm)", libraryNumericRules.ataraClearance],
+                      ["ataraClearanceTopMm", "Top (mm)", libraryNumericRules.ataraClearance]
+                    ] as const).map(([key, label, rule]) => (
                       <label key={key}>
                         <span>{label}</span>
-                        <input
+                        <NumericInput
                           disabled={!editable}
-                          type="number"
+                          rule={rule}
                           step="1"
                           value={itemEditor[key]}
-                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                          onDraftChange={(value) => setItemEditor({ ...itemEditor, [key]: value })}
+                          onCommit={(value) => {
+                            setItemEditor({ ...itemEditor, [key]: value === undefined ? "" : String(value) });
+                          }}
                         />
                       </label>
                     ))}
@@ -1849,19 +2048,22 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                   <summary>Operational Data</summary>
                   <div className="manager-editor-grid">
                     {([
-                      ["ataraCapacityMin", "Capacity Min"],
-                      ["ataraCapacityNominal", "Capacity Nominal"],
-                      ["ataraCapacityMax", "Capacity Max"],
-                      ["ataraNoiseDb", "Noise (dB)"]
-                    ] as const).map(([key, label]) => (
+                      ["ataraCapacityMin", "Capacity Min", libraryNumericRules.ataraCapacity],
+                      ["ataraCapacityNominal", "Capacity Nominal", libraryNumericRules.ataraCapacity],
+                      ["ataraCapacityMax", "Capacity Max", libraryNumericRules.ataraCapacity],
+                      ["ataraNoiseDb", "Noise (dB)", libraryNumericRules.ataraNoiseDb]
+                    ] as const).map(([key, label, rule]) => (
                       <label key={key}>
                         <span>{label}</span>
-                        <input
+                        <NumericInput
                           disabled={!editable}
-                          type="number"
+                          rule={rule}
                           step="1"
                           value={itemEditor[key]}
-                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                          onDraftChange={(value) => setItemEditor({ ...itemEditor, [key]: value })}
+                          onCommit={(value) => {
+                            setItemEditor({ ...itemEditor, [key]: value === undefined ? "" : String(value) });
+                          }}
                         />
                       </label>
                     ))}
@@ -1898,21 +2100,24 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
                   </div>
                   <div className="manager-editor-grid">
                     {([
-                      ["ataraElectricalPowerKw", "Electrical Power (kW)"],
-                      ["ataraVoltage", "Voltage"],
-                      ["ataraFrequencyHz", "Frequency (Hz)"],
-                      ["ataraPneumaticPressureBar", "Pneumatic Pressure (bar)"],
-                      ["ataraAirConsumptionNlMin", "Air Consumption (Nl/min)"],
-                      ["ataraAspirationAirflowM3h", "Aspiration Airflow (m3/h)"]
-                    ] as const).map(([key, label]) => (
+                      ["ataraElectricalPowerKw", "Electrical Power (kW)", libraryNumericRules.ataraElectricalPowerKw],
+                      ["ataraVoltage", "Voltage", libraryNumericRules.ataraVoltage],
+                      ["ataraFrequencyHz", "Frequency (Hz)", libraryNumericRules.ataraFrequencyHz],
+                      ["ataraPneumaticPressureBar", "Pneumatic Pressure (bar)", libraryNumericRules.ataraPneumaticPressureBar],
+                      ["ataraAirConsumptionNlMin", "Air Consumption (Nl/min)", libraryNumericRules.ataraAirConsumptionNlMin],
+                      ["ataraAspirationAirflowM3h", "Aspiration Airflow (m3/h)", libraryNumericRules.ataraAspirationAirflowM3h]
+                    ] as const).map(([key, label, rule]) => (
                       <label key={key}>
                         <span>{label}</span>
-                        <input
+                        <NumericInput
                           disabled={!editable}
-                          type="number"
+                          rule={rule}
                           step="0.1"
                           value={itemEditor[key]}
-                          onChange={(event) => setItemEditor({ ...itemEditor, [key]: event.target.value })}
+                          onDraftChange={(value) => setItemEditor({ ...itemEditor, [key]: value })}
+                          onCommit={(value) => {
+                            setItemEditor({ ...itemEditor, [key]: value === undefined ? "" : String(value) });
+                          }}
                         />
                       </label>
                     ))}
