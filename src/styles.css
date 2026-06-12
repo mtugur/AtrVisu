@@ -29,6 +29,13 @@ textarea {
   font: inherit;
 }
 
+select {
+  color-scheme: dark;
+  min-width: 0;
+  color: #f4f7f2;
+  background-color: #11181a;
+}
+
 select option {
   color: #f4f7f2;
   background: #101619;
@@ -38,6 +45,51 @@ select option:checked,
 select option:hover {
   color: #11170f;
   background: #a8c978;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  color: rgba(237, 243, 240, 0.48);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.numeric-input-control {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.numeric-input-row {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+
+.numeric-input-row input {
+  padding-right: 48px;
+}
+
+.numeric-input-unit {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: rgba(237, 243, 240, 0.56);
+  font-size: 0.72rem;
+  font-weight: 800;
+  pointer-events: none;
+  text-transform: uppercase;
+  transform: translateY(-50%);
+}
+
+.numeric-input-message {
+  color: #f3bd72;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.numeric-input-row input[aria-invalid="true"] {
+  border-color: rgba(243, 189, 114, 0.82);
+  box-shadow: 0 0 0 1px rgba(243, 189, 114, 0.18);
 }
 
 .app-shell {

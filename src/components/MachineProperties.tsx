@@ -13,6 +13,8 @@ import {
   getConnectionPointDisplayLabel,
   validateConnectionPointsForObject
 } from "../utils/connectionPoints";
+import { createNumericFieldRule } from "../utils/numericFieldRules";
+import { NumericInput } from "./common/NumericInput";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
@@ -28,6 +30,39 @@ type MachinePropertiesProps = {
 };
 
 const formatMm = (value: number) => formatLength(value, "mm", 0);
+
+const selectedMachinePlanXRule = createNumericFieldRule({
+  key: "selectedMachine.planX",
+  label: "Plan X",
+  unit: "mm",
+  numericKind: "signed-coordinate",
+  optional: false,
+  allowDecimal: true,
+  zeroPolicy: "zero-allowed",
+  invalidInputBehavior: "keep-invalid"
+});
+
+const selectedMachinePlanYRule = createNumericFieldRule({
+  key: "selectedMachine.planY",
+  label: "Plan Y",
+  unit: "mm",
+  numericKind: "signed-coordinate",
+  optional: false,
+  allowDecimal: true,
+  zeroPolicy: "zero-allowed",
+  invalidInputBehavior: "keep-invalid"
+});
+
+const selectedMachineElevationRule = createNumericFieldRule({
+  key: "selectedMachine.elevation",
+  label: "Elevation",
+  unit: "mm",
+  numericKind: "non-negative-physical",
+  optional: false,
+  allowDecimal: true,
+  zeroPolicy: "zero-allowed",
+  invalidInputBehavior: "keep-invalid"
+});
 
 const summarizeConnectionPointMetadata = (metadata?: {
   voltage?: number;
@@ -197,29 +232,47 @@ export function MachineProperties({
 
           <label className="property-field">
             <span>Plan X (mm)</span>
-            <input
-              type="number"
+            <NumericInput
+              ariaLabel="Plan X"
+              rule={selectedMachinePlanXRule}
               step="10"
               value={positionMm.xMm}
-              onChange={(event) => updatePosition("x", event.target.value)}
+              onChange={(value) => updatePosition("x", String(value))}
+              onCommit={(value) => {
+                if (value !== undefined) {
+                  updatePosition("x", String(value));
+                }
+              }}
             />
           </label>
           <label className="property-field">
             <span>Plan Y (mm)</span>
-            <input
-              type="number"
+            <NumericInput
+              ariaLabel="Plan Y"
+              rule={selectedMachinePlanYRule}
               step="10"
               value={positionMm.yMm}
-              onChange={(event) => updatePosition("z", event.target.value)}
+              onChange={(value) => updatePosition("z", String(value))}
+              onCommit={(value) => {
+                if (value !== undefined) {
+                  updatePosition("z", String(value));
+                }
+              }}
             />
           </label>
           <label className="property-field">
             <span>Elevation (mm)</span>
-            <input
-              type="number"
+            <NumericInput
+              ariaLabel="Elevation"
+              rule={selectedMachineElevationRule}
               step="10"
               value={selectedMachine.elevationMm ?? 0}
-              onChange={(event) => updateElevation(event.target.value)}
+              onChange={(value) => updateElevation(String(value))}
+              onCommit={(value) => {
+                if (value !== undefined) {
+                  updateElevation(String(value));
+                }
+              }}
             />
           </label>
           <label className="property-field">
