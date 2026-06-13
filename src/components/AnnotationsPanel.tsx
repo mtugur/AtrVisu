@@ -1,4 +1,5 @@
 import type { AnnotationObject, AnnotationType } from "../types/annotations";
+import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import { normalizeAnnotationSizeScale } from "../utils/annotations";
 import { createNumericFieldRule } from "../utils/numericFieldRules";
@@ -8,9 +9,12 @@ type AnnotationsPanelProps = {
   annotations: AnnotationObject[];
   selectedAnnotationId: string | null;
   placedMachines: PlacedMachine[];
+  layers: LayoutLayer[];
+  isSelectedAnnotationLocked: boolean;
   onAddAnnotation: (type: AnnotationType) => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onUpdateAnnotation: (annotationId: string, updates: Partial<AnnotationObject>, options?: { recordHistory?: boolean }) => void;
+  onChangeAnnotationLayer: (annotationId: string, layerId: string) => void;
   onCommitAnnotationEdit: () => void;
   onDeleteAnnotation: (annotationId: string) => void;
 };
@@ -61,9 +65,12 @@ export function AnnotationsPanel({
   annotations,
   selectedAnnotationId,
   placedMachines,
+  layers,
+  isSelectedAnnotationLocked,
   onAddAnnotation,
   onSelectAnnotation,
   onUpdateAnnotation,
+  onChangeAnnotationLayer,
   onCommitAnnotationEdit,
   onDeleteAnnotation
 }: AnnotationsPanelProps) {
@@ -72,7 +79,7 @@ export function AnnotationsPanel({
     ? placedMachines.find((machine) => machine.instanceId === selectedAnnotation.targetObjectId)
     : undefined;
   const updatePosition = (axis: "xMm" | "yMm" | "zMm", value: number, recordHistory = false) => {
-    if (!selectedAnnotation) {
+    if (!selectedAnnotation || isSelectedAnnotationLocked) {
       return;
     }
 
@@ -132,6 +139,7 @@ export function AnnotationsPanel({
             <span>Type</span>
             <select
               value={selectedAnnotation.type}
+              disabled={isSelectedAnnotationLocked}
               onChange={(event) =>
                 onUpdateAnnotation(selectedAnnotation.id, { type: event.target.value as AnnotationType })
               }
@@ -142,10 +150,28 @@ export function AnnotationsPanel({
             </select>
           </label>
           <label className="property-field">
+            <span>Layer</span>
+            <select
+              value={selectedAnnotation.layerId ?? "default"}
+              disabled={isSelectedAnnotationLocked}
+              onChange={(event) => onChangeAnnotationLayer(selectedAnnotation.id, event.target.value)}
+            >
+              {layers.map((layer) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name}{layer.locked ? " (locked)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {isSelectedAnnotationLocked ? (
+            <p className="layer-lock-note">This annotation is on a locked layer. Editing, movement, and delete are disabled.</p>
+          ) : null}
+          <label className="property-field">
             <span>Text</span>
             <textarea
               data-testid="annotation-text-input"
               value={selectedAnnotation.text}
+              disabled={isSelectedAnnotationLocked}
               onChange={(event) =>
                 onUpdateAnnotation(selectedAnnotation.id, { text: event.target.value }, { recordHistory: false })
               }
@@ -157,6 +183,7 @@ export function AnnotationsPanel({
             <NumericInput
               ariaLabel="Annotation Plan X"
               data-testid="annotation-plan-x-input"
+              disabled={isSelectedAnnotationLocked}
               rule={annotationPlanXRule}
               step="10"
               value={selectedAnnotation.positionMm.xMm}
@@ -169,6 +196,7 @@ export function AnnotationsPanel({
             <NumericInput
               ariaLabel="Annotation Plan Y"
               data-testid="annotation-plan-y-input"
+              disabled={isSelectedAnnotationLocked}
               rule={annotationPlanYRule}
               step="10"
               value={selectedAnnotation.positionMm.yMm}
@@ -180,6 +208,7 @@ export function AnnotationsPanel({
             <span>Elevation (mm)</span>
             <NumericInput
               ariaLabel="Annotation Elevation"
+              disabled={isSelectedAnnotationLocked}
               rule={annotationElevationRule}
               step="10"
               value={selectedAnnotation.positionMm.zMm ?? 1600}
@@ -203,6 +232,7 @@ export function AnnotationsPanel({
             <span>Size Scale: {normalizeAnnotationSizeScale(selectedAnnotation.style)}x</span>
             <input
               type="range"
+              disabled={isSelectedAnnotationLocked}
               min="1"
               max="10"
               step="1"
@@ -220,6 +250,7 @@ export function AnnotationsPanel({
             <span>Emphasis</span>
             <select
               value={selectedAnnotation.style?.emphasis ?? "normal"}
+              disabled={isSelectedAnnotationLocked}
               onChange={(event) =>
                 onUpdateAnnotation(selectedAnnotation.id, {
                   style: { ...selectedAnnotation.style, emphasis: event.target.value as "normal" | "important" | "critical" }
@@ -235,6 +266,7 @@ export function AnnotationsPanel({
             <input
               type="checkbox"
               checked={selectedAnnotation.style?.background ?? true}
+              disabled={isSelectedAnnotationLocked}
               onChange={(event) =>
                 onUpdateAnnotation(selectedAnnotation.id, {
                   style: { ...selectedAnnotation.style, background: event.target.checked }
@@ -243,7 +275,12 @@ export function AnnotationsPanel({
             />
             <span>Background</span>
           </label>
-          <button className="delete-object-button" type="button" onClick={() => onDeleteAnnotation(selectedAnnotation.id)}>
+          <button
+            className="delete-object-button"
+            type="button"
+            disabled={isSelectedAnnotationLocked}
+            onClick={() => onDeleteAnnotation(selectedAnnotation.id)}
+          >
             Delete Annotation
           </button>
         </div>

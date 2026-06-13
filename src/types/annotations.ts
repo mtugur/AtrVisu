@@ -10,6 +10,7 @@ export type AnnotationObject = {
   id: string;
   type: AnnotationType;
   text: string;
+  layerId?: string;
   positionMm: {
     xMm: number;
     yMm: number;

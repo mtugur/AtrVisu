@@ -8,6 +8,7 @@ import { AnnotationsPanel } from "./components/AnnotationsPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
+import { LayersPanel } from "./components/LayersPanel";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { MachineProperties } from "./components/MachineProperties";
 import { MultiSelectionProperties } from "./components/MultiSelectionProperties";
@@ -25,11 +26,12 @@ import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
 import type { MachineConnectionPoint } from "./types/ataraMachineData";
 import type { AnnotationObject, AnnotationType } from "./types/annotations";
+import type { LayoutLayer } from "./types/layers";
 import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
 import {
@@ -57,6 +59,18 @@ import {
 } from "./utils/annotations";
 import { addViewpoint, createViewpoint, deleteViewpoint, updateViewpoint } from "./utils/viewpoints";
 import { shouldHandleGlobalUndoRedo } from "./utils/keyboardShortcuts";
+import {
+  createDefaultLayer,
+  createLayer,
+  deleteLayerAndReassignItems,
+  getLayer,
+  getLayerId,
+  isLayerLocked,
+  isLayerVisible,
+  isolateLayer,
+  normalizeLayers,
+  showAllLayers
+} from "./utils/layers";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -93,6 +107,8 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
+  const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
+  const [selectedLayerId, setSelectedLayerId] = useState("default");
   const [viewpoints, setViewpoints] = useState<LayoutViewpoint[]>([]);
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
@@ -150,6 +166,7 @@ export function App() {
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
+  const layersRef = useRef<LayoutLayer[]>(layers);
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
@@ -157,6 +174,26 @@ export function App() {
   const selectedMachineId = primarySelectedMachineId;
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
   const singleSelectedMachine = selectedMachineIds.length === 1 ? selectedMachine : undefined;
+  const visiblePlacedMachines = useMemo(
+    () => placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)),
+    [layers, placedMachines]
+  );
+  const visibleAnnotations = useMemo(
+    () => annotations.filter((annotation) => isLayerVisible(annotation.layerId, layers)),
+    [annotations, layers]
+  );
+  const lockedMachineIds = useMemo(
+    () => placedMachines.filter((machine) => isLayerLocked(machine.layerId, layers)).map((machine) => machine.instanceId),
+    [layers, placedMachines]
+  );
+  const lockedAnnotationIds = useMemo(
+    () => annotations.filter((annotation) => isLayerLocked(annotation.layerId, layers)).map((annotation) => annotation.id),
+    [annotations, layers]
+  );
+  const selectedMachineLocked = selectedMachine ? isLayerLocked(selectedMachine.layerId, layers) : false;
+  const selectedAnnotationLocked = editingAnnotationId
+    ? isLayerLocked(annotations.find((annotation) => annotation.id === editingAnnotationId)?.layerId, layers)
+    : false;
   const selectedMachineIdSet = useMemo(() => new Set(selectedMachineIds), [selectedMachineIds]);
   const selectedMachines = useMemo(
     () => placedMachines.filter((machine) => selectedMachineIdSet.has(machine.instanceId)),
@@ -174,8 +211,8 @@ export function App() {
     ? currentLayout.revisions.find((revision) => revision.revisionId === currentRevisionId)
     : null;
   const collisionResult = useMemo(
-    () => checkAllObjectCollisions(placedMachines, collisionSettings.enabled),
-    [collisionSettings.enabled, placedMachines]
+    () => checkAllObjectCollisions(visiblePlacedMachines, collisionSettings.enabled),
+    [collisionSettings.enabled, visiblePlacedMachines]
   );
   const selectedCollisionPairs = selectedMachineId
     ? collisionResult.pairs.filter(
@@ -217,7 +254,7 @@ export function App() {
   }, [nudgeSettings]);
 
   useEffect(() => {
-    const activeIds = new Set(placedMachines.map((machine) => machine.instanceId));
+    const activeIds = new Set(placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)).map((machine) => machine.instanceId));
     const nextSelection = selectedMachineIds.filter((id) => activeIds.has(id));
     const nextPrimary = primarySelectedMachineId && activeIds.has(primarySelectedMachineId)
       ? primarySelectedMachineId
@@ -229,7 +266,7 @@ export function App() {
     if (nextPrimary !== primarySelectedMachineId) {
       setPrimarySelectedMachineId(nextPrimary);
     }
-  }, [placedMachines, primarySelectedMachineId, selectedMachineIds]);
+  }, [layers, placedMachines, primarySelectedMachineId, selectedMachineIds]);
 
   useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
@@ -242,6 +279,29 @@ export function App() {
   useEffect(() => {
     annotationsRef.current = annotations;
   }, [annotations]);
+
+  useEffect(() => {
+    layersRef.current = layers;
+  }, [layers]);
+
+  useEffect(() => {
+    const normalized = normalizeLayers(layers);
+    if (normalized.length !== layers.length || normalized.some((layer, index) => layer.id !== layers[index]?.id)) {
+      setLayers(normalized);
+    }
+    if (!normalized.some((layer) => layer.id === selectedLayerId)) {
+      setSelectedLayerId("default");
+    }
+  }, [layers, selectedLayerId]);
+
+  useEffect(() => {
+    if (selectedAnnotationId && !visibleAnnotations.some((annotation) => annotation.id === selectedAnnotationId)) {
+      setSelectedAnnotationId(null);
+    }
+    if (editingAnnotationId && !visibleAnnotations.some((annotation) => annotation.id === editingAnnotationId)) {
+      setEditingAnnotationId(null);
+    }
+  }, [editingAnnotationId, selectedAnnotationId, visibleAnnotations]);
 
   useEffect(() => {
     viewpointsRef.current = viewpoints;
@@ -271,7 +331,7 @@ export function App() {
       return;
     }
     setLayoutHistory((current) =>
-      pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current)
+      pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current)
     );
   }, []);
 
@@ -290,12 +350,13 @@ export function App() {
 
   const undoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current);
+      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setLayers(normalizeLayers(result.layers));
       setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
@@ -305,12 +366,13 @@ export function App() {
 
   const redoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current);
+      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setLayers(normalizeLayers(result.layers));
       setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
@@ -409,8 +471,8 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints),
-    [annotations, placedMachines, viewpoints]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers),
+    [annotations, layers, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
@@ -465,6 +527,8 @@ export function App() {
     const { libraryId } = selection;
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(selection.definition));
     const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+    const targetLayer = getLayer(selectedLayerId, layers);
+    const layerId = targetLayer.locked ? "default" : targetLayer.id;
 
     markLayoutChanged();
     setPlacedMachines((current) => {
@@ -485,6 +549,7 @@ export function App() {
           machineDefinitionId: definition.id,
           definitionSnapshot: definition,
           definition,
+          layerId,
           position,
           positionMm: {
             xMm: metersToMm(position.x),
@@ -498,13 +563,17 @@ export function App() {
       ];
     });
     replaceSelection([instanceId], instanceId);
-  }, [markLayoutChanged, replaceSelection]);
+  }, [layers, markLayoutChanged, replaceSelection, selectedLayerId]);
 
   const updateMachine = useCallback((
     instanceId: string,
-    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
+    updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection" | "layerId">>,
     options: { snapPosition?: boolean; snapRotation?: boolean } = {}
   ) => {
+    const currentMachine = placedMachinesRef.current.find((machine) => machine.instanceId === instanceId);
+    if (currentMachine && isLayerLocked(currentMachine.layerId, layersRef.current)) {
+      return;
+    }
     markLayoutChanged();
     setPlacedMachines((current) =>
       current.map((machine) => {
@@ -566,9 +635,12 @@ export function App() {
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(layout);
     const importedAnnotations = annotationsFromLayout(layout);
+    const importedLayers = layersFromLayout(layout);
     const importedViewpoints = viewpointsFromLayout(layout);
 
     markLayoutChanged();
+    setLayers(importedLayers);
+    setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
     setViewpoints(importedViewpoints);
@@ -682,10 +754,104 @@ export function App() {
     applyViewpoint(viewpoints[nextIndex].id);
   }, [applyViewpoint, selectedViewpointId, viewpoints]);
 
+  const addLayer = useCallback((name: string) => {
+    try {
+      const layer = createLayer(name);
+      markLayoutChanged();
+      setLayers((current) => normalizeLayers([...current, layer]));
+      setSelectedLayerId(layer.id);
+    } catch (caught) {
+      window.alert(caught instanceof Error ? caught.message : "Layer could not be created.");
+    }
+  }, [markLayoutChanged]);
+
+  const renameLayer = useCallback((layerId: string, name: string) => {
+    if (!name.trim()) {
+      return;
+    }
+    markLayoutChanged();
+    setLayers((current) =>
+      current.map((layer) =>
+        layer.id === layerId && !layer.systemLayer
+          ? { ...layer, name: name.trim(), updatedAt: new Date().toISOString() }
+          : layer
+      )
+    );
+  }, [markLayoutChanged]);
+
+  const toggleLayerVisibility = useCallback((layerId: string) => {
+    markLayoutChanged();
+    setLayers((current) =>
+      current.map((layer) =>
+        layer.id === layerId ? { ...layer, visible: !layer.visible, updatedAt: new Date().toISOString() } : layer
+      )
+    );
+  }, [markLayoutChanged]);
+
+  const toggleLayerLocked = useCallback((layerId: string) => {
+    markLayoutChanged();
+    setLayers((current) =>
+      current.map((layer) =>
+        layer.id === layerId ? { ...layer, locked: !layer.locked, updatedAt: new Date().toISOString() } : layer
+      )
+    );
+  }, [markLayoutChanged]);
+
+  const removeLayer = useCallback((layerId: string) => {
+    const layer = layers.find((item) => item.id === layerId);
+    if (!layer || layer.systemLayer) {
+      return;
+    }
+    if (!window.confirm(`Delete layer "${layer.name}"? Items on this layer will move to Default.`)) {
+      return;
+    }
+    markLayoutChanged();
+    const result = deleteLayerAndReassignItems(layers, placedMachinesRef.current, annotationsRef.current, layerId);
+    setLayers(normalizeLayers(result.layers));
+    setPlacedMachines(result.machines);
+    setAnnotations(result.annotations);
+    setSelectedLayerId("default");
+  }, [layers, markLayoutChanged]);
+
+  const isolateSelectedLayer = useCallback((layerId: string) => {
+    markLayoutChanged();
+    setLayers((current) => isolateLayer(current, layerId));
+    setSelectedLayerId(layerId);
+  }, [markLayoutChanged]);
+
+  const showAllLayoutLayers = useCallback(() => {
+    markLayoutChanged();
+    setLayers((current) => showAllLayers(current));
+  }, [markLayoutChanged]);
+
+  const changeMachineLayer = useCallback((instanceId: string, layerId: string) => {
+    const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
+    if (!machine || isLayerLocked(machine.layerId, layersRef.current)) {
+      return;
+    }
+    markLayoutChanged();
+    setPlacedMachines((current) =>
+      current.map((item) => item.instanceId === instanceId ? { ...item, layerId: getLayerId(layerId, layersRef.current) } : item)
+    );
+  }, [markLayoutChanged]);
+
+  const changeAnnotationLayer = useCallback((annotationId: string, layerId: string) => {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    if (!annotation || isLayerLocked(annotation.layerId, layersRef.current)) {
+      return;
+    }
+    markLayoutChanged();
+    setAnnotations((current) =>
+      current.map((item) => item.id === annotationId ? { ...item, layerId: getLayerId(layerId, layersRef.current) } : item)
+    );
+  }, [markLayoutChanged]);
+
   const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
     setIsBenchmarkMode(true);
     setPlacedMachines(machines);
     setAnnotations([]);
+    setLayers([createDefaultLayer()]);
+    setSelectedLayerId("default");
     setViewpoints([]);
     setSelectedViewpointId(null);
     clearSelection();
@@ -695,9 +861,12 @@ export function App() {
   const restoreBenchmarkSnapshot = useCallback((snapshot: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
+    const importedLayers = layersFromLayout(snapshot);
     const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
+    setLayers(importedLayers);
+    setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
@@ -709,6 +878,8 @@ export function App() {
   const clearBenchmarkScene = useCallback(() => {
     setPlacedMachines([]);
     setAnnotations([]);
+    setLayers([createDefaultLayer()]);
+    setSelectedLayerId("default");
     setViewpoints([]);
     setSelectedViewpointId(null);
     clearSelection();
@@ -724,9 +895,12 @@ export function App() {
   ) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
+    const importedLayers = layersFromLayout(snapshot);
     const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
+    setLayers(importedLayers);
+    setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
@@ -742,31 +916,35 @@ export function App() {
     updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
     options: { recordHistory?: boolean } = {}
   ) => {
-    if (updates.length === 0) {
+    const unlockedUpdates = updates.filter((update) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === update.instanceId);
+      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    });
+    if (unlockedUpdates.length === 0) {
       return;
     }
 
     markLayoutChanged(options);
     setPlacedMachines((current) => {
-      if (!placementSettingsRef.current.gridSnapEnabled || updates.length === 1) {
-        const snappedUpdates = updates.map((update) => ({
+      if (!placementSettingsRef.current.gridSnapEnabled || unlockedUpdates.length === 1) {
+        const snappedUpdates = unlockedUpdates.map((update) => ({
           ...update,
           ...applyPositionSnap({ xMm: update.xMm, yMm: update.yMm }, placementSettingsRef.current)
         }));
         return applyMachinePositionUpdates(current, snappedUpdates);
       }
 
-      const firstUpdate = updates[0];
+      const firstUpdate = unlockedUpdates[0];
       const firstMachine = current.find((machine) => machine.instanceId === firstUpdate.instanceId);
       if (!firstMachine) {
-        return applyMachinePositionUpdates(current, updates);
+        return applyMachinePositionUpdates(current, unlockedUpdates);
       }
 
       const firstPosition = getMachinePlanPositionMm(firstMachine);
       const snappedFirstPosition = applyPositionSnap({ xMm: firstUpdate.xMm, yMm: firstUpdate.yMm }, placementSettingsRef.current);
       const snappedDeltaXMm = snappedFirstPosition.xMm - firstPosition.xMm;
       const snappedDeltaYMm = snappedFirstPosition.yMm - firstPosition.yMm;
-      const updateIds = new Set(updates.map((update) => update.instanceId));
+      const updateIds = new Set(unlockedUpdates.map((update) => update.instanceId));
 
       return current.map((machine) => {
         if (!updateIds.has(machine.instanceId)) {
@@ -791,37 +969,73 @@ export function App() {
     deltaYMm: number,
     options: { recordHistory?: boolean } = {}
   ) => {
-    if (selectedMachineIds.length === 0) {
+    const unlockedIds = selectedMachineIds.filter((id) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    });
+    if (unlockedIds.length === 0) {
       return;
     }
 
     markLayoutChanged(options);
-    setPlacedMachines((current) => moveObjectsByDelta(current, selectedMachineIds, deltaXMm, deltaYMm));
+    setPlacedMachines((current) => moveObjectsByDelta(current, unlockedIds, deltaXMm, deltaYMm));
   }, [markLayoutChanged, selectedMachineIds]);
 
   const applyAlignmentAction = useCallback((action: AlignmentAction) => {
+    const unlockedIds = selectedMachineIds.filter((id) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    });
+    if (unlockedIds.length === 0) {
+      return;
+    }
     markLayoutChanged();
-    setPlacedMachines((current) => alignObjectsToAnchor(current, selectedMachineIds, primarySelectedMachineId, action));
+    setPlacedMachines((current) => alignObjectsToAnchor(current, unlockedIds, unlockedIds.includes(primarySelectedMachineId ?? "") ? primarySelectedMachineId : unlockedIds[0], action));
   }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
 
   const applyDistributionAction = useCallback((action: DistributionAction) => {
+    const unlockedIds = selectedMachineIds.filter((id) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    });
+    if (unlockedIds.length === 0) {
+      return;
+    }
     markLayoutChanged();
-    setPlacedMachines((current) => distributeObjectsByCenter(current, selectedMachineIds, action));
+    setPlacedMachines((current) => distributeObjectsByCenter(current, unlockedIds, action));
   }, [markLayoutChanged, selectedMachineIds]);
 
   const applyEqualGapAction = useCallback((action: EqualGapAction) => {
+    const unlockedIds = selectedMachineIds.filter((id) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    });
+    if (unlockedIds.length === 0) {
+      return;
+    }
     markLayoutChanged();
-    setPlacedMachines((current) => equalizeGaps(current, selectedMachineIds, action));
+    setPlacedMachines((current) => equalizeGaps(current, unlockedIds, action));
   }, [markLayoutChanged, selectedMachineIds]);
 
   const applyPairAlignmentAction = useCallback((action: PairAlignmentAction, gapMm = 0) => {
+    const unlockedIds = selectedMachineIds.filter((id) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    });
+    if (unlockedIds.length === 0) {
+      return;
+    }
     markLayoutChanged();
     setPlacedMachines((current) =>
-      applyPairAlignment(current, selectedMachineIds, primarySelectedMachineId, action, gapMm)
+      applyPairAlignment(current, unlockedIds, unlockedIds.includes(primarySelectedMachineId ?? "") ? primarySelectedMachineId : unlockedIds[0], action, gapMm)
     );
   }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
 
   const applyPairAnchorSnap = useCallback((primaryAnchor: FootprintAnchor, secondaryAnchor: FootprintAnchor) => {
+    const primaryMachine = placedMachinesRef.current.find((item) => item.instanceId === primarySelectedMachineId);
+    if (primaryMachine && isLayerLocked(primaryMachine.layerId, layersRef.current)) {
+      return;
+    }
     markLayoutChanged();
     setPlacedMachines((current) =>
       snapPrimaryAnchorToSecondaryAnchor(
@@ -839,30 +1053,39 @@ export function App() {
     movingPoint: MachineConnectionPoint,
     fixedPoint: MachineConnectionPoint
   ) => {
+    const movingMachine = placedMachinesRef.current.find((item) => item.instanceId === selection.movingMachineId);
+    if (movingMachine && isLayerLocked(movingMachine.layerId, layersRef.current)) {
+      return;
+    }
     markLayoutChanged();
     setPlacedMachines((current) => applyConnectionPointSnap(current, selection, movingPoint, fixedPoint));
   }, [markLayoutChanged]);
 
   const addAnnotation = useCallback((type: AnnotationType) => {
     markLayoutChanged();
+    const targetLayer = getLayer(selectedLayerId, layers);
     const annotation = createAnnotation({
       type,
       selectedMachine: type === "callout" ? selectedMachine : undefined
     });
-    setAnnotations((current) => [...current, annotation]);
+    setAnnotations((current) => [...current, { ...annotation, layerId: targetLayer.locked ? "default" : targetLayer.id }]);
     setSelectedAnnotationId(annotation.id);
     setEditingAnnotationId(annotation.id);
     setAnnotationSelectionSignal((current) => current + 1);
     setIsPanelCollapsed(false);
     setSelectedMachineIds([]);
     setPrimarySelectedMachineId(null);
-  }, [markLayoutChanged, selectedMachine]);
+  }, [layers, markLayoutChanged, selectedLayerId, selectedMachine]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
     updates: Partial<AnnotationObject>,
     options: { recordHistory?: boolean } = {}
   ) => {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    if (annotation && isLayerLocked(annotation.layerId, layersRef.current)) {
+      return;
+    }
     if (options.recordHistory !== false) {
       markLayoutChanged();
       annotationEditHistoryRecordedRef.current = false;
@@ -881,6 +1104,10 @@ export function App() {
     positionMm: { xMm: number; yMm: number },
     options: { recordHistory?: boolean } = {}
   ) => {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    if (annotation && isLayerLocked(annotation.layerId, layersRef.current)) {
+      return;
+    }
     markLayoutChanged(options);
     setAnnotations((current) =>
       updateAnnotation(current, annotationId, {
@@ -898,6 +1125,10 @@ export function App() {
   }, []);
 
   const removeAnnotation = useCallback((annotationId: string) => {
+    const annotation = annotationsRef.current.find((item) => item.id === annotationId);
+    if (annotation && isLayerLocked(annotation.layerId, layersRef.current)) {
+      return;
+    }
     markLayoutChanged();
     setAnnotations((current) => deleteAnnotation(current, annotationId));
     setSelectedAnnotationId((current) => current === annotationId ? null : current);
@@ -905,25 +1136,26 @@ export function App() {
   }, [markLayoutChanged]);
 
   const deleteSelectedMachines = useCallback(() => {
-    if (selectedMachineIds.length === 0) {
+    const deletableMachines = selectedMachines.filter((machine) => !isLayerLocked(machine.layerId, layersRef.current));
+    if (deletableMachines.length === 0) {
       return;
     }
 
-    const selectedNames = selectedMachines.map((machine) => machine.definition.name);
-    const label = selectedMachineIds.length === 1
+    const selectedNames = deletableMachines.map((machine) => machine.definition.name);
+    const label = deletableMachines.length === 1
       ? selectedNames[0] ?? "the selected object"
-      : `${selectedMachineIds.length} selected objects`;
+      : `${deletableMachines.length} selected objects`;
     const confirmed = window.confirm(`Delete ${label} from the layout?`);
     if (!confirmed) {
       return;
     }
 
     markLayoutChanged();
-    const ids = new Set(selectedMachineIds);
+    const ids = new Set(deletableMachines.map((machine) => machine.instanceId));
     setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
     setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
     clearSelection();
-  }, [clearSelection, markLayoutChanged, selectedMachineIds, selectedMachines]);
+  }, [clearSelection, markLayoutChanged, selectedMachines]);
 
   useEffect(() => {
     try {
@@ -937,7 +1169,7 @@ export function App() {
       if (
         parsedLayout.appName === "AtrVisu" &&
         parsedLayout.version === 1 &&
-        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0 || (parsedLayout.viewpoints?.length ?? 0) > 0)
+        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0 || (parsedLayout.viewpoints?.length ?? 0) > 0 || (parsedLayout.layers?.length ?? 0) > 0)
       ) {
         setRecoveryLayout(parsedLayout);
         return;
@@ -961,7 +1193,7 @@ export function App() {
 
     const autosaveId = window.setTimeout(() => {
       try {
-        if (placedMachines.length === 0 && annotations.length === 0 && viewpoints.length === 0) {
+        if (placedMachines.length === 0 && annotations.length === 0 && viewpoints.length === 0 && layers.length <= 1) {
           window.localStorage.removeItem(AUTOSAVE_KEY);
           return;
         }
@@ -975,7 +1207,7 @@ export function App() {
     return () => {
       window.clearTimeout(autosaveId);
     };
-  }, [annotations.length, autosaveReady, createLayoutSnapshot, isBenchmarkMode, placedMachines.length, viewpoints.length]);
+  }, [annotations.length, autosaveReady, createLayoutSnapshot, isBenchmarkMode, layers.length, placedMachines.length, viewpoints.length]);
 
   const restoreAutosavedLayout = () => {
     if (!recoveryLayout) {
@@ -1084,11 +1316,13 @@ export function App() {
     <main className="app-shell" data-testid="app-root">
       <BabylonScene
         ref={sceneRef}
-        placedMachines={placedMachines}
-        annotations={annotations}
+        placedMachines={visiblePlacedMachines}
+        annotations={visibleAnnotations}
         selectedMachineIds={selectedMachineIds}
         primarySelectedMachineId={primarySelectedMachineId}
         selectedAnnotationId={selectedAnnotationId}
+        lockedMachineIds={lockedMachineIds}
+        lockedAnnotationIds={lockedAnnotationIds}
         onSelectMachine={selectMachine}
         onSelectAnnotation={selectAnnotationForEditing}
         onUpdateMachine={updateMachine}
@@ -1189,6 +1423,27 @@ export function App() {
             />
           </PanelSection>
           <PanelSection
+            title="Layers"
+            storageKey="atrvisu.panelSection.layers.v1"
+            defaultExpanded={false}
+            badge={layers.length > 1 ? `${layers.length}` : undefined}
+          >
+            <LayersPanel
+              layers={layers}
+              placedMachines={placedMachines}
+              annotations={annotations}
+              selectedLayerId={selectedLayerId}
+              onSelectLayer={setSelectedLayerId}
+              onAddLayer={addLayer}
+              onRenameLayer={renameLayer}
+              onDeleteLayer={removeLayer}
+              onToggleVisibility={toggleLayerVisibility}
+              onToggleLocked={toggleLayerLocked}
+              onIsolateLayer={isolateSelectedLayer}
+              onShowAllLayers={showAllLayoutLayers}
+            />
+          </PanelSection>
+          <PanelSection
             title="Project Manager"
             storageKey="atrvisu.panelSection.projectManager.v1"
             defaultExpanded
@@ -1275,9 +1530,12 @@ export function App() {
               annotations={annotations}
               selectedAnnotationId={editingAnnotationId}
               placedMachines={placedMachines}
+              layers={layers}
+              isSelectedAnnotationLocked={selectedAnnotationLocked}
               onAddAnnotation={addAnnotation}
               onSelectAnnotation={selectAnnotationForEditing}
               onUpdateAnnotation={updateSelectedAnnotation}
+              onChangeAnnotationLayer={changeAnnotationLayer}
               onCommitAnnotationEdit={commitAnnotationEdit}
               onDeleteAnnotation={removeAnnotation}
             />
@@ -1366,10 +1624,13 @@ export function App() {
               ) : (
                 <MachineProperties
                   selectedMachine={singleSelectedMachine}
+                  layers={layers}
+                  isLocked={selectedMachineLocked}
                   placementSettings={placementSettings}
                   visualDiagnostics={selectedVisualDiagnostics}
                   collisionPairs={selectedCollisionPairs}
                   onUpdateMachine={updateMachine}
+                  onChangeLayer={changeMachineLayer}
                   onDeleteSelected={deleteSelectedMachines}
                 />
               )}

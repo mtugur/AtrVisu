@@ -689,6 +689,110 @@ select:disabled {
   outline: none;
 }
 
+.layers-panel,
+.layer-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.layer-actions,
+.layer-row-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.layer-actions button,
+.layer-row-actions button,
+.layer-main-button {
+  min-height: 34px;
+  border: 1px solid rgba(164, 190, 178, 0.16);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.055);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.layer-actions button:hover:not(:disabled),
+.layer-actions button:focus-visible,
+.layer-row-actions button:hover:not(:disabled),
+.layer-row-actions button:focus-visible,
+.layer-main-button:hover,
+.layer-main-button:focus-visible {
+  border-color: rgba(168, 201, 120, 0.62);
+  background: rgba(168, 201, 120, 0.12);
+  outline: none;
+}
+
+.layer-row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.layer-row {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid rgba(164, 190, 178, 0.13);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.layer-row.is-selected {
+  border-color: rgba(168, 201, 120, 0.58);
+}
+
+.layer-row.is-hidden {
+  opacity: 0.72;
+}
+
+.layer-row.is-locked {
+  border-style: dashed;
+}
+
+.layer-main-button {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 8px;
+  text-align: left;
+}
+
+.layer-color {
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border-radius: 50%;
+}
+
+.layer-main-button strong,
+.layer-main-button small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.layer-main-button small {
+  grid-column: 2;
+  color: rgba(237, 243, 240, 0.58);
+  font-size: 0.72rem;
+}
+
+.layer-lock-note {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(233, 176, 96, 0.28);
+  border-radius: 8px;
+  color: #f4d7a3;
+  background: rgba(233, 176, 96, 0.08);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .connection-point-card,
 .connection-editor-card {
   display: grid;

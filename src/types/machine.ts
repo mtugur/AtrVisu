@@ -1,6 +1,7 @@
 import type { CollisionEnvelope } from "./collision";
 import type { AtaraMachineData } from "./ataraMachineData";
 import type { AnnotationObject } from "./annotations";
+import type { LayoutLayer } from "./layers";
 import type { LayoutViewpoint } from "./viewpoints";
 
 export type MachineCategory = string;
@@ -92,6 +93,7 @@ export type PlacedMachine = {
   machineDefinitionId: string;
   definitionSnapshot: MachineDefinition;
   definition: MachineDefinition;
+  layerId?: string;
   position: {
     x: number;
     z: number;
@@ -111,6 +113,7 @@ export type LayoutObject = {
   libraryId?: string;
   machineDefinitionId: string;
   definitionSnapshot?: MachineDefinition;
+  layerId?: string;
   name: string;
   category: MachineCategory;
   widthMm?: number;
@@ -143,6 +146,7 @@ export type AtrVisuLayout = {
   };
   exportedAt: string;
   objects: LayoutObject[];
+  layers?: LayoutLayer[];
   annotations?: AnnotationObject[];
   viewpoints?: LayoutViewpoint[];
 };

@@ -1,5 +1,6 @@
 import type { LayoutHistorySnapshot, LayoutHistoryState } from "../types/history";
 import type { AnnotationObject } from "../types/annotations";
+import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import type { LayoutViewpoint } from "../types/viewpoints";
 
@@ -29,20 +30,31 @@ export const cloneViewpoints = (viewpoints: LayoutViewpoint[]): LayoutViewpoint[
   return JSON.parse(JSON.stringify(viewpoints)) as LayoutViewpoint[];
 };
 
+export const cloneLayers = (layers: LayoutLayer[]): LayoutLayer[] => {
+  if (typeof structuredClone === "function") {
+    return structuredClone(layers) as LayoutLayer[];
+  }
+
+  return JSON.parse(JSON.stringify(layers)) as LayoutLayer[];
+};
+
 const toHistorySnapshot = (
   snapshot: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
-  viewpoints: LayoutViewpoint[] = []
+  viewpoints: LayoutViewpoint[] = [],
+  layers: LayoutLayer[] = []
 ): LayoutHistorySnapshot =>
   Array.isArray(snapshot)
     ? {
         machines: clonePlacedMachines(snapshot),
         annotations: cloneAnnotations(annotations),
+        layers: cloneLayers(layers),
         viewpoints: cloneViewpoints(viewpoints)
       }
     : {
         machines: clonePlacedMachines(snapshot.machines),
         annotations: cloneAnnotations(snapshot.annotations),
+        layers: cloneLayers(snapshot.layers ?? []),
         viewpoints: cloneViewpoints(snapshot.viewpoints ?? [])
       };
 
@@ -56,10 +68,11 @@ export const pushHistorySnapshot = (
   history: LayoutHistoryState,
   snapshot: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
-  viewpoints: LayoutViewpoint[] = []
+  viewpoints: LayoutViewpoint[] = [],
+  layers: LayoutLayer[] = []
 ): LayoutHistoryState => ({
   ...history,
-  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, viewpoints)].slice(-history.limit),
+  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, viewpoints, layers)].slice(-history.limit),
   redoStack: []
 });
 
@@ -67,11 +80,13 @@ export const undoHistory = (
   history: LayoutHistoryState,
   current: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
-  viewpoints: LayoutViewpoint[] = []
+  viewpoints: LayoutViewpoint[] = [],
+  layers: LayoutLayer[] = []
 ): {
   history: LayoutHistoryState;
   machines: PlacedMachine[];
   annotations: AnnotationObject[];
+  layers: LayoutLayer[];
   viewpoints: LayoutViewpoint[];
 } | null => {
   const previous = history.undoStack[history.undoStack.length - 1];
@@ -83,10 +98,11 @@ export const undoHistory = (
     history: {
       ...history,
       undoStack: history.undoStack.slice(0, -1),
-      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, viewpoints)].slice(-history.limit)
+      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, viewpoints, layers)].slice(-history.limit)
     },
     machines: clonePlacedMachines(previous.machines),
     annotations: cloneAnnotations(previous.annotations),
+    layers: cloneLayers(previous.layers ?? []),
     viewpoints: cloneViewpoints(previous.viewpoints ?? [])
   };
 };
@@ -95,11 +111,13 @@ export const redoHistory = (
   history: LayoutHistoryState,
   current: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
-  viewpoints: LayoutViewpoint[] = []
+  viewpoints: LayoutViewpoint[] = [],
+  layers: LayoutLayer[] = []
 ): {
   history: LayoutHistoryState;
   machines: PlacedMachine[];
   annotations: AnnotationObject[];
+  layers: LayoutLayer[];
   viewpoints: LayoutViewpoint[];
 } | null => {
   const next = history.redoStack[history.redoStack.length - 1];
@@ -110,11 +128,12 @@ export const redoHistory = (
   return {
     history: {
       ...history,
-      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, viewpoints)].slice(-history.limit),
+      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, viewpoints, layers)].slice(-history.limit),
       redoStack: history.redoStack.slice(0, -1)
     },
     machines: clonePlacedMachines(next.machines),
     annotations: cloneAnnotations(next.annotations),
+    layers: cloneLayers(next.layers ?? []),
     viewpoints: cloneViewpoints(next.viewpoints ?? [])
   };
 };

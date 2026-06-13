@@ -149,6 +149,40 @@ test("viewpoints can be captured and applied without red console errors", async 
   expect(errors).toEqual([]);
 });
 
+test("layers can be created, assigned, hidden, and shown without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  await page.locator(".machine-card").first().click();
+  const propertiesSectionButton = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSectionButton.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSectionButton.click();
+  }
+
+  const layersSection = page.getByRole("button", { name: /Layers/i });
+  if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
+    await layersSection.click();
+  }
+  await expect(page.getByTestId("layers-panel")).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("Test Layer");
+  });
+  await page.getByTestId("add-layer").click();
+  const layerRow = page.locator(".layer-row").filter({ hasText: "Test Layer" });
+  await expect(layerRow).toBeVisible();
+
+  await page.getByLabel("Selected machine properties").getByLabel("Layer").selectOption({ label: "Test Layer" });
+  await expect(layerRow).toContainText("1 item");
+  await layerRow.getByRole("button", { name: "Hide" }).click();
+  await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toContainText("None");
+  await layerRow.getByRole("button", { name: "Show" }).click();
+  await layerRow.getByRole("button", { name: "Isolate" }).click();
+  await page.getByRole("button", { name: "Show All Layers" }).click();
+
+  expect(errors).toEqual([]);
+});
+
 test("Library Manager opens and closes with stable header control", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

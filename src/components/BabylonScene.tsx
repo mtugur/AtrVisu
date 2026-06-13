@@ -63,6 +63,8 @@ type BabylonSceneProps = {
   selectedMachineIds: string[];
   primarySelectedMachineId: string | null;
   selectedAnnotationId: string | null;
+  lockedMachineIds?: string[];
+  lockedAnnotationIds?: string[];
   onSelectMachine: (instanceId: string | null, mode?: "replace" | "toggle" | "clear") => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onUpdateMachine: (
@@ -889,6 +891,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   selectedMachineIds,
   primarySelectedMachineId,
   selectedAnnotationId,
+  lockedMachineIds = [],
+  lockedAnnotationIds = [],
   onSelectMachine,
   onSelectAnnotation,
   onUpdateMachine,
@@ -911,6 +915,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const selectedMachineIdsRef = useRef<string[]>(selectedMachineIds);
+  const lockedMachineIdsRef = useRef<string[]>(lockedMachineIds);
+  const lockedAnnotationIdsRef = useRef<string[]>(lockedAnnotationIds);
   const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
@@ -970,6 +976,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           : Color3.Black();
     });
   }, [primarySelectedMachineId, selectedMachineIds]);
+
+  useEffect(() => {
+    lockedMachineIdsRef.current = lockedMachineIds;
+  }, [lockedMachineIds]);
+
+  useEffect(() => {
+    lockedAnnotationIdsRef.current = lockedAnnotationIds;
+  }, [lockedAnnotationIds]);
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings;
@@ -1317,7 +1331,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           dragStateRef.current = null;
           panStateRef.current = null;
           const annotation = annotationsRef.current.find((item) => item.id === annotationId);
-          if (annotation) {
+          if (annotation && !lockedAnnotationIdsRef.current.includes(annotationId)) {
             const planeElevationMeters = (annotation.positionMm.zMm ?? 1600) / 1000;
             const pointerPlanPoint = pickPlanPointMm(planeElevationMeters);
             if (!pointerPlanPoint) {
@@ -1343,10 +1357,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (instanceId) {
           const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
           const floorPoint = pickFloorPoint();
-          if (machine && floorPoint) {
+          if (machine && floorPoint && !lockedMachineIdsRef.current.includes(instanceId)) {
             onBeginObjectDrag();
             const currentSelection = selectedMachineIdsRef.current;
-            const draggedIds = currentSelection.includes(instanceId) && !isToggleSelection ? currentSelection : [instanceId];
+            const draggedIds = (currentSelection.includes(instanceId) && !isToggleSelection ? currentSelection : [instanceId])
+              .filter((id) => !lockedMachineIdsRef.current.includes(id));
+            if (draggedIds.length === 0) {
+              onSelectAnnotation(null);
+              onSelectMachine(instanceId, isToggleSelection ? "toggle" : "replace");
+              return;
+            }
             const startPositions = draggedIds.reduce<Record<string, { xMm: number; yMm: number }>>((positions, id) => {
               const draggedMachine = placedMachinesRef.current.find((item) => item.instanceId === id);
               if (draggedMachine) {
