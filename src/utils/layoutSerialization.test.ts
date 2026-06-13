@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
 
 const createMachine = (): PlacedMachine => ({
   instanceId: "machine-1",
@@ -67,14 +67,37 @@ const createMachine = (): PlacedMachine => ({
 
 describe("layout serialization", () => {
   it("exports unit metadata and preserves millimeter dimensions", () => {
-    const layout = createLayoutSnapshotFromMachines([createMachine()], "2026-06-05T00:00:00.000Z", [{
-      id: "annotation-1",
-      type: "warning",
-      text: "Leave 800 mm maintenance space",
-      positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
-      targetObjectId: "machine-1",
-      style: { sizeScale: 8, emphasis: "critical", background: true }
-    }]);
+    const layout = createLayoutSnapshotFromMachines(
+      [createMachine()],
+      "2026-06-05T00:00:00.000Z",
+      [{
+        id: "annotation-1",
+        type: "warning",
+        text: "Leave 800 mm maintenance space",
+        positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
+        targetObjectId: "machine-1",
+        style: { sizeScale: 8, emphasis: "critical", background: true }
+      }],
+      [{
+        id: "viewpoint-1",
+        name: "Overview",
+        camera: {
+          alpha: 0.8,
+          beta: 1.1,
+          radius: 32,
+          targetX: 1,
+          targetY: 0,
+          targetZ: -2,
+          mode: "perspective"
+        },
+        displayState: {
+          showAnnotations: true,
+          selectedObjectIds: ["machine-1"]
+        },
+        createdAt: "2026-06-05T00:00:00.000Z",
+        updatedAt: "2026-06-05T00:00:00.000Z"
+      }]
+    );
     const object = layout.objects[0];
 
     expect(layout.unitSystem).toEqual({ canonicalUnit: "mm", renderUnit: "m", version: "1.0" });
@@ -100,6 +123,22 @@ describe("layout serialization", () => {
       positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
       targetObjectId: "machine-1",
       style: { sizeScale: 8 }
+    });
+    expect(viewpointsFromLayout(layout)[0]).toMatchObject({
+      id: "viewpoint-1",
+      name: "Overview",
+      camera: {
+        alpha: 0.8,
+        beta: 1.1,
+        radius: 32,
+        targetX: 1,
+        targetY: 0,
+        targetZ: -2
+      },
+      displayState: {
+        showAnnotations: true,
+        selectedObjectIds: ["machine-1"]
+      }
     });
   });
 
@@ -138,5 +177,6 @@ describe("layout serialization", () => {
     });
     expect(machine.positionMm).toEqual({ xMm: 1250, yMm: -2500 });
     expect(machine.rotationDeg).toBe(90);
+    expect(viewpointsFromLayout(legacyLayout)).toEqual([]);
   });
 });

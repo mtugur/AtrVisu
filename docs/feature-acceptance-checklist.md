@@ -68,6 +68,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Export/import project works.
 - Refresh behavior is safe.
 - Autosave or recovery behavior remains separate from named/project save flows.
+- If the feature is part of layout review or presentation, saved viewpoints preserve the relevant camera/display state.
 
 ## Theme / Readability
 

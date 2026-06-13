@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { BabylonScene } from "./components/BabylonScene";
+import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
 import { AnnotationsPanel } from "./components/AnnotationsPanel";
@@ -16,6 +16,7 @@ import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
 import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModal";
 import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
+import { ViewpointsPanel } from "./components/ViewpointsPanel";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 import type { AlignmentAction, DistributionAction, EqualGapAction, FootprintAnchor, PairAlignmentAction } from "./types/alignment";
 import type { NudgeSettings, SelectionMode } from "./types/selection";
@@ -24,10 +25,11 @@ import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
 import type { MachineConnectionPoint } from "./types/ataraMachineData";
 import type { AnnotationObject, AnnotationType } from "./types/annotations";
+import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout } from "./utils/layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
 import {
@@ -53,6 +55,8 @@ import {
   detachAnnotationsForDeletedObjects,
   updateAnnotation
 } from "./utils/annotations";
+import { addViewpoint, createViewpoint, deleteViewpoint, updateViewpoint } from "./utils/viewpoints";
+import { shouldHandleGlobalUndoRedo } from "./utils/keyboardShortcuts";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -70,12 +74,6 @@ const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   largeNudgeStepMm: 1000,
   smallNudgeStepMm: 10
 };
-
-const isTextEntryTarget = (target: EventTarget | null) =>
-  target instanceof HTMLInputElement ||
-  target instanceof HTMLTextAreaElement ||
-  target instanceof HTMLSelectElement ||
-  (target instanceof HTMLElement && target.isContentEditable);
 
 const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined): NudgeSettings => ({
   nudgeStepMm:
@@ -95,6 +93,8 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
+  const [viewpoints, setViewpoints] = useState<LayoutViewpoint[]>([]);
+  const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [annotationSelectionSignal, setAnnotationSelectionSignal] = useState(0);
@@ -150,6 +150,8 @@ export function App() {
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
+  const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
+  const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
 
   const selectedMachineId = primarySelectedMachineId;
@@ -242,6 +244,16 @@ export function App() {
   }, [annotations]);
 
   useEffect(() => {
+    viewpointsRef.current = viewpoints;
+  }, [viewpoints]);
+
+  useEffect(() => {
+    if (selectedViewpointId && !viewpoints.some((viewpoint) => viewpoint.id === selectedViewpointId)) {
+      setSelectedViewpointId(viewpoints[viewpoints.length - 1]?.id ?? null);
+    }
+  }, [selectedViewpointId, viewpoints]);
+
+  useEffect(() => {
     if (!selectedAnnotationId && !editingAnnotationId) {
       return;
     }
@@ -258,7 +270,9 @@ export function App() {
     if (isBenchmarkModeRef.current) {
       return;
     }
-    setLayoutHistory((current) => pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current));
+    setLayoutHistory((current) =>
+      pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current)
+    );
   }, []);
 
   const clearLayoutHistory = useCallback(() => {
@@ -276,12 +290,13 @@ export function App() {
 
   const undoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current);
+      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
       return result.history;
@@ -290,12 +305,13 @@ export function App() {
 
   const redoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current);
+      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
       return result.history;
@@ -393,8 +409,8 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations),
-    [annotations, placedMachines]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints),
+    [annotations, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
@@ -550,17 +566,128 @@ export function App() {
   const importLayout = useCallback((layout: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(layout);
     const importedAnnotations = annotationsFromLayout(layout);
+    const importedViewpoints = viewpointsFromLayout(layout);
 
     markLayoutChanged();
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
+    setViewpoints(importedViewpoints);
+    setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
   }, [clearSelection, markLayoutChanged]);
+
+  const createCurrentDisplayState = useCallback((): ViewpointDisplayState => ({
+    showCollisionEnvelope: overlaySettings.showCollisionEnvelope,
+    showConnectionPoints: overlaySettings.showConnectionPoints,
+    showAnnotations: overlaySettings.showAnnotations,
+    selectedObjectIds: selectedMachineIds,
+    selectedAnnotationId
+  }), [overlaySettings, selectedAnnotationId, selectedMachineIds]);
+
+  const captureViewpoint = useCallback((name: string) => {
+    const camera = sceneRef.current?.getCameraState();
+    if (!camera) {
+      return;
+    }
+
+    try {
+      const viewpoint = createViewpoint({
+        name,
+        camera,
+        displayState: createCurrentDisplayState()
+      });
+      markLayoutChanged();
+      setViewpoints((current) => addViewpoint(current, viewpoint));
+      setSelectedViewpointId(viewpoint.id);
+    } catch (caught) {
+      window.alert(caught instanceof Error ? caught.message : "Viewpoint could not be captured.");
+    }
+  }, [createCurrentDisplayState, markLayoutChanged]);
+
+  const applyViewpoint = useCallback((viewpointId: string) => {
+    const viewpoint = viewpoints.find((item) => item.id === viewpointId);
+    if (!viewpoint) {
+      return;
+    }
+
+    sceneRef.current?.applyCameraState(viewpoint.camera);
+    if (viewpoint.displayState) {
+      const {
+        selectedObjectIds,
+        selectedAnnotationId: displaySelectedAnnotationId,
+        ...overlayDisplayState
+      } = viewpoint.displayState;
+      setOverlaySettings((current) => ({
+        ...current,
+        ...overlayDisplayState
+      }));
+      if (selectedObjectIds) {
+        setSelectedMachineIds(selectedObjectIds);
+        setPrimarySelectedMachineId(selectedObjectIds[selectedObjectIds.length - 1] ?? null);
+        setSelectedAnnotationId(null);
+        setEditingAnnotationId(null);
+      }
+      if (displaySelectedAnnotationId) {
+        selectAnnotationForEditing(displaySelectedAnnotationId);
+      }
+    }
+    setSelectedViewpointId(viewpoint.id);
+  }, [selectAnnotationForEditing, viewpoints]);
+
+  const updateSelectedViewpointFromCurrentView = useCallback((viewpointId: string) => {
+    const camera = sceneRef.current?.getCameraState();
+    if (!camera) {
+      return;
+    }
+
+    markLayoutChanged();
+    setViewpoints((current) =>
+      updateViewpoint(current, viewpointId, {
+        camera,
+        displayState: createCurrentDisplayState()
+      })
+    );
+  }, [createCurrentDisplayState, markLayoutChanged]);
+
+  const renameViewpoint = useCallback((viewpointId: string, name: string) => {
+    if (!name.trim()) {
+      return;
+    }
+
+    markLayoutChanged();
+    setViewpoints((current) => updateViewpoint(current, viewpointId, { name }));
+  }, [markLayoutChanged]);
+
+  const removeViewpoint = useCallback((viewpointId: string) => {
+    const viewpoint = viewpoints.find((item) => item.id === viewpointId);
+    if (!viewpoint) {
+      return;
+    }
+    if (!window.confirm(`Delete viewpoint "${viewpoint.name}"?`)) {
+      return;
+    }
+
+    markLayoutChanged();
+    setViewpoints((current) => deleteViewpoint(current, viewpointId));
+  }, [markLayoutChanged, viewpoints]);
+
+  const stepViewpoint = useCallback((direction: "previous" | "next") => {
+    if (viewpoints.length === 0) {
+      return;
+    }
+    const currentIndex = Math.max(0, viewpoints.findIndex((viewpoint) => viewpoint.id === selectedViewpointId));
+    const nextIndex = direction === "next"
+      ? (currentIndex + 1) % viewpoints.length
+      : (currentIndex - 1 + viewpoints.length) % viewpoints.length;
+    applyViewpoint(viewpoints[nextIndex].id);
+  }, [applyViewpoint, selectedViewpointId, viewpoints]);
 
   const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
     setIsBenchmarkMode(true);
     setPlacedMachines(machines);
     setAnnotations([]);
+    setViewpoints([]);
+    setSelectedViewpointId(null);
     clearSelection();
     clearLayoutHistory();
   }, [clearLayoutHistory, clearSelection]);
@@ -568,8 +695,11 @@ export function App() {
   const restoreBenchmarkSnapshot = useCallback((snapshot: AtrVisuLayout) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
+    const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
+    setViewpoints(importedViewpoints);
+    setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
     setIsBenchmarkMode(false);
     setHasUnsavedProjectChanges(false);
@@ -579,6 +709,8 @@ export function App() {
   const clearBenchmarkScene = useCallback(() => {
     setPlacedMachines([]);
     setAnnotations([]);
+    setViewpoints([]);
+    setSelectedViewpointId(null);
     clearSelection();
     setIsBenchmarkMode(true);
     clearLayoutHistory();
@@ -592,8 +724,11 @@ export function App() {
   ) => {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
+    const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
+    setViewpoints(importedViewpoints);
+    setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
     setCurrentProjectId(projectId);
     setCurrentLayoutId(layoutId);
@@ -802,7 +937,7 @@ export function App() {
       if (
         parsedLayout.appName === "AtrVisu" &&
         parsedLayout.version === 1 &&
-        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0)
+        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0 || (parsedLayout.viewpoints?.length ?? 0) > 0)
       ) {
         setRecoveryLayout(parsedLayout);
         return;
@@ -826,7 +961,7 @@ export function App() {
 
     const autosaveId = window.setTimeout(() => {
       try {
-        if (placedMachines.length === 0 && annotations.length === 0) {
+        if (placedMachines.length === 0 && annotations.length === 0 && viewpoints.length === 0) {
           window.localStorage.removeItem(AUTOSAVE_KEY);
           return;
         }
@@ -840,7 +975,7 @@ export function App() {
     return () => {
       window.clearTimeout(autosaveId);
     };
-  }, [annotations.length, autosaveReady, createLayoutSnapshot, isBenchmarkMode, placedMachines.length]);
+  }, [annotations.length, autosaveReady, createLayoutSnapshot, isBenchmarkMode, placedMachines.length, viewpoints.length]);
 
   const restoreAutosavedLayout = () => {
     if (!recoveryLayout) {
@@ -860,12 +995,8 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isTextEntryTarget(event.target)) {
-        return;
-      }
-
       const key = event.key.toLowerCase();
-      if ((event.ctrlKey || event.metaKey) && key === "z") {
+      if (shouldHandleGlobalUndoRedo(event) && key === "z") {
         event.preventDefault();
         if (event.shiftKey) {
           redoLayoutChange();
@@ -875,9 +1006,18 @@ export function App() {
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && key === "y") {
+      if (shouldHandleGlobalUndoRedo(event) && key === "y") {
         event.preventDefault();
         redoLayoutChange();
+        return;
+      }
+
+      if (event.target instanceof HTMLElement && (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement ||
+        event.target.isContentEditable
+      )) {
         return;
       }
 
@@ -943,6 +1083,7 @@ export function App() {
     <>
     <main className="app-shell" data-testid="app-root">
       <BabylonScene
+        ref={sceneRef}
         placedMachines={placedMachines}
         annotations={annotations}
         selectedMachineIds={selectedMachineIds}
@@ -1028,6 +1169,24 @@ export function App() {
             defaultExpanded
           >
             <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
+          </PanelSection>
+          <PanelSection
+            title="Viewpoints"
+            storageKey="atrvisu.panelSection.viewpoints.v1"
+            defaultExpanded={false}
+            badge={viewpoints.length > 0 ? `${viewpoints.length}` : undefined}
+          >
+            <ViewpointsPanel
+              viewpoints={viewpoints}
+              selectedViewpointId={selectedViewpointId}
+              onSelectViewpoint={setSelectedViewpointId}
+              onCaptureViewpoint={captureViewpoint}
+              onApplyViewpoint={applyViewpoint}
+              onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
+              onRenameViewpoint={renameViewpoint}
+              onDeleteViewpoint={removeViewpoint}
+              onStepViewpoint={stepViewpoint}
+            />
           </PanelSection>
           <PanelSection
             title="Project Manager"

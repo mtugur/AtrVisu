@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import {
   AbstractMesh,
   ArcRotateCamera,
+  Camera,
   Color3,
   Color4,
   DynamicTexture,
@@ -27,6 +28,7 @@ import type { PlacedMachine } from "../types/machine";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
 import type { ScenePerformanceMetrics } from "../types/performance";
 import type { AnnotationObject } from "../types/annotations";
+import type { ViewpointCameraState } from "../types/viewpoints";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
 import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
@@ -83,6 +85,11 @@ type BabylonSceneProps = {
   collisionResult: CollisionCheckResult;
   onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
   onPerformanceMetricsChange?: (metrics: ScenePerformanceMetrics) => void;
+};
+
+export type BabylonSceneHandle = {
+  getCameraState: () => ViewpointCameraState | null;
+  applyCameraState: (camera: ViewpointCameraState) => void;
 };
 
 type PlacedMachineNode = {
@@ -876,7 +883,7 @@ const loadVisualModel = async (
   }
 };
 
-export function BabylonScene({
+export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(function BabylonScene({
   placedMachines,
   annotations,
   selectedMachineIds,
@@ -894,7 +901,7 @@ export function BabylonScene({
   collisionResult,
   onVisualDiagnosticsChange,
   onPerformanceMetricsChange
-}: BabylonSceneProps) {
+}: BabylonSceneProps, ref) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<Scene | null>(null);
   const cameraRef = useRef<ArcRotateCamera | null>(null);
@@ -1072,6 +1079,40 @@ export function BabylonScene({
   useEffect(() => {
     onPerformanceMetricsChangeRef.current = onPerformanceMetricsChange;
   }, [onPerformanceMetricsChange]);
+
+  useImperativeHandle(ref, () => ({
+    getCameraState: () => {
+      const camera = cameraRef.current;
+      if (!camera) {
+        return null;
+      }
+
+      return {
+        alpha: camera.alpha,
+        beta: camera.beta,
+        radius: camera.radius,
+        targetX: camera.target.x,
+        targetY: camera.target.y,
+        targetZ: camera.target.z,
+        positionX: camera.position.x,
+        positionY: camera.position.y,
+        positionZ: camera.position.z,
+        mode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA ? "orthographic" : "perspective"
+      };
+    },
+    applyCameraState: (cameraState) => {
+      const camera = cameraRef.current;
+      if (!camera) {
+        return;
+      }
+
+      camera.mode = cameraState.mode === "orthographic" ? Camera.ORTHOGRAPHIC_CAMERA : Camera.PERSPECTIVE_CAMERA;
+      camera.alpha = cameraState.alpha;
+      camera.beta = cameraState.beta;
+      camera.radius = cameraState.radius;
+      camera.target = new Vector3(cameraState.targetX, cameraState.targetY, cameraState.targetZ);
+    }
+  }), []);
 
   useEffect(() => {
     isSimulationRunningRef.current = isSimulationRunning;
@@ -1778,4 +1819,4 @@ export function BabylonScene({
   }, [placedMachines]);
 
   return <canvas className="scene-canvas" ref={canvasRef} aria-label="AtrVisu 3D workspace" />;
-}
+});
