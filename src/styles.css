@@ -607,6 +607,88 @@ select:disabled {
   outline: none;
 }
 
+.viewpoints-panel,
+.viewpoint-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.viewpoint-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.viewpoint-actions button,
+.viewpoints-panel > button {
+  min-height: 36px;
+  border: 1px solid rgba(164, 190, 178, 0.18);
+  border-radius: 8px;
+  color: #f4f7f2;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.viewpoint-actions button:hover:not(:disabled),
+.viewpoint-actions button:focus-visible,
+.viewpoints-panel > button:hover:not(:disabled),
+.viewpoints-panel > button:focus-visible {
+  border-color: rgba(168, 201, 120, 0.62);
+  background: rgba(168, 201, 120, 0.12);
+  outline: none;
+}
+
+.viewpoint-actions button:disabled,
+.viewpoints-panel > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.viewpoint-list {
+  max-height: 190px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.viewpoint-list-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  color: rgba(237, 243, 240, 0.72);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.viewpoint-list-item strong,
+.viewpoint-list-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.viewpoint-list-item strong {
+  color: #f4f7f2;
+}
+
+.viewpoint-list-item span {
+  font-size: 0.74rem;
+}
+
+.viewpoint-list-item.is-selected,
+.viewpoint-list-item:hover,
+.viewpoint-list-item:focus-visible {
+  border-color: rgba(168, 201, 120, 0.68);
+  background: rgba(168, 201, 120, 0.12);
+  outline: none;
+}
+
 .connection-point-card,
 .connection-editor-card {
   display: grid;

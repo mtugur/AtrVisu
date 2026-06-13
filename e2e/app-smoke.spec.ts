@@ -130,6 +130,25 @@ test("annotation create and negative coordinate smoke has no red console errors"
   expect(errors).toEqual([]);
 });
 
+test("viewpoints can be captured and applied without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const viewpointsSection = page.getByRole("button", { name: /Viewpoints/i });
+  if ((await viewpointsSection.getAttribute("aria-expanded")) !== "true") {
+    await viewpointsSection.click();
+  }
+  await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
+  await page.getByTestId("viewpoint-name-input").fill("Genel Gorunum");
+  await page.getByTestId("capture-viewpoint").click();
+  await expect(page.getByRole("button", { name: /Genel Gorunum/i })).toBeVisible();
+  await page.getByRole("button", { name: /Genel Gorunum/i }).click();
+  await expect(page.getByTestId("apply-viewpoint")).toBeEnabled();
+  await page.getByTestId("apply-viewpoint").click();
+
+  expect(errors).toEqual([]);
+});
+
 test("Library Manager opens and closes with stable header control", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
