@@ -15,6 +15,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Is it readable at normal working zoom levels?
 - Does it update when data changes?
 - Does it avoid hiding or clipping labels inside objects where practical?
+- Does every visible/editable entity define whether it supports layers, visibility, and locking?
 
 ## Scene Selection
 
@@ -29,6 +30,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Do visible fields have real effect?
 - Are units clear?
 - Are unsupported controls hidden or clearly marked as future/limited?
+- If the item is hidden or locked by layer state, is the panel state clear and safe?
 
 ## Numeric Input
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
 
 const createMachine = (): PlacedMachine => ({
   instanceId: "machine-1",
@@ -96,7 +96,10 @@ describe("layout serialization", () => {
         },
         createdAt: "2026-06-05T00:00:00.000Z",
         updatedAt: "2026-06-05T00:00:00.000Z"
-      }]
+      }],
+      [
+        { id: "process", name: "Process", visible: true, locked: false, createdAt: "2026-06-05T00:00:00.000Z", updatedAt: "2026-06-05T00:00:00.000Z" }
+      ]
     );
     const object = layout.objects[0];
 
@@ -117,8 +120,10 @@ describe("layout serialization", () => {
     expect(layout.annotations?.[0]).toMatchObject({
       id: "annotation-1",
       text: "Leave 800 mm maintenance space",
-      targetObjectId: "machine-1"
+      targetObjectId: "machine-1",
+      layerId: "default"
     });
+    expect(layout.layers?.map((layer) => layer.id)).toEqual(["default", "process"]);
     expect(annotationsFromLayout(layout)[0]).toMatchObject({
       positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
       targetObjectId: "machine-1",
@@ -177,6 +182,8 @@ describe("layout serialization", () => {
     });
     expect(machine.positionMm).toEqual({ xMm: 1250, yMm: -2500 });
     expect(machine.rotationDeg).toBe(90);
+    expect(machine.layerId).toBe("default");
+    expect(layersFromLayout(legacyLayout)[0].id).toBe("default");
     expect(viewpointsFromLayout(legacyLayout)).toEqual([]);
   });
 });

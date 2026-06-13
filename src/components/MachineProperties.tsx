@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { CollisionPair } from "../types/collision";
+import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import type { VisualModelDiagnostics } from "../types/overlays";
 import type { PlacementSettings } from "../types/placement";
@@ -18,6 +19,8 @@ import { NumericInput } from "./common/NumericInput";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
+  layers: LayoutLayer[];
+  isLocked: boolean;
   placementSettings: PlacementSettings;
   visualDiagnostics?: VisualModelDiagnostics;
   collisionPairs: CollisionPair[];
@@ -26,6 +29,7 @@ type MachinePropertiesProps = {
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
     options?: { snapPosition?: boolean; snapRotation?: boolean }
   ) => void;
+  onChangeLayer: (instanceId: string, layerId: string) => void;
   onDeleteSelected: () => void;
 };
 
@@ -102,10 +106,13 @@ export const getSelectedAtaraMachineDataState = (selectedMachine?: PlacedMachine
 
 export function MachineProperties({
   selectedMachine,
+  layers,
+  isLocked,
   placementSettings,
   visualDiagnostics,
   collisionPairs,
   onUpdateMachine,
+  onChangeLayer,
   onDeleteSelected
 }: MachinePropertiesProps) {
   const currentRotation = selectedMachine?.rotationDeg ?? selectedMachine?.rotationY ?? 0;
@@ -116,7 +123,7 @@ export function MachineProperties({
   }, [currentRotation, selectedMachine?.instanceId]);
 
   const updatePosition = (axis: "x" | "z", value: string) => {
-    if (!selectedMachine) {
+    if (!selectedMachine || isLocked) {
       return;
     }
 
@@ -144,7 +151,7 @@ export function MachineProperties({
   };
 
   const updateElevation = (value: string) => {
-    if (!selectedMachine) {
+    if (!selectedMachine || isLocked) {
       return;
     }
 
@@ -159,7 +166,7 @@ export function MachineProperties({
   };
 
   const getPositionMm = () => {
-    if (!selectedMachine) {
+    if (!selectedMachine || isLocked) {
       return { xMm: 0, yMm: 0 };
     }
 
@@ -229,11 +236,29 @@ export function MachineProperties({
             <span>Category</span>
             <strong>{selectedMachine.definition.category}</strong>
           </div>
+          <label className="property-field">
+            <span>Layer</span>
+            <select
+              value={selectedMachine.layerId ?? "default"}
+              onChange={(event) => onChangeLayer(selectedMachine.instanceId, event.target.value)}
+              disabled={isLocked}
+            >
+              {layers.map((layer) => (
+                <option key={layer.id} value={layer.id}>
+                  {layer.name}{layer.locked ? " (locked)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {isLocked ? (
+            <p className="layer-lock-note">This object is on a locked layer. Movement, editing, and delete are disabled.</p>
+          ) : null}
 
           <label className="property-field">
             <span>Plan X (mm)</span>
             <NumericInput
               ariaLabel="Plan X"
+              disabled={isLocked}
               rule={selectedMachinePlanXRule}
               step="10"
               value={positionMm.xMm}
@@ -249,6 +274,7 @@ export function MachineProperties({
             <span>Plan Y (mm)</span>
             <NumericInput
               ariaLabel="Plan Y"
+              disabled={isLocked}
               rule={selectedMachinePlanYRule}
               step="10"
               value={positionMm.yMm}
@@ -264,6 +290,7 @@ export function MachineProperties({
             <span>Elevation (mm)</span>
             <NumericInput
               ariaLabel="Elevation"
+              disabled={isLocked}
               rule={selectedMachineElevationRule}
               step="10"
               value={selectedMachine.elevationMm ?? 0}
@@ -279,6 +306,7 @@ export function MachineProperties({
             <span>Rotation Angle (&deg;)</span>
             <input
               type="number"
+              disabled={isLocked}
               step={placementSettings.rotationSnapEnabled ? placementSettings.rotationSnapStepDeg : 1}
               value={rotationDraft}
               onChange={(event) => setRotationDraft(event.target.value)}
@@ -483,11 +511,12 @@ export function MachineProperties({
               <span>Flow Direction</span>
               <select
                 value={selectedMachine.flowDirection}
-                onChange={(event) =>
-                  onUpdateMachine(selectedMachine.instanceId, {
+              onChange={(event) =>
+                  !isLocked && onUpdateMachine(selectedMachine.instanceId, {
                     flowDirection: event.target.value === "reverse" ? "reverse" : "forward"
                   })
                 }
+                disabled={isLocked}
               >
                 <option value="forward">Forward</option>
                 <option value="reverse">Reverse</option>
@@ -495,7 +524,7 @@ export function MachineProperties({
             </label>
           ) : null}
 
-          <button className="delete-object-button" type="button" onClick={onDeleteSelected}>
+          <button className="delete-object-button" type="button" disabled={isLocked} onClick={onDeleteSelected}>
             Delete Selected Object
           </button>
         </div>
