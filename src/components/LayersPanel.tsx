@@ -70,39 +70,45 @@ export function LayersPanel({
                 <span className="layer-color" style={{ background: layer.color ?? "#a8c978" }} aria-hidden="true" />
                 <strong>{layer.name}</strong>
                 <small>
-                  {itemCount} item{itemCount === 1 ? "" : "s"} {layer.systemLayer ? "| system" : ""}
+                  {itemCount} item{itemCount === 1 ? "" : "s"} {layer.systemLayer ? "| default system" : ""}
                 </small>
               </button>
               <div className="layer-row-actions">
-                <button type="button" onClick={() => onToggleVisibility(layer.id)}>
-                  {layer.visible ? "Hide" : "Show"}
-                </button>
-                <button type="button" onClick={() => onToggleLocked(layer.id)}>
-                  {layer.locked ? "Unlock" : "Lock"}
-                </button>
+                {!layer.systemLayer ? (
+                  <>
+                    <button type="button" onClick={() => onToggleVisibility(layer.id)}>
+                      {layer.visible ? "Hide" : "Show"}
+                    </button>
+                    <button type="button" onClick={() => onToggleLocked(layer.id)}>
+                      {layer.locked ? "Unlock" : "Lock"}
+                    </button>
+                  </>
+                ) : null}
                 <button type="button" onClick={() => onIsolateLayer(layer.id)}>
                   Isolate
                 </button>
-                <button
-                  type="button"
-                  disabled={layer.systemLayer}
-                  onClick={() => {
-                    const name = window.prompt("Layer name", layer.name);
-                    if (name?.trim()) {
-                      onRenameLayer(layer.id, name);
-                    }
-                  }}
-                >
-                  Rename
-                </button>
-                <button
-                  className="danger-action"
-                  type="button"
-                  disabled={layer.systemLayer}
-                  onClick={() => onDeleteLayer(layer.id)}
-                >
-                  Delete
-                </button>
+                {!layer.systemLayer ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = window.prompt("Layer name", layer.name);
+                        if (name?.trim()) {
+                          onRenameLayer(layer.id, name);
+                        }
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <button
+                      className="danger-action"
+                      type="button"
+                      onClick={() => onDeleteLayer(layer.id)}
+                    >
+                      Delete
+                    </button>
+                  </>
+                ) : null}
               </div>
             </article>
           );

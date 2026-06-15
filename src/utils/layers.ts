@@ -27,14 +27,19 @@ const normalizeLayer = (value: unknown, index: number): LayoutLayer | null => {
     return null;
   }
   const timestamp = typeof candidate.updatedAt === "string" ? candidate.updatedAt : nowIso();
+  const isDefaultLayer = id === DEFAULT_LAYER_ID;
   return {
     id,
-    name,
-    description: typeof candidate.description === "string" ? candidate.description : "",
-    visible: typeof candidate.visible === "boolean" ? candidate.visible : true,
-    locked: typeof candidate.locked === "boolean" ? candidate.locked : false,
+    name: isDefaultLayer ? "Default" : name,
+    description: isDefaultLayer
+      ? "Default layer for legacy and unassigned layout items."
+      : typeof candidate.description === "string"
+        ? candidate.description
+        : "",
+    visible: isDefaultLayer ? true : typeof candidate.visible === "boolean" ? candidate.visible : true,
+    locked: isDefaultLayer ? false : typeof candidate.locked === "boolean" ? candidate.locked : false,
     color: typeof candidate.color === "string" ? candidate.color : undefined,
-    systemLayer: id === DEFAULT_LAYER_ID ? true : Boolean(candidate.systemLayer),
+    systemLayer: isDefaultLayer ? true : Boolean(candidate.systemLayer),
     createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : timestamp,
     updatedAt: timestamp
   };
@@ -51,7 +56,7 @@ export const normalizeLayers = (layers: unknown): LayoutLayer[] => {
   const byId = new Map<string, LayoutLayer>();
   normalized.forEach((layer) => {
     if (!byId.has(layer.id)) {
-      byId.set(layer.id, layer.id === DEFAULT_LAYER_ID ? { ...layer, systemLayer: true } : layer);
+      byId.set(layer.id, layer.id === DEFAULT_LAYER_ID ? { ...layer, visible: true, locked: false, systemLayer: true } : layer);
     }
   });
   if (!byId.has(DEFAULT_LAYER_ID)) {
@@ -119,22 +124,35 @@ export const deleteLayerAndReassignItems = (
   machines: PlacedMachine[],
   annotations: AnnotationObject[],
   layerId: string
-) => ({
-  layers: layers.filter((layer) => layer.id !== layerId || layer.systemLayer),
-  machines: machines.map((machine) =>
-    getLayerId(machine.layerId, layers) === layerId ? { ...machine, layerId: DEFAULT_LAYER_ID } : machine
-  ),
-  annotations: annotations.map((annotation) =>
-    getLayerId(annotation.layerId, layers) === layerId ? { ...annotation, layerId: DEFAULT_LAYER_ID } : annotation
-  )
-});
+) => {
+  const targetLayer = getLayer(layerId, layers);
+  if (targetLayer.systemLayer || targetLayer.id === DEFAULT_LAYER_ID) {
+    return { layers: normalizeLayers(layers), machines, annotations };
+  }
+
+  return {
+    layers: layers.filter((layer) => layer.id !== layerId || layer.systemLayer),
+    machines: machines.map((machine) =>
+      getLayerId(machine.layerId, layers) === layerId ? { ...machine, layerId: DEFAULT_LAYER_ID } : machine
+    ),
+    annotations: annotations.map((annotation) =>
+      getLayerId(annotation.layerId, layers) === layerId ? { ...annotation, layerId: DEFAULT_LAYER_ID } : annotation
+    )
+  };
+};
 
 export const isolateLayer = (layers: LayoutLayer[], layerId: string) =>
   layers.map((layer) => ({
     ...layer,
-    visible: layer.id === layerId || (Boolean(layer.systemLayer) && layer.id !== DEFAULT_LAYER_ID),
+    visible: layer.id === DEFAULT_LAYER_ID || layer.id === layerId,
     updatedAt: nowIso()
   }));
 
 export const showAllLayers = (layers: LayoutLayer[]) =>
-  layers.map((layer) => ({ ...layer, visible: true, updatedAt: nowIso() }));
+  layers.map((layer) => ({
+    ...layer,
+    visible: true,
+    locked: layer.id === DEFAULT_LAYER_ID ? false : layer.locked,
+    systemLayer: layer.id === DEFAULT_LAYER_ID ? true : layer.systemLayer,
+    updatedAt: nowIso()
+  }));

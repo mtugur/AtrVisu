@@ -52,6 +52,7 @@ AtrVisu is an engineering layout tool. Interactions should feel predictable to u
 
 - Do not introduce UI controls that do nothing.
 - Do not create hidden assumptions.
+- Do not create hidden active state. For example, layer selection must not silently become a current layer unless the UI explicitly shows that workflow.
 - If behavior is limited in v0.1, show concise helper text or hide unsupported controls.
 
 ## Numeric Field Rules

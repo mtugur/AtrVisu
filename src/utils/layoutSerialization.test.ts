@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
 
 const createMachine = (): PlacedMachine => ({
   instanceId: "machine-1",
@@ -99,6 +99,9 @@ describe("layout serialization", () => {
       }],
       [
         { id: "process", name: "Process", visible: true, locked: false, createdAt: "2026-06-05T00:00:00.000Z", updatedAt: "2026-06-05T00:00:00.000Z" }
+      ],
+      [
+        { id: "group-1", name: "Packaging Line", objectIds: ["machine-1"], createdAt: "2026-06-05T00:00:00.000Z", updatedAt: "2026-06-05T00:00:00.000Z" }
       ]
     );
     const object = layout.objects[0];
@@ -124,6 +127,7 @@ describe("layout serialization", () => {
       layerId: "default"
     });
     expect(layout.layers?.map((layer) => layer.id)).toEqual(["default", "process"]);
+    expect(layout.groups?.[0]).toMatchObject({ id: "group-1", name: "Packaging Line", objectIds: ["machine-1"] });
     expect(annotationsFromLayout(layout)[0]).toMatchObject({
       positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
       targetObjectId: "machine-1",
@@ -144,6 +148,10 @@ describe("layout serialization", () => {
         showAnnotations: true,
         selectedObjectIds: ["machine-1"]
       }
+    });
+    expect(groupsFromLayout(layout, placedMachinesFromLayout(layout), layersFromLayout(layout))[0]).toMatchObject({
+      name: "Packaging Line",
+      objectIds: ["machine-1"]
     });
   });
 
@@ -184,6 +192,36 @@ describe("layout serialization", () => {
     expect(machine.rotationDeg).toBe(90);
     expect(machine.layerId).toBe("default");
     expect(layersFromLayout(legacyLayout)[0].id).toBe("default");
+    expect(groupsFromLayout(legacyLayout, [machine], layersFromLayout(legacyLayout))).toEqual([]);
     expect(viewpointsFromLayout(legacyLayout)).toEqual([]);
+  });
+
+  it("normalizes imported Default layer as visible and unlocked", () => {
+    const layout: AtrVisuLayout = {
+      appName: "AtrVisu",
+      version: 1,
+      exportedAt: "2026-06-05T00:00:00.000Z",
+      layers: [
+        { id: "default", name: "Default", visible: false, locked: true, createdAt: "now", updatedAt: "now" },
+        { id: "process", name: "Process", visible: false, locked: true, createdAt: "now", updatedAt: "now" }
+      ],
+      objects: [],
+      annotations: [
+        {
+          id: "annotation-1",
+          type: "note",
+          text: "Legacy annotation",
+          positionMm: { xMm: 0, yMm: 0, zMm: 1600 }
+        }
+      ]
+    };
+
+    expect(layersFromLayout(layout)[0]).toMatchObject({
+      id: "default",
+      visible: true,
+      locked: false,
+      systemLayer: true
+    });
+    expect(annotationsFromLayout(layout)[0].layerId).toBe("default");
   });
 });

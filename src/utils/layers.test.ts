@@ -59,6 +59,21 @@ describe("layers", () => {
     });
   });
 
+  it("forces Default to remain visible, unlocked, and system-owned", () => {
+    const layers = normalizeLayers([
+      { id: "default", name: "Hidden Default", visible: false, locked: true, systemLayer: false },
+      { id: "process", name: "Process", visible: true, locked: false }
+    ]);
+
+    expect(layers[0]).toMatchObject({
+      id: "default",
+      name: "Default",
+      visible: true,
+      locked: false,
+      systemLayer: true
+    });
+  });
+
   it("resolves missing or orphan layer ids to Default", () => {
     const layers = normalizeLayers([{ id: "process", name: "Process", visible: false, locked: true }]);
 
@@ -77,6 +92,15 @@ describe("layers", () => {
     expect(result.annotations[0].layerId).toBe("default");
   });
 
+  it("does not delete Default through layer reassignment", () => {
+    const layers = normalizeLayers([{ id: "process", name: "Process", visible: true, locked: false }]);
+    const result = deleteLayerAndReassignItems(layers, [machine()], [annotation()], "default");
+
+    expect(result.layers.map((layer) => layer.id)).toEqual(["default", "process"]);
+    expect(result.machines[0].layerId).toBeUndefined();
+    expect(result.annotations[0].layerId).toBeUndefined();
+  });
+
   it("isolates one layer and can show all layers again", () => {
     const layers = normalizeLayers([
       { id: "process", name: "Process", visible: true, locked: false },
@@ -84,6 +108,7 @@ describe("layers", () => {
     ]);
 
     const isolated = isolateLayer(layers, "process");
+    expect(isLayerVisible("default", isolated)).toBe(true);
     expect(isLayerVisible("process", isolated)).toBe(true);
     expect(isLayerVisible("civil", isolated)).toBe(false);
 

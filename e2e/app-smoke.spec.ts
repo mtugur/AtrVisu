@@ -153,12 +153,6 @@ test("layers can be created, assigned, hidden, and shown without red console err
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
-  await page.locator(".machine-card").first().click();
-  const propertiesSectionButton = page.getByRole("button", { name: /Selected Object Properties/i });
-  if ((await propertiesSectionButton.getAttribute("aria-expanded")) !== "true") {
-    await propertiesSectionButton.click();
-  }
-
   const layersSection = page.getByRole("button", { name: /Layers/i });
   if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
     await layersSection.click();
@@ -171,14 +165,62 @@ test("layers can be created, assigned, hidden, and shown without red console err
   await page.getByTestId("add-layer").click();
   const layerRow = page.locator(".layer-row").filter({ hasText: "Test Layer" });
   await expect(layerRow).toBeVisible();
+  const defaultLayerRow = page.locator(".layer-row").filter({ hasText: "Default" });
+  await expect(defaultLayerRow).toContainText("default system");
+  await expect(defaultLayerRow.getByRole("button", { name: "Hide" })).toHaveCount(0);
+  await expect(defaultLayerRow.getByRole("button", { name: "Delete" })).toHaveCount(0);
+
+  await page.locator(".machine-card").first().click();
+  const propertiesSectionButton = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSectionButton.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSectionButton.click();
+  }
+  await expect(page.getByLabel("Selected machine properties").getByLabel("Layer")).toHaveValue("default");
+  await expect(defaultLayerRow).toContainText("1 item");
+  await expect(layerRow).toContainText("0 items");
 
   await page.getByLabel("Selected machine properties").getByLabel("Layer").selectOption({ label: "Test Layer" });
   await expect(layerRow).toContainText("1 item");
+  await expect(defaultLayerRow).toContainText("0 items");
   await layerRow.getByRole("button", { name: "Hide" }).click();
   await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toContainText("None");
   await layerRow.getByRole("button", { name: "Show" }).click();
   await layerRow.getByRole("button", { name: "Isolate" }).click();
+  await expect(defaultLayerRow).not.toHaveClass(/is-hidden/);
   await page.getByRole("button", { name: "Show All Layers" }).click();
+
+  const annotationsSection = page.getByRole("button", { name: /Annotations/i });
+  if ((await annotationsSection.getAttribute("aria-expanded")) !== "true") {
+    await annotationsSection.click();
+  }
+  await page.getByTestId("add-note-annotation").click();
+  await expect(page.getByTestId("annotation-properties")).toBeVisible();
+  await expect(page.getByTestId("annotation-properties").getByLabel("Layer")).toHaveValue("default");
+  await expect(defaultLayerRow).toContainText("1 item");
+
+  expect(errors).toEqual([]);
+});
+
+test("assembly tree can create and select a group without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  await page.locator(".machine-card").first().click();
+  const assemblySection = page.getByRole("button", { name: /Assembly Tree/i });
+  if ((await assemblySection.getAttribute("aria-expanded")) !== "true") {
+    await assemblySection.click();
+  }
+  await expect(page.getByTestId("assembly-tree-panel")).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("Packaging Line 1");
+  });
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: "Packaging Line 1" });
+  await expect(group).toBeVisible();
+  await expect(group).toContainText("1 object");
+  await group.locator(".assembly-group-button").click();
+  await expect(group).toHaveClass(/is-selected/);
 
   expect(errors).toEqual([]);
 });

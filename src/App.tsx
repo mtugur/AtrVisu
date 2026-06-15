@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
 import { AnnotationsPanel } from "./components/AnnotationsPanel";
@@ -26,12 +27,13 @@ import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
 import type { MachineConnectionPoint } from "./types/ataraMachineData";
 import type { AnnotationObject, AnnotationType } from "./types/annotations";
+import type { ObjectGroup } from "./types/groups";
 import type { LayoutLayer } from "./types/layers";
 import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
+import { annotationsFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
 import {
@@ -59,6 +61,14 @@ import {
 } from "./utils/annotations";
 import { addViewpoint, createViewpoint, deleteViewpoint, updateViewpoint } from "./utils/viewpoints";
 import { shouldHandleGlobalUndoRedo } from "./utils/keyboardShortcuts";
+import {
+  addObjectsToGroup,
+  createObjectGroup,
+  getVisibleGroupObjectIds,
+  normalizeGroups,
+  removeObjectsFromGroup,
+  removeObjectsFromGroups
+} from "./utils/groups";
 import {
   createDefaultLayer,
   createLayer,
@@ -108,6 +118,8 @@ export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
   const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
+  const [groups, setGroups] = useState<ObjectGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState("default");
   const [viewpoints, setViewpoints] = useState<LayoutViewpoint[]>([]);
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
@@ -167,12 +179,14 @@ export function App() {
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const layersRef = useRef<LayoutLayer[]>(layers);
+  const groupsRef = useRef<ObjectGroup[]>(groups);
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
 
   const selectedMachineId = primarySelectedMachineId;
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
+  const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) : null;
   const singleSelectedMachine = selectedMachineIds.length === 1 ? selectedMachine : undefined;
   const visiblePlacedMachines = useMemo(
     () => placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)),
@@ -199,6 +213,15 @@ export function App() {
     () => placedMachines.filter((machine) => selectedMachineIdSet.has(machine.instanceId)),
     [placedMachines, selectedMachineIdSet]
   );
+  const selectedGroupHasLockedVisibleMembers = useMemo(() => {
+    if (!selectedGroup) {
+      return false;
+    }
+    return selectedGroup.objectIds.some((objectId) => {
+      const machine = placedMachines.find((item) => item.instanceId === objectId);
+      return machine ? isLayerVisible(machine.layerId, layers) && isLayerLocked(machine.layerId, layers) : false;
+    });
+  }, [layers, placedMachines, selectedGroup]);
   const selectionBounds = useMemo(() => getSelectionPlanBounds(selectedMachines), [selectedMachines]);
   const canUndo = layoutHistory.undoStack.length > 0;
   const canRedo = layoutHistory.redoStack.length > 0;
@@ -285,8 +308,34 @@ export function App() {
   }, [layers]);
 
   useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+
+  useEffect(() => {
+    const normalized = normalizeGroups(groups, placedMachines, layers);
+    if (
+      normalized.length !== groups.length ||
+      normalized.some((group, index) => group.id !== groups[index]?.id || group.objectIds.join("|") !== groups[index]?.objectIds.join("|"))
+    ) {
+      setGroups(normalized);
+    }
+    if (selectedGroupId && !normalized.some((group) => group.id === selectedGroupId)) {
+      setSelectedGroupId(null);
+    }
+  }, [groups, layers, placedMachines, selectedGroupId]);
+
+  useEffect(() => {
     const normalized = normalizeLayers(layers);
-    if (normalized.length !== layers.length || normalized.some((layer, index) => layer.id !== layers[index]?.id)) {
+    if (
+      normalized.length !== layers.length ||
+      normalized.some((layer, index) =>
+        layer.id !== layers[index]?.id ||
+        layer.name !== layers[index]?.name ||
+        layer.visible !== layers[index]?.visible ||
+        layer.locked !== layers[index]?.locked ||
+        layer.systemLayer !== layers[index]?.systemLayer
+      )
+    ) {
       setLayers(normalized);
     }
     if (!normalized.some((layer) => layer.id === selectedLayerId)) {
@@ -331,7 +380,7 @@ export function App() {
       return;
     }
     setLayoutHistory((current) =>
-      pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current)
+      pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current, groupsRef.current)
     );
   }, []);
 
@@ -350,13 +399,14 @@ export function App() {
 
   const undoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current);
+      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current, groupsRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
       setLayers(normalizeLayers(result.layers));
+      setGroups(normalizeGroups(result.groups, result.machines, result.layers));
       setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
@@ -366,13 +416,14 @@ export function App() {
 
   const redoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current);
+      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current, groupsRef.current);
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
       setLayers(normalizeLayers(result.layers));
+      setGroups(normalizeGroups(result.groups, result.machines, result.layers));
       setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
@@ -471,8 +522,8 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers),
-    [annotations, layers, placedMachines, viewpoints]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups),
+    [annotations, groups, layers, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
@@ -527,8 +578,6 @@ export function App() {
     const { libraryId } = selection;
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(selection.definition));
     const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
-    const targetLayer = getLayer(selectedLayerId, layers);
-    const layerId = targetLayer.locked ? "default" : targetLayer.id;
 
     markLayoutChanged();
     setPlacedMachines((current) => {
@@ -549,7 +598,7 @@ export function App() {
           machineDefinitionId: definition.id,
           definitionSnapshot: definition,
           definition,
-          layerId,
+          layerId: "default",
           position,
           positionMm: {
             xMm: metersToMm(position.x),
@@ -563,7 +612,7 @@ export function App() {
       ];
     });
     replaceSelection([instanceId], instanceId);
-  }, [layers, markLayoutChanged, replaceSelection, selectedLayerId]);
+  }, [markLayoutChanged, replaceSelection]);
 
   const updateMachine = useCallback((
     instanceId: string,
@@ -636,10 +685,13 @@ export function App() {
     const importedMachines = placedMachinesFromLayout(layout);
     const importedAnnotations = annotationsFromLayout(layout);
     const importedLayers = layersFromLayout(layout);
+    const importedGroups = groupsFromLayout(layout, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(layout);
 
     markLayoutChanged();
     setLayers(importedLayers);
+    setGroups(importedGroups);
+    setSelectedGroupId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
@@ -759,7 +811,6 @@ export function App() {
       const layer = createLayer(name);
       markLayoutChanged();
       setLayers((current) => normalizeLayers([...current, layer]));
-      setSelectedLayerId(layer.id);
     } catch (caught) {
       window.alert(caught instanceof Error ? caught.message : "Layer could not be created.");
     }
@@ -780,6 +831,9 @@ export function App() {
   }, [markLayoutChanged]);
 
   const toggleLayerVisibility = useCallback((layerId: string) => {
+    if (getLayer(layerId, layersRef.current).systemLayer) {
+      return;
+    }
     markLayoutChanged();
     setLayers((current) =>
       current.map((layer) =>
@@ -789,6 +843,9 @@ export function App() {
   }, [markLayoutChanged]);
 
   const toggleLayerLocked = useCallback((layerId: string) => {
+    if (getLayer(layerId, layersRef.current).systemLayer) {
+      return;
+    }
     markLayoutChanged();
     setLayers((current) =>
       current.map((layer) =>
@@ -846,11 +903,94 @@ export function App() {
     );
   }, [markLayoutChanged]);
 
+  const selectObjectGroup = useCallback((groupId: string) => {
+    const group = groupsRef.current.find((item) => item.id === groupId);
+    if (!group) {
+      return;
+    }
+    const visibleObjectIds = getVisibleGroupObjectIds(group, placedMachinesRef.current, layersRef.current);
+    setSelectedGroupId(groupId);
+    replaceSelection(visibleObjectIds, visibleObjectIds[visibleObjectIds.length - 1] ?? null);
+    setSelectedAnnotationId(null);
+    setEditingAnnotationId(null);
+  }, [replaceSelection]);
+
+  const createGroupFromSelection = useCallback((name: string) => {
+    const objectIds = selectedMachineIds.filter((id) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      return machine ? isLayerVisible(machine.layerId, layersRef.current) : false;
+    });
+    if (objectIds.length === 0) {
+      return;
+    }
+    try {
+      const group = createObjectGroup(name, objectIds);
+      markLayoutChanged();
+      setGroups((current) => addObjectsToGroup([...current, { ...group, objectIds: [] }], group.id, objectIds));
+      setSelectedGroupId(group.id);
+    } catch (caught) {
+      window.alert(caught instanceof Error ? caught.message : "Group could not be created.");
+    }
+  }, [markLayoutChanged, selectedMachineIds]);
+
+  const addSelectionToGroup = useCallback((groupId: string) => {
+    if (selectedMachineIds.length === 0) {
+      return;
+    }
+    markLayoutChanged();
+    setGroups((current) => addObjectsToGroup(current, groupId, selectedMachineIds));
+    setSelectedGroupId(groupId);
+  }, [markLayoutChanged, selectedMachineIds]);
+
+  const removeSelectionFromGroup = useCallback((groupId: string) => {
+    if (selectedMachineIds.length === 0) {
+      return;
+    }
+    markLayoutChanged();
+    setGroups((current) => removeObjectsFromGroup(current, groupId, selectedMachineIds));
+  }, [markLayoutChanged, selectedMachineIds]);
+
+  const renameObjectGroup = useCallback((groupId: string, name: string) => {
+    if (!name.trim()) {
+      return;
+    }
+    markLayoutChanged();
+    setGroups((current) =>
+      current.map((group) =>
+        group.id === groupId ? { ...group, name: name.trim(), updatedAt: new Date().toISOString() } : group
+      )
+    );
+  }, [markLayoutChanged]);
+
+  const deleteObjectGroup = useCallback((groupId: string) => {
+    const group = groups.find((item) => item.id === groupId);
+    if (!group) {
+      return;
+    }
+    if (!window.confirm(`Delete group "${group.name}"? Objects will remain in the layout.`)) {
+      return;
+    }
+    markLayoutChanged();
+    setGroups((current) => current.filter((item) => item.id !== groupId));
+    setSelectedGroupId((current) => current === groupId ? null : current);
+  }, [groups, markLayoutChanged]);
+
+  const toggleGroupCollapsed = useCallback((groupId: string) => {
+    markLayoutChanged();
+    setGroups((current) =>
+      current.map((group) =>
+        group.id === groupId ? { ...group, collapsed: !group.collapsed, updatedAt: new Date().toISOString() } : group
+      )
+    );
+  }, [markLayoutChanged]);
+
   const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
     setIsBenchmarkMode(true);
     setPlacedMachines(machines);
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
+    setGroups([]);
+    setSelectedGroupId(null);
     setSelectedLayerId("default");
     setViewpoints([]);
     setSelectedViewpointId(null);
@@ -862,10 +1002,13 @@ export function App() {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
     const importedLayers = layersFromLayout(snapshot);
+    const importedGroups = groupsFromLayout(snapshot, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
     setLayers(importedLayers);
+    setGroups(importedGroups);
+    setSelectedGroupId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
@@ -879,6 +1022,8 @@ export function App() {
     setPlacedMachines([]);
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
+    setGroups([]);
+    setSelectedGroupId(null);
     setSelectedLayerId("default");
     setViewpoints([]);
     setSelectedViewpointId(null);
@@ -896,10 +1041,13 @@ export function App() {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
     const importedLayers = layersFromLayout(snapshot);
+    const importedGroups = groupsFromLayout(snapshot, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setAnnotations(importedAnnotations);
     setLayers(importedLayers);
+    setGroups(importedGroups);
+    setSelectedGroupId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
@@ -916,6 +1064,9 @@ export function App() {
     updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
     options: { recordHistory?: boolean } = {}
   ) => {
+    if (selectedGroupHasLockedVisibleMembers) {
+      return;
+    }
     const unlockedUpdates = updates.filter((update) => {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === update.instanceId);
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
@@ -962,13 +1113,16 @@ export function App() {
         )[0];
       });
     });
-  }, [markLayoutChanged]);
+  }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers]);
 
   const moveSelectedByDelta = useCallback((
     deltaXMm: number,
     deltaYMm: number,
     options: { recordHistory?: boolean } = {}
   ) => {
+    if (selectedGroupHasLockedVisibleMembers) {
+      return;
+    }
     const unlockedIds = selectedMachineIds.filter((id) => {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
@@ -979,9 +1133,12 @@ export function App() {
 
     markLayoutChanged(options);
     setPlacedMachines((current) => moveObjectsByDelta(current, unlockedIds, deltaXMm, deltaYMm));
-  }, [markLayoutChanged, selectedMachineIds]);
+  }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
   const applyAlignmentAction = useCallback((action: AlignmentAction) => {
+    if (selectedGroupHasLockedVisibleMembers) {
+      return;
+    }
     const unlockedIds = selectedMachineIds.filter((id) => {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
@@ -991,9 +1148,12 @@ export function App() {
     }
     markLayoutChanged();
     setPlacedMachines((current) => alignObjectsToAnchor(current, unlockedIds, unlockedIds.includes(primarySelectedMachineId ?? "") ? primarySelectedMachineId : unlockedIds[0], action));
-  }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
+  }, [markLayoutChanged, primarySelectedMachineId, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
   const applyDistributionAction = useCallback((action: DistributionAction) => {
+    if (selectedGroupHasLockedVisibleMembers) {
+      return;
+    }
     const unlockedIds = selectedMachineIds.filter((id) => {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
@@ -1003,9 +1163,12 @@ export function App() {
     }
     markLayoutChanged();
     setPlacedMachines((current) => distributeObjectsByCenter(current, unlockedIds, action));
-  }, [markLayoutChanged, selectedMachineIds]);
+  }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
   const applyEqualGapAction = useCallback((action: EqualGapAction) => {
+    if (selectedGroupHasLockedVisibleMembers) {
+      return;
+    }
     const unlockedIds = selectedMachineIds.filter((id) => {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
@@ -1015,9 +1178,12 @@ export function App() {
     }
     markLayoutChanged();
     setPlacedMachines((current) => equalizeGaps(current, unlockedIds, action));
-  }, [markLayoutChanged, selectedMachineIds]);
+  }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
   const applyPairAlignmentAction = useCallback((action: PairAlignmentAction, gapMm = 0) => {
+    if (selectedGroupHasLockedVisibleMembers) {
+      return;
+    }
     const unlockedIds = selectedMachineIds.filter((id) => {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
@@ -1029,7 +1195,7 @@ export function App() {
     setPlacedMachines((current) =>
       applyPairAlignment(current, unlockedIds, unlockedIds.includes(primarySelectedMachineId ?? "") ? primarySelectedMachineId : unlockedIds[0], action, gapMm)
     );
-  }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
+  }, [markLayoutChanged, primarySelectedMachineId, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
   const applyPairAnchorSnap = useCallback((primaryAnchor: FootprintAnchor, secondaryAnchor: FootprintAnchor) => {
     const primaryMachine = placedMachinesRef.current.find((item) => item.instanceId === primarySelectedMachineId);
@@ -1063,19 +1229,18 @@ export function App() {
 
   const addAnnotation = useCallback((type: AnnotationType) => {
     markLayoutChanged();
-    const targetLayer = getLayer(selectedLayerId, layers);
     const annotation = createAnnotation({
       type,
       selectedMachine: type === "callout" ? selectedMachine : undefined
     });
-    setAnnotations((current) => [...current, { ...annotation, layerId: targetLayer.locked ? "default" : targetLayer.id }]);
+    setAnnotations((current) => [...current, { ...annotation, layerId: "default" }]);
     setSelectedAnnotationId(annotation.id);
     setEditingAnnotationId(annotation.id);
     setAnnotationSelectionSignal((current) => current + 1);
     setIsPanelCollapsed(false);
     setSelectedMachineIds([]);
     setPrimarySelectedMachineId(null);
-  }, [layers, markLayoutChanged, selectedLayerId, selectedMachine]);
+  }, [markLayoutChanged, selectedMachine]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
@@ -1154,6 +1319,8 @@ export function App() {
     const ids = new Set(deletableMachines.map((machine) => machine.instanceId));
     setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
     setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
+    setGroups((current) => removeObjectsFromGroups(current, ids));
+    setSelectedGroupId(null);
     clearSelection();
   }, [clearSelection, markLayoutChanged, selectedMachines]);
 
@@ -1169,7 +1336,7 @@ export function App() {
       if (
         parsedLayout.appName === "AtrVisu" &&
         parsedLayout.version === 1 &&
-        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0 || (parsedLayout.viewpoints?.length ?? 0) > 0 || (parsedLayout.layers?.length ?? 0) > 0)
+        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0 || (parsedLayout.viewpoints?.length ?? 0) > 0 || (parsedLayout.layers?.length ?? 0) > 0 || (parsedLayout.groups?.length ?? 0) > 0)
       ) {
         setRecoveryLayout(parsedLayout);
         return;
@@ -1193,7 +1360,7 @@ export function App() {
 
     const autosaveId = window.setTimeout(() => {
       try {
-        if (placedMachines.length === 0 && annotations.length === 0 && viewpoints.length === 0 && layers.length <= 1) {
+        if (placedMachines.length === 0 && annotations.length === 0 && viewpoints.length === 0 && layers.length <= 1 && groups.length === 0) {
           window.localStorage.removeItem(AUTOSAVE_KEY);
           return;
         }
@@ -1207,7 +1374,7 @@ export function App() {
     return () => {
       window.clearTimeout(autosaveId);
     };
-  }, [annotations.length, autosaveReady, createLayoutSnapshot, isBenchmarkMode, layers.length, placedMachines.length, viewpoints.length]);
+  }, [annotations.length, autosaveReady, createLayoutSnapshot, groups.length, isBenchmarkMode, layers.length, placedMachines.length, viewpoints.length]);
 
   const restoreAutosavedLayout = () => {
     if (!recoveryLayout) {
@@ -1441,6 +1608,26 @@ export function App() {
               onToggleLocked={toggleLayerLocked}
               onIsolateLayer={isolateSelectedLayer}
               onShowAllLayers={showAllLayoutLayers}
+            />
+          </PanelSection>
+          <PanelSection
+            title="Assembly Tree"
+            storageKey="atrvisu.panelSection.assemblyTree.v1"
+            defaultExpanded={false}
+            badge={groups.length > 0 ? `${groups.length}` : undefined}
+          >
+            <AssemblyTreePanel
+              groups={groups}
+              placedMachines={placedMachines}
+              selectedGroupId={selectedGroupId}
+              selectedMachineIds={selectedMachineIds}
+              onCreateGroupFromSelection={createGroupFromSelection}
+              onAddSelectionToGroup={addSelectionToGroup}
+              onRemoveSelectionFromGroup={removeSelectionFromGroup}
+              onRenameGroup={renameObjectGroup}
+              onDeleteGroup={deleteObjectGroup}
+              onSelectGroup={selectObjectGroup}
+              onToggleGroupCollapsed={toggleGroupCollapsed}
             />
           </PanelSection>
           <PanelSection

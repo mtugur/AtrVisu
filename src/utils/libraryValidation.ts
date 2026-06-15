@@ -50,6 +50,9 @@ const DEFAULT_CLEARANCE = {
   left: 0,
   right: 0
 };
+const DIAGNOSTIC_MISSING_MODEL_PATHS = new Set([
+  "/library/models/not-existing-test.glb"
+]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -61,6 +64,21 @@ const isNonEmptyString = (value: unknown): value is string => {
 
 const isPositiveNumber = (value: unknown): value is number => {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+};
+
+const sanitizeDiagnosticModelPath = (modelPath: string | null) =>
+  modelPath && DIAGNOSTIC_MISSING_MODEL_PATHS.has(modelPath) ? null : modelPath;
+
+const sanitizeVisualModelInput = (value: unknown) => {
+  if (!isRecord(value) || !isNonEmptyString(value.modelPath)) {
+    return value;
+  }
+
+  const modelPath = sanitizeDiagnosticModelPath(value.modelPath.trim());
+  return {
+    ...value,
+    modelPath
+  };
 };
 
 const readDimensionMm = (item: Record<string, unknown>, mmKey: string, meterKey: string) => {
@@ -286,6 +304,8 @@ const validateMachineItem = (
 
   const dimensionsMm = { widthMm, depthMm, heightMm };
   const ataraMachineData = normalizeAtaraMachineData(item.ataraMachineData, dimensionsMm);
+  const rawModelPath = isNonEmptyString(item.modelPath) ? item.modelPath.trim() : null;
+  const modelPath = sanitizeDiagnosticModelPath(rawModelPath);
 
   return {
     id,
@@ -304,8 +324,8 @@ const validateMachineItem = (
     depth: mmToMeters(depthMm),
     height: mmToMeters(heightMm),
     defaultColor,
-    modelPath: isNonEmptyString(item.modelPath) ? item.modelPath : null,
-    visualModel: normalizeVisualModel(item.visualModel, isNonEmptyString(item.modelPath) ? item.modelPath : null),
+    modelPath,
+    visualModel: normalizeVisualModel(sanitizeVisualModelInput(item.visualModel), modelPath),
     thumbnailPath: isNonEmptyString(item.thumbnailPath) ? item.thumbnailPath : null,
     connectionPoints,
     clearance: readClearance(item.clearance, warnings, path),
