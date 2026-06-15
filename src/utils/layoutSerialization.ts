@@ -1,5 +1,6 @@
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "../types/machine";
 import type { AnnotationObject } from "../types/annotations";
+import type { ObjectGroup } from "../types/groups";
 import type { LayoutLayer } from "../types/layers";
 import type { LayoutViewpoint } from "../types/viewpoints";
 import {
@@ -12,6 +13,7 @@ import { metersToMm, mmToMeters } from "./units";
 import { normalizeMachineVisualModel } from "./visualModel";
 import { normalizeCollisionEnvelope } from "./collision";
 import { normalizeAnnotations } from "./annotations";
+import { normalizeGroups } from "./groups";
 import { getLayerId, normalizeLayers } from "./layers";
 import { normalizeViewpoints } from "./viewpoints";
 
@@ -22,9 +24,11 @@ export const createLayoutSnapshotFromMachines = (
   exportedAt = new Date().toISOString(),
   annotations: AnnotationObject[] = [],
   viewpoints: LayoutViewpoint[] = [],
-  layers: LayoutLayer[] = []
+  layers: LayoutLayer[] = [],
+  groups: ObjectGroup[] = []
 ): AtrVisuLayout => {
   const normalizedLayers = normalizeLayers(layers);
+  const normalizedGroups = normalizeGroups(groups, placedMachines, normalizedLayers);
 
   return {
     appName: "AtrVisu",
@@ -32,6 +36,7 @@ export const createLayoutSnapshotFromMachines = (
     unitSystem: ATRVISU_UNIT_SYSTEM,
     exportedAt,
     layers: normalizedLayers,
+    groups: normalizedGroups,
     objects: placedMachines.map((machine) => {
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definition));
     const snapshot = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definitionSnapshot));
@@ -81,6 +86,9 @@ export const annotationsFromLayout = (layout: AtrVisuLayout): AnnotationObject[]
 
 export const layersFromLayout = (layout: AtrVisuLayout): LayoutLayer[] =>
   normalizeLayers(layout.layers);
+
+export const groupsFromLayout = (layout: AtrVisuLayout, machines: PlacedMachine[], layers: LayoutLayer[]): ObjectGroup[] =>
+  normalizeGroups(layout.groups, machines, layers);
 
 export const viewpointsFromLayout = (layout: AtrVisuLayout): LayoutViewpoint[] =>
   normalizeViewpoints(layout.viewpoints);

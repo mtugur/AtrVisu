@@ -7,9 +7,12 @@ Layers organize layout objects and annotations for editing, review, and presenta
 Every layout has a `Default` system layer:
 
 - `id: "default"`
-- visible by default
-- unlocked by default
+- always visible
+- always unlocked
 - cannot be deleted
+- cannot be hidden
+- cannot be renamed
+- cannot be locked
 
 Older layouts without layer data load safely. Machines and annotations without `layerId` resolve to the Default layer.
 
@@ -21,6 +24,8 @@ v0.1 supports layers for:
 - annotations
 
 Connection points inherit the visibility and lock behavior of their parent machine.
+
+New machines and new annotations are always created on the Default layer in v0.1. The layer selected in the Layers panel is only a management selection; it is not a hidden current layer. Users can manually move objects and annotations to another layer from their properties panels.
 
 ## Visibility
 
@@ -47,7 +52,7 @@ Locked visible objects can still act as visual references and connection snap co
 
 ## Isolate And Show All
 
-`Isolate` makes the selected layer visible and hides other regular layers. `Show All Layers` restores visibility for all layers. These actions do not delete data or change object positions.
+`Isolate` makes the selected layer visible and hides other regular user-created layers. The Default layer remains visible during isolate because it is the stable baseline layer. `Show All Layers` restores visibility for all user-created layers. These actions do not delete data or change object positions.
 
 ## Limitations
 

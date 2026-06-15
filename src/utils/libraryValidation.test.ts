@@ -88,6 +88,39 @@ describe("library validation", () => {
     expect(item.visualModel?.scaleMode).toBe("metadata-box");
   });
 
+  it("removes diagnostic missing GLB fixture paths from normal loaded library items", () => {
+    const warnings: LibraryValidationWarning[] = [];
+    const library = validateLibraryDocument(
+      entry,
+      createLibrary({
+        name: "Test Conveyor",
+        modelPath: "/library/models/not-existing-test.glb",
+        visualModel: { modelPath: "/library/models/not-existing-test.glb" }
+      }),
+      warnings
+    );
+    const item = library.root.items[0];
+
+    expect(item.modelPath).toBeNull();
+    expect(item.visualModel?.modelPath).toBeNull();
+  });
+
+  it("preserves real GLB model paths for fallback loading diagnostics", () => {
+    const warnings: LibraryValidationWarning[] = [];
+    const library = validateLibraryDocument(
+      entry,
+      createLibrary({
+        modelPath: "/library/models/forklift.glb",
+        visualModel: { modelPath: "/library/models/forklift.glb" }
+      }),
+      warnings
+    );
+    const item = library.root.items[0];
+
+    expect(item.modelPath).toBe("/library/models/forklift.glb");
+    expect(item.visualModel?.modelPath).toBe("/library/models/forklift.glb");
+  });
+
   it("normalizes invalid collision envelope safely", () => {
     const warnings: LibraryValidationWarning[] = [];
     const library = validateLibraryDocument(

@@ -1,6 +1,7 @@
 import type { CollisionEnvelope } from "./collision";
 import type { AtaraMachineData } from "./ataraMachineData";
 import type { AnnotationObject } from "./annotations";
+import type { ObjectGroup } from "./groups";
 import type { LayoutLayer } from "./layers";
 import type { LayoutViewpoint } from "./viewpoints";
 
@@ -147,6 +148,7 @@ export type AtrVisuLayout = {
   exportedAt: string;
   objects: LayoutObject[];
   layers?: LayoutLayer[];
+  groups?: ObjectGroup[];
   annotations?: AnnotationObject[];
   viewpoints?: LayoutViewpoint[];
 };

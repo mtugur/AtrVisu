@@ -16,6 +16,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Does it update when data changes?
 - Does it avoid hiding or clipping labels inside objects where practical?
 - Does every visible/editable entity define whether it supports layers, visibility, and locking?
+- If layers are involved, do new entities default predictably without hidden active-layer state?
 
 ## Scene Selection
 
@@ -23,6 +24,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Does the right panel reflect scene selection?
 - Does scene selection use the same state helper as panel/list/card selection?
 - Does empty-space click clear selection consistently?
+- Does every new selectable entity define panel selection, persistence, undo/redo, and layer/group interaction?
 
 ## Right Panel Editing
 
@@ -31,6 +33,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Are units clear?
 - Are unsupported controls hidden or clearly marked as future/limited?
 - If the item is hidden or locked by layer state, is the panel state clear and safe?
+- If a system/default layer exists, are hide, lock, rename, and delete controls blocked or hidden?
 
 ## Numeric Input
 
