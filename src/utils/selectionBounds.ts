@@ -1,33 +1,13 @@
 import type { PlacedMachine } from "../types/machine";
 import type { PlanBounds } from "../types/alignment";
-import { getMachineDimensionsMm } from "./machineDimensions";
-import { getMachinePlanPositionMm } from "./placement";
-
-const degToRad = (valueDeg: number) => (valueDeg * Math.PI) / 180;
+import { getMachineFootprintBoundsMm } from "./coordinateReference";
 
 export const getObjectPlanBounds = (machine: PlacedMachine): PlanBounds => {
-  const position = getMachinePlanPositionMm(machine);
-  const dimensions = getMachineDimensionsMm(machine.definition);
-  const rotationDeg = machine.rotationDeg ?? machine.rotationY ?? 0;
-  const rotationRad = degToRad(rotationDeg);
-  const cos = Math.abs(Math.cos(rotationRad));
-  const sin = Math.abs(Math.sin(rotationRad));
-
-  // Foundation v0.1 uses axis-aligned plan bounds. Rotated objects expand to
-  // the enclosing AABB, which is predictable for alignment and collision UI.
-  const rotatedWidthMm = dimensions.widthMm * cos + dimensions.depthMm * sin;
-  const rotatedDepthMm = dimensions.widthMm * sin + dimensions.depthMm * cos;
+  const bounds = getMachineFootprintBoundsMm(machine);
 
   return {
     objectId: machine.instanceId,
-    centerXMm: position.xMm,
-    centerYMm: position.yMm,
-    minXMm: position.xMm - rotatedWidthMm / 2,
-    maxXMm: position.xMm + rotatedWidthMm / 2,
-    minYMm: position.yMm - rotatedDepthMm / 2,
-    maxYMm: position.yMm + rotatedDepthMm / 2,
-    widthMm: rotatedWidthMm,
-    depthMm: rotatedDepthMm
+    ...bounds
   };
 };
 

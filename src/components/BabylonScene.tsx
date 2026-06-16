@@ -24,12 +24,14 @@ import {
 } from "@babylonjs/core";
 import "@babylonjs/loaders/glTF";
 import type { CollisionCheckResult } from "../types/collision";
+import type { CivilReferenceItem } from "../types/civil";
 import type { PlacedMachine } from "../types/machine";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
 import type { ScenePerformanceMetrics } from "../types/performance";
 import type { AnnotationObject } from "../types/annotations";
 import type { ViewpointCameraState } from "../types/viewpoints";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
+import { getCivilReferenceRenderCenterMm, getMachineRenderCenterMm } from "../utils/coordinateReference";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
 import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
 import { metersToMm, mmToMeters } from "../utils/units";
@@ -59,13 +61,18 @@ const ANNOTATION_LABEL_OFFSET_METERS = new Vector3(0.78, 0.42, 0);
 
 type BabylonSceneProps = {
   placedMachines: PlacedMachine[];
+  civilReferences: CivilReferenceItem[];
   annotations: AnnotationObject[];
   selectedMachineIds: string[];
   primarySelectedMachineId: string | null;
+  selectedCivilReferenceId: string | null;
+  selectedCivilReferenceIds: string[];
   selectedAnnotationId: string | null;
   lockedMachineIds?: string[];
+  lockedCivilReferenceIds?: string[];
   lockedAnnotationIds?: string[];
   onSelectMachine: (instanceId: string | null, mode?: "replace" | "toggle" | "clear") => void;
+  onSelectCivilReference: (id: string | null, mode?: "replace" | "toggle" | "clear") => void;
   onSelectAnnotation: (annotationId: string | null) => void;
   onUpdateMachine: (
     instanceId: string,
@@ -77,6 +84,11 @@ type BabylonSceneProps = {
   ) => void;
   onSetAnnotationPosition: (
     annotationId: string,
+    positionMm: { xMm: number; yMm: number },
+    options?: { recordHistory?: boolean }
+  ) => void;
+  onSetCivilReferencePosition: (
+    id: string,
     positionMm: { xMm: number; yMm: number },
     options?: { recordHistory?: boolean }
   ) => void;
@@ -130,8 +142,42 @@ type AnnotationNode = {
   sizeScale: number;
 };
 
+type CivilReferenceNode = {
+  mesh: Mesh;
+  material: StandardMaterial;
+  selectionFrame: LinesMesh;
+  label: Mesh;
+  labelTexture: DynamicTexture;
+  signature: string;
+};
+
 const hexToColor3 = (hex: string) => {
   return Color3.FromHexString(hex);
+};
+
+const getCivilColor = (item: CivilReferenceItem) => {
+  const colorToken = item.style?.colorToken;
+  if (typeof colorToken === "string" && colorToken.startsWith("#")) {
+    return Color3.FromHexString(colorToken);
+  }
+
+  switch (item.type) {
+    case "wall":
+      return Color3.FromHexString("#8d98a5");
+    case "column":
+      return Color3.FromHexString("#b6bdc8");
+    case "restricted-area":
+      return Color3.FromHexString("#d77957");
+    case "walkway":
+      return Color3.FromHexString("#d5c25d");
+    case "door-opening":
+      return Color3.FromHexString("#7ec8de");
+    case "floor-area":
+      return Color3.FromHexString("#3f6f91");
+    case "reference-zone":
+    default:
+      return Color3.FromHexString("#75b99d");
+  }
 };
 
 const createLabel = (scene: Scene, textureKey: string, text: string, y: number) => {
@@ -538,6 +584,77 @@ const createMetadataFrame = (scene: Scene, machine: PlacedMachine) => {
   );
 };
 
+const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): CivilReferenceNode => {
+  const width = mmToMeters(item.sizeMm.widthMm);
+  const depth = mmToMeters(item.sizeMm.depthMm);
+  const height = mmToMeters(item.sizeMm.heightMm ?? 20);
+  const material = new StandardMaterial(`civil-reference-material-${item.id}`, scene);
+  const color = getCivilColor(item);
+  material.diffuseColor = color;
+  material.emissiveColor = color.scale(0.18);
+  material.specularColor = new Color3(0.08, 0.09, 0.1);
+  material.alpha = item.style?.opacity ?? 0.45;
+
+  const mesh = MeshBuilder.CreateBox(
+    `civil-reference-${item.id}`,
+    { width, depth, height },
+    scene
+  );
+  mesh.material = material;
+  mesh.metadata = { civilReferenceId: item.id };
+  mesh.isPickable = true;
+  mesh.renderingGroupId = item.type === "wall" || item.type === "column" ? 0 : 1;
+
+  const selectionFrame = createWireBoxFrame(
+    scene,
+    `civil-selection-frame-${item.id}`,
+    { width, depth, height: Math.max(height, 0.08) },
+    new Color3(1, 0.86, 0.28)
+  );
+  selectionFrame.parent = mesh;
+  selectionFrame.isVisible = false;
+
+  const { label, texture } = createLabel(scene, `civil-${item.id}`, item.name, height + 0.35);
+  label.isPickable = false;
+  label.renderingGroupId = 2;
+
+  return { mesh, material, selectionFrame, label, labelTexture: texture, signature: getCivilReferenceNodeSignature(item) };
+};
+
+const getCivilReferenceNodeSignature = (item: CivilReferenceItem) =>
+  `${item.type}|${item.sizeMm.widthMm}|${item.sizeMm.depthMm}|${item.sizeMm.heightMm ?? 20}`;
+
+const disposeCivilReferenceNode = (node: CivilReferenceNode) => {
+  node.labelTexture.dispose();
+  node.material.dispose();
+  node.selectionFrame.dispose();
+  node.label.dispose();
+  node.mesh.dispose();
+};
+
+const positionCivilReferenceNode = (
+  node: CivilReferenceNode,
+  item: CivilReferenceItem,
+  selectedCivilReferenceId: string | null,
+  showLabels: boolean
+) => {
+  const height = mmToMeters(item.sizeMm.heightMm ?? 20);
+  const center = getCivilReferenceRenderCenterMm(item);
+  node.mesh.position = new Vector3(
+    mmToMeters(center.xMm),
+    mmToMeters(item.positionMm.zMm ?? 0) + height / 2,
+    mmToMeters(center.yMm)
+  );
+  node.mesh.rotation.y = radiansFromDegrees(item.rotationDeg);
+  node.selectionFrame.isVisible = selectedCivilReferenceId === item.id;
+  node.label.position = new Vector3(
+    node.mesh.position.x,
+    mmToMeters(item.positionMm.zMm ?? 0) + height + 0.35,
+    node.mesh.position.z
+  );
+  node.label.isVisible = showLabels;
+};
+
 const createClearanceFrame = (scene: Scene, machine: PlacedMachine) => {
   const clearance = machine.definition.clearance;
   if (!clearance) {
@@ -887,17 +1004,23 @@ const loadVisualModel = async (
 
 export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(function BabylonScene({
   placedMachines,
+  civilReferences,
   annotations,
   selectedMachineIds,
   primarySelectedMachineId,
+  selectedCivilReferenceId,
+  selectedCivilReferenceIds,
   selectedAnnotationId,
   lockedMachineIds = [],
+  lockedCivilReferenceIds = [],
   lockedAnnotationIds = [],
   onSelectMachine,
+  onSelectCivilReference,
   onSelectAnnotation,
   onUpdateMachine,
   onSetMachinePositions,
   onSetAnnotationPosition,
+  onSetCivilReferencePosition,
   onBeginObjectDrag,
   isSimulationRunning,
   simulationSpeed,
@@ -911,11 +1034,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const floorRef = useRef<Mesh | null>(null);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
+  const civilReferenceNodesRef = useRef<Map<string, CivilReferenceNode>>(new Map());
   const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
+  const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const selectedMachineIdsRef = useRef<string[]>(selectedMachineIds);
+  const selectedCivilReferenceIdRef = useRef<string | null>(selectedCivilReferenceId);
+  const selectedCivilReferenceIdsRef = useRef<string[]>(selectedCivilReferenceIds);
   const lockedMachineIdsRef = useRef<string[]>(lockedMachineIds);
+  const lockedCivilReferenceIdsRef = useRef<string[]>(lockedCivilReferenceIds);
   const lockedAnnotationIdsRef = useRef<string[]>(lockedAnnotationIds);
   const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
@@ -930,6 +1058,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     startFloorZ: number;
     startPositions: Record<string, { xMm: number; yMm: number }>;
   } | null>(null);
+  const civilDragStateRef = useRef<{
+    id: string;
+    startFloorX: number;
+    startFloorZ: number;
+    startPosition: { xMm: number; yMm: number };
+  } | null>(null);
   const annotationDragStateRef = useRef<{
     annotationId: string;
     planeElevationMeters: number;
@@ -943,6 +1077,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     placedMachinesRef.current = placedMachines;
   }, [placedMachines]);
+
+  useEffect(() => {
+    civilReferencesRef.current = civilReferences;
+  }, [civilReferences]);
 
   useEffect(() => {
     annotationsRef.current = annotations;
@@ -978,8 +1116,33 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   }, [primarySelectedMachineId, selectedMachineIds]);
 
   useEffect(() => {
+    selectedCivilReferenceIdRef.current = selectedCivilReferenceId;
+    selectedCivilReferenceIdsRef.current = selectedCivilReferenceIds;
+    civilReferenceNodesRef.current.forEach((node, id) => {
+      const isSelected = selectedCivilReferenceIds.includes(id);
+      node.selectionFrame.isVisible = isSelected;
+      node.material.emissiveColor = isSelected
+        ? new Color3(0.28, 0.22, 0.06)
+        : getCivilColor(civilReferencesRef.current.find((item) => item.id === id) ?? {
+            id,
+            type: "reference-zone",
+            name: "",
+            positionMm: { xMm: 0, yMm: 0 },
+            sizeMm: { widthMm: 1, depthMm: 1 },
+            rotationDeg: 0,
+            createdAt: "",
+            updatedAt: ""
+          }).scale(0.18);
+    });
+  }, [selectedCivilReferenceId, selectedCivilReferenceIds]);
+
+  useEffect(() => {
     lockedMachineIdsRef.current = lockedMachineIds;
   }, [lockedMachineIds]);
+
+  useEffect(() => {
+    lockedCivilReferenceIdsRef.current = lockedCivilReferenceIds;
+  }, [lockedCivilReferenceIds]);
 
   useEffect(() => {
     lockedAnnotationIdsRef.current = lockedAnnotationIds;
@@ -1001,7 +1164,42 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettings);
       });
     });
+    civilReferenceNodesRef.current.forEach((node) => {
+      node.label.isVisible = overlaySettings.showLabels;
+    });
   }, [overlaySettings]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) {
+      return;
+    }
+
+    const activeCivilIds = new Set(civilReferences.map((item) => item.id));
+    civilReferenceNodesRef.current.forEach((node, id) => {
+      if (!activeCivilIds.has(id)) {
+        disposeCivilReferenceNode(node);
+        civilReferenceNodesRef.current.delete(id);
+      }
+    });
+
+    civilReferences.forEach((item) => {
+      const existing = civilReferenceNodesRef.current.get(item.id);
+      if (existing && existing.signature === getCivilReferenceNodeSignature(item)) {
+        existing.material.diffuseColor = getCivilColor(item);
+        existing.material.emissiveColor = getCivilColor(item).scale(0.18);
+        existing.material.alpha = item.style?.opacity ?? 0.45;
+        positionCivilReferenceNode(existing, item, selectedCivilReferenceIdRef.current, overlaySettingsRef.current.showLabels);
+        return;
+      }
+      if (existing) {
+        disposeCivilReferenceNode(existing);
+      }
+      const node = createCivilReferenceNode(scene, item);
+      positionCivilReferenceNode(node, item, selectedCivilReferenceIdRef.current, overlaySettingsRef.current.showLabels);
+      civilReferenceNodesRef.current.set(item.id, node);
+    });
+  }, [civilReferences]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1312,6 +1510,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         const pick = pointerInfo.pickInfo;
         const instanceId = pick?.pickedMesh?.metadata?.instanceId as string | undefined;
+        const civilReferenceId = pick?.pickedMesh?.metadata?.civilReferenceId as string | undefined;
         const annotationId = pick?.pickedMesh?.metadata?.annotationId as string | undefined;
         const sourceEvent = pointerInfo.event as PointerEvent | undefined;
         const isToggleSelection = Boolean(sourceEvent?.ctrlKey || sourceEvent?.shiftKey);
@@ -1321,6 +1520,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           sourceEvent?.preventDefault();
           panStateRef.current = { lastFloorPoint: panPoint.clone() };
           dragStateRef.current = null;
+          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
           cameraRef.current?.detachControl();
           return;
@@ -1350,7 +1550,36 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             };
             cameraRef.current?.detachControl();
           }
+          onSelectCivilReference(null);
           onSelectAnnotation(annotationId);
+          return;
+        }
+
+        if (civilReferenceId) {
+          const civilReference = civilReferencesRef.current.find((item) => item.id === civilReferenceId);
+          const floorPoint = pickFloorPoint();
+          sourceEvent?.preventDefault();
+          dragStateRef.current = null;
+          annotationDragStateRef.current = null;
+          panStateRef.current = null;
+          if (civilReference && floorPoint && !lockedCivilReferenceIdsRef.current.includes(civilReferenceId)) {
+            onBeginObjectDrag();
+            civilDragStateRef.current = {
+              id: civilReferenceId,
+              startFloorX: floorPoint.x,
+              startFloorZ: floorPoint.z,
+              startPosition: {
+                xMm: civilReference.positionMm.xMm,
+                yMm: civilReference.positionMm.yMm
+              }
+            };
+            cameraRef.current?.detachControl();
+          }
+          onSelectAnnotation(null);
+          if (!isToggleSelection) {
+            onSelectMachine(null, "clear");
+          }
+          onSelectCivilReference(civilReferenceId, isToggleSelection ? "toggle" : "replace");
           return;
         }
 
@@ -1386,14 +1615,19 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);
+          if (!isToggleSelection) {
+            onSelectCivilReference(null);
+          }
           onSelectMachine(instanceId, isToggleSelection ? "toggle" : "replace");
           return;
         }
 
         if (pick?.pickedMesh === floorRef.current) {
           dragStateRef.current = null;
+          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
           onSelectAnnotation(null);
+          onSelectCivilReference(null);
           onSelectMachine(null, "clear");
         }
       }
@@ -1413,8 +1647,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
 
         const dragState = dragStateRef.current;
+        const civilDragState = civilDragStateRef.current;
         const annotationDragState = annotationDragStateRef.current;
-        if (!dragState && !annotationDragState) {
+        if (!dragState && !civilDragState && !annotationDragState) {
           return;
         }
 
@@ -1442,6 +1677,20 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
+        if (civilDragState) {
+          const deltaXMm = metersToMm(floorPoint.x - civilDragState.startFloorX);
+          const deltaYMm = metersToMm(floorPoint.z - civilDragState.startFloorZ);
+          onSetCivilReferencePosition(
+            civilDragState.id,
+            {
+              xMm: civilDragState.startPosition.xMm + deltaXMm,
+              yMm: civilDragState.startPosition.yMm + deltaYMm
+            },
+            { recordHistory: false }
+          );
+          return;
+        }
+
         if (!dragState) {
           return;
         }
@@ -1464,8 +1713,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERUP) {
-        if (dragStateRef.current || annotationDragStateRef.current || panStateRef.current) {
+        if (dragStateRef.current || civilDragStateRef.current || annotationDragStateRef.current || panStateRef.current) {
           dragStateRef.current = null;
+          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
           panStateRef.current = null;
           cameraRef.current?.attachControl(canvasRef.current, true);
@@ -1562,6 +1812,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         node.box.dispose();
       });
       machineNodesRef.current.clear();
+      civilReferenceNodesRef.current.forEach(disposeCivilReferenceNode);
+      civilReferenceNodesRef.current.clear();
       annotationNodesRef.current.forEach(disposeAnnotationNode);
       annotationNodesRef.current.clear();
       cameraRef.current = null;
@@ -1570,7 +1822,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       scene.dispose();
       engine.dispose();
     };
-  }, [onBeginObjectDrag, onSelectAnnotation, onSelectMachine, onSetAnnotationPosition, onSetMachinePositions, onUpdateMachine]);
+  }, [
+    onBeginObjectDrag,
+    onSelectAnnotation,
+    onSelectCivilReference,
+    onSelectMachine,
+    onSetAnnotationPosition,
+    onSetCivilReferencePosition,
+    onSetMachinePositions,
+    onUpdateMachine
+  ]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1618,8 +1879,13 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         return;
       }
 
-      const { definition, instanceId, position } = machine;
+      const { definition, instanceId } = machine;
       const dimensions = getMachineDimensionsMeters(definition);
+      const renderCenterMm = getMachineRenderCenterMm(machine);
+      const renderCenter = {
+        x: mmToMeters(renderCenterMm.xMm),
+        z: mmToMeters(renderCenterMm.yMm)
+      };
       const material = new StandardMaterial(`machine-material-${instanceId}`, scene);
       material.diffuseColor = hexToColor3(definition.defaultColor);
       material.specularColor = new Color3(0.14, 0.16, 0.18);
@@ -1634,15 +1900,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         },
         scene
       );
-      box.position = new Vector3(position.x, dimensions.height / 2, position.z);
+      box.position = new Vector3(renderCenter.x, dimensions.height / 2, renderCenter.z);
       box.rotation.y = (machine.rotationY * Math.PI) / 180;
       box.material = material;
       box.metadata = { instanceId };
       box.visibility = 0;
 
       const { label, texture } = createLabel(scene, instanceId, definition.name, dimensions.height + 0.85);
-      label.position.x = position.x;
-      label.position.z = position.z;
+      label.position.x = renderCenter.x;
+      label.position.z = renderCenter.z;
       label.isVisible = overlaySettingsRef.current.showLabels;
 
       const selectionFrame = createSelectionFrame(scene, machine);
@@ -1779,6 +2045,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
 
       const dimensions = getMachineDimensionsMeters(machine.definition);
+      const renderCenterMm = getMachineRenderCenterMm(machine);
+      const renderCenter = {
+        x: mmToMeters(renderCenterMm.xMm),
+        z: mmToMeters(renderCenterMm.yMm)
+      };
       const connectionPoints = getConnectionPointsForObject(machine);
       if (node.connectionPointMarkers.length !== connectionPoints.length) {
         node.connectionPointMarkers.forEach((markerSet) => {
@@ -1795,16 +2066,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return markerSet;
         });
       }
-      node.box.position.x = machine.position.x;
+      node.box.position.x = renderCenter.x;
       node.box.position.y = dimensions.height / 2;
-      node.box.position.z = machine.position.z;
+      node.box.position.z = renderCenter.z;
       node.box.rotation.y = (machine.rotationY * Math.PI) / 180;
       if (node.flowArrow) {
         node.flowArrow.rotation.y = machine.flowDirection === "reverse" ? Math.PI : 0;
       }
-      node.label.position.x = machine.position.x;
+      node.label.position.x = renderCenter.x;
       node.label.position.y = dimensions.height + 0.85;
-      node.label.position.z = machine.position.z;
+      node.label.position.z = renderCenter.z;
       node.selectionFrame.isVisible =
         selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showSelectionBox;
       node.selectionFrame.color =

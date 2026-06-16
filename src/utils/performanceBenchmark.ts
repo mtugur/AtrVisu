@@ -7,6 +7,7 @@ import type {
   BenchmarkScenario,
   ScenePerformanceMetrics
 } from "../types/performance";
+import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT } from "./coordinateReference";
 import { createLayoutSnapshotFromMachines } from "./layoutSerialization";
 import { mmToMeters } from "./units";
 
@@ -132,6 +133,8 @@ export const createBenchmarkMachines = (options: BenchmarkOptions): PlacedMachin
         z: mmToMeters(position.yMm)
       },
       positionMm: position,
+      referencePoint: LAYOUT_REFERENCE_POINT,
+      coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
       elevationMm: 0,
       rotationDeg,
       rotationY: rotationDeg,

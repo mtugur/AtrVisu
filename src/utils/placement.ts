@@ -2,8 +2,8 @@ import type { PlanPositionMm } from "../types/coordinates";
 import type { PlacedMachine } from "../types/machine";
 import type { MeasurementResult, PlacementSettings } from "../types/placement";
 import { getCollisionEnvelopeForMachine } from "./collision";
+import { getMachineReferencePositionMm } from "./coordinateReference";
 import { getMachineDimensionsMm } from "./machineDimensions";
-import { metersToMm } from "./units";
 
 export const snapMm = (valueMm: number, stepMm: number) => {
   if (!Number.isFinite(valueMm) || !Number.isFinite(stepMm) || stepMm <= 0) {
@@ -59,10 +59,7 @@ export const distanceBetweenPlanPositionsMm = (a: PlanPositionMm, b: PlanPositio
 };
 
 export const getMachinePlanPositionMm = (machine: PlacedMachine): PlanPositionMm => {
-  return machine.positionMm ?? {
-    xMm: metersToMm(machine.position.x),
-    yMm: metersToMm(machine.position.z)
-  };
+  return getMachineReferencePositionMm(machine);
 };
 
 export const calculateMeasurementBetweenMachines = (

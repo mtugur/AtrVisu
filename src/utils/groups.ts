@@ -1,6 +1,8 @@
 import type { ObjectGroup } from "../types/groups";
+import type { CivilReferenceItem } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
+import { getAlignableEntityKey } from "./alignment";
 import { getLayerId, isLayerVisible } from "./layers";
 
 const nowIso = () => new Date().toISOString();
@@ -39,9 +41,11 @@ export const createGroupId = () => `group-${Date.now()}-${Math.round(Math.random
 export const normalizeGroups = (
   groups: unknown,
   machines: PlacedMachine[] = [],
-  layers: LayoutLayer[] = []
+  layers: LayoutLayer[] = [],
+  civilReferences: CivilReferenceItem[] = []
 ): ObjectGroup[] => {
   const machineIds = new Set(machines.map((machine) => machine.instanceId));
+  const civilIds = new Set(civilReferences.map((item) => item.id));
   const claimedObjectIds = new Set<string>();
   const normalized = Array.isArray(groups)
     ? groups.flatMap((group, index) => {
@@ -56,7 +60,10 @@ export const normalizeGroups = (
       return;
     }
     const objectIds = group.objectIds.filter((objectId) => {
-      if ((machineIds.size > 0 && !machineIds.has(objectId)) || claimedObjectIds.has(objectId)) {
+      const machineKey = objectId.replace(/^(object|machine):/, "");
+      const isMachine = machineIds.has(objectId) || machineIds.has(machineKey);
+      const isCivil = objectId.startsWith("civil:") && civilIds.has(objectId.slice("civil:".length));
+      if (((machineIds.size > 0 || civilIds.size > 0) && !isMachine && !isCivil) || claimedObjectIds.has(objectId)) {
         return false;
       }
       claimedObjectIds.add(objectId);
@@ -117,11 +124,27 @@ export const removeObjectsFromGroup = (groups: ObjectGroup[], groupId: string, o
 export const getVisibleGroupObjectIds = (
   group: ObjectGroup,
   machines: PlacedMachine[],
-  layers: LayoutLayer[]
+  layers: LayoutLayer[],
+  civilReferences: CivilReferenceItem[] = []
 ) => {
   const machinesById = new Map(machines.map((machine) => [machine.instanceId, machine]));
+  const civilById = new Map(civilReferences.map((item) => [item.id, item]));
   return group.objectIds.filter((objectId) => {
-    const machine = machinesById.get(objectId);
+    if (objectId.startsWith("civil:")) {
+      const civil = civilById.get(objectId.slice("civil:".length));
+      return civil ? isLayerVisible(civil.layerId, layers) : false;
+    }
+    const machineId = objectId.replace(/^(object|machine):/, "");
+    const machine = machinesById.get(machineId);
     return machine ? isLayerVisible(machine.layerId, layers) : false;
   });
 };
+
+export const getGroupEntityKeys = (group: ObjectGroup) =>
+  group.objectIds.map((objectId) => objectId.startsWith("civil:")
+    ? objectId
+    : objectId.startsWith("object:")
+      ? getAlignableEntityKey("machine", objectId.slice("object:".length))
+      : objectId.startsWith("machine:")
+        ? objectId
+        : getAlignableEntityKey("machine", objectId));

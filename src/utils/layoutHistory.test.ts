@@ -63,14 +63,14 @@ describe("layout history", () => {
   it("pushes, undoes, and redoes layout snapshots", () => {
     const initial = [machine("a", 0)];
     const moved = [machine("a", 1000)];
-    const history = pushHistorySnapshot(createLayoutHistory(), initial, [annotation("before")], [viewpoint("viewpoint-1", "Before")]);
+    const history = pushHistorySnapshot(createLayoutHistory(), initial, [annotation("before")], [], [viewpoint("viewpoint-1", "Before")]);
 
-    const undone = undoHistory(history, moved, [annotation("after")], [viewpoint("viewpoint-2", "After")]);
+    const undone = undoHistory(history, moved, [annotation("after")], [], [viewpoint("viewpoint-2", "After")]);
     expect(undone?.machines[0].positionMm?.xMm).toBe(0);
     expect(undone?.annotations[0].text).toBe("before");
     expect(undone?.viewpoints[0].name).toBe("Before");
 
-    const redone = undone ? redoHistory(undone.history, undone.machines, undone.annotations, undone.viewpoints) : null;
+    const redone = undone ? redoHistory(undone.history, undone.machines, undone.annotations, undone.civilReferences, undone.viewpoints) : null;
     expect(redone?.machines[0].positionMm?.xMm).toBe(1000);
     expect(redone?.annotations[0].text).toBe("after");
     expect(redone?.viewpoints[0].name).toBe("After");
@@ -79,14 +79,14 @@ describe("layout history", () => {
   it("keeps viewpoint-only layout changes undoable", () => {
     const machines = [machine("a", 0)];
     const annotations = [annotation("same")];
-    const history = pushHistorySnapshot(createLayoutHistory(), machines, annotations, []);
+    const history = pushHistorySnapshot(createLayoutHistory(), machines, annotations, [], []);
 
-    const undone = undoHistory(history, machines, annotations, [viewpoint("viewpoint-1", "Captured")]);
+    const undone = undoHistory(history, machines, annotations, [], [viewpoint("viewpoint-1", "Captured")]);
     expect(undone?.machines[0].instanceId).toBe("a");
     expect(undone?.annotations[0].text).toBe("same");
     expect(undone?.viewpoints).toEqual([]);
 
-    const redone = undone ? redoHistory(undone.history, undone.machines, undone.annotations, undone.viewpoints) : null;
+    const redone = undone ? redoHistory(undone.history, undone.machines, undone.annotations, undone.civilReferences, undone.viewpoints) : null;
     expect(redone?.viewpoints[0].name).toBe("Captured");
   });
 

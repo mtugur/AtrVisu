@@ -6,12 +6,11 @@ import type {
   FootprintAnchor,
   PairAlignmentAction
 } from "../types/alignment";
-import type { PlacedMachine } from "../types/machine";
 import type { NudgeSettings } from "../types/selection";
 
 type AlignmentToolsPanelProps = {
-  selectedMachines: PlacedMachine[];
-  primarySelectedMachine?: PlacedMachine;
+  selectedEntityCount: number;
+  primarySelectionLabel?: string;
   nudgeSettings: NudgeSettings;
   onAlign: (action: AlignmentAction) => void;
   onDistribute: (action: DistributionAction) => void;
@@ -39,8 +38,8 @@ const anchorOptions: Array<{ value: FootprintAnchor; label: string }> = [
 ];
 
 export function AlignmentToolsPanel({
-  selectedMachines,
-  primarySelectedMachine,
+  selectedEntityCount,
+  primarySelectionLabel,
   nudgeSettings,
   onAlign,
   onDistribute,
@@ -53,8 +52,8 @@ export function AlignmentToolsPanel({
   const [pairGapYMm, setPairGapYMm] = useState(100);
   const [primaryAnchor, setPrimaryAnchor] = useState<FootprintAnchor>("center");
   const [secondaryAnchor, setSecondaryAnchor] = useState<FootprintAnchor>("center");
-  const hasEnoughObjects = selectedMachines.length >= 2;
-  const hasPair = selectedMachines.length === 2;
+  const hasEnoughObjects = selectedEntityCount >= 2;
+  const hasPair = selectedEntityCount === 2;
 
   return (
     <section className="precision-section alignment-tools" data-testid="alignment-tools-panel" aria-label="Alignment tools">
@@ -62,7 +61,7 @@ export function AlignmentToolsPanel({
         <>
           <div className="property-readout">
             <span>Anchor</span>
-            <strong>{primarySelectedMachine?.definition.name ?? "Primary selected object"}</strong>
+            <strong>{primarySelectionLabel ?? "Primary selected object"}</strong>
           </div>
           <div className="alignment-group">
             <strong>Align to Primary</strong>
@@ -90,16 +89,16 @@ export function AlignmentToolsPanel({
           <div className="alignment-group">
             <strong>Distribute</strong>
             <div className="alignment-button-grid">
-              <button type="button" disabled={selectedMachines.length < 3} onClick={() => onDistribute("horizontal")}>
+              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onDistribute("horizontal")}>
                 Horizontal
               </button>
-              <button type="button" disabled={selectedMachines.length < 3} onClick={() => onDistribute("vertical")}>
+              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onDistribute("vertical")}>
                 Vertical
               </button>
-              <button type="button" disabled={selectedMachines.length < 3} onClick={() => onEqualGap("gapX")}>
+              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onEqualGap("gapX")}>
                 Equal Gap X
               </button>
-              <button type="button" disabled={selectedMachines.length < 3} onClick={() => onEqualGap("gapY")}>
+              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onEqualGap("gapY")}>
                 Equal Gap Y
               </button>
             </div>

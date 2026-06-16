@@ -1,11 +1,14 @@
 import type { ObjectGroup } from "../types/groups";
 import type { PlacedMachine } from "../types/machine";
+import type { CivilReferenceItem } from "../types/civil";
+import { getCivilTypeLabel } from "../utils/civil";
 
 type AssemblyTreePanelProps = {
   groups: ObjectGroup[];
   placedMachines: PlacedMachine[];
+  civilReferences: CivilReferenceItem[];
   selectedGroupId: string | null;
-  selectedMachineIds: string[];
+  selectedEntityCount: number;
   onCreateGroupFromSelection: (name: string) => void;
   onAddSelectionToGroup: (groupId: string) => void;
   onRemoveSelectionFromGroup: (groupId: string) => void;
@@ -18,8 +21,9 @@ type AssemblyTreePanelProps = {
 export function AssemblyTreePanel({
   groups,
   placedMachines,
+  civilReferences,
   selectedGroupId,
-  selectedMachineIds,
+  selectedEntityCount,
   onCreateGroupFromSelection,
   onAddSelectionToGroup,
   onRemoveSelectionFromGroup,
@@ -29,7 +33,8 @@ export function AssemblyTreePanel({
   onToggleGroupCollapsed
 }: AssemblyTreePanelProps) {
   const machinesById = new Map(placedMachines.map((machine) => [machine.instanceId, machine]));
-  const selectedCount = selectedMachineIds.length;
+  const civilById = new Map(civilReferences.map((item) => [item.id, item]));
+  const selectedCount = selectedEntityCount;
 
   return (
     <section className="assembly-panel" data-testid="assembly-tree-panel" aria-label="Assembly Tree">
@@ -52,9 +57,14 @@ export function AssemblyTreePanel({
       </p>
       <div className="assembly-list" aria-label="Object groups">
         {groups.length > 0 ? groups.map((group) => {
-          const memberMachines = group.objectIds.flatMap((objectId) => {
-            const machine = machinesById.get(objectId);
-            return machine ? [machine] : [];
+          const members = group.objectIds.flatMap((objectId) => {
+            if (objectId.startsWith("civil:")) {
+              const civil = civilById.get(objectId.slice("civil:".length));
+              return civil ? [{ id: objectId, name: civil.name, typeLabel: getCivilTypeLabel(civil.type) }] : [];
+            }
+            const machineId = objectId.replace(/^(object|machine):/, "");
+            const machine = machinesById.get(machineId);
+            return machine ? [{ id: objectId, name: machine.definition.name, typeLabel: machine.definition.category }] : [];
           });
           return (
             <article
@@ -77,13 +87,13 @@ export function AssemblyTreePanel({
                   onClick={() => onSelectGroup(group.id)}
                 >
                   <strong>{group.name}</strong>
-                  <small>{memberMachines.length} object{memberMachines.length === 1 ? "" : "s"}</small>
+                  <small>{members.length} item{members.length === 1 ? "" : "s"}</small>
                 </button>
               </div>
               {!group.collapsed ? (
                 <div className="assembly-members">
-                  {memberMachines.length > 0 ? memberMachines.map((machine) => (
-                    <span key={machine.instanceId}>{machine.definition.name}</span>
+                  {members.length > 0 ? members.map((member) => (
+                    <span key={member.id}>{member.name} <small>{member.typeLabel}</small></span>
                   )) : <span>No objects assigned.</span>}
                 </div>
               ) : null}

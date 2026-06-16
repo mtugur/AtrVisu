@@ -1,6 +1,7 @@
 import type { CollisionEnvelope } from "./collision";
 import type { AtaraMachineData } from "./ataraMachineData";
 import type { AnnotationObject } from "./annotations";
+import type { CivilReferenceItem } from "./civil";
 import type { ObjectGroup } from "./groups";
 import type { LayoutLayer } from "./layers";
 import type { LayoutViewpoint } from "./viewpoints";
@@ -103,6 +104,8 @@ export type PlacedMachine = {
     xMm: number;
     yMm: number;
   };
+  referencePoint?: "front-left-bottom";
+  coordinateReferenceVersion?: "front-left-bottom-v1";
   elevationMm?: number;
   rotationDeg?: number;
   rotationY: number;
@@ -127,6 +130,8 @@ export type LayoutObject = {
     xMm: number;
     yMm: number;
   };
+  referencePoint?: "front-left-bottom";
+  coordinateReferenceVersion?: "front-left-bottom-v1";
   elevationMm?: number;
   rotationDeg?: number;
   positionX: number;
@@ -145,10 +150,13 @@ export type AtrVisuLayout = {
     renderUnit: "m";
     version: "1.0";
   };
+  coordinateReferenceVersion?: "front-left-bottom-v1";
+  referencePoint?: "front-left-bottom";
   exportedAt: string;
   objects: LayoutObject[];
   layers?: LayoutLayer[];
   groups?: ObjectGroup[];
+  civilReferences?: CivilReferenceItem[];
   annotations?: AnnotationObject[];
   viewpoints?: LayoutViewpoint[];
 };

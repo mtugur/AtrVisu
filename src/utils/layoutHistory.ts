@@ -1,5 +1,6 @@
 import type { LayoutHistorySnapshot, LayoutHistoryState } from "../types/history";
 import type { AnnotationObject } from "../types/annotations";
+import type { CivilReferenceItem } from "../types/civil";
 import type { ObjectGroup } from "../types/groups";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
@@ -21,6 +22,14 @@ export const cloneAnnotations = (annotations: AnnotationObject[]): AnnotationObj
   }
 
   return JSON.parse(JSON.stringify(annotations)) as AnnotationObject[];
+};
+
+export const cloneCivilReferences = (civilReferences: CivilReferenceItem[]): CivilReferenceItem[] => {
+  if (typeof structuredClone === "function") {
+    return structuredClone(civilReferences) as CivilReferenceItem[];
+  }
+
+  return JSON.parse(JSON.stringify(civilReferences)) as CivilReferenceItem[];
 };
 
 export const cloneViewpoints = (viewpoints: LayoutViewpoint[]): LayoutViewpoint[] => {
@@ -50,6 +59,7 @@ export const cloneGroups = (groups: ObjectGroup[]): ObjectGroup[] => {
 const toHistorySnapshot = (
   snapshot: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
+  civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = []
@@ -58,6 +68,7 @@ const toHistorySnapshot = (
     ? {
         machines: clonePlacedMachines(snapshot),
         annotations: cloneAnnotations(annotations),
+        civilReferences: cloneCivilReferences(civilReferences),
         layers: cloneLayers(layers),
         groups: cloneGroups(groups),
         viewpoints: cloneViewpoints(viewpoints)
@@ -65,6 +76,7 @@ const toHistorySnapshot = (
     : {
         machines: clonePlacedMachines(snapshot.machines),
         annotations: cloneAnnotations(snapshot.annotations),
+        civilReferences: cloneCivilReferences(snapshot.civilReferences ?? []),
         layers: cloneLayers(snapshot.layers ?? []),
         groups: cloneGroups(snapshot.groups ?? []),
         viewpoints: cloneViewpoints(snapshot.viewpoints ?? [])
@@ -80,12 +92,13 @@ export const pushHistorySnapshot = (
   history: LayoutHistoryState,
   snapshot: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
+  civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = []
 ): LayoutHistoryState => ({
   ...history,
-  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, viewpoints, layers, groups)].slice(-history.limit),
+  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, civilReferences, viewpoints, layers, groups)].slice(-history.limit),
   redoStack: []
 });
 
@@ -93,6 +106,7 @@ export const undoHistory = (
   history: LayoutHistoryState,
   current: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
+  civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = []
@@ -100,6 +114,7 @@ export const undoHistory = (
   history: LayoutHistoryState;
   machines: PlacedMachine[];
   annotations: AnnotationObject[];
+  civilReferences: CivilReferenceItem[];
   layers: LayoutLayer[];
   groups: ObjectGroup[];
   viewpoints: LayoutViewpoint[];
@@ -113,10 +128,11 @@ export const undoHistory = (
     history: {
       ...history,
       undoStack: history.undoStack.slice(0, -1),
-      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, viewpoints, layers, groups)].slice(-history.limit)
+      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups)].slice(-history.limit)
     },
     machines: clonePlacedMachines(previous.machines),
     annotations: cloneAnnotations(previous.annotations),
+    civilReferences: cloneCivilReferences(previous.civilReferences ?? []),
     layers: cloneLayers(previous.layers ?? []),
     groups: cloneGroups(previous.groups ?? []),
     viewpoints: cloneViewpoints(previous.viewpoints ?? [])
@@ -127,6 +143,7 @@ export const redoHistory = (
   history: LayoutHistoryState,
   current: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
+  civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = []
@@ -134,6 +151,7 @@ export const redoHistory = (
   history: LayoutHistoryState;
   machines: PlacedMachine[];
   annotations: AnnotationObject[];
+  civilReferences: CivilReferenceItem[];
   layers: LayoutLayer[];
   groups: ObjectGroup[];
   viewpoints: LayoutViewpoint[];
@@ -146,11 +164,12 @@ export const redoHistory = (
   return {
     history: {
       ...history,
-      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, viewpoints, layers, groups)].slice(-history.limit),
+      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups)].slice(-history.limit),
       redoStack: history.redoStack.slice(0, -1)
     },
     machines: clonePlacedMachines(next.machines),
     annotations: cloneAnnotations(next.annotations),
+    civilReferences: cloneCivilReferences(next.civilReferences ?? []),
     layers: cloneLayers(next.layers ?? []),
     groups: cloneGroups(next.groups ?? []),
     viewpoints: cloneViewpoints(next.viewpoints ?? [])
