@@ -4,7 +4,7 @@ Object groups organize related layout objects so a line, area, or system can be 
 
 ## Groups Versus Layers
 
-- Groups organize machines into logical sets such as Packaging Line 1 or Palletizing Area.
+- Groups organize machines and Building / Civil references into logical sets such as Packaging Line 1, Palletizing Area, or Building Obstacles.
 - Layers control visibility and lock behavior.
 - A hidden layer still hides group members.
 - A locked layer still protects group members from movement, editing, and deletion.
@@ -23,7 +23,9 @@ Each group stores:
 - `createdAt`
 - `updatedAt`
 
-Objects may be outside any group. In v0.1, one object belongs to one group at a time. When an object is deleted, it is removed from group membership safely.
+Objects and civil references may be outside any group. In v0.1, one entity belongs to one group at a time. When a machine or civil reference is deleted, it is removed from group membership safely.
+
+Machine Library remains the source for machines and equipment. Building / Civil remains a separate UI section for walls, columns, floor references, walkways, and zones. Groups only provide shared organization after entities have been placed in the layout.
 
 ## Assembly Tree
 
@@ -37,7 +39,7 @@ The right-panel Assembly Tree supports:
 - Expand / collapse
 - Select group
 
-Selecting a group selects its visible member objects in the scene. Hidden layer members remain hidden and are not selected through the group.
+Selecting a group selects its visible member machines and civil references in the scene. Hidden layer members remain hidden and are not selected through the group.
 
 ## Movement
 

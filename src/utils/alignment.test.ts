@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import {
+  alignEntitiesToAnchor,
   alignObjectsToAnchor,
+  applyEntityPairAlignment,
   applyPairAlignment,
+  distributeEntitiesByCenter,
   distributeObjectsByCenter,
   equalizeGaps,
+  equalizeEntityGaps,
   getFootprintAnchorPoint,
+  getAlignableEntityKey,
   moveObjectsByDelta,
+  selectionHasLockedAlignableEntities,
   snapPrimaryAnchorToSecondaryAnchor
 } from "./alignment";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./selectionBounds";
@@ -169,5 +175,135 @@ describe("alignment helpers", () => {
       0
     );
     expect(result.find((item) => item.instanceId === "primary")?.positionMm?.xMm).toBe(4000);
+  });
+});
+
+describe("mixed alignable entity helpers", () => {
+  const entity = (
+    kind: "machine" | "civil",
+    id: string,
+    xMm: number,
+    yMm: number,
+    widthMm = 1000,
+    depthMm = 1000,
+    locked = false,
+    hidden = false
+  ) => ({
+    kind,
+    id,
+    label: id,
+    positionMm: { xMm, yMm },
+    locked,
+    hidden,
+    bounds: {
+      objectId: id,
+      centerXMm: xMm + widthMm / 2,
+      centerYMm: yMm + depthMm / 2,
+      minXMm: xMm,
+      maxXMm: xMm + widthMm,
+      minYMm: yMm,
+      maxYMm: yMm + depthMm,
+      widthMm,
+      depthMm
+    }
+  });
+
+  it("aligns two civil columns by footprint edge", () => {
+    const entities = [
+      entity("civil", "column-a", 0, 0, 600, 600),
+      entity("civil", "column-b", 2000, 1000, 600, 600)
+    ];
+    const updates = alignEntitiesToAnchor(
+      entities,
+      entities.map((item) => getAlignableEntityKey(item.kind, item.id)),
+      getAlignableEntityKey("civil", "column-a"),
+      "left"
+    );
+
+    expect(updates).toEqual([{ kind: "civil", id: "column-b", xMm: 0, yMm: 1000 }]);
+  });
+
+  it("aligns a wall and a machine by center line", () => {
+    const entities = [
+      entity("machine", "packer", 0, 0, 2000, 1000),
+      entity("civil", "wall", 5000, 2000, 3000, 200)
+    ];
+    const updates = applyEntityPairAlignment(
+      entities,
+      entities.map((item) => getAlignableEntityKey(item.kind, item.id)),
+      getAlignableEntityKey("civil", "wall"),
+      "centerY"
+    );
+
+    expect(updates).toEqual([{ kind: "civil", id: "wall", xMm: 5000, yMm: 400 }]);
+  });
+
+  it("uses civil-first selection order as align-to-primary anchor", () => {
+    const entities = [
+      entity("machine", "machine-a", 3000, 0, 1000, 1000),
+      entity("civil", "column-a", 0, 1000, 600, 600)
+    ];
+    const updates = alignEntitiesToAnchor(
+      entities,
+      [getAlignableEntityKey("civil", "column-a"), getAlignableEntityKey("machine", "machine-a")],
+      getAlignableEntityKey("civil", "column-a"),
+      "left"
+    );
+
+    expect(updates).toEqual([{ kind: "machine", id: "machine-a", xMm: 0, yMm: 0 }]);
+  });
+
+  it("uses machine-first selection order as align-to-primary anchor", () => {
+    const entities = [
+      entity("machine", "machine-a", 3000, 0, 1000, 1000),
+      entity("civil", "column-a", 0, 1000, 600, 600)
+    ];
+    const updates = alignEntitiesToAnchor(
+      entities,
+      [getAlignableEntityKey("machine", "machine-a"), getAlignableEntityKey("civil", "column-a")],
+      getAlignableEntityKey("machine", "machine-a"),
+      "left"
+    );
+
+    expect(updates).toEqual([{ kind: "civil", id: "column-a", xMm: 3000, yMm: 1000 }]);
+  });
+
+  it("excludes hidden civil entities from alignment updates", () => {
+    const entities = [
+      entity("civil", "visible-a", 0, 0),
+      entity("civil", "visible-b", 2000, 0),
+      entity("civil", "hidden-c", 4000, 0, 1000, 1000, false, true)
+    ];
+    const updates = alignEntitiesToAnchor(
+      entities,
+      entities.map((item) => getAlignableEntityKey(item.kind, item.id)),
+      getAlignableEntityKey("civil", "visible-a"),
+      "left"
+    );
+
+    expect(updates).toEqual([{ kind: "civil", id: "visible-b", xMm: 0, yMm: 0 }]);
+  });
+
+  it("blocks alignment when a locked civil entity is selected", () => {
+    const entities = [
+      entity("civil", "column-a", 0, 0),
+      entity("civil", "column-b", 2000, 0, 1000, 1000, true)
+    ];
+    const ids = entities.map((item) => getAlignableEntityKey(item.kind, item.id));
+
+    expect(selectionHasLockedAlignableEntities(entities, ids)).toBe(true);
+    expect(alignEntitiesToAnchor(entities, ids, getAlignableEntityKey("civil", "column-a"), "left")).toEqual([]);
+  });
+
+  it("distributes mixed entities and equalizes civil gaps", () => {
+    const entities = [
+      entity("machine", "a", 0, 0, 1000, 1000),
+      entity("civil", "b", 2000, 0, 1000, 1000),
+      entity("civil", "c", 6000, 0, 1000, 1000)
+    ];
+    const ids = entities.map((item) => getAlignableEntityKey(item.kind, item.id));
+
+    expect(distributeEntitiesByCenter(entities, ids, "horizontal").map((update) => update.xMm)).toEqual([0, 3000, 6000]);
+    expect(equalizeEntityGaps(entities, ids, "gapX").map((update) => update.xMm)).toEqual([0, 3000, 6000]);
   });
 });

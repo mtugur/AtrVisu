@@ -9,6 +9,7 @@ import {
   getConnectionPointWorldDirection,
   getConnectionPointWorldPosition
 } from "./connectionPoints";
+import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT } from "./coordinateReference";
 import { getMachinePlanPositionMm } from "./placement";
 import { mmToMeters } from "./units";
 
@@ -112,6 +113,8 @@ export const applyConnectionPointSnap = (
       ? {
           ...machine,
           positionMm: nextPositionMm,
+          referencePoint: LAYOUT_REFERENCE_POINT,
+          coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
           position: {
             x: mmToMeters(nextPositionMm.xMm),
             z: mmToMeters(nextPositionMm.yMm)

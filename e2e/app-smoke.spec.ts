@@ -201,6 +201,30 @@ test("layers can be created, assigned, hidden, and shown without red console err
   expect(errors).toEqual([]);
 });
 
+test("building civil references can be added and edited without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const civilSection = page.getByRole("button", { name: /Building \/ Civil/i });
+  if ((await civilSection.getAttribute("aria-expanded")) !== "true") {
+    await civilSection.click();
+  }
+  await expect(page.getByTestId("civil-reference-panel")).toBeVisible();
+  await page.getByTestId("add-civil-column").click();
+
+  const propertiesSection = page.getByRole("button", { name: /Civil Reference Properties/i });
+  await expect(propertiesSection).toBeVisible();
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  await expect(page.getByTestId("civil-reference-properties")).toBeVisible();
+  await page.getByTestId("civil-plan-x-input").fill("-200");
+  await page.getByTestId("civil-plan-x-input").blur();
+  await expect(page.getByTestId("civil-plan-x-input")).toHaveValue("-200");
+
+  expect(errors).toEqual([]);
+});
+
 test("assembly tree can create and select a group without red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -218,7 +242,7 @@ test("assembly tree can create and select a group without red console errors", a
   await page.getByTestId("create-group-from-selection").click();
   const group = page.locator(".assembly-group-row").filter({ hasText: "Packaging Line 1" });
   await expect(group).toBeVisible();
-  await expect(group).toContainText("1 object");
+  await expect(group).toContainText("1 item");
   await group.locator(".assembly-group-button").click();
   await expect(group).toHaveClass(/is-selected/);
 

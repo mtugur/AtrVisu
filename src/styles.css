@@ -2558,9 +2558,14 @@ select:disabled {
     justify-content: stretch;
   }
 
-  .manager-footer button {
+.manager-footer button {
     flex: 1 1 140px;
   }
+}
+
+.civil-reference-panel {
+  display: grid;
+  gap: 0.75rem;
 }
 
 @media (max-width: 460px) {

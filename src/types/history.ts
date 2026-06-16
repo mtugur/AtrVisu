@@ -1,5 +1,6 @@
 import type { PlacedMachine } from "./machine";
 import type { AnnotationObject } from "./annotations";
+import type { CivilReferenceItem } from "./civil";
 import type { ObjectGroup } from "./groups";
 import type { LayoutLayer } from "./layers";
 import type { LayoutViewpoint } from "./viewpoints";
@@ -7,6 +8,7 @@ import type { LayoutViewpoint } from "./viewpoints";
 export type LayoutHistorySnapshot = {
   machines: PlacedMachine[];
   annotations: AnnotationObject[];
+  civilReferences: CivilReferenceItem[];
   layers: LayoutLayer[];
   groups: ObjectGroup[];
   viewpoints: LayoutViewpoint[];

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { CivilReferenceItem, CivilReferenceType } from "../types/civil";
 import type { PlacedMachine } from "../types/machine";
 import {
+  buildCollisionEnvelopeFromCivilReference,
   buildCollisionEnvelopeFromObject,
   checkAllObjectCollisions,
   checkObjectCollision
@@ -60,6 +62,29 @@ const createMachine = (
     flowDirection: "forward"
   };
 };
+
+const createCivil = (
+  id: string,
+  type: CivilReferenceType,
+  positionMm: { xMm: number; yMm: number },
+  sizeMm = { widthMm: 1000, depthMm: 1000, heightMm: 3000 },
+  visible = true,
+  locked = false
+): CivilReferenceItem => ({
+  id,
+  type,
+  name: id,
+  positionMm: { ...positionMm, zMm: 0 },
+  referencePoint: "front-left-bottom",
+  coordinateReferenceVersion: "front-left-bottom-v1",
+  sizeMm,
+  rotationDeg: 0,
+  layerId: visible ? "default" : "hidden",
+  locked,
+  visible,
+  createdAt: "now",
+  updatedAt: "now"
+});
 
 describe("collision helpers", () => {
   it("returns no collision for separated rectangles", () => {
@@ -130,5 +155,47 @@ describe("collision helpers", () => {
 
     expect(() => checkAllObjectCollisions([legacy])).not.toThrow();
     expect(buildCollisionEnvelopeFromObject(legacy)?.center).toEqual({ xMm: 250, yMm: -500 });
+  });
+
+  it("detects machine vs wall collisions", () => {
+    const result = checkAllObjectCollisions(
+      [createMachine("conveyor", { xMm: 0, yMm: 0 })],
+      [createCivil("wall-1", "wall", { xMm: 250, yMm: 0 })]
+    );
+
+    expect(result.pairs).toHaveLength(1);
+    expect(result.pairs[0].entityA?.entityType).toBe("object");
+    expect(result.pairs[0].entityB?.entityType).toBe("civil");
+  });
+
+  it("detects machine vs column collisions", () => {
+    const result = checkAllObjectCollisions(
+      [createMachine("machine", { xMm: 0, yMm: 0 })],
+      [createCivil("column-1", "column", { xMm: 250, yMm: 250 }, { widthMm: 500, depthMm: 500, heightMm: 3000 })]
+    );
+
+    expect(result.pairs).toHaveLength(1);
+    expect(result.collidingObjectIds).toEqual(["machine", "civil:column-1"]);
+  });
+
+  it("ignores non-solid civil references for hard collision", () => {
+    const machine = createMachine("machine", { xMm: 0, yMm: 0 });
+
+    expect(checkAllObjectCollisions([machine], [createCivil("floor", "floor-area", { xMm: 0, yMm: 0 })]).pairs).toHaveLength(0);
+    expect(checkAllObjectCollisions([machine], [createCivil("walkway", "walkway", { xMm: 0, yMm: 0 })]).pairs).toHaveLength(0);
+    expect(checkAllObjectCollisions([machine], [createCivil("zone", "reference-zone", { xMm: 0, yMm: 0 })]).pairs).toHaveLength(0);
+  });
+
+  it("keeps locked visible civil solids collidable", () => {
+    const result = checkAllObjectCollisions(
+      [createMachine("machine", { xMm: 0, yMm: 0 })],
+      [createCivil("locked-column", "column", { xMm: 0, yMm: 0 }, { widthMm: 500, depthMm: 500, heightMm: 3000 }, true, true)]
+    );
+
+    expect(result.pairs).toHaveLength(1);
+  });
+
+  it("builds no footprint for non-solid civil references", () => {
+    expect(buildCollisionEnvelopeFromCivilReference(createCivil("walkway", "walkway", { xMm: 0, yMm: 0 }))).toBeNull();
   });
 });

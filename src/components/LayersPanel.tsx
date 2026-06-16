@@ -1,4 +1,5 @@
 import type { AnnotationObject } from "../types/annotations";
+import type { CivilReferenceItem } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import { getLayerItemCounts } from "../utils/layers";
@@ -7,6 +8,7 @@ type LayersPanelProps = {
   layers: LayoutLayer[];
   placedMachines: PlacedMachine[];
   annotations: AnnotationObject[];
+  civilReferences?: CivilReferenceItem[];
   selectedLayerId: string;
   onSelectLayer: (layerId: string) => void;
   onAddLayer: (name: string) => void;
@@ -22,6 +24,7 @@ export function LayersPanel({
   layers,
   placedMachines,
   annotations,
+  civilReferences = [],
   selectedLayerId,
   onSelectLayer,
   onAddLayer,
@@ -32,7 +35,7 @@ export function LayersPanel({
   onIsolateLayer,
   onShowAllLayers
 }: LayersPanelProps) {
-  const counts = getLayerItemCounts(layers, placedMachines, annotations);
+  const counts = getLayerItemCounts(layers, placedMachines, annotations, civilReferences);
 
   return (
     <section className="layers-panel" data-testid="layers-panel" aria-label="Layers">

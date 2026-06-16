@@ -2,6 +2,15 @@ import type { PlanPositionMm } from "./coordinates";
 
 export type CollisionSeverity = "warning" | "error";
 
+export type CollisionEntityType = "object" | "civil";
+
+export type CollisionEntityRef = {
+  entityType: CollisionEntityType;
+  id: string;
+  name?: string;
+  typeLabel?: string;
+};
+
 export type CollisionEnvelope = {
   widthMm: number;
   depthMm: number;
@@ -19,6 +28,8 @@ export type CollisionPair = {
   objectBId: string;
   objectAName: string;
   objectBName: string;
+  entityA?: CollisionEntityRef;
+  entityB?: CollisionEntityRef;
   severity: CollisionSeverity;
   reason: string;
 };

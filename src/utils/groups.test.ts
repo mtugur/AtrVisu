@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { CivilReferenceItem } from "../types/civil";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import { createDefaultLayer } from "./layers";
 import {
@@ -35,6 +36,20 @@ const machine = (instanceId: string, layerId = "default"): PlacedMachine => ({
   rotationY: 0,
   rotationDeg: 0,
   flowDirection: "forward"
+});
+
+const civil = (id: string, layerId = "default"): CivilReferenceItem => ({
+  id,
+  type: "column",
+  name: id,
+  positionMm: { xMm: 0, yMm: 0, zMm: 0 },
+  referencePoint: "front-left-bottom",
+  coordinateReferenceVersion: "front-left-bottom-v1",
+  sizeMm: { widthMm: 500, depthMm: 500, heightMm: 3000 },
+  rotationDeg: 0,
+  layerId,
+  createdAt: "now",
+  updatedAt: "now"
 });
 
 describe("object groups", () => {
@@ -85,5 +100,23 @@ describe("object groups", () => {
     const group = createObjectGroup("Line", ["a", "b"]);
 
     expect(getVisibleGroupObjectIds(group, [machine("a"), machine("b", "hidden")], layers)).toEqual(["a"]);
+  });
+
+  it("normalizes mixed machine and civil group members", () => {
+    const groups = normalizeGroups([
+      { id: "mixed", name: "Mixed", objectIds: ["machine:a", "civil:column-1", "civil:missing"] }
+    ], [machine("a")], [createDefaultLayer()], [civil("column-1")]);
+
+    expect(groups[0].objectIds).toEqual(["machine:a", "civil:column-1"]);
+  });
+
+  it("resolves visible civil group members and hides hidden civil members", () => {
+    const layers = [
+      createDefaultLayer(),
+      { id: "hidden", name: "Hidden", visible: false, locked: false, createdAt: "now", updatedAt: "now" }
+    ];
+    const group = createObjectGroup("Civil", ["civil:column-a", "civil:column-b"]);
+
+    expect(getVisibleGroupObjectIds(group, [], layers, [civil("column-a"), civil("column-b", "hidden")])).toEqual(["civil:column-a"]);
   });
 });

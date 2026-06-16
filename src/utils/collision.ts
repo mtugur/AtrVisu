@@ -1,7 +1,15 @@
-import type { CollisionCheckResult, CollisionEnvelope, CollisionPair } from "../types/collision";
+import type { CivilReferenceItem } from "../types/civil";
+import type { CollisionCheckResult, CollisionEntityRef, CollisionEnvelope, CollisionPair } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
+import {
+  getCivilReferenceRenderCenterMm,
+  getFootprintCornersFromReferenceMm,
+  getMachineRenderCenterMm,
+  usesFrontLeftBottomReference,
+  getReferenceFromCenterMm
+} from "./coordinateReference";
+import { getCivilTypeLabel } from "./civil";
 import { getMachineDimensionsMm } from "./machineDimensions";
-import { metersToMm } from "./units";
 
 const EPSILON_MM = 0.001;
 
@@ -13,6 +21,7 @@ type PlanPoint = {
 export type CollisionFootprint = {
   objectId: string;
   objectName: string;
+  entityRef: CollisionEntityRef;
   center: PlanPoint;
   elevationMm: number;
   rotationDeg: number;
@@ -129,10 +138,7 @@ export const buildCollisionEnvelopeFromObject = (machine: PlacedMachine): Collis
     return null;
   }
 
-  const positionMm = machine.positionMm ?? {
-    xMm: metersToMm(machine.position.x),
-    yMm: metersToMm(machine.position.z)
-  };
+  const renderCenterMm = getMachineRenderCenterMm(machine);
   const offsetMm = envelope.offsetMm ?? { xMm: 0, yMm: 0, zMm: 0 };
   const rotationDeg = machine.rotationDeg ?? machine.rotationY;
   const radians = (rotationDeg * Math.PI) / 180;
@@ -141,18 +147,68 @@ export const buildCollisionEnvelopeFromObject = (machine: PlacedMachine): Collis
   const rotatedOffsetX = offsetMm.xMm * cos - offsetMm.zMm * sin;
   const rotatedOffsetY = offsetMm.xMm * sin + offsetMm.zMm * cos;
   const center = {
-    xMm: positionMm.xMm + rotatedOffsetX,
-    yMm: positionMm.yMm + rotatedOffsetY
+    xMm: renderCenterMm.xMm + rotatedOffsetX,
+    yMm: renderCenterMm.yMm + rotatedOffsetY
   };
 
   return {
     objectId: machine.instanceId,
     objectName: machine.definition.name,
+    entityRef: {
+      entityType: "object",
+      id: machine.instanceId,
+      name: machine.definition.name,
+      typeLabel: machine.definition.category
+    },
     center,
     elevationMm: (machine.elevationMm ?? 0) + offsetMm.yMm,
     rotationDeg,
     envelope,
     corners: getRotatedFootprintCorners(center, envelope.widthMm, envelope.depthMm, rotationDeg)
+  };
+};
+
+export const isCivilReferenceHardCollidable = (item: CivilReferenceItem) =>
+  item.type === "wall" || item.type === "column";
+
+export const buildCollisionEnvelopeFromCivilReference = (item: CivilReferenceItem): CollisionFootprint | null => {
+  if (!isCivilReferenceHardCollidable(item)) {
+    return null;
+  }
+
+  const widthMm = item.sizeMm.widthMm;
+  const depthMm = item.sizeMm.depthMm;
+  const heightMm = item.sizeMm.heightMm ?? 20;
+  if (widthMm <= 0 || depthMm <= 0 || heightMm <= 0) {
+    return null;
+  }
+
+  const center = getCivilReferenceRenderCenterMm(item);
+  const reference = usesFrontLeftBottomReference(item)
+    ? item.positionMm
+    : getReferenceFromCenterMm(item.positionMm, item.sizeMm, item.rotationDeg);
+  const envelope: CollisionEnvelope = {
+    widthMm,
+    depthMm,
+    heightMm,
+    offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
+    enabled: true
+  };
+
+  return {
+    objectId: `civil:${item.id}`,
+    objectName: item.name,
+    entityRef: {
+      entityType: "civil",
+      id: item.id,
+      name: item.name,
+      typeLabel: getCivilTypeLabel(item.type)
+    },
+    center,
+    elevationMm: item.positionMm.zMm ?? 0,
+    rotationDeg: item.rotationDeg,
+    envelope,
+    corners: getFootprintCornersFromReferenceMm(reference, item.sizeMm, item.rotationDeg)
   };
 };
 
@@ -187,6 +243,32 @@ export const checkObjectCollision = (
     objectBId: bFootprint.objectId,
     objectAName: aFootprint.objectName,
     objectBName: bFootprint.objectName,
+    entityA: aFootprint.entityRef,
+    entityB: bFootprint.entityRef,
+    severity: "error",
+    reason: "Collision envelopes overlap on the floor plan."
+  };
+};
+
+const checkCollisionFootprints = (
+  aFootprint: CollisionFootprint,
+  bFootprint: CollisionFootprint
+): CollisionPair | null => {
+  if (!hasVerticalOverlap(aFootprint, bFootprint)) {
+    return null;
+  }
+
+  if (!checkOrientedRectangleOverlap(aFootprint.corners, bFootprint.corners)) {
+    return null;
+  }
+
+  return {
+    objectAId: aFootprint.objectId,
+    objectBId: bFootprint.objectId,
+    objectAName: aFootprint.objectName,
+    objectBName: bFootprint.objectName,
+    entityA: aFootprint.entityRef,
+    entityB: bFootprint.entityRef,
     severity: "error",
     reason: "Collision envelopes overlap on the floor plan."
   };
@@ -194,8 +276,12 @@ export const checkObjectCollision = (
 
 export const checkAllObjectCollisions = (
   machines: PlacedMachine[],
-  enabled = true
+  civilReferencesOrEnabled: CivilReferenceItem[] | boolean = [],
+  enabledOrDefault = true
 ): CollisionCheckResult => {
+  const civilReferences = Array.isArray(civilReferencesOrEnabled) ? civilReferencesOrEnabled : [];
+  const enabled = typeof civilReferencesOrEnabled === "boolean" ? civilReferencesOrEnabled : enabledOrDefault;
+
   if (!enabled) {
     return {
       enabled,
@@ -206,9 +292,20 @@ export const checkAllObjectCollisions = (
   }
 
   const pairs: CollisionPair[] = [];
-  for (let aIndex = 0; aIndex < machines.length; aIndex += 1) {
-    for (let bIndex = aIndex + 1; bIndex < machines.length; bIndex += 1) {
-      const pair = checkObjectCollision(machines[aIndex], machines[bIndex]);
+  const footprints = [
+    ...machines.flatMap((machine) => {
+      const footprint = buildCollisionEnvelopeFromObject(machine);
+      return footprint ? [footprint] : [];
+    }),
+    ...civilReferences.flatMap((item) => {
+      const footprint = buildCollisionEnvelopeFromCivilReference(item);
+      return footprint ? [footprint] : [];
+    })
+  ];
+
+  for (let aIndex = 0; aIndex < footprints.length; aIndex += 1) {
+    for (let bIndex = aIndex + 1; bIndex < footprints.length; bIndex += 1) {
+      const pair = checkCollisionFootprints(footprints[aIndex], footprints[bIndex]);
       if (pair) {
         pairs.push(pair);
       }
@@ -221,7 +318,7 @@ export const checkAllObjectCollisions = (
 
   return {
     enabled,
-    checkedObjectCount: machines.length,
+    checkedObjectCount: footprints.length,
     pairs,
     collidingObjectIds
   };

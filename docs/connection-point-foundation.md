@@ -30,6 +30,8 @@ Connection point positions are machine-local and use millimeters:
 
 Machine rotation transforms local Plan X/Y into world Plan X/Y. Elevation is added to the placed object elevation.
 
+This is intentionally separate from the global layout reference point. Machine layout `positionMm` uses the front-left-bottom footprint reference, but v0.1 connection point local `xMm` / `yMm` values remain center-relative to preserve existing library data. Runtime world-position helpers first derive the machine render center from the front-left-bottom reference, then apply the center-relative connection point offset.
+
 Legacy library-level `connectionPoints` are converted for display as a compatibility fallback. New engineering data should use `ataraMachineData.connectionPoints`.
 
 Negative `xMm` and `yMm` values are valid because points can be left/right or front/back from the machine center. `zMm` is elevation and should normally be between `0` and the machine height.

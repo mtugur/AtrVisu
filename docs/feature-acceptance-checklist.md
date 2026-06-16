@@ -16,6 +16,7 @@ Use this checklist before closing every AtrVisu feature branch.
 - Does it update when data changes?
 - Does it avoid hiding or clipping labels inside objects where practical?
 - Does every visible/editable entity define whether it supports layers, visibility, and locking?
+- If the feature adds reference geometry, is collision behavior clearly implemented or documented as a limitation?
 - If layers are involved, do new entities default predictably without hidden active-layer state?
 
 ## Scene Selection
@@ -23,6 +24,8 @@ Use this checklist before closing every AtrVisu feature branch.
 - Can the user select the item from the scene if it is visible and selectable?
 - Does the right panel reflect scene selection?
 - Does scene selection use the same state helper as panel/list/card selection?
+- Does mixed entity multi-selection preserve actual selection order across entity types?
+- Does Align to Primary use the first selected visible entity rather than prioritizing one entity type?
 - Does empty-space click clear selection consistently?
 - Does every new selectable entity define panel selection, persistence, undo/redo, and layer/group interaction?
 

@@ -5,6 +5,8 @@ import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
+import { CivilReferencePanel } from "./components/CivilReferencePanel";
+import { CivilReferenceProperties } from "./components/CivilReferenceProperties";
 import { AnnotationsPanel } from "./components/AnnotationsPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
@@ -27,22 +29,31 @@ import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
 import type { MachineConnectionPoint } from "./types/ataraMachineData";
 import type { AnnotationObject, AnnotationType } from "./types/annotations";
+import type { CivilReferenceItem, CivilReferenceType } from "./types/civil";
 import type { ObjectGroup } from "./types/groups";
 import type { LayoutLayer } from "./types/layers";
 import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
+import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT, getCivilReferenceFootprintBoundsMm } from "./utils/coordinateReference";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
+import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
 import {
   alignObjectsToAnchor,
+  alignEntitiesToAnchor,
   applyMachinePositionUpdates,
+  applyEntityPairAlignment,
   applyPairAlignment,
   distributeObjectsByCenter,
+  distributeEntitiesByCenter,
   equalizeGaps,
+  equalizeEntityGaps,
+  getAlignableEntityKey,
   moveObjectsByDelta,
+  selectionHasLockedAlignableEntities,
+  snapPrimaryEntityAnchorToSecondaryAnchor,
   snapPrimaryAnchorToSecondaryAnchor
 } from "./utils/alignment";
 import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./utils/layoutHistory";
@@ -51,7 +62,7 @@ import { listProjects } from "./utils/projectStorage";
 import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
-import { getSelectionPlanBounds } from "./utils/selectionBounds";
+import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
 import { applyConnectionPointSnap, type ConnectionPointSnapSelection } from "./utils/connectionPointSnap";
 import {
   createAnnotation,
@@ -59,11 +70,19 @@ import {
   detachAnnotationsForDeletedObjects,
   updateAnnotation
 } from "./utils/annotations";
+import {
+  createCivilReference,
+  deleteCivilReference,
+  getVisibleCivilReferences,
+  normalizeCivilReferences,
+  updateCivilReference
+} from "./utils/civil";
 import { addViewpoint, createViewpoint, deleteViewpoint, updateViewpoint } from "./utils/viewpoints";
 import { shouldHandleGlobalUndoRedo } from "./utils/keyboardShortcuts";
 import {
   addObjectsToGroup,
   createObjectGroup,
+  getGroupEntityKeys,
   getVisibleGroupObjectIds,
   normalizeGroups,
   removeObjectsFromGroup,
@@ -114,8 +133,12 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
       : DEFAULT_NUDGE_SETTINGS.smallNudgeStepMm
 });
 
+const areStringArraysEqual = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
 export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
+  const [civilReferences, setCivilReferences] = useState<CivilReferenceItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
   const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
   const [groups, setGroups] = useState<ObjectGroup[]>([]);
@@ -123,6 +146,9 @@ export function App() {
   const [selectedLayerId, setSelectedLayerId] = useState("default");
   const [viewpoints, setViewpoints] = useState<LayoutViewpoint[]>([]);
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
+  const [selectedCivilReferenceId, setSelectedCivilReferenceId] = useState<string | null>(null);
+  const [selectedCivilReferenceIds, setSelectedCivilReferenceIds] = useState<string[]>([]);
+  const [selectedEntityKeys, setSelectedEntityKeys] = useState<string[]>([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [annotationSelectionSignal, setAnnotationSelectionSignal] = useState(0);
@@ -177,6 +203,7 @@ export function App() {
   const placementSettingsRef = useRef(placementSettings);
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
+  const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const layersRef = useRef<LayoutLayer[]>(layers);
   const groupsRef = useRef<ObjectGroup[]>(groups);
@@ -186,11 +213,20 @@ export function App() {
 
   const selectedMachineId = primarySelectedMachineId;
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
+  const selectedCivilReference = selectedCivilReferenceId
+    && selectedMachineIds.length === 0
+    && selectedCivilReferenceIds.length <= 1
+    ? civilReferences.find((item) => item.id === selectedCivilReferenceId)
+    : undefined;
   const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) : null;
   const singleSelectedMachine = selectedMachineIds.length === 1 ? selectedMachine : undefined;
   const visiblePlacedMachines = useMemo(
     () => placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)),
     [layers, placedMachines]
+  );
+  const visibleCivilReferences = useMemo(
+    () => getVisibleCivilReferences(civilReferences, layers),
+    [civilReferences, layers]
   );
   const visibleAnnotations = useMemo(
     () => annotations.filter((annotation) => isLayerVisible(annotation.layerId, layers)),
@@ -200,28 +236,83 @@ export function App() {
     () => placedMachines.filter((machine) => isLayerLocked(machine.layerId, layers)).map((machine) => machine.instanceId),
     [layers, placedMachines]
   );
+  const lockedCivilReferenceIds = useMemo(
+    () => civilReferences
+      .filter((item) => item.locked || isLayerLocked(item.layerId, layers))
+      .map((item) => item.id),
+    [civilReferences, layers]
+  );
   const lockedAnnotationIds = useMemo(
     () => annotations.filter((annotation) => isLayerLocked(annotation.layerId, layers)).map((annotation) => annotation.id),
     [annotations, layers]
   );
   const selectedMachineLocked = selectedMachine ? isLayerLocked(selectedMachine.layerId, layers) : false;
+  const selectedCivilReferenceLocked = selectedCivilReference
+    ? Boolean(selectedCivilReference.locked || isLayerLocked(selectedCivilReference.layerId, layers))
+    : false;
   const selectedAnnotationLocked = editingAnnotationId
     ? isLayerLocked(annotations.find((annotation) => annotation.id === editingAnnotationId)?.layerId, layers)
     : false;
   const selectedMachineIdSet = useMemo(() => new Set(selectedMachineIds), [selectedMachineIds]);
+  const selectedCivilReferenceIdSet = useMemo(() => new Set(selectedCivilReferenceIds), [selectedCivilReferenceIds]);
   const selectedMachines = useMemo(
     () => placedMachines.filter((machine) => selectedMachineIdSet.has(machine.instanceId)),
     [placedMachines, selectedMachineIdSet]
   );
+  const selectedCivilReferences = useMemo(
+    () => civilReferences.filter((item) => selectedCivilReferenceIdSet.has(item.id)),
+    [civilReferences, selectedCivilReferenceIdSet]
+  );
+  const alignableEntities = useMemo(() => [
+    ...visiblePlacedMachines.map((machine) => ({
+      id: machine.instanceId,
+      kind: "machine" as const,
+      label: machine.definition.name,
+      bounds: getObjectPlanBounds(machine),
+      positionMm: getMachinePlanPositionMm(machine),
+      locked: isLayerLocked(machine.layerId, layers),
+      hidden: false
+    })),
+    ...visibleCivilReferences.map((item) => ({
+      id: item.id,
+      kind: "civil" as const,
+      label: item.name,
+      bounds: { objectId: item.id, ...getCivilReferenceFootprintBoundsMm(item) },
+      positionMm: item.positionMm,
+      locked: Boolean(item.locked || isLayerLocked(item.layerId, layers)),
+      hidden: false
+    }))
+  ], [layers, visibleCivilReferences, visiblePlacedMachines]);
+  const selectedAlignableEntityIds = useMemo(() => [
+    ...selectedEntityKeys
+  ], [selectedEntityKeys]);
+  const selectedAlignableEntities = useMemo(() => {
+    const byKey = new Map(alignableEntities.map((entity) => [getAlignableEntityKey(entity.kind, entity.id), entity]));
+    return selectedAlignableEntityIds.flatMap((key) => {
+      const entity = byKey.get(key);
+      return entity ? [entity] : [];
+    });
+  }, [alignableEntities, selectedAlignableEntityIds]);
+  const primarySelectedAlignableId = useMemo(() => {
+    return selectedAlignableEntityIds[0] ?? null;
+  }, [selectedAlignableEntityIds]);
+  const primarySelectedAlignable = primarySelectedAlignableId
+    ? selectedAlignableEntities.find((entity) => getAlignableEntityKey(entity.kind, entity.id) === primarySelectedAlignableId)
+    : undefined;
   const selectedGroupHasLockedVisibleMembers = useMemo(() => {
     if (!selectedGroup) {
       return false;
     }
     return selectedGroup.objectIds.some((objectId) => {
-      const machine = placedMachines.find((item) => item.instanceId === objectId);
+      if (objectId.startsWith("civil:")) {
+        const civil = civilReferences.find((item) => item.id === objectId.slice("civil:".length));
+        return civil ? isLayerVisible(civil.layerId, layers) && (civil.locked || isLayerLocked(civil.layerId, layers)) : false;
+      }
+      const machineId = objectId.replace(/^(object|machine):/, "");
+      const machine = placedMachines.find((item) => item.instanceId === machineId);
       return machine ? isLayerVisible(machine.layerId, layers) && isLayerLocked(machine.layerId, layers) : false;
     });
-  }, [layers, placedMachines, selectedGroup]);
+  }, [civilReferences, layers, placedMachines, selectedGroup]);
   const selectionBounds = useMemo(() => getSelectionPlanBounds(selectedMachines), [selectedMachines]);
   const canUndo = layoutHistory.undoStack.length > 0;
   const canRedo = layoutHistory.redoStack.length > 0;
@@ -234,14 +325,26 @@ export function App() {
     ? currentLayout.revisions.find((revision) => revision.revisionId === currentRevisionId)
     : null;
   const collisionResult = useMemo(
-    () => checkAllObjectCollisions(visiblePlacedMachines, collisionSettings.enabled),
-    [collisionSettings.enabled, visiblePlacedMachines]
+    () => checkAllObjectCollisions(visiblePlacedMachines, visibleCivilReferences, collisionSettings.enabled),
+    [collisionSettings.enabled, visibleCivilReferences, visiblePlacedMachines]
   );
   const selectedCollisionPairs = selectedMachineId
     ? collisionResult.pairs.filter(
         (pair) => pair.objectAId === selectedMachineId || pair.objectBId === selectedMachineId
       )
     : [];
+  const handleVisualDiagnosticsChange = useCallback((diagnostics: VisualModelDiagnostics) => {
+    setVisualDiagnostics((current) => {
+      const previous = current[diagnostics.instanceId];
+      if (previous && JSON.stringify(previous) === JSON.stringify(diagnostics)) {
+        return current;
+      }
+      return {
+        ...current,
+        [diagnostics.instanceId]: diagnostics
+      };
+    });
+  }, []);
 
   useEffect(() => {
     try {
@@ -281,7 +384,7 @@ export function App() {
     const nextSelection = selectedMachineIds.filter((id) => activeIds.has(id));
     const nextPrimary = primarySelectedMachineId && activeIds.has(primarySelectedMachineId)
       ? primarySelectedMachineId
-      : nextSelection[nextSelection.length - 1] ?? null;
+      : nextSelection[0] ?? null;
 
     if (nextSelection.length !== selectedMachineIds.length) {
       setSelectedMachineIds(nextSelection);
@@ -289,7 +392,36 @@ export function App() {
     if (nextPrimary !== primarySelectedMachineId) {
       setPrimarySelectedMachineId(nextPrimary);
     }
+    setSelectedEntityKeys((current) => {
+      const next = current.filter((key) => {
+      if (key.startsWith("machine:")) {
+        return activeIds.has(key.slice("machine:".length));
+      }
+      return true;
+      });
+      return areStringArraysEqual(current, next) ? current : next;
+    });
   }, [layers, placedMachines, primarySelectedMachineId, selectedMachineIds]);
+
+  useEffect(() => {
+    const activeCivilIds = new Set(visibleCivilReferences.map((item) => item.id));
+    const nextSelection = selectedCivilReferenceIds.filter((id) => activeCivilIds.has(id));
+    if (nextSelection.length !== selectedCivilReferenceIds.length) {
+      setSelectedCivilReferenceIds(nextSelection);
+    }
+    if (selectedCivilReferenceId && !visibleCivilReferences.some((item) => item.id === selectedCivilReferenceId)) {
+      setSelectedCivilReferenceId(nextSelection[0] ?? null);
+    }
+    setSelectedEntityKeys((current) => {
+      const next = current.filter((key) => {
+      if (key.startsWith("civil:")) {
+        return activeCivilIds.has(key.slice("civil:".length));
+      }
+      return true;
+      });
+      return areStringArraysEqual(current, next) ? current : next;
+    });
+  }, [selectedCivilReferenceId, selectedCivilReferenceIds, visibleCivilReferences]);
 
   useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
@@ -298,6 +430,10 @@ export function App() {
   useEffect(() => {
     placedMachinesRef.current = placedMachines;
   }, [placedMachines]);
+
+  useEffect(() => {
+    civilReferencesRef.current = civilReferences;
+  }, [civilReferences]);
 
   useEffect(() => {
     annotationsRef.current = annotations;
@@ -312,7 +448,7 @@ export function App() {
   }, [groups]);
 
   useEffect(() => {
-    const normalized = normalizeGroups(groups, placedMachines, layers);
+    const normalized = normalizeGroups(groups, placedMachines, layers, civilReferences);
     if (
       normalized.length !== groups.length ||
       normalized.some((group, index) => group.id !== groups[index]?.id || group.objectIds.join("|") !== groups[index]?.objectIds.join("|"))
@@ -322,7 +458,23 @@ export function App() {
     if (selectedGroupId && !normalized.some((group) => group.id === selectedGroupId)) {
       setSelectedGroupId(null);
     }
-  }, [groups, layers, placedMachines, selectedGroupId]);
+  }, [civilReferences, groups, layers, placedMachines, selectedGroupId]);
+
+  useEffect(() => {
+    const normalized = normalizeCivilReferences(civilReferences, layers);
+    if (
+      normalized.length !== civilReferences.length ||
+      normalized.some((item, index) =>
+        item.id !== civilReferences[index]?.id ||
+        item.layerId !== civilReferences[index]?.layerId ||
+        item.sizeMm.widthMm !== civilReferences[index]?.sizeMm.widthMm ||
+        item.sizeMm.depthMm !== civilReferences[index]?.sizeMm.depthMm ||
+        item.sizeMm.heightMm !== civilReferences[index]?.sizeMm.heightMm
+      )
+    ) {
+      setCivilReferences(normalized);
+    }
+  }, [civilReferences, layers]);
 
   useEffect(() => {
     const normalized = normalizeLayers(layers);
@@ -380,7 +532,15 @@ export function App() {
       return;
     }
     setLayoutHistory((current) =>
-      pushHistorySnapshot(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current, groupsRef.current)
+      pushHistorySnapshot(
+        current,
+        placedMachinesRef.current,
+        annotationsRef.current,
+        civilReferencesRef.current,
+        viewpointsRef.current,
+        layersRef.current,
+        groupsRef.current
+      )
     );
   }, []);
 
@@ -393,20 +553,29 @@ export function App() {
       recordLayoutHistory();
     }
     if (!isBenchmarkModeRef.current) {
-      setHasUnsavedProjectChanges(true);
+      setHasUnsavedProjectChanges((current) => current || true);
     }
   }, [recordLayoutHistory]);
 
   const undoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = undoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current, groupsRef.current);
+      const result = undoHistory(
+        current,
+        placedMachinesRef.current,
+        annotationsRef.current,
+        civilReferencesRef.current,
+        viewpointsRef.current,
+        layersRef.current,
+        groupsRef.current
+      );
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setCivilReferences(normalizeCivilReferences(result.civilReferences, result.layers));
       setLayers(normalizeLayers(result.layers));
-      setGroups(normalizeGroups(result.groups, result.machines, result.layers));
+      setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
       setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
@@ -416,14 +585,23 @@ export function App() {
 
   const redoLayoutChange = useCallback(() => {
     setLayoutHistory((current) => {
-      const result = redoHistory(current, placedMachinesRef.current, annotationsRef.current, viewpointsRef.current, layersRef.current, groupsRef.current);
+      const result = redoHistory(
+        current,
+        placedMachinesRef.current,
+        annotationsRef.current,
+        civilReferencesRef.current,
+        viewpointsRef.current,
+        layersRef.current,
+        groupsRef.current
+      );
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setCivilReferences(normalizeCivilReferences(result.civilReferences, result.layers));
       setLayers(normalizeLayers(result.layers));
-      setGroups(normalizeGroups(result.groups, result.machines, result.layers));
+      setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
       setViewpoints(result.viewpoints);
       setSelectedAnnotationId(null);
       setHasUnsavedProjectChanges(true);
@@ -522,13 +700,16 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups),
-    [annotations, groups, layers, placedMachines, viewpoints]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences),
+    [annotations, civilReferences, groups, layers, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
     setSelectedMachineIds([]);
     setPrimarySelectedMachineId(null);
+    setSelectedCivilReferenceId(null);
+    setSelectedCivilReferenceIds([]);
+    setSelectedEntityKeys([]);
     setSelectedAnnotationId(null);
     setEditingAnnotationId(null);
   }, []);
@@ -541,6 +722,11 @@ export function App() {
 
     setSelectedAnnotationId(null);
     setEditingAnnotationId(null);
+    if (mode !== "toggle") {
+      setSelectedCivilReferenceId(null);
+      setSelectedCivilReferenceIds([]);
+      setSelectedEntityKeys([]);
+    }
 
     if (mode === "toggle") {
       setSelectedMachineIds((current) => {
@@ -548,14 +734,20 @@ export function App() {
         const nextSelection = isAlreadySelected
           ? current.filter((id) => id !== instanceId)
           : [...current, instanceId];
-        setPrimarySelectedMachineId(isAlreadySelected ? nextSelection[nextSelection.length - 1] ?? null : instanceId);
+        setPrimarySelectedMachineId(nextSelection[0] ?? null);
         return nextSelection;
+      });
+      setSelectedEntityKeys((current) => {
+        const key = getAlignableEntityKey("machine", instanceId);
+        const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+        return areStringArraysEqual(current, next) ? current : next;
       });
       return;
     }
 
     setSelectedMachineIds([instanceId]);
     setPrimarySelectedMachineId(instanceId);
+    setSelectedEntityKeys([getAlignableEntityKey("machine", instanceId)]);
   }, [clearSelection]);
 
   const selectAnnotationForEditing = useCallback((annotationId: string | null) => {
@@ -564,14 +756,54 @@ export function App() {
     if (annotationId) {
       setAnnotationSelectionSignal((current) => current + 1);
       setIsPanelCollapsed(false);
+      setSelectedCivilReferenceId(null);
+      setSelectedCivilReferenceIds([]);
+      setSelectedEntityKeys([]);
       setSelectedMachineIds([]);
       setPrimarySelectedMachineId(null);
     }
   }, []);
 
-  const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[ids.length - 1] ?? null) => {
+  const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
+    if (!id || mode === "clear") {
+      clearSelection();
+      return;
+    }
+
+    setIsPanelCollapsed(false);
+    setSelectedAnnotationId(null);
+    setEditingAnnotationId(null);
+
+    if (mode === "toggle") {
+      setSelectedCivilReferenceIds((current) => {
+        const isAlreadySelected = current.includes(id);
+        const nextSelection = isAlreadySelected
+          ? current.filter((itemId) => itemId !== id)
+          : [...current, id];
+        setSelectedCivilReferenceId(nextSelection[0] ?? null);
+        return nextSelection;
+      });
+      setSelectedEntityKeys((current) => {
+        const key = getAlignableEntityKey("civil", id);
+        const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+        return areStringArraysEqual(current, next) ? current : next;
+      });
+      return;
+    }
+
+    setSelectedMachineIds([]);
+    setPrimarySelectedMachineId(null);
+    setSelectedCivilReferenceIds([id]);
+    setSelectedCivilReferenceId(id);
+    setSelectedEntityKeys([getAlignableEntityKey("civil", id)]);
+  }, [clearSelection]);
+
+  const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
+    setSelectedCivilReferenceId(null);
+    setSelectedCivilReferenceIds([]);
     setSelectedMachineIds(ids);
     setPrimarySelectedMachineId(primaryId);
+    setSelectedEntityKeys(ids.map((id) => getAlignableEntityKey("machine", id)));
   }, []);
 
   const addMachine = useCallback((selection: { libraryId: string; definition: MachineDefinition }) => {
@@ -604,6 +836,8 @@ export function App() {
             xMm: metersToMm(position.x),
             yMm: metersToMm(position.z)
           },
+          referencePoint: LAYOUT_REFERENCE_POINT,
+          coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
           elevationMm: 0,
           rotationDeg: 0,
           rotationY: 0,
@@ -661,6 +895,8 @@ export function App() {
           ...updates,
           position: nextPosition,
           positionMm: nextPositionMm,
+          referencePoint: LAYOUT_REFERENCE_POINT,
+          coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
           rotationY: nextRotationY,
           rotationDeg: nextRotationY
         };
@@ -685,6 +921,7 @@ export function App() {
     const importedMachines = placedMachinesFromLayout(layout);
     const importedAnnotations = annotationsFromLayout(layout);
     const importedLayers = layersFromLayout(layout);
+    const importedCivilReferences = civilReferencesFromLayout(layout, importedLayers);
     const importedGroups = groupsFromLayout(layout, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(layout);
 
@@ -694,6 +931,7 @@ export function App() {
     setSelectedGroupId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setPlacedMachines(importedMachines);
+    setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
@@ -747,7 +985,10 @@ export function App() {
       }));
       if (selectedObjectIds) {
         setSelectedMachineIds(selectedObjectIds);
-        setPrimarySelectedMachineId(selectedObjectIds[selectedObjectIds.length - 1] ?? null);
+        setPrimarySelectedMachineId(selectedObjectIds[0] ?? null);
+        setSelectedCivilReferenceIds([]);
+        setSelectedCivilReferenceId(null);
+        setSelectedEntityKeys(selectedObjectIds.map((id) => getAlignableEntityKey("machine", id)));
         setSelectedAnnotationId(null);
         setEditingAnnotationId(null);
       }
@@ -867,6 +1108,9 @@ export function App() {
     setLayers(normalizeLayers(result.layers));
     setPlacedMachines(result.machines);
     setAnnotations(result.annotations);
+    setCivilReferences((current) =>
+      current.map((item) => getLayerId(item.layerId, layers) === layerId ? { ...item, layerId: "default" } : item)
+    );
     setSelectedLayerId("default");
   }, [layers, markLayoutChanged]);
 
@@ -908,16 +1152,32 @@ export function App() {
     if (!group) {
       return;
     }
-    const visibleObjectIds = getVisibleGroupObjectIds(group, placedMachinesRef.current, layersRef.current);
+    const visibleObjectIds = getVisibleGroupObjectIds(group, placedMachinesRef.current, layersRef.current, civilReferencesRef.current);
+    const visibleEntityKeys = getGroupEntityKeys({ ...group, objectIds: visibleObjectIds });
+    const visibleMachineIds = visibleObjectIds
+      .filter((id) => !id.startsWith("civil:"))
+      .map((id) => id.replace(/^(object|machine):/, ""));
+    const visibleCivilIds = visibleObjectIds
+      .filter((id) => id.startsWith("civil:"))
+      .map((id) => id.slice("civil:".length));
     setSelectedGroupId(groupId);
-    replaceSelection(visibleObjectIds, visibleObjectIds[visibleObjectIds.length - 1] ?? null);
+    setSelectedMachineIds(visibleMachineIds);
+    setPrimarySelectedMachineId(visibleEntityKeys[0]?.startsWith("machine:") ? visibleEntityKeys[0].slice("machine:".length) : visibleMachineIds[0] ?? null);
+    setSelectedCivilReferenceIds(visibleCivilIds);
+    setSelectedCivilReferenceId(visibleEntityKeys[0]?.startsWith("civil:") ? visibleEntityKeys[0].slice("civil:".length) : visibleCivilIds[0] ?? null);
+    setSelectedEntityKeys(visibleEntityKeys);
     setSelectedAnnotationId(null);
     setEditingAnnotationId(null);
-  }, [replaceSelection]);
+  }, []);
 
   const createGroupFromSelection = useCallback((name: string) => {
-    const objectIds = selectedMachineIds.filter((id) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+    const objectIds = selectedAlignableEntityIds.filter((key) => {
+      if (key.startsWith("civil:")) {
+        const civil = civilReferencesRef.current.find((item) => item.id === key.slice("civil:".length));
+        return civil ? isLayerVisible(civil.layerId, layersRef.current) : false;
+      }
+      const machineId = key.replace(/^(object|machine):/, "");
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === machineId);
       return machine ? isLayerVisible(machine.layerId, layersRef.current) : false;
     });
     if (objectIds.length === 0) {
@@ -931,24 +1191,24 @@ export function App() {
     } catch (caught) {
       window.alert(caught instanceof Error ? caught.message : "Group could not be created.");
     }
-  }, [markLayoutChanged, selectedMachineIds]);
+  }, [markLayoutChanged, selectedAlignableEntityIds]);
 
   const addSelectionToGroup = useCallback((groupId: string) => {
-    if (selectedMachineIds.length === 0) {
+    if (selectedAlignableEntityIds.length === 0) {
       return;
     }
     markLayoutChanged();
-    setGroups((current) => addObjectsToGroup(current, groupId, selectedMachineIds));
+    setGroups((current) => addObjectsToGroup(current, groupId, selectedAlignableEntityIds));
     setSelectedGroupId(groupId);
-  }, [markLayoutChanged, selectedMachineIds]);
+  }, [markLayoutChanged, selectedAlignableEntityIds]);
 
   const removeSelectionFromGroup = useCallback((groupId: string) => {
-    if (selectedMachineIds.length === 0) {
+    if (selectedAlignableEntityIds.length === 0) {
       return;
     }
     markLayoutChanged();
-    setGroups((current) => removeObjectsFromGroup(current, groupId, selectedMachineIds));
-  }, [markLayoutChanged, selectedMachineIds]);
+    setGroups((current) => removeObjectsFromGroup(current, groupId, selectedAlignableEntityIds));
+  }, [markLayoutChanged, selectedAlignableEntityIds]);
 
   const renameObjectGroup = useCallback((groupId: string, name: string) => {
     if (!name.trim()) {
@@ -987,6 +1247,7 @@ export function App() {
   const applyBenchmarkMachines = useCallback((machines: PlacedMachine[]) => {
     setIsBenchmarkMode(true);
     setPlacedMachines(machines);
+    setCivilReferences([]);
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
     setGroups([]);
@@ -1002,9 +1263,11 @@ export function App() {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
     const importedLayers = layersFromLayout(snapshot);
+    const importedCivilReferences = civilReferencesFromLayout(snapshot, importedLayers);
     const importedGroups = groupsFromLayout(snapshot, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
+    setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
     setLayers(importedLayers);
     setGroups(importedGroups);
@@ -1020,6 +1283,7 @@ export function App() {
 
   const clearBenchmarkScene = useCallback(() => {
     setPlacedMachines([]);
+    setCivilReferences([]);
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
     setGroups([]);
@@ -1041,9 +1305,11 @@ export function App() {
     const importedMachines = placedMachinesFromLayout(snapshot);
     const importedAnnotations = annotationsFromLayout(snapshot);
     const importedLayers = layersFromLayout(snapshot);
+    const importedCivilReferences = civilReferencesFromLayout(snapshot, importedLayers);
     const importedGroups = groupsFromLayout(snapshot, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
+    setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
     setLayers(importedLayers);
     setGroups(importedGroups);
@@ -1072,6 +1338,15 @@ export function App() {
       return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
     });
     if (unlockedUpdates.length === 0) {
+      return;
+    }
+
+    const hasRealPositionChange = unlockedUpdates.some((update) => {
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === update.instanceId);
+      const currentPosition = machine ? getMachinePlanPositionMm(machine) : null;
+      return currentPosition ? currentPosition.xMm !== update.xMm || currentPosition.yMm !== update.yMm : false;
+    });
+    if (!hasRealPositionChange) {
       return;
     }
 
@@ -1135,84 +1410,105 @@ export function App() {
     setPlacedMachines((current) => moveObjectsByDelta(current, unlockedIds, deltaXMm, deltaYMm));
   }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
-  const applyAlignmentAction = useCallback((action: AlignmentAction) => {
+  const applyAlignablePositionUpdates = useCallback((updates: Array<{ kind: "machine" | "civil"; id: string; xMm: number; yMm: number }>) => {
+    const machineUpdates = updates
+      .filter((update) => update.kind === "machine")
+      .map((update) => ({ instanceId: update.id, xMm: update.xMm, yMm: update.yMm }));
+    const civilUpdates = updates.filter((update) => update.kind === "civil");
+
+    if (machineUpdates.length > 0) {
+      setPlacedMachines((current) => applyMachinePositionUpdates(current, machineUpdates));
+    }
+    if (civilUpdates.length > 0) {
+      setCivilReferences((current) =>
+        civilUpdates.reduce(
+          (items, update) => updateCivilReference(items, update.id, { positionMm: { xMm: update.xMm, yMm: update.yMm } }),
+          current
+        )
+      );
+    }
+  }, []);
+
+  const canApplyAlignableAction = useCallback(() => {
     if (selectedGroupHasLockedVisibleMembers) {
+      window.alert("Alignment is blocked because the selected group contains locked visible objects.");
+      return false;
+    }
+    if (selectedAlignableEntityIds.length < 2) {
+      return false;
+    }
+    if (selectionHasLockedAlignableEntities(alignableEntities, selectedAlignableEntityIds)) {
+      window.alert("Alignment is blocked because the selection includes locked objects or civil references.");
+      return false;
+    }
+    return true;
+  }, [alignableEntities, selectedAlignableEntityIds, selectedGroupHasLockedVisibleMembers]);
+
+  const applyAlignmentAction = useCallback((action: AlignmentAction) => {
+    if (!canApplyAlignableAction()) {
       return;
     }
-    const unlockedIds = selectedMachineIds.filter((id) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
-      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
-    });
-    if (unlockedIds.length === 0) {
+    const updates = alignEntitiesToAnchor(alignableEntities, selectedAlignableEntityIds, primarySelectedAlignableId, action);
+    if (updates.length === 0) {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) => alignObjectsToAnchor(current, unlockedIds, unlockedIds.includes(primarySelectedMachineId ?? "") ? primarySelectedMachineId : unlockedIds[0], action));
-  }, [markLayoutChanged, primarySelectedMachineId, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
+    applyAlignablePositionUpdates(updates);
+  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, primarySelectedAlignableId, selectedAlignableEntityIds]);
 
   const applyDistributionAction = useCallback((action: DistributionAction) => {
-    if (selectedGroupHasLockedVisibleMembers) {
+    if (!canApplyAlignableAction()) {
       return;
     }
-    const unlockedIds = selectedMachineIds.filter((id) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
-      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
-    });
-    if (unlockedIds.length === 0) {
+    const updates = distributeEntitiesByCenter(alignableEntities, selectedAlignableEntityIds, action);
+    if (updates.length === 0) {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) => distributeObjectsByCenter(current, unlockedIds, action));
-  }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
+    applyAlignablePositionUpdates(updates);
+  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, selectedAlignableEntityIds]);
 
   const applyEqualGapAction = useCallback((action: EqualGapAction) => {
-    if (selectedGroupHasLockedVisibleMembers) {
+    if (!canApplyAlignableAction()) {
       return;
     }
-    const unlockedIds = selectedMachineIds.filter((id) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
-      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
-    });
-    if (unlockedIds.length === 0) {
+    const updates = equalizeEntityGaps(alignableEntities, selectedAlignableEntityIds, action);
+    if (updates.length === 0) {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) => equalizeGaps(current, unlockedIds, action));
-  }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
+    applyAlignablePositionUpdates(updates);
+  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, selectedAlignableEntityIds]);
 
   const applyPairAlignmentAction = useCallback((action: PairAlignmentAction, gapMm = 0) => {
-    if (selectedGroupHasLockedVisibleMembers) {
+    if (!canApplyAlignableAction()) {
       return;
     }
-    const unlockedIds = selectedMachineIds.filter((id) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
-      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
-    });
-    if (unlockedIds.length === 0) {
+    const updates = applyEntityPairAlignment(alignableEntities, selectedAlignableEntityIds, primarySelectedAlignableId, action, gapMm);
+    if (updates.length === 0) {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) =>
-      applyPairAlignment(current, unlockedIds, unlockedIds.includes(primarySelectedMachineId ?? "") ? primarySelectedMachineId : unlockedIds[0], action, gapMm)
-    );
-  }, [markLayoutChanged, primarySelectedMachineId, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
+    applyAlignablePositionUpdates(updates);
+  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, primarySelectedAlignableId, selectedAlignableEntityIds]);
 
   const applyPairAnchorSnap = useCallback((primaryAnchor: FootprintAnchor, secondaryAnchor: FootprintAnchor) => {
-    const primaryMachine = placedMachinesRef.current.find((item) => item.instanceId === primarySelectedMachineId);
-    if (primaryMachine && isLayerLocked(primaryMachine.layerId, layersRef.current)) {
+    if (!canApplyAlignableAction()) {
+      return;
+    }
+    const updates = snapPrimaryEntityAnchorToSecondaryAnchor(
+      alignableEntities,
+      selectedAlignableEntityIds,
+      primarySelectedAlignableId,
+      primaryAnchor,
+      secondaryAnchor
+    );
+    if (updates.length === 0) {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) =>
-      snapPrimaryAnchorToSecondaryAnchor(
-        current,
-        selectedMachineIds,
-        primarySelectedMachineId,
-        primaryAnchor,
-        secondaryAnchor
-      )
-    );
-  }, [markLayoutChanged, primarySelectedMachineId, selectedMachineIds]);
+    applyAlignablePositionUpdates(updates);
+  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, primarySelectedAlignableId, selectedAlignableEntityIds]);
 
   const applyConnectionSnap = useCallback((
     selection: ConnectionPointSnapSelection,
@@ -1227,6 +1523,75 @@ export function App() {
     setPlacedMachines((current) => applyConnectionPointSnap(current, selection, movingPoint, fixedPoint));
   }, [markLayoutChanged]);
 
+  const addCivilReference = useCallback((type: CivilReferenceType) => {
+    const index = civilReferencesRef.current.length;
+    const column = index % PLACEMENT_COLUMNS;
+    const row = Math.floor(index / PLACEMENT_COLUMNS);
+    const positionMm = {
+      xMm: metersToMm(PLACEMENT_ORIGIN.x + column * PLACEMENT_SPACING),
+      yMm: metersToMm(PLACEMENT_ORIGIN.z + row * PLACEMENT_SPACING)
+    };
+    const item = createCivilReference(type, positionMm);
+    markLayoutChanged();
+    setCivilReferences((current) => [...current, item]);
+    selectCivilReferenceForEditing(item.id);
+  }, [markLayoutChanged, selectCivilReferenceForEditing]);
+
+  const updateSelectedCivilReference = useCallback((
+    id: string,
+    updates: Partial<CivilReferenceItem>,
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    const item = civilReferencesRef.current.find((reference) => reference.id === id);
+    if (!item || isLayerLocked(item.layerId, layersRef.current)) {
+      return;
+    }
+    if (item.locked && updates.locked !== false) {
+      return;
+    }
+    markLayoutChanged(options);
+    setCivilReferences((current) => updateCivilReference(current, id, updates));
+  }, [markLayoutChanged]);
+
+  const setCivilReferencePosition = useCallback((
+    id: string,
+    positionMm: { xMm: number; yMm: number },
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    const item = civilReferencesRef.current.find((reference) => reference.id === id);
+    if (item && item.positionMm.xMm === positionMm.xMm && item.positionMm.yMm === positionMm.yMm) {
+      return;
+    }
+    updateSelectedCivilReference(id, { positionMm }, options);
+  }, [updateSelectedCivilReference]);
+
+  const changeCivilReferenceLayer = useCallback((id: string, layerId: string) => {
+    const item = civilReferencesRef.current.find((reference) => reference.id === id);
+    if (!item || item.locked || isLayerLocked(item.layerId, layersRef.current)) {
+      return;
+    }
+    markLayoutChanged();
+    setCivilReferences((current) =>
+      updateCivilReference(current, id, { layerId: getLayerId(layerId, layersRef.current) })
+    );
+  }, [markLayoutChanged]);
+
+  const removeCivilReference = useCallback((id: string) => {
+    const item = civilReferencesRef.current.find((reference) => reference.id === id);
+    if (!item || item.locked || isLayerLocked(item.layerId, layersRef.current)) {
+      return;
+    }
+    if (!window.confirm(`Delete civil reference "${item.name}"?`)) {
+      return;
+    }
+    markLayoutChanged();
+    setCivilReferences((current) => deleteCivilReference(current, id));
+    setGroups((current) => removeObjectsFromGroups(current, [getAlignableEntityKey("civil", id)]));
+    setSelectedCivilReferenceId((current) => current === id ? null : current);
+    setSelectedCivilReferenceIds((current) => current.filter((itemId) => itemId !== id));
+    setSelectedEntityKeys((current) => current.filter((key) => key !== getAlignableEntityKey("civil", id)));
+  }, [markLayoutChanged]);
+
   const addAnnotation = useCallback((type: AnnotationType) => {
     markLayoutChanged();
     const annotation = createAnnotation({
@@ -1238,6 +1603,9 @@ export function App() {
     setEditingAnnotationId(annotation.id);
     setAnnotationSelectionSignal((current) => current + 1);
     setIsPanelCollapsed(false);
+    setSelectedCivilReferenceId(null);
+    setSelectedCivilReferenceIds([]);
+    setSelectedEntityKeys([]);
     setSelectedMachineIds([]);
     setPrimarySelectedMachineId(null);
   }, [markLayoutChanged, selectedMachine]);
@@ -1317,9 +1685,13 @@ export function App() {
 
     markLayoutChanged();
     const ids = new Set(deletableMachines.map((machine) => machine.instanceId));
+    const groupIdsToRemove = deletableMachines.flatMap((machine) => [
+      machine.instanceId,
+      getAlignableEntityKey("machine", machine.instanceId)
+    ]);
     setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
     setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
-    setGroups((current) => removeObjectsFromGroups(current, ids));
+    setGroups((current) => removeObjectsFromGroups(current, groupIdsToRemove));
     setSelectedGroupId(null);
     clearSelection();
   }, [clearSelection, markLayoutChanged, selectedMachines]);
@@ -1336,7 +1708,12 @@ export function App() {
       if (
         parsedLayout.appName === "AtrVisu" &&
         parsedLayout.version === 1 &&
-        (parsedLayout.objects.length > 0 || (parsedLayout.annotations?.length ?? 0) > 0 || (parsedLayout.viewpoints?.length ?? 0) > 0 || (parsedLayout.layers?.length ?? 0) > 0 || (parsedLayout.groups?.length ?? 0) > 0)
+        (parsedLayout.objects.length > 0 ||
+          (parsedLayout.civilReferences?.length ?? 0) > 0 ||
+          (parsedLayout.annotations?.length ?? 0) > 0 ||
+          (parsedLayout.viewpoints?.length ?? 0) > 0 ||
+          (parsedLayout.layers?.length ?? 0) > 0 ||
+          (parsedLayout.groups?.length ?? 0) > 0)
       ) {
         setRecoveryLayout(parsedLayout);
         return;
@@ -1360,7 +1737,14 @@ export function App() {
 
     const autosaveId = window.setTimeout(() => {
       try {
-        if (placedMachines.length === 0 && annotations.length === 0 && viewpoints.length === 0 && layers.length <= 1 && groups.length === 0) {
+        if (
+          placedMachines.length === 0 &&
+          civilReferences.length === 0 &&
+          annotations.length === 0 &&
+          viewpoints.length === 0 &&
+          layers.length <= 1 &&
+          groups.length === 0
+        ) {
           window.localStorage.removeItem(AUTOSAVE_KEY);
           return;
         }
@@ -1374,7 +1758,7 @@ export function App() {
     return () => {
       window.clearTimeout(autosaveId);
     };
-  }, [annotations.length, autosaveReady, createLayoutSnapshot, groups.length, isBenchmarkMode, layers.length, placedMachines.length, viewpoints.length]);
+  }, [annotations.length, autosaveReady, civilReferences.length, createLayoutSnapshot, groups.length, isBenchmarkMode, layers.length, placedMachines.length, viewpoints.length]);
 
   const restoreAutosavedLayout = () => {
     if (!recoveryLayout) {
@@ -1420,9 +1804,15 @@ export function App() {
         return;
       }
 
-      if (event.key === "Escape" && (selectedMachineIds.length > 0 || selectedAnnotationId || editingAnnotationId)) {
+      if (event.key === "Escape" && (selectedMachineIds.length > 0 || selectedCivilReferenceId || selectedAnnotationId || editingAnnotationId)) {
         event.preventDefault();
         clearSelection();
+        return;
+      }
+
+      if (event.key === "Delete" && selectedCivilReferenceId) {
+        event.preventDefault();
+        removeCivilReference(selectedCivilReferenceId);
         return;
       }
 
@@ -1471,8 +1861,10 @@ export function App() {
     moveSelectedByDelta,
     nudgeSettings,
     removeAnnotation,
+    removeCivilReference,
     redoLayoutChange,
     editingAnnotationId,
+    selectedCivilReferenceId,
     selectedAnnotationId,
     selectedMachineIds.length,
     undoLayoutChange
@@ -1484,28 +1876,29 @@ export function App() {
       <BabylonScene
         ref={sceneRef}
         placedMachines={visiblePlacedMachines}
+        civilReferences={visibleCivilReferences}
         annotations={visibleAnnotations}
         selectedMachineIds={selectedMachineIds}
         primarySelectedMachineId={primarySelectedMachineId}
+        selectedCivilReferenceId={selectedCivilReferenceId}
+        selectedCivilReferenceIds={selectedCivilReferenceIds}
         selectedAnnotationId={selectedAnnotationId}
         lockedMachineIds={lockedMachineIds}
+        lockedCivilReferenceIds={lockedCivilReferenceIds}
         lockedAnnotationIds={lockedAnnotationIds}
         onSelectMachine={selectMachine}
+        onSelectCivilReference={selectCivilReferenceForEditing}
         onSelectAnnotation={selectAnnotationForEditing}
         onUpdateMachine={updateMachine}
         onSetMachinePositions={setMachinePositions}
         onSetAnnotationPosition={setAnnotationPosition}
+        onSetCivilReferencePosition={setCivilReferencePosition}
         onBeginObjectDrag={recordLayoutHistory}
         isSimulationRunning={isSimulationRunning}
         simulationSpeed={simulationSpeed}
         overlaySettings={overlaySettings}
         collisionResult={collisionResult}
-        onVisualDiagnosticsChange={(diagnostics) =>
-          setVisualDiagnostics((current) => ({
-            ...current,
-            [diagnostics.instanceId]: diagnostics
-          }))
-        }
+        onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
         onPerformanceMetricsChange={setLatestPerformanceMetrics}
       />
       {isPanelCollapsed ? (
@@ -1599,6 +1992,7 @@ export function App() {
               layers={layers}
               placedMachines={placedMachines}
               annotations={annotations}
+              civilReferences={civilReferences}
               selectedLayerId={selectedLayerId}
               onSelectLayer={setSelectedLayerId}
               onAddLayer={addLayer}
@@ -1611,6 +2005,14 @@ export function App() {
             />
           </PanelSection>
           <PanelSection
+            title="Building / Civil"
+            storageKey="atrvisu.panelSection.civilReferences.v1"
+            defaultExpanded={false}
+            badge={civilReferences.length > 0 ? `${civilReferences.length}` : undefined}
+          >
+            <CivilReferencePanel onAddCivilReference={addCivilReference} />
+          </PanelSection>
+          <PanelSection
             title="Assembly Tree"
             storageKey="atrvisu.panelSection.assemblyTree.v1"
             defaultExpanded={false}
@@ -1619,8 +2021,9 @@ export function App() {
             <AssemblyTreePanel
               groups={groups}
               placedMachines={placedMachines}
+              civilReferences={civilReferences}
               selectedGroupId={selectedGroupId}
-              selectedMachineIds={selectedMachineIds}
+              selectedEntityCount={selectedAlignableEntities.length}
               onCreateGroupFromSelection={createGroupFromSelection}
               onAddSelectionToGroup={addSelectionToGroup}
               onRemoveSelectionFromGroup={removeSelectionFromGroup}
@@ -1745,11 +2148,11 @@ export function App() {
             title="Alignment Tools"
             storageKey="atrvisu.panelSection.alignmentTools.v1"
             defaultExpanded={false}
-            badge={selectedMachineIds.length >= 2 ? `${selectedMachineIds.length}` : undefined}
+            badge={selectedAlignableEntities.length >= 2 ? `${selectedAlignableEntities.length}` : undefined}
           >
             <AlignmentToolsPanel
-              selectedMachines={selectedMachines}
-              primarySelectedMachine={selectedMachine}
+              selectedEntityCount={selectedAlignableEntities.length}
+              primarySelectionLabel={primarySelectedAlignable?.label}
               nudgeSettings={nudgeSettings}
               onAlign={applyAlignmentAction}
               onDistribute={applyDistributionAction}
@@ -1795,12 +2198,21 @@ export function App() {
           </PanelSection>
           {!editingAnnotationId ? (
             <PanelSection
-              title={selectedMachineIds.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
+              title={selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
               storageKey="atrvisu.panelSection.properties.v1"
-              defaultExpanded={selectedMachineIds.length > 0}
-              badge={selectedMachineIds.length > 1 ? `${selectedMachineIds.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+              defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference)}
+              badge={selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
             >
-              {selectedMachineIds.length > 1 ? (
+              {selectedCivilReference ? (
+                <CivilReferenceProperties
+                  selectedCivilReference={selectedCivilReference}
+                  layers={layers}
+                  isLocked={selectedCivilReferenceLocked}
+                  onUpdateCivilReference={updateSelectedCivilReference}
+                  onChangeLayer={changeCivilReferenceLayer}
+                  onDeleteCivilReference={removeCivilReference}
+                />
+              ) : selectedMachineIds.length > 1 && selectedCivilReferenceIds.length === 0 ? (
                 <MultiSelectionProperties
                   selectedMachines={selectedMachines}
                   primarySelectedMachine={selectedMachine}
@@ -1808,6 +2220,17 @@ export function App() {
                   onClearSelection={clearSelection}
                   onDeleteSelected={deleteSelectedMachines}
                 />
+              ) : selectedAlignableEntities.length > 1 ? (
+                <div className="property-grid">
+                  <div className="property-readout">
+                    <span>Selected entities</span>
+                    <strong>{selectedAlignableEntities.length}</strong>
+                  </div>
+                  <p className="collision-note">Use Alignment Tools to align the selected machines and civil references.</p>
+                  <button type="button" onClick={clearSelection}>
+                    Clear Selection
+                  </button>
+                </div>
               ) : (
                 <MachineProperties
                   selectedMachine={singleSelectedMachine}
@@ -1833,7 +2256,7 @@ export function App() {
         currentLayoutId={currentLayoutId}
         currentRevisionId={currentRevisionId}
         currentSnapshot={createLayoutSnapshot()}
-        hasSceneObjects={placedMachines.length > 0}
+        hasSceneObjects={placedMachines.length > 0 || civilReferences.length > 0}
         isDirty={hasUnsavedProjectChanges}
         onClose={() => setIsProjectManagerOpen(false)}
         onProjectsChanged={setProjects}

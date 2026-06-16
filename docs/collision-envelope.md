@@ -47,7 +47,25 @@ v0.1 uses oriented rectangle overlap on the floor plan:
 - Width and depth come from the collision envelope.
 - Height and elevation are checked as simple vertical intervals when available.
 
-This is an O(n²) check over layout objects, which is acceptable for the current interactive layout scale.
+This is an O(n^2) check over layout objects and solid civil references, which is acceptable for the current interactive layout scale.
+
+## Building / Civil References
+
+Building / Civil stays separate from Machine Library in the UI, but solid civil items participate in collision checking internally.
+
+Hard-collision civil items:
+
+- wall
+- column
+
+Non-blocking civil references by default:
+
+- floor-area
+- walkway
+- reference-zone
+- restricted-area in v0.1 unless a future blocking flag is added
+
+Hidden civil references are ignored. Locked visible civil references still participate as static obstacles.
 
 ## Edge Rule
 

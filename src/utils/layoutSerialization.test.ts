@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
-import { annotationsFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
+import { getMachineRenderCenterMm } from "./coordinateReference";
+import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
 
 const createMachine = (): PlacedMachine => ({
   instanceId: "machine-1",
@@ -102,6 +103,20 @@ describe("layout serialization", () => {
       ],
       [
         { id: "group-1", name: "Packaging Line", objectIds: ["machine-1"], createdAt: "2026-06-05T00:00:00.000Z", updatedAt: "2026-06-05T00:00:00.000Z" }
+      ],
+      [
+        {
+          id: "civil-column-1",
+          type: "column",
+          name: "Grid Column A1",
+          positionMm: { xMm: -1000, yMm: 2000, zMm: 0 },
+          sizeMm: { widthMm: 600, depthMm: 600, heightMm: 3200 },
+          rotationDeg: 0,
+          layerId: "process",
+          locked: false,
+          createdAt: "2026-06-05T00:00:00.000Z",
+          updatedAt: "2026-06-05T00:00:00.000Z"
+        }
       ]
     );
     const object = layout.objects[0];
@@ -128,6 +143,11 @@ describe("layout serialization", () => {
     });
     expect(layout.layers?.map((layer) => layer.id)).toEqual(["default", "process"]);
     expect(layout.groups?.[0]).toMatchObject({ id: "group-1", name: "Packaging Line", objectIds: ["machine-1"] });
+    expect(layout.civilReferences?.[0]).toMatchObject({
+      id: "civil-column-1",
+      layerId: "process",
+      positionMm: { xMm: -1000, yMm: 2000, zMm: 0 }
+    });
     expect(annotationsFromLayout(layout)[0]).toMatchObject({
       positionMm: { xMm: -200, yMm: 350, zMm: 1600 },
       targetObjectId: "machine-1",
@@ -152,6 +172,10 @@ describe("layout serialization", () => {
     expect(groupsFromLayout(layout, placedMachinesFromLayout(layout), layersFromLayout(layout))[0]).toMatchObject({
       name: "Packaging Line",
       objectIds: ["machine-1"]
+    });
+    expect(civilReferencesFromLayout(layout, layersFromLayout(layout))[0]).toMatchObject({
+      name: "Grid Column A1",
+      sizeMm: { widthMm: 600, depthMm: 600, heightMm: 3200 }
     });
   });
 
@@ -188,12 +212,15 @@ describe("layout serialization", () => {
       offsetMm: { xMm: 0, yMm: 0, zMm: 0 },
       enabled: true
     });
-    expect(machine.positionMm).toEqual({ xMm: 1250, yMm: -2500 });
+    expect(machine.positionMm).toEqual({ xMm: 1630, yMm: -3938 });
+    expect(getMachineRenderCenterMm(machine).xMm).toBeCloseTo(1250);
+    expect(getMachineRenderCenterMm(machine).yMm).toBeCloseTo(-2500);
     expect(machine.rotationDeg).toBe(90);
     expect(machine.layerId).toBe("default");
     expect(layersFromLayout(legacyLayout)[0].id).toBe("default");
     expect(groupsFromLayout(legacyLayout, [machine], layersFromLayout(legacyLayout))).toEqual([]);
     expect(viewpointsFromLayout(legacyLayout)).toEqual([]);
+    expect(civilReferencesFromLayout(legacyLayout, layersFromLayout(legacyLayout))).toEqual([]);
   });
 
   it("normalizes imported Default layer as visible and unlocked", () => {

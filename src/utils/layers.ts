@@ -1,4 +1,5 @@
 import type { AnnotationObject } from "../types/annotations";
+import type { CivilReferenceItem } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
 import { DEFAULT_LAYER_ID } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
@@ -83,22 +84,29 @@ export const isLayerLocked = (layerId: string | undefined, layers: LayoutLayer[]
 export const getLayerItemCounts = (
   layers: LayoutLayer[],
   machines: PlacedMachine[],
-  annotations: AnnotationObject[]
+  annotations: AnnotationObject[],
+  civilReferences: CivilReferenceItem[] = []
 ) => {
-  const counts: Record<string, { machines: number; annotations: number; total: number }> = {};
+  const counts: Record<string, { machines: number; annotations: number; civilReferences: number; total: number }> = {};
   layers.forEach((layer) => {
-    counts[layer.id] = { machines: 0, annotations: 0, total: 0 };
+    counts[layer.id] = { machines: 0, annotations: 0, civilReferences: 0, total: 0 };
   });
   machines.forEach((machine) => {
     const layerId = getLayerId(machine.layerId, layers);
-    counts[layerId] ??= { machines: 0, annotations: 0, total: 0 };
+    counts[layerId] ??= { machines: 0, annotations: 0, civilReferences: 0, total: 0 };
     counts[layerId].machines += 1;
     counts[layerId].total += 1;
   });
   annotations.forEach((annotation) => {
     const layerId = getLayerId(annotation.layerId, layers);
-    counts[layerId] ??= { machines: 0, annotations: 0, total: 0 };
+    counts[layerId] ??= { machines: 0, annotations: 0, civilReferences: 0, total: 0 };
     counts[layerId].annotations += 1;
+    counts[layerId].total += 1;
+  });
+  civilReferences.forEach((item) => {
+    const layerId = getLayerId(item.layerId, layers);
+    counts[layerId] ??= { machines: 0, annotations: 0, civilReferences: 0, total: 0 };
+    counts[layerId].civilReferences += 1;
     counts[layerId].total += 1;
   });
   return counts;

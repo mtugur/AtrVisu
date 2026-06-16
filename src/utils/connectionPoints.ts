@@ -4,9 +4,9 @@ import type {
   MachineConnectionPoint
 } from "../types/ataraMachineData";
 import type { ConnectionPoint, PlacedMachine } from "../types/machine";
+import { getMachineRenderCenterMm } from "./coordinateReference";
 import { getMachineDimensionsMm } from "./machineDimensions";
 import { normalizeAtaraMachineData } from "./ataraMachineData";
-import { getMachinePlanPositionMm } from "./placement";
 
 export const CONNECTION_POINT_TYPES: AtaraConnectionPointType[] = [
   "product-in",
@@ -152,7 +152,7 @@ export const getConnectionPointWorldPosition = (
   machine: PlacedMachine,
   point: MachineConnectionPoint
 ): ConnectionPointWorldPosition => {
-  const machinePosition = getMachinePlanPositionMm(machine);
+  const machinePosition = getMachineRenderCenterMm(machine);
   const rotated = rotatePlan(point.positionMm.xMm, point.positionMm.yMm, machine.rotationDeg ?? machine.rotationY ?? 0);
 
   return {
