@@ -28,6 +28,16 @@ describe("surface inventory audit", () => {
     expect(getSurfaceInventoryItemsByCommandId("project.exportJson").map((item) => item.surfaceId)).toContain("surface.projectExportJson");
   });
 
+  it("covers viewport fit and no-red-console command seed links", () => {
+    expect(getSurfaceInventoryItemsByCommandId("view.fitView").length).toBeGreaterThan(0);
+    expect(getSurfaceInventoryItemsByCommandId("diagnostics.noRedConsole").length).toBeGreaterThan(0);
+  });
+
+  it("covers layout explorer and diagnostics panel seed links", () => {
+    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer").length).toBeGreaterThan(0);
+    expect(getSurfaceInventoryItemsByPanelId("panel.diagnostics").length).toBeGreaterThan(0);
+  });
+
   it("finds surfaces by feature id", () => {
     expect(getSurfaceInventoryItemsByFeatureId("library.manager").map((item) => item.surfaceId)).toContain("surface.libraryManager");
   });

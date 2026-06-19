@@ -17,6 +17,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Babylon Scene Viewport",
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/BabylonScene.tsx"],
+    commandIds: ["view.fitView"],
     featureIds: ["selection.singleSelect", "selection.multiSelect", "object.movePlan"]
   },
   {
@@ -35,6 +36,14 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx"],
     panelIds: ["panel.statusBar"]
+  },
+  {
+    surfaceId: "surface.layoutExplorer",
+    surfaceType: "panel",
+    label: "Layout Explorer",
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/AssemblyTreePanel.tsx"],
+    panelIds: ["panel.layoutExplorer"]
   },
   {
     surfaceId: "surface.projectSave",
@@ -226,7 +235,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Visual Model Diagnostics",
     owner: "existing-ui",
     sourceFiles: ["src/components/MachineProperties.tsx", "src/utils/visualModel.ts"],
-    panelIds: ["panel.inspector"],
+    commandIds: ["diagnostics.noRedConsole"],
+    panelIds: ["panel.inspector", "panel.diagnostics"],
     featureIds: ["object.propertiesInspector"]
   },
   {
