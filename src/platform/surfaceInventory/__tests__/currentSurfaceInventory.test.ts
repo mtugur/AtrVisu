@@ -1,0 +1,60 @@
+import { describe, expect, it } from "vitest";
+import { currentPlatformSurfaceInventory } from "../currentSurfaceInventory";
+
+const criticalSurfaceIds = [
+  "surface.machineLibrary",
+  "surface.sceneViewport",
+  "surface.inspector",
+  "surface.projectExportJson",
+  "surface.projectImportJson",
+  "surface.deleteSelected",
+  "surface.undoRedo",
+  "surface.annotations",
+  "surface.layers",
+  "surface.groups",
+  "surface.collisionCheck",
+  "surface.libraryManager",
+  "surface.taxonomyManager",
+  "surface.civilColumn",
+  "surface.rotationSnap",
+  "surface.connectionPointSnap",
+  "surface.alignment"
+] as const;
+
+describe("current surface inventory", () => {
+  it("is not empty", () => {
+    expect(currentPlatformSurfaceInventory.length).toBeGreaterThan(0);
+  });
+
+  it("uses unique surface ids", () => {
+    const surfaceIds = currentPlatformSurfaceInventory.map((item) => item.surfaceId);
+
+    expect(new Set(surfaceIds).size).toBe(surfaceIds.length);
+  });
+
+  it("has non-empty labels", () => {
+    expect(currentPlatformSurfaceInventory.every((item) => item.label.trim())).toBe(true);
+  });
+
+  it("has non-empty source files", () => {
+    expect(currentPlatformSurfaceInventory.every((item) => item.sourceFiles.length > 0)).toBe(true);
+    expect(currentPlatformSurfaceInventory.every((item) => item.sourceFiles.every((sourceFile) => sourceFile.trim()))).toBe(true);
+  });
+
+  it("contains panel-linked surfaces", () => {
+    expect(currentPlatformSurfaceInventory.some((item) => (item.panelIds?.length ?? 0) > 0)).toBe(true);
+  });
+
+  it("contains command-linked surfaces", () => {
+    expect(currentPlatformSurfaceInventory.some((item) => (item.commandIds?.length ?? 0) > 0)).toBe(true);
+  });
+
+  it("contains critical surface ids", () => {
+    const surfaceIds = new Set(currentPlatformSurfaceInventory.map((item) => item.surfaceId));
+
+    criticalSurfaceIds.forEach((surfaceId) => {
+      expect(surfaceIds.has(surfaceId)).toBe(true);
+    });
+  });
+});
+
