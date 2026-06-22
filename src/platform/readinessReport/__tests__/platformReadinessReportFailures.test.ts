@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createPlatformReadinessReportFromParts } from "../platformReadinessReport";
+import {
+  createPlatformReadinessReportFromDependencies,
+  createPlatformReadinessReportFromParts
+} from "../platformReadinessReport";
+import type { PlatformReadinessDependencies } from "../platformReadinessReport";
 import type { PlatformReadinessReport } from "../platformReadinessTypes";
 
 type ReadinessParts = Pick<
@@ -48,6 +52,17 @@ const passingParts = (): ReadinessParts => ({
     warningCount: 0
   }
 });
+
+const passingDependencies = (): PlatformReadinessDependencies => {
+  const parts = passingParts();
+
+  return {
+    createRegistrySeedSummary: () => ({ ...parts.registrySeedSummary }),
+    createFeatureAccessIntegrationSummary: () => ({ ...parts.featureAccessIntegrationSummary }),
+    createSurfaceInventorySummary: () => ({ ...parts.surfaceInventorySummary }),
+    createSurfaceCoverageSummary: () => ({ ...parts.surfaceCoverageSummary })
+  };
+};
 
 describe("platform readiness report failures", () => {
   it("is not ready when registry seeds fail", () => {
@@ -132,5 +147,45 @@ describe("platform readiness report failures", () => {
 
     expect(report.status).toBe("ready");
     expect(report.checks.every((check) => check.status === "pass")).toBe(true);
+  });
+
+  it("returns not-ready when registry seed validation throws", () => {
+    const dependencies = passingDependencies();
+    const createReport = () => createPlatformReadinessReportFromDependencies({
+      ...dependencies,
+      createRegistrySeedSummary: () => {
+        throw new Error("Duplicate command id.");
+      }
+    });
+
+    expect(createReport).not.toThrow();
+
+    const report = createReport();
+    const registryCheck = report.checks.find((check) => check.id === "registry-seeds");
+
+    expect(report.status).toBe("not-ready");
+    expect(report.errorCount).toBeGreaterThan(0);
+    expect(report.issueCount).toBeGreaterThan(0);
+    expect(registryCheck?.status).toBe("fail");
+    expect(registryCheck?.summary).toContain("Duplicate command id.");
+  });
+
+  it("returns a report when an audit dependency throws", () => {
+    const dependencies = passingDependencies();
+    const createReport = () => createPlatformReadinessReportFromDependencies({
+      ...dependencies,
+      createSurfaceInventorySummary: () => {
+        throw "Inventory unavailable";
+      }
+    });
+
+    expect(createReport).not.toThrow();
+
+    const report = createReport();
+    const inventoryCheck = report.checks.find((check) => check.id === "surface-inventory");
+
+    expect(report.status).toBe("not-ready");
+    expect(inventoryCheck?.status).toBe("fail");
+    expect(inventoryCheck?.summary).toContain("Inventory unavailable");
   });
 });
