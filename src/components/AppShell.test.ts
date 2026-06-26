@@ -53,4 +53,19 @@ describe("AppShell render contract", () => {
     expect(markup).toContain('data-testid="app-root"');
     expect(markup).toContain('data-app-shell-zone="app-root"');
   });
+
+  it("renders zone anchors for root slot wrapper elements", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AppShell, {
+        viewport: createSlot("viewport-slot", "viewport-slot"),
+        rightPanel: createSlot("right-panel-slot", "right-panel-slot"),
+        modalLayer: createSlot("modal-layer-slot", "modal-layer-slot")
+      })
+    );
+
+    expect(markup).toContain('data-app-shell-zone="app-root"');
+    expect(markup).toContain('data-app-shell-zone="scene-viewport"');
+    expect(markup).toContain('data-app-shell-zone="machine-properties"');
+    expect(markup).toContain('data-app-shell-zone="modal-layer"');
+  });
 });
