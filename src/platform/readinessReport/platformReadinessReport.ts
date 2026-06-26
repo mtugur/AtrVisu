@@ -1,3 +1,4 @@
+import { createPlatformAppShellBoundaryReport } from "../appShellBoundary";
 import { platformFeatureAccessMatrix } from "../featureAccess";
 import {
   createFeatureAccessIntegrationReport,
@@ -21,13 +22,15 @@ type PlatformReadinessReportParts = Pick<
   | "featureAccessIntegrationSummary"
   | "surfaceInventorySummary"
   | "surfaceCoverageSummary"
+  | "appShellBoundarySummary"
 >;
 
 type PlatformReadinessCheckId =
   | "registry-seeds"
   | "feature-access-integration"
   | "surface-inventory"
-  | "surface-coverage";
+  | "surface-coverage"
+  | "app-shell-boundary";
 
 type PlatformReadinessFailureSummaries = Partial<Record<PlatformReadinessCheckId, string>>;
 
@@ -36,6 +39,7 @@ export type PlatformReadinessDependencies = {
   createFeatureAccessIntegrationSummary: () => PlatformReadinessReport["featureAccessIntegrationSummary"];
   createSurfaceInventorySummary: () => PlatformReadinessReport["surfaceInventorySummary"];
   createSurfaceCoverageSummary: () => PlatformReadinessReport["surfaceCoverageSummary"];
+  createAppShellBoundarySummary: () => PlatformReadinessReport["appShellBoundarySummary"];
 };
 
 type SafeSummaryResult<T> = {
@@ -125,10 +129,18 @@ export const createPlatformReadinessReportFromParts = (
     coverageErrorCount,
     coverageWarningCount
   );
+  const appShellBoundaryErrorCount = parts.appShellBoundarySummary.errorCount;
+  const appShellBoundaryWarningCount = parts.appShellBoundarySummary.warningCount;
+  const appShellBoundaryIssueCount = normalizeIssueCount(
+    parts.appShellBoundarySummary.issueCount,
+    appShellBoundaryErrorCount,
+    appShellBoundaryWarningCount
+  );
   const registryPasses = registryErrorCount === 0;
   const integrationPasses = integrationErrorCount === 0;
   const inventoryPasses = inventoryErrorCount === 0;
   const coveragePasses = coverageErrorCount === 0 && uncoveredCoverageCount === 0;
+  const appShellBoundaryPasses = appShellBoundaryErrorCount === 0;
   const checks: readonly PlatformReadinessCheck[] = [
     createCheck(
       "registry-seeds",
@@ -169,6 +181,16 @@ export const createPlatformReadinessReportFromParts = (
       coverageWarningCount,
       "All command, panel, and required feature surfaces are covered.",
       failureSummaries["surface-coverage"] ?? "Surface coverage contains errors or uncovered platform entries."
+    ),
+    createCheck(
+      "app-shell-boundary",
+      "App shell boundary",
+      appShellBoundaryPasses,
+      appShellBoundaryIssueCount,
+      appShellBoundaryErrorCount,
+      appShellBoundaryWarningCount,
+      "App shell boundary inventory has no errors.",
+      failureSummaries["app-shell-boundary"] ?? "App shell boundary inventory contains errors."
     )
   ];
   const errorCount = checks.reduce((total, check) => total + check.errorCount, 0);
@@ -194,6 +216,10 @@ export const createPlatformReadinessReportFromParts = (
       ...parts.surfaceCoverageSummary,
       issueCount: coverageIssueCount,
       errorCount: coverageErrorCount
+    },
+    appShellBoundarySummary: {
+      ...parts.appShellBoundarySummary,
+      issueCount: appShellBoundaryIssueCount
     }
   };
 };
@@ -257,6 +283,19 @@ const platformReadinessDependencies: PlatformReadinessDependencies = {
       errorCount: report.errorCount,
       warningCount: report.warningCount
     };
+  },
+  createAppShellBoundarySummary: () => {
+    const report = createPlatformAppShellBoundaryReport();
+
+    return {
+      zoneCount: report.zoneCount,
+      highRiskZoneCount: report.highRiskZoneCount,
+      mediumRiskZoneCount: report.mediumRiskZoneCount,
+      lowRiskZoneCount: report.lowRiskZoneCount,
+      issueCount: report.issueCount,
+      errorCount: report.errorCount,
+      warningCount: report.warningCount
+    };
   }
 };
 
@@ -312,19 +351,34 @@ export const createPlatformReadinessReportFromDependencies = (
     },
     "Surface coverage audit"
   );
+  const appShellBoundaryResult = safelyCreateSummary(
+    dependencies.createAppShellBoundarySummary,
+    {
+      zoneCount: 0,
+      highRiskZoneCount: 0,
+      mediumRiskZoneCount: 0,
+      lowRiskZoneCount: 0,
+      issueCount: 1,
+      errorCount: 1,
+      warningCount: 0
+    },
+    "App shell boundary audit"
+  );
 
   return createPlatformReadinessReportFromParts(
     {
       registrySeedSummary: registryResult.summary,
       featureAccessIntegrationSummary: integrationResult.summary,
       surfaceInventorySummary: inventoryResult.summary,
-      surfaceCoverageSummary: coverageResult.summary
+      surfaceCoverageSummary: coverageResult.summary,
+      appShellBoundarySummary: appShellBoundaryResult.summary
     },
     {
       "registry-seeds": registryResult.failureSummary,
       "feature-access-integration": integrationResult.failureSummary,
       "surface-inventory": inventoryResult.failureSummary,
-      "surface-coverage": coverageResult.failureSummary
+      "surface-coverage": coverageResult.failureSummary,
+      "app-shell-boundary": appShellBoundaryResult.failureSummary
     }
   );
 };

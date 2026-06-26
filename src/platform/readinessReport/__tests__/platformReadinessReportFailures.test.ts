@@ -12,6 +12,7 @@ type ReadinessParts = Pick<
   | "featureAccessIntegrationSummary"
   | "surfaceInventorySummary"
   | "surfaceCoverageSummary"
+  | "appShellBoundarySummary"
 >;
 
 const passingParts = (): ReadinessParts => ({
@@ -50,6 +51,15 @@ const passingParts = (): ReadinessParts => ({
     issueCount: 0,
     errorCount: 0,
     warningCount: 0
+  },
+  appShellBoundarySummary: {
+    zoneCount: 1,
+    highRiskZoneCount: 0,
+    mediumRiskZoneCount: 1,
+    lowRiskZoneCount: 0,
+    issueCount: 0,
+    errorCount: 0,
+    warningCount: 0
   }
 });
 
@@ -60,7 +70,8 @@ const passingDependencies = (): PlatformReadinessDependencies => {
     createRegistrySeedSummary: () => ({ ...parts.registrySeedSummary }),
     createFeatureAccessIntegrationSummary: () => ({ ...parts.featureAccessIntegrationSummary }),
     createSurfaceInventorySummary: () => ({ ...parts.surfaceInventorySummary }),
-    createSurfaceCoverageSummary: () => ({ ...parts.surfaceCoverageSummary })
+    createSurfaceCoverageSummary: () => ({ ...parts.surfaceCoverageSummary }),
+    createAppShellBoundarySummary: () => ({ ...parts.appShellBoundarySummary })
   };
 };
 
@@ -149,6 +160,39 @@ describe("platform readiness report failures", () => {
     expect(report.checks.every((check) => check.status === "pass")).toBe(true);
   });
 
+  it("is not ready when app shell boundary fails", () => {
+    const parts = passingParts();
+    const report = createPlatformReadinessReportFromParts({
+      ...parts,
+      appShellBoundarySummary: {
+        ...parts.appShellBoundarySummary,
+        issueCount: 1,
+        errorCount: 1
+      }
+    });
+
+    expect(report.status).toBe("not-ready");
+    expect(report.checks.find((check) => check.id === "app-shell-boundary")?.status).toBe("fail");
+  });
+
+  it("keeps app shell boundary warnings passing but counted", () => {
+    const parts = passingParts();
+    const report = createPlatformReadinessReportFromParts({
+      ...parts,
+      appShellBoundarySummary: {
+        ...parts.appShellBoundarySummary,
+        issueCount: 1,
+        warningCount: 1
+      }
+    });
+    const check = report.checks.find((item) => item.id === "app-shell-boundary");
+
+    expect(report.status).toBe("ready");
+    expect(check?.status).toBe("pass");
+    expect(report.warningCount).toBe(1);
+    expect(report.issueCount).toBe(1);
+  });
+
   it("returns not-ready when registry seed validation throws", () => {
     const dependencies = passingDependencies();
     const createReport = () => createPlatformReadinessReportFromDependencies({
@@ -187,5 +231,26 @@ describe("platform readiness report failures", () => {
     expect(report.status).toBe("not-ready");
     expect(inventoryCheck?.status).toBe("fail");
     expect(inventoryCheck?.summary).toContain("Inventory unavailable");
+  });
+
+  it("returns a report when app shell boundary dependency throws", () => {
+    const dependencies = passingDependencies();
+    const createReport = () => createPlatformReadinessReportFromDependencies({
+      ...dependencies,
+      createAppShellBoundarySummary: () => {
+        throw new Error("Boundary unavailable.");
+      }
+    });
+
+    expect(createReport).not.toThrow();
+
+    const report = createReport();
+    const check = report.checks.find((item) => item.id === "app-shell-boundary");
+
+    expect(report.status).toBe("not-ready");
+    expect(report.errorCount).toBeGreaterThan(0);
+    expect(report.issueCount).toBeGreaterThan(0);
+    expect(check?.status).toBe("fail");
+    expect(check?.summary).toContain("Boundary unavailable.");
   });
 });
