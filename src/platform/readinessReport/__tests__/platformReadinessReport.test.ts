@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { currentAppShellBoundaryZones } from "../../appShellBoundary";
 import { platformFeatureAccessMatrix } from "../../featureAccess";
 import { platformFeatureAccessCoverageDefinitions } from "../../integration";
 import { platformCommandSeedDefinitions, platformPanelSeedDefinitions } from "../../registrySeeds";
@@ -23,7 +24,8 @@ describe("platform readiness report", () => {
       "registry-seeds",
       "feature-access-integration",
       "surface-inventory",
-      "surface-coverage"
+      "surface-coverage",
+      "app-shell-boundary"
     ]);
     expect(report.checks.every((check) => check.status === "pass")).toBe(true);
   });
@@ -51,13 +53,31 @@ describe("platform readiness report", () => {
     expect(summary.uncoveredRequiredFeatureCount).toBe(0);
   });
 
+  it("includes a passing app shell boundary check", () => {
+    const report = createPlatformReadinessReport();
+    const check = report.checks.find((item) => item.id === "app-shell-boundary");
+
+    expect(check?.status).toBe("pass");
+    expect(report.status).toBe("ready");
+    expect(report.errorCount).toBe(0);
+    expect(typeof report.warningCount).toBe("number");
+  });
+
+  it("returns app shell boundary summary", () => {
+    const summary = createPlatformReadinessReport().appShellBoundarySummary;
+
+    expect(summary.zoneCount).toBeGreaterThan(0);
+    expect(typeof summary.warningCount).toBe("number");
+  });
+
   it("does not mutate platform source arrays", () => {
     const lengths = {
       commands: platformCommandSeedDefinitions.length,
       panels: platformPanelSeedDefinitions.length,
       features: platformFeatureAccessMatrix.length,
       coverage: platformFeatureAccessCoverageDefinitions.length,
-      surfaces: currentPlatformSurfaceInventory.length
+      surfaces: currentPlatformSurfaceInventory.length,
+      appShellBoundaryZones: currentAppShellBoundaryZones.length
     };
 
     createPlatformReadinessReport();
@@ -67,5 +87,6 @@ describe("platform readiness report", () => {
     expect(platformFeatureAccessMatrix).toHaveLength(lengths.features);
     expect(platformFeatureAccessCoverageDefinitions).toHaveLength(lengths.coverage);
     expect(currentPlatformSurfaceInventory).toHaveLength(lengths.surfaces);
+    expect(currentAppShellBoundaryZones).toHaveLength(lengths.appShellBoundaryZones);
   });
 });

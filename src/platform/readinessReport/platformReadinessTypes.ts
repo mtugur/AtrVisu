@@ -54,4 +54,13 @@ export type PlatformReadinessReport = {
     errorCount: number;
     warningCount: number;
   };
+  appShellBoundarySummary: {
+    zoneCount: number;
+    highRiskZoneCount: number;
+    mediumRiskZoneCount: number;
+    lowRiskZoneCount: number;
+    issueCount: number;
+    errorCount: number;
+    warningCount: number;
+  };
 };
