@@ -54,6 +54,17 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   expect(errors).toEqual([]);
 });
 
+test("app shell zone anchors are rendered without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  for (const zone of ["app-root", "machine-properties", "top-toolbar"]) {
+    await expect(page.locator(`[data-app-shell-zone="${zone}"]`)).toBeVisible();
+  }
+
+  expect(errors).toEqual([]);
+});
+
 test("selected object and numeric rotation smoke has no red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
