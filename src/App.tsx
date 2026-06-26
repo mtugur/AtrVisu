@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { AppShell } from "./components/AppShell";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
@@ -1871,41 +1872,43 @@ export function App() {
   ]);
 
   return (
-    <>
-    <main className="app-shell" data-testid="app-root">
-      <BabylonScene
-        ref={sceneRef}
-        placedMachines={visiblePlacedMachines}
-        civilReferences={visibleCivilReferences}
-        annotations={visibleAnnotations}
-        selectedMachineIds={selectedMachineIds}
-        primarySelectedMachineId={primarySelectedMachineId}
-        selectedCivilReferenceId={selectedCivilReferenceId}
-        selectedCivilReferenceIds={selectedCivilReferenceIds}
-        selectedAnnotationId={selectedAnnotationId}
-        lockedMachineIds={lockedMachineIds}
-        lockedCivilReferenceIds={lockedCivilReferenceIds}
-        lockedAnnotationIds={lockedAnnotationIds}
-        onSelectMachine={selectMachine}
-        onSelectCivilReference={selectCivilReferenceForEditing}
-        onSelectAnnotation={selectAnnotationForEditing}
-        onUpdateMachine={updateMachine}
-        onSetMachinePositions={setMachinePositions}
-        onSetAnnotationPosition={setAnnotationPosition}
-        onSetCivilReferencePosition={setCivilReferencePosition}
-        onBeginObjectDrag={recordLayoutHistory}
-        isSimulationRunning={isSimulationRunning}
-        simulationSpeed={simulationSpeed}
-        overlaySettings={overlaySettings}
-        collisionResult={collisionResult}
-        onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
-        onPerformanceMetricsChange={setLatestPerformanceMetrics}
-      />
-      {isPanelCollapsed ? (
+    <AppShell
+      viewport={(
+        <BabylonScene
+          ref={sceneRef}
+          placedMachines={visiblePlacedMachines}
+          civilReferences={visibleCivilReferences}
+          annotations={visibleAnnotations}
+          selectedMachineIds={selectedMachineIds}
+          primarySelectedMachineId={primarySelectedMachineId}
+          selectedCivilReferenceId={selectedCivilReferenceId}
+          selectedCivilReferenceIds={selectedCivilReferenceIds}
+          selectedAnnotationId={selectedAnnotationId}
+          lockedMachineIds={lockedMachineIds}
+          lockedCivilReferenceIds={lockedCivilReferenceIds}
+          lockedAnnotationIds={lockedAnnotationIds}
+          onSelectMachine={selectMachine}
+          onSelectCivilReference={selectCivilReferenceForEditing}
+          onSelectAnnotation={selectAnnotationForEditing}
+          onUpdateMachine={updateMachine}
+          onSetMachinePositions={setMachinePositions}
+          onSetAnnotationPosition={setAnnotationPosition}
+          onSetCivilReferencePosition={setCivilReferencePosition}
+          onBeginObjectDrag={recordLayoutHistory}
+          isSimulationRunning={isSimulationRunning}
+          simulationSpeed={simulationSpeed}
+          overlaySettings={overlaySettings}
+          collisionResult={collisionResult}
+          onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
+          onPerformanceMetricsChange={setLatestPerformanceMetrics}
+        />
+      )}
+      rightPanel={isPanelCollapsed ? (
         <button
           className="panel-reopen-tab"
           type="button"
           aria-label="Open right panel"
+          data-app-shell-zone="machine-properties"
           onClick={() => setIsPanelCollapsed(false)}
         >
           Panel
@@ -1914,6 +1917,7 @@ export function App() {
         <aside
           className="machine-panel"
           data-testid="right-panel"
+          data-app-shell-zone="machine-properties"
           style={{ "--panel-width": `${panelWidth}px` } as CSSProperties}
           aria-label="Machine library, layout, and properties"
         >
@@ -1923,7 +1927,7 @@ export function App() {
             aria-label="Resize right panel"
             onPointerDown={startPanelResize}
           />
-          <div className="panel-toolbar">
+          <div className="panel-toolbar" data-app-shell-zone="top-toolbar">
             <span>AtrVisu Tools</span>
             <div className="toolbar-button-group" aria-label="Undo and redo">
               <button type="button" disabled={!canUndo} onClick={undoLayoutChange}>
@@ -2248,43 +2252,46 @@ export function App() {
           ) : null}
         </aside>
       )}
-    </main>
-    {isProjectManagerOpen ? (
-      <ProjectManager
-        projects={projects}
-        currentProjectId={currentProjectId}
-        currentLayoutId={currentLayoutId}
-        currentRevisionId={currentRevisionId}
-        currentSnapshot={createLayoutSnapshot()}
-        hasSceneObjects={placedMachines.length > 0 || civilReferences.length > 0}
-        isDirty={hasUnsavedProjectChanges}
-        onClose={() => setIsProjectManagerOpen(false)}
-        onProjectsChanged={setProjects}
-        onCurrentSelectionChange={(projectId, layoutId, revisionId) => {
-          setCurrentProjectId(projectId);
-          setCurrentLayoutId(layoutId);
-          setCurrentRevisionId(revisionId);
-        }}
-        onLoadRevision={loadRevisionSnapshot}
-        onSavedRevision={(projectId, layoutId, revisionId) => {
-          setCurrentProjectId(projectId);
-          setCurrentLayoutId(layoutId);
-          setCurrentRevisionId(revisionId);
-          void refreshProjects();
-          setHasUnsavedProjectChanges(false);
-        }}
-      />
-    ) : null}
-    {isPerformanceBenchmarkOpen ? (
-      <PerformanceBenchmarkModal
-        currentSnapshot={createLayoutSnapshot()}
-        latestMetrics={latestPerformanceMetrics}
-        onApplyBenchmarkScene={applyBenchmarkMachines}
-        onRestoreScene={restoreBenchmarkSnapshot}
-        onClearBenchmarkScene={clearBenchmarkScene}
-        onClose={() => setIsPerformanceBenchmarkOpen(false)}
-      />
-    ) : null}
-    </>
+      modalLayer={(
+        <>
+          {isProjectManagerOpen ? (
+            <ProjectManager
+              projects={projects}
+              currentProjectId={currentProjectId}
+              currentLayoutId={currentLayoutId}
+              currentRevisionId={currentRevisionId}
+              currentSnapshot={createLayoutSnapshot()}
+              hasSceneObjects={placedMachines.length > 0 || civilReferences.length > 0}
+              isDirty={hasUnsavedProjectChanges}
+              onClose={() => setIsProjectManagerOpen(false)}
+              onProjectsChanged={setProjects}
+              onCurrentSelectionChange={(projectId, layoutId, revisionId) => {
+                setCurrentProjectId(projectId);
+                setCurrentLayoutId(layoutId);
+                setCurrentRevisionId(revisionId);
+              }}
+              onLoadRevision={loadRevisionSnapshot}
+              onSavedRevision={(projectId, layoutId, revisionId) => {
+                setCurrentProjectId(projectId);
+                setCurrentLayoutId(layoutId);
+                setCurrentRevisionId(revisionId);
+                void refreshProjects();
+                setHasUnsavedProjectChanges(false);
+              }}
+            />
+          ) : null}
+          {isPerformanceBenchmarkOpen ? (
+            <PerformanceBenchmarkModal
+              currentSnapshot={createLayoutSnapshot()}
+              latestMetrics={latestPerformanceMetrics}
+              onApplyBenchmarkScene={applyBenchmarkMachines}
+              onRestoreScene={restoreBenchmarkSnapshot}
+              onClearBenchmarkScene={clearBenchmarkScene}
+              onClose={() => setIsPerformanceBenchmarkOpen(false)}
+            />
+          ) : null}
+        </>
+      )}
+    />
   );
 }
