@@ -66,6 +66,10 @@ describe("babylon scene extraction plan", () => {
     expect(firstCandidate?.riskLevel).not.toBe("high");
   });
 
+  it("uses diagnostics and overlays as the next safe refactor candidate after extracted phases", () => {
+    expect(babylonSceneExtractionPlan.firstSafeRefactorCandidate).toBe("diagnostics-overlays-extraction");
+  });
+
   it("protects the AppShell scene viewport slot and E2E smoke stability", () => {
     const baselinePhase = getBabylonSceneExtractionPhaseById("baseline-protection");
 
@@ -81,11 +85,12 @@ describe("babylon scene extraction plan", () => {
     }
   });
 
-  it("documents expected conceptual files or modules for every phase", () => {
-    expect(
-      babylonSceneExtractionPlan.phases.every((phase) =>
-        phase.expectedFilesOrModules.some((moduleName) => moduleName.includes("conceptual"))
-      )
-    ).toBe(true);
+  it("documents extracted visual context and lifecycle modules", () => {
+    expect(getBabylonSceneExtractionPhaseById("scene-lifecycle-extraction")?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/sceneLifecycle.ts"
+    );
+    expect(getBabylonSceneExtractionPhaseById("visual-context-extraction")?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/visualContext.ts"
+    );
   });
 });

@@ -4,6 +4,14 @@ import type { PlatformBabylonSceneBoundaryReport } from "./babylonSceneBoundaryT
 
 export const createPlatformBabylonSceneBoundaryReport = (): PlatformBabylonSceneBoundaryReport => {
   const audit = createBabylonSceneBoundaryAuditReport();
+  const nextRefactorCandidates = currentBabylonSceneBoundary.primaryResponsibilities
+    .filter((responsibility) => responsibility.nextRefactorCandidate)
+    .sort((left, right) => {
+      const riskOrder = { low: 0, medium: 1, high: 2 };
+      const riskDelta = riskOrder[left.riskLevel] - riskOrder[right.riskLevel];
+
+      return riskDelta === 0 ? left.id.localeCompare(right.id) : riskDelta;
+    });
 
   return {
     status: audit.readiness,
@@ -14,6 +22,16 @@ export const createPlatformBabylonSceneBoundaryReport = (): PlatformBabylonScene
     sourceFileCount: currentBabylonSceneBoundary.sourceFiles.length,
     parentBoundaryCount: currentBabylonSceneBoundary.parentBoundaryIds.length,
     responsibilityCount: currentBabylonSceneBoundary.primaryResponsibilities.length,
+    extractedResponsibilityCount: currentBabylonSceneBoundary.primaryResponsibilities.filter(
+      (responsibility) => responsibility.status === "extracted"
+    ).length,
+    remainingResponsibilityCount: currentBabylonSceneBoundary.primaryResponsibilities.filter(
+      (responsibility) => responsibility.status === "remaining"
+    ).length,
+    highRiskResponsibilityCount: currentBabylonSceneBoundary.primaryResponsibilities.filter(
+      (responsibility) => responsibility.riskLevel === "high"
+    ).length,
+    nextRefactorCandidates,
     upstreamInputCount: currentBabylonSceneBoundary.knownUpstreamInputs.length,
     downstreamEffectCount: currentBabylonSceneBoundary.knownDownstreamEffects.length,
     boundaryRiskCount: currentBabylonSceneBoundary.boundaryRisks.length,

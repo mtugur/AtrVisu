@@ -13,6 +13,8 @@ describe("current babylon scene boundary", () => {
   it("has non-empty source files", () => {
     expect(currentBabylonSceneBoundary.sourceFiles.length).toBeGreaterThan(0);
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/BabylonScene.tsx");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/sceneLifecycle.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/visualContext.ts");
     expect(currentBabylonSceneBoundary.sourceFiles.every((sourceFile) => sourceFile.trim())).toBe(true);
   });
 
@@ -27,6 +29,42 @@ describe("current babylon scene boundary", () => {
     expect(responsibilityIds).toContain("pointer-interaction-handling");
     expect(responsibilityIds).toContain("drag-move-placement-interaction");
     expect(responsibilityIds).toContain("collision-clearance-visualization");
+  });
+
+  it("marks extracted visual context and scene lifecycle responsibilities", () => {
+    const lifecycle = currentBabylonSceneBoundary.primaryResponsibilities.find(
+      (item) => item.id === "babylon-engine-scene-lifecycle"
+    );
+    const visualContext = currentBabylonSceneBoundary.primaryResponsibilities.find(
+      (item) => item.id === "lighting-ground-grid-context"
+    );
+
+    expect(lifecycle?.status).toBe("extracted");
+    expect(lifecycle?.ownerModule).toBe("src/components/babylonScene/sceneLifecycle.ts");
+    expect(visualContext?.status).toBe("extracted");
+    expect(visualContext?.ownerModule).toBe("src/components/babylonScene/visualContext.ts");
+  });
+
+  it("keeps interaction responsibilities visible as high risk", () => {
+    const highRiskIds = currentBabylonSceneBoundary.primaryResponsibilities
+      .filter((item) => item.riskLevel === "high")
+      .map((item) => item.id);
+
+    expect(highRiskIds).toContain("selection-visualization");
+    expect(highRiskIds).toContain("pointer-interaction-handling");
+    expect(highRiskIds).toContain("drag-move-placement-interaction");
+    expect(highRiskIds).toContain("rotation-transform-interaction");
+  });
+
+  it("documents controlled next refactor candidates", () => {
+    const candidateIds = currentBabylonSceneBoundary.primaryResponsibilities
+      .filter((item) => item.nextRefactorCandidate)
+      .map((item) => item.id);
+
+    expect(candidateIds).toEqual([
+      "collision-clearance-visualization",
+      "visual-diagnostics-overlays"
+    ]);
   });
 
   it("documents upstream inputs and downstream effects", () => {
@@ -50,5 +88,7 @@ describe("current babylon scene boundary", () => {
     expect(noteIds).toContain("preserve-app-shell-scene-viewport-slot");
     expect(noteIds).toContain("preserve-zone-anchors");
     expect(noteIds).toContain("no-platform-runtime-dependency");
+    expect(noteIds).toContain("visual-context-extracted");
+    expect(noteIds).toContain("scene-lifecycle-extracted");
   });
 });

@@ -7,6 +7,8 @@ export const currentBabylonSceneBoundary = {
   runtimeStatus: "active",
   sourceFiles: [
     "src/components/BabylonScene.tsx",
+    "src/components/babylonScene/sceneLifecycle.ts",
+    "src/components/babylonScene/visualContext.ts",
     "src/types/machine.ts",
     "src/types/civil.ts",
     "src/types/annotations.ts",
@@ -43,55 +45,107 @@ export const currentBabylonSceneBoundary = {
   primaryResponsibilities: [
     {
       id: "babylon-engine-scene-lifecycle",
-      label: "Babylon engine and scene lifecycle"
+      label: "Babylon engine and scene lifecycle setup extracted to sceneLifecycle helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/sceneLifecycle.ts",
+      nextRefactorCandidate: false
     },
     {
       id: "canvas-rendering",
-      label: "Canvas rendering"
+      label: "Canvas rendering remains coordinated by BabylonScene component",
+      status: "remaining",
+      riskLevel: "low",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "camera-creation-control",
-      label: "Camera creation and control"
+      label: "Camera creation and viewport behavior remains in BabylonScene",
+      status: "remaining",
+      riskLevel: "medium",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "lighting-ground-grid-context",
-      label: "Lighting, ground, and grid visual context"
+      label: "Lighting, ground, and grid visual context setup extracted to visualContext helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/visualContext.ts",
+      nextRefactorCandidate: false
     },
     {
       id: "machine-object-mesh-rendering",
-      label: "Machine and object mesh rendering"
+      label: "Machine and object mesh rendering remains in BabylonScene",
+      status: "remaining",
+      riskLevel: "medium",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "civil-building-reference-rendering",
-      label: "Civil and building reference rendering"
+      label: "Civil and building reference rendering remains in BabylonScene",
+      status: "remaining",
+      riskLevel: "medium",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "annotation-connection-overlay-rendering",
-      label: "Annotation and connection point overlay rendering"
+      label: "Annotation and connection point overlay rendering remains in BabylonScene",
+      status: "remaining",
+      riskLevel: "medium",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "selection-visualization",
-      label: "Selection visualization"
+      label: "Selection visualization remains in BabylonScene and is high risk to extract",
+      status: "remaining",
+      riskLevel: "high",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "pointer-interaction-handling",
-      label: "Pointer interaction handling"
+      label: "Pointer interaction handling remains in BabylonScene and is high risk to extract",
+      status: "remaining",
+      riskLevel: "high",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "drag-move-placement-interaction",
-      label: "Drag, move, and placement interaction handling"
+      label: "Drag, move, and placement interaction handling remains in BabylonScene and is high risk to extract",
+      status: "remaining",
+      riskLevel: "high",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "rotation-transform-interaction",
-      label: "Rotation and transform interaction handling"
+      label: "Rotation and transform or gizmo interaction remains in BabylonScene and is high risk to extract",
+      status: "remaining",
+      riskLevel: "high",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
     },
     {
       id: "collision-clearance-visualization",
-      label: "Collision and clearance visualization"
+      label: "Collision and clearance visualization remains in BabylonScene as a controlled next candidate",
+      status: "remaining",
+      riskLevel: "medium",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: true
     },
     {
       id: "visual-diagnostics-overlays",
-      label: "Visual diagnostics and overlay responsibilities"
+      label: "Visual diagnostics and overlay responsibilities remain in BabylonScene as a controlled next candidate",
+      status: "remaining",
+      riskLevel: "medium",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: true
     }
   ],
   knownUpstreamInputs: [
@@ -169,11 +223,11 @@ export const currentBabylonSceneBoundary = {
   boundaryRisks: [
     {
       id: "multi-responsibility-component",
-      label: "BabylonScene currently carries multiple responsibilities"
+      label: "BabylonScene still carries camera, rendering, interaction, selection, drag, and diagnostics responsibilities"
     },
     {
       id: "render-interaction-coupling",
-      label: "Render lifecycle and interaction logic are tightly coupled"
+      label: "Render loop contents and interaction logic remain coupled after lifecycle setup extraction"
     },
     {
       id: "selection-placement-viewport-coupling",
@@ -187,7 +241,19 @@ export const currentBabylonSceneBoundary = {
   extractionNotes: [
     {
       id: "extract-gradually",
-      label: "Selection, placement, and viewport concerns should be extracted gradually"
+      label: "Visual context and scene lifecycle setup are extracted; remaining selection, placement, and viewport concerns should be extracted gradually"
+    },
+    {
+      id: "visual-context-extracted",
+      label: "Lighting, ground, and grid setup now lives in src/components/babylonScene/visualContext.ts"
+    },
+    {
+      id: "scene-lifecycle-extracted",
+      label: "Engine, scene, render loop, resize, and dispose lifecycle setup now lives in src/components/babylonScene/sceneLifecycle.ts"
+    },
+    {
+      id: "next-controlled-candidate",
+      label: "Diagnostics and overlay extraction is the next controlled candidate before high-risk interaction extraction"
     },
     {
       id: "preserve-app-shell-scene-viewport-slot",
