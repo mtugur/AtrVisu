@@ -4,10 +4,8 @@ import {
   ArcRotateCamera,
   Camera,
   Color3,
-  Color4,
   DynamicTexture,
   Engine,
-  HemisphericLight,
   LinesMesh,
   Matrix,
   Mesh,
@@ -51,10 +49,8 @@ import {
   getAnnotationVisualStyle,
   getRayPlanePlanPointMm
 } from "../utils/annotations";
+import { createSceneVisualContext } from "./babylonScene/visualContext";
 
-const GRID_SIZE = 42;
-const GRID_MAJOR_STEP = 6;
-const GRID_MINOR_STEP = 1;
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
 const ANNOTATION_LABEL_OFFSET_METERS = new Vector3(0.78, 0.42, 0);
@@ -1349,8 +1345,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     const scene = new Scene(engine);
     sceneRef.current = scene;
-    scene.clearColor = new Color4(0.035, 0.045, 0.055, 1);
-    scene.ambientColor = new Color3(0.18, 0.22, 0.25);
 
     const camera = new ArcRotateCamera(
       "orbit-camera",
@@ -1378,54 +1372,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       pointerInput.panningMouseButton = 1;
     }
 
-    const keyLight = new HemisphericLight("key-light", new Vector3(0.2, 1, 0.35), scene);
-    keyLight.intensity = 0.88;
-    keyLight.groundColor = new Color3(0.08, 0.09, 0.1);
-
-    const gridMaterial = new StandardMaterial("grid-material", scene);
-    gridMaterial.diffuseColor = new Color3(0.18, 0.68, 0.74);
-    gridMaterial.emissiveColor = new Color3(0.04, 0.17, 0.18);
-    gridMaterial.alpha = 0.88;
-
-    const majorMaterial = new StandardMaterial("major-grid-material", scene);
-    majorMaterial.diffuseColor = new Color3(0.7, 0.86, 0.56);
-    majorMaterial.emissiveColor = new Color3(0.12, 0.16, 0.08);
-    majorMaterial.alpha = 0.95;
-
-    for (let i = -GRID_SIZE; i <= GRID_SIZE; i += GRID_MINOR_STEP) {
-      const isMajor = i % GRID_MAJOR_STEP === 0;
-      const material = isMajor ? majorMaterial : gridMaterial;
-      const thickness = isMajor ? 0.045 : 0.018;
-
-      const xLine = MeshBuilder.CreateBox(
-        `grid-x-${i}`,
-        { width: GRID_SIZE * 2, height: thickness, depth: thickness },
-        scene
-      );
-      xLine.position.z = i;
-      xLine.material = material;
-      xLine.isPickable = false;
-
-      const zLine = MeshBuilder.CreateBox(
-        `grid-z-${i}`,
-        { width: thickness, height: thickness, depth: GRID_SIZE * 2 },
-        scene
-      );
-      zLine.position.x = i;
-      zLine.material = material;
-      zLine.isPickable = false;
-    }
-
-    const floor = MeshBuilder.CreateGround(
-      "floor-pick-plane",
-      { width: GRID_SIZE * 2, height: GRID_SIZE * 2 },
-      scene
-    );
-    const floorMaterial = new StandardMaterial("floor-pick-material", scene);
-    floorMaterial.alpha = 0;
-    floor.material = floorMaterial;
-    floor.visibility = 0;
-    floor.isPickable = true;
+    const { floor } = createSceneVisualContext(scene);
     floorRef.current = floor;
 
     const createPointerRay = () => {
