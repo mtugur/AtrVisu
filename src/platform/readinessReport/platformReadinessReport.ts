@@ -1,4 +1,5 @@
 import { createPlatformAppShellBoundaryReport } from "../appShellBoundary";
+import { createPlatformBabylonSceneBoundaryReport } from "../babylonSceneBoundary";
 import { platformFeatureAccessMatrix } from "../featureAccess";
 import {
   createFeatureAccessIntegrationReport,
@@ -25,6 +26,7 @@ type PlatformReadinessReportParts = Pick<
   | "surfaceCoverageSummary"
   | "appShellBoundarySummary"
   | "sceneViewportBoundarySummary"
+  | "babylonSceneBoundarySummary"
 >;
 
 type PlatformReadinessCheckId =
@@ -33,7 +35,8 @@ type PlatformReadinessCheckId =
   | "surface-inventory"
   | "surface-coverage"
   | "app-shell-boundary"
-  | "scene-viewport-boundary";
+  | "scene-viewport-boundary"
+  | "babylon-scene-boundary";
 
 type PlatformReadinessFailureSummaries = Partial<Record<PlatformReadinessCheckId, string>>;
 
@@ -44,6 +47,7 @@ export type PlatformReadinessDependencies = {
   createSurfaceCoverageSummary: () => PlatformReadinessReport["surfaceCoverageSummary"];
   createAppShellBoundarySummary: () => PlatformReadinessReport["appShellBoundarySummary"];
   createSceneViewportBoundarySummary: () => PlatformReadinessReport["sceneViewportBoundarySummary"];
+  createBabylonSceneBoundarySummary: () => PlatformReadinessReport["babylonSceneBoundarySummary"];
 };
 
 type SafeSummaryResult<T> = {
@@ -147,6 +151,13 @@ export const createPlatformReadinessReportFromParts = (
     sceneViewportBoundaryErrorCount,
     sceneViewportBoundaryWarningCount
   );
+  const babylonSceneBoundaryErrorCount = parts.babylonSceneBoundarySummary.errorCount;
+  const babylonSceneBoundaryWarningCount = parts.babylonSceneBoundarySummary.warningCount;
+  const babylonSceneBoundaryIssueCount = normalizeIssueCount(
+    parts.babylonSceneBoundarySummary.issueCount,
+    babylonSceneBoundaryErrorCount,
+    babylonSceneBoundaryWarningCount
+  );
   const registryPasses = registryErrorCount === 0;
   const integrationPasses = integrationErrorCount === 0;
   const inventoryPasses = inventoryErrorCount === 0;
@@ -154,6 +165,8 @@ export const createPlatformReadinessReportFromParts = (
   const appShellBoundaryPasses = appShellBoundaryErrorCount === 0;
   const sceneViewportBoundaryPasses =
     sceneViewportBoundaryErrorCount === 0 && parts.sceneViewportBoundarySummary.status === "ready";
+  const babylonSceneBoundaryPasses =
+    babylonSceneBoundaryErrorCount === 0 && parts.babylonSceneBoundarySummary.status === "ready";
   const checks: readonly PlatformReadinessCheck[] = [
     createCheck(
       "registry-seeds",
@@ -214,6 +227,16 @@ export const createPlatformReadinessReportFromParts = (
       sceneViewportBoundaryWarningCount,
       "Scene viewport boundary inventory is ready.",
       failureSummaries["scene-viewport-boundary"] ?? "Scene viewport boundary inventory is not ready."
+    ),
+    createCheck(
+      "babylon-scene-boundary",
+      "Babylon scene boundary",
+      babylonSceneBoundaryPasses,
+      babylonSceneBoundaryIssueCount,
+      babylonSceneBoundaryErrorCount,
+      babylonSceneBoundaryWarningCount,
+      "Babylon scene boundary inventory is ready.",
+      failureSummaries["babylon-scene-boundary"] ?? "Babylon scene boundary inventory is not ready."
     )
   ];
   const errorCount = checks.reduce((total, check) => total + check.errorCount, 0);
@@ -247,6 +270,10 @@ export const createPlatformReadinessReportFromParts = (
     sceneViewportBoundarySummary: {
       ...parts.sceneViewportBoundarySummary,
       issueCount: sceneViewportBoundaryIssueCount
+    },
+    babylonSceneBoundarySummary: {
+      ...parts.babylonSceneBoundarySummary,
+      issueCount: babylonSceneBoundaryIssueCount
     }
   };
 };
@@ -335,6 +362,27 @@ const platformReadinessDependencies: PlatformReadinessDependencies = {
       runtimeStatus: report.runtimeStatus,
       appShellZoneId: report.appShellZoneId,
       sourceFileCount: report.sourceFileCount,
+      responsibilityCount: report.responsibilityCount,
+      upstreamInputCount: report.upstreamInputCount,
+      downstreamEffectCount: report.downstreamEffectCount,
+      boundaryRiskCount: report.boundaryRiskCount,
+      extractionNoteCount: report.extractionNoteCount,
+      issueCount: report.issueCount,
+      errorCount: report.errorCount,
+      warningCount: report.warningCount
+    };
+  },
+  createBabylonSceneBoundarySummary: () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+
+    return {
+      status: report.status,
+      boundaryId: report.boundaryId,
+      displayName: report.displayName,
+      ownerLayer: report.ownerLayer,
+      runtimeStatus: report.runtimeStatus,
+      sourceFileCount: report.sourceFileCount,
+      parentBoundaryCount: report.parentBoundaryCount,
       responsibilityCount: report.responsibilityCount,
       upstreamInputCount: report.upstreamInputCount,
       downstreamEffectCount: report.downstreamEffectCount,
@@ -433,6 +481,27 @@ export const createPlatformReadinessReportFromDependencies = (
     } satisfies PlatformReadinessReport["sceneViewportBoundarySummary"],
     "Scene viewport boundary audit"
   );
+  const babylonSceneBoundaryResult = safelyCreateSummary(
+    dependencies.createBabylonSceneBoundarySummary,
+    {
+      status: "not-ready",
+      boundaryId: "babylon-scene",
+      displayName: "Babylon Scene",
+      ownerLayer: "scene-viewport",
+      runtimeStatus: "active",
+      sourceFileCount: 0,
+      parentBoundaryCount: 0,
+      responsibilityCount: 0,
+      upstreamInputCount: 0,
+      downstreamEffectCount: 0,
+      boundaryRiskCount: 0,
+      extractionNoteCount: 0,
+      issueCount: 1,
+      errorCount: 1,
+      warningCount: 0
+    } satisfies PlatformReadinessReport["babylonSceneBoundarySummary"],
+    "Babylon scene boundary audit"
+  );
 
   return createPlatformReadinessReportFromParts(
     {
@@ -441,7 +510,8 @@ export const createPlatformReadinessReportFromDependencies = (
       surfaceInventorySummary: inventoryResult.summary,
       surfaceCoverageSummary: coverageResult.summary,
       appShellBoundarySummary: appShellBoundaryResult.summary,
-      sceneViewportBoundarySummary: sceneViewportBoundaryResult.summary
+      sceneViewportBoundarySummary: sceneViewportBoundaryResult.summary,
+      babylonSceneBoundarySummary: babylonSceneBoundaryResult.summary
     },
     {
       "registry-seeds": registryResult.failureSummary,
@@ -449,7 +519,8 @@ export const createPlatformReadinessReportFromDependencies = (
       "surface-inventory": inventoryResult.failureSummary,
       "surface-coverage": coverageResult.failureSummary,
       "app-shell-boundary": appShellBoundaryResult.failureSummary,
-      "scene-viewport-boundary": sceneViewportBoundaryResult.failureSummary
+      "scene-viewport-boundary": sceneViewportBoundaryResult.failureSummary,
+      "babylon-scene-boundary": babylonSceneBoundaryResult.failureSummary
     }
   );
 };

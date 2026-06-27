@@ -80,4 +80,21 @@ export type PlatformReadinessReport = {
     errorCount: number;
     warningCount: number;
   };
+  babylonSceneBoundarySummary: {
+    status: PlatformReadinessStatus;
+    boundaryId: string;
+    displayName: string;
+    ownerLayer: "scene-viewport";
+    runtimeStatus: "active";
+    sourceFileCount: number;
+    parentBoundaryCount: number;
+    responsibilityCount: number;
+    upstreamInputCount: number;
+    downstreamEffectCount: number;
+    boundaryRiskCount: number;
+    extractionNoteCount: number;
+    issueCount: number;
+    errorCount: number;
+    warningCount: number;
+  };
 };
