@@ -3,6 +3,7 @@ import { currentAppShellBoundaryZones } from "../../appShellBoundary";
 import { platformFeatureAccessMatrix } from "../../featureAccess";
 import { platformFeatureAccessCoverageDefinitions } from "../../integration";
 import { platformCommandSeedDefinitions, platformPanelSeedDefinitions } from "../../registrySeeds";
+import { currentSceneViewportBoundary } from "../../sceneViewportBoundary";
 import { currentPlatformSurfaceInventory } from "../../surfaceInventory";
 import {
   createPlatformReadinessReport,
@@ -25,7 +26,8 @@ describe("platform readiness report", () => {
       "feature-access-integration",
       "surface-inventory",
       "surface-coverage",
-      "app-shell-boundary"
+      "app-shell-boundary",
+      "scene-viewport-boundary"
     ]);
     expect(report.checks.every((check) => check.status === "pass")).toBe(true);
   });
@@ -70,6 +72,24 @@ describe("platform readiness report", () => {
     expect(typeof summary.warningCount).toBe("number");
   });
 
+  it("includes a passing scene viewport boundary check", () => {
+    const report = createPlatformReadinessReport();
+    const check = report.checks.find((item) => item.id === "scene-viewport-boundary");
+
+    expect(check?.status).toBe("pass");
+    expect(report.status).toBe("ready");
+  });
+
+  it("returns scene viewport boundary summary", () => {
+    const summary = createPlatformReadinessReport().sceneViewportBoundarySummary;
+
+    expect(summary.status).toBe("ready");
+    expect(summary.boundaryId).toBe("scene-viewport");
+    expect(summary.displayName).toBe("Scene Viewport");
+    expect(summary.sourceFileCount).toBeGreaterThan(0);
+    expect(summary.responsibilityCount).toBeGreaterThan(0);
+  });
+
   it("does not mutate platform source arrays", () => {
     const lengths = {
       commands: platformCommandSeedDefinitions.length,
@@ -77,7 +97,8 @@ describe("platform readiness report", () => {
       features: platformFeatureAccessMatrix.length,
       coverage: platformFeatureAccessCoverageDefinitions.length,
       surfaces: currentPlatformSurfaceInventory.length,
-      appShellBoundaryZones: currentAppShellBoundaryZones.length
+      appShellBoundaryZones: currentAppShellBoundaryZones.length,
+      sceneViewportResponsibilities: currentSceneViewportBoundary.primaryResponsibilities.length
     };
 
     createPlatformReadinessReport();
@@ -88,5 +109,6 @@ describe("platform readiness report", () => {
     expect(platformFeatureAccessCoverageDefinitions).toHaveLength(lengths.coverage);
     expect(currentPlatformSurfaceInventory).toHaveLength(lengths.surfaces);
     expect(currentAppShellBoundaryZones).toHaveLength(lengths.appShellBoundaryZones);
+    expect(currentSceneViewportBoundary.primaryResponsibilities).toHaveLength(lengths.sceneViewportResponsibilities);
   });
 });

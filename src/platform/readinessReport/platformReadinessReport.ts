@@ -8,6 +8,7 @@ import {
   createSeededPlatformCommandRegistry,
   createSeededPlatformPanelRegistry
 } from "../registrySeeds";
+import { createPlatformSceneViewportBoundaryReport } from "../sceneViewportBoundary";
 import { createPlatformSurfaceCoverageReport } from "../surfaceCoverageAudit";
 import { createPlatformSurfaceInventoryReport } from "../surfaceInventory";
 import type {
@@ -23,6 +24,7 @@ type PlatformReadinessReportParts = Pick<
   | "surfaceInventorySummary"
   | "surfaceCoverageSummary"
   | "appShellBoundarySummary"
+  | "sceneViewportBoundarySummary"
 >;
 
 type PlatformReadinessCheckId =
@@ -30,7 +32,8 @@ type PlatformReadinessCheckId =
   | "feature-access-integration"
   | "surface-inventory"
   | "surface-coverage"
-  | "app-shell-boundary";
+  | "app-shell-boundary"
+  | "scene-viewport-boundary";
 
 type PlatformReadinessFailureSummaries = Partial<Record<PlatformReadinessCheckId, string>>;
 
@@ -40,6 +43,7 @@ export type PlatformReadinessDependencies = {
   createSurfaceInventorySummary: () => PlatformReadinessReport["surfaceInventorySummary"];
   createSurfaceCoverageSummary: () => PlatformReadinessReport["surfaceCoverageSummary"];
   createAppShellBoundarySummary: () => PlatformReadinessReport["appShellBoundarySummary"];
+  createSceneViewportBoundarySummary: () => PlatformReadinessReport["sceneViewportBoundarySummary"];
 };
 
 type SafeSummaryResult<T> = {
@@ -136,11 +140,20 @@ export const createPlatformReadinessReportFromParts = (
     appShellBoundaryErrorCount,
     appShellBoundaryWarningCount
   );
+  const sceneViewportBoundaryErrorCount = parts.sceneViewportBoundarySummary.errorCount;
+  const sceneViewportBoundaryWarningCount = parts.sceneViewportBoundarySummary.warningCount;
+  const sceneViewportBoundaryIssueCount = normalizeIssueCount(
+    parts.sceneViewportBoundarySummary.issueCount,
+    sceneViewportBoundaryErrorCount,
+    sceneViewportBoundaryWarningCount
+  );
   const registryPasses = registryErrorCount === 0;
   const integrationPasses = integrationErrorCount === 0;
   const inventoryPasses = inventoryErrorCount === 0;
   const coveragePasses = coverageErrorCount === 0 && uncoveredCoverageCount === 0;
   const appShellBoundaryPasses = appShellBoundaryErrorCount === 0;
+  const sceneViewportBoundaryPasses =
+    sceneViewportBoundaryErrorCount === 0 && parts.sceneViewportBoundarySummary.status === "ready";
   const checks: readonly PlatformReadinessCheck[] = [
     createCheck(
       "registry-seeds",
@@ -191,6 +204,16 @@ export const createPlatformReadinessReportFromParts = (
       appShellBoundaryWarningCount,
       "App shell boundary inventory has no errors.",
       failureSummaries["app-shell-boundary"] ?? "App shell boundary inventory contains errors."
+    ),
+    createCheck(
+      "scene-viewport-boundary",
+      "Scene viewport boundary",
+      sceneViewportBoundaryPasses,
+      sceneViewportBoundaryIssueCount,
+      sceneViewportBoundaryErrorCount,
+      sceneViewportBoundaryWarningCount,
+      "Scene viewport boundary inventory is ready.",
+      failureSummaries["scene-viewport-boundary"] ?? "Scene viewport boundary inventory is not ready."
     )
   ];
   const errorCount = checks.reduce((total, check) => total + check.errorCount, 0);
@@ -220,6 +243,10 @@ export const createPlatformReadinessReportFromParts = (
     appShellBoundarySummary: {
       ...parts.appShellBoundarySummary,
       issueCount: appShellBoundaryIssueCount
+    },
+    sceneViewportBoundarySummary: {
+      ...parts.sceneViewportBoundarySummary,
+      issueCount: sceneViewportBoundaryIssueCount
     }
   };
 };
@@ -296,6 +323,27 @@ const platformReadinessDependencies: PlatformReadinessDependencies = {
       errorCount: report.errorCount,
       warningCount: report.warningCount
     };
+  },
+  createSceneViewportBoundarySummary: () => {
+    const report = createPlatformSceneViewportBoundaryReport();
+
+    return {
+      status: report.status,
+      boundaryId: report.boundaryId,
+      displayName: report.displayName,
+      ownerLayer: report.ownerLayer,
+      runtimeStatus: report.runtimeStatus,
+      appShellZoneId: report.appShellZoneId,
+      sourceFileCount: report.sourceFileCount,
+      responsibilityCount: report.responsibilityCount,
+      upstreamInputCount: report.upstreamInputCount,
+      downstreamEffectCount: report.downstreamEffectCount,
+      boundaryRiskCount: report.boundaryRiskCount,
+      extractionNoteCount: report.extractionNoteCount,
+      issueCount: report.issueCount,
+      errorCount: report.errorCount,
+      warningCount: report.warningCount
+    };
   }
 };
 
@@ -364,6 +412,27 @@ export const createPlatformReadinessReportFromDependencies = (
     },
     "App shell boundary audit"
   );
+  const sceneViewportBoundaryResult = safelyCreateSummary(
+    dependencies.createSceneViewportBoundarySummary,
+    {
+      status: "not-ready",
+      boundaryId: "scene-viewport",
+      displayName: "Scene Viewport",
+      ownerLayer: "app-shell",
+      runtimeStatus: "active",
+      appShellZoneId: "scene-viewport",
+      sourceFileCount: 0,
+      responsibilityCount: 0,
+      upstreamInputCount: 0,
+      downstreamEffectCount: 0,
+      boundaryRiskCount: 0,
+      extractionNoteCount: 0,
+      issueCount: 1,
+      errorCount: 1,
+      warningCount: 0
+    } satisfies PlatformReadinessReport["sceneViewportBoundarySummary"],
+    "Scene viewport boundary audit"
+  );
 
   return createPlatformReadinessReportFromParts(
     {
@@ -371,14 +440,16 @@ export const createPlatformReadinessReportFromDependencies = (
       featureAccessIntegrationSummary: integrationResult.summary,
       surfaceInventorySummary: inventoryResult.summary,
       surfaceCoverageSummary: coverageResult.summary,
-      appShellBoundarySummary: appShellBoundaryResult.summary
+      appShellBoundarySummary: appShellBoundaryResult.summary,
+      sceneViewportBoundarySummary: sceneViewportBoundaryResult.summary
     },
     {
       "registry-seeds": registryResult.failureSummary,
       "feature-access-integration": integrationResult.failureSummary,
       "surface-inventory": inventoryResult.failureSummary,
       "surface-coverage": coverageResult.failureSummary,
-      "app-shell-boundary": appShellBoundaryResult.failureSummary
+      "app-shell-boundary": appShellBoundaryResult.failureSummary,
+      "scene-viewport-boundary": sceneViewportBoundaryResult.failureSummary
     }
   );
 };

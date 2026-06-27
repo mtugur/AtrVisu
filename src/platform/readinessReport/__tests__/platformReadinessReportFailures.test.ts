@@ -13,6 +13,7 @@ type ReadinessParts = Pick<
   | "surfaceInventorySummary"
   | "surfaceCoverageSummary"
   | "appShellBoundarySummary"
+  | "sceneViewportBoundarySummary"
 >;
 
 const passingParts = (): ReadinessParts => ({
@@ -60,6 +61,23 @@ const passingParts = (): ReadinessParts => ({
     issueCount: 0,
     errorCount: 0,
     warningCount: 0
+  },
+  sceneViewportBoundarySummary: {
+    status: "ready",
+    boundaryId: "scene-viewport",
+    displayName: "Scene Viewport",
+    ownerLayer: "app-shell",
+    runtimeStatus: "active",
+    appShellZoneId: "scene-viewport",
+    sourceFileCount: 1,
+    responsibilityCount: 1,
+    upstreamInputCount: 1,
+    downstreamEffectCount: 1,
+    boundaryRiskCount: 1,
+    extractionNoteCount: 1,
+    issueCount: 0,
+    errorCount: 0,
+    warningCount: 0
   }
 });
 
@@ -71,7 +89,8 @@ const passingDependencies = (): PlatformReadinessDependencies => {
     createFeatureAccessIntegrationSummary: () => ({ ...parts.featureAccessIntegrationSummary }),
     createSurfaceInventorySummary: () => ({ ...parts.surfaceInventorySummary }),
     createSurfaceCoverageSummary: () => ({ ...parts.surfaceCoverageSummary }),
-    createAppShellBoundarySummary: () => ({ ...parts.appShellBoundarySummary })
+    createAppShellBoundarySummary: () => ({ ...parts.appShellBoundarySummary }),
+    createSceneViewportBoundarySummary: () => ({ ...parts.sceneViewportBoundarySummary })
   };
 };
 
@@ -175,6 +194,22 @@ describe("platform readiness report failures", () => {
     expect(report.checks.find((check) => check.id === "app-shell-boundary")?.status).toBe("fail");
   });
 
+  it("is not ready when scene viewport boundary fails", () => {
+    const parts = passingParts();
+    const report = createPlatformReadinessReportFromParts({
+      ...parts,
+      sceneViewportBoundarySummary: {
+        ...parts.sceneViewportBoundarySummary,
+        status: "not-ready",
+        issueCount: 1,
+        errorCount: 1
+      }
+    });
+
+    expect(report.status).toBe("not-ready");
+    expect(report.checks.find((check) => check.id === "scene-viewport-boundary")?.status).toBe("fail");
+  });
+
   it("keeps app shell boundary warnings passing but counted", () => {
     const parts = passingParts();
     const report = createPlatformReadinessReportFromParts({
@@ -252,5 +287,26 @@ describe("platform readiness report failures", () => {
     expect(report.issueCount).toBeGreaterThan(0);
     expect(check?.status).toBe("fail");
     expect(check?.summary).toContain("Boundary unavailable.");
+  });
+
+  it("returns a report when scene viewport boundary dependency throws", () => {
+    const dependencies = passingDependencies();
+    const createReport = () => createPlatformReadinessReportFromDependencies({
+      ...dependencies,
+      createSceneViewportBoundarySummary: () => {
+        throw new Error("Scene viewport boundary unavailable.");
+      }
+    });
+
+    expect(createReport).not.toThrow();
+
+    const report = createReport();
+    const check = report.checks.find((item) => item.id === "scene-viewport-boundary");
+
+    expect(report.status).toBe("not-ready");
+    expect(report.errorCount).toBeGreaterThan(0);
+    expect(report.issueCount).toBeGreaterThan(0);
+    expect(check?.status).toBe("fail");
+    expect(check?.summary).toContain("Scene viewport boundary unavailable.");
   });
 });

@@ -63,4 +63,21 @@ export type PlatformReadinessReport = {
     errorCount: number;
     warningCount: number;
   };
+  sceneViewportBoundarySummary: {
+    status: PlatformReadinessStatus;
+    boundaryId: string;
+    displayName: string;
+    ownerLayer: "app-shell";
+    runtimeStatus: "active";
+    appShellZoneId: "scene-viewport";
+    sourceFileCount: number;
+    responsibilityCount: number;
+    upstreamInputCount: number;
+    downstreamEffectCount: number;
+    boundaryRiskCount: number;
+    extractionNoteCount: number;
+    issueCount: number;
+    errorCount: number;
+    warningCount: number;
+  };
 };
