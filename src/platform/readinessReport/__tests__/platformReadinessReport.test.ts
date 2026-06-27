@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { currentAppShellBoundaryZones } from "../../appShellBoundary";
+import { currentBabylonSceneBoundary } from "../../babylonSceneBoundary";
 import { platformFeatureAccessMatrix } from "../../featureAccess";
 import { platformFeatureAccessCoverageDefinitions } from "../../integration";
 import { platformCommandSeedDefinitions, platformPanelSeedDefinitions } from "../../registrySeeds";
@@ -27,7 +28,8 @@ describe("platform readiness report", () => {
       "surface-inventory",
       "surface-coverage",
       "app-shell-boundary",
-      "scene-viewport-boundary"
+      "scene-viewport-boundary",
+      "babylon-scene-boundary"
     ]);
     expect(report.checks.every((check) => check.status === "pass")).toBe(true);
   });
@@ -90,6 +92,26 @@ describe("platform readiness report", () => {
     expect(summary.responsibilityCount).toBeGreaterThan(0);
   });
 
+  it("includes a passing Babylon scene boundary check", () => {
+    const report = createPlatformReadinessReport();
+    const check = report.checks.find((item) => item.id === "babylon-scene-boundary");
+
+    expect(check?.status).toBe("pass");
+    expect(report.status).toBe("ready");
+  });
+
+  it("returns Babylon scene boundary summary", () => {
+    const summary = createPlatformReadinessReport().babylonSceneBoundarySummary;
+
+    expect(summary.status).toBe("ready");
+    expect(summary.boundaryId).toBe("babylon-scene");
+    expect(summary.displayName).toBe("Babylon Scene");
+    expect(summary.ownerLayer).toBe("scene-viewport");
+    expect(summary.sourceFileCount).toBeGreaterThan(0);
+    expect(summary.parentBoundaryCount).toBeGreaterThan(0);
+    expect(summary.responsibilityCount).toBeGreaterThan(0);
+  });
+
   it("does not mutate platform source arrays", () => {
     const lengths = {
       commands: platformCommandSeedDefinitions.length,
@@ -98,7 +120,8 @@ describe("platform readiness report", () => {
       coverage: platformFeatureAccessCoverageDefinitions.length,
       surfaces: currentPlatformSurfaceInventory.length,
       appShellBoundaryZones: currentAppShellBoundaryZones.length,
-      sceneViewportResponsibilities: currentSceneViewportBoundary.primaryResponsibilities.length
+      sceneViewportResponsibilities: currentSceneViewportBoundary.primaryResponsibilities.length,
+      babylonSceneResponsibilities: currentBabylonSceneBoundary.primaryResponsibilities.length
     };
 
     createPlatformReadinessReport();
@@ -110,5 +133,6 @@ describe("platform readiness report", () => {
     expect(currentPlatformSurfaceInventory).toHaveLength(lengths.surfaces);
     expect(currentAppShellBoundaryZones).toHaveLength(lengths.appShellBoundaryZones);
     expect(currentSceneViewportBoundary.primaryResponsibilities).toHaveLength(lengths.sceneViewportResponsibilities);
+    expect(currentBabylonSceneBoundary.primaryResponsibilities).toHaveLength(lengths.babylonSceneResponsibilities);
   });
 });

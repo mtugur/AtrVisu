@@ -14,6 +14,7 @@ type ReadinessParts = Pick<
   | "surfaceCoverageSummary"
   | "appShellBoundarySummary"
   | "sceneViewportBoundarySummary"
+  | "babylonSceneBoundarySummary"
 >;
 
 const passingParts = (): ReadinessParts => ({
@@ -78,6 +79,23 @@ const passingParts = (): ReadinessParts => ({
     issueCount: 0,
     errorCount: 0,
     warningCount: 0
+  },
+  babylonSceneBoundarySummary: {
+    status: "ready",
+    boundaryId: "babylon-scene",
+    displayName: "Babylon Scene",
+    ownerLayer: "scene-viewport",
+    runtimeStatus: "active",
+    sourceFileCount: 1,
+    parentBoundaryCount: 1,
+    responsibilityCount: 1,
+    upstreamInputCount: 1,
+    downstreamEffectCount: 1,
+    boundaryRiskCount: 1,
+    extractionNoteCount: 1,
+    issueCount: 0,
+    errorCount: 0,
+    warningCount: 0
   }
 });
 
@@ -90,7 +108,8 @@ const passingDependencies = (): PlatformReadinessDependencies => {
     createSurfaceInventorySummary: () => ({ ...parts.surfaceInventorySummary }),
     createSurfaceCoverageSummary: () => ({ ...parts.surfaceCoverageSummary }),
     createAppShellBoundarySummary: () => ({ ...parts.appShellBoundarySummary }),
-    createSceneViewportBoundarySummary: () => ({ ...parts.sceneViewportBoundarySummary })
+    createSceneViewportBoundarySummary: () => ({ ...parts.sceneViewportBoundarySummary }),
+    createBabylonSceneBoundarySummary: () => ({ ...parts.babylonSceneBoundarySummary })
   };
 };
 
@@ -210,6 +229,22 @@ describe("platform readiness report failures", () => {
     expect(report.checks.find((check) => check.id === "scene-viewport-boundary")?.status).toBe("fail");
   });
 
+  it("is not ready when Babylon scene boundary fails", () => {
+    const parts = passingParts();
+    const report = createPlatformReadinessReportFromParts({
+      ...parts,
+      babylonSceneBoundarySummary: {
+        ...parts.babylonSceneBoundarySummary,
+        status: "not-ready",
+        issueCount: 1,
+        errorCount: 1
+      }
+    });
+
+    expect(report.status).toBe("not-ready");
+    expect(report.checks.find((check) => check.id === "babylon-scene-boundary")?.status).toBe("fail");
+  });
+
   it("keeps app shell boundary warnings passing but counted", () => {
     const parts = passingParts();
     const report = createPlatformReadinessReportFromParts({
@@ -308,5 +343,26 @@ describe("platform readiness report failures", () => {
     expect(report.issueCount).toBeGreaterThan(0);
     expect(check?.status).toBe("fail");
     expect(check?.summary).toContain("Scene viewport boundary unavailable.");
+  });
+
+  it("returns a report when Babylon scene boundary dependency throws", () => {
+    const dependencies = passingDependencies();
+    const createReport = () => createPlatformReadinessReportFromDependencies({
+      ...dependencies,
+      createBabylonSceneBoundarySummary: () => {
+        throw new Error("Babylon scene boundary unavailable.");
+      }
+    });
+
+    expect(createReport).not.toThrow();
+
+    const report = createReport();
+    const check = report.checks.find((item) => item.id === "babylon-scene-boundary");
+
+    expect(report.status).toBe("not-ready");
+    expect(report.errorCount).toBeGreaterThan(0);
+    expect(report.issueCount).toBeGreaterThan(0);
+    expect(check?.status).toBe("fail");
+    expect(check?.summary).toContain("Babylon scene boundary unavailable.");
   });
 });
