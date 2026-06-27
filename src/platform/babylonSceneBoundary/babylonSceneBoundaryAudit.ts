@@ -3,13 +3,22 @@ import type {
   BabylonSceneBoundaryAuditReport,
   BabylonSceneBoundaryInventory,
   BabylonSceneBoundaryIssue,
-  BabylonSceneBoundaryReference
+  BabylonSceneBoundaryReference,
+  BabylonSceneBoundaryResponsibility
 } from "./babylonSceneBoundaryTypes";
 
 const hasText = (value: string) => value.trim().length > 0;
 
 const hasReferenceItems = (items: readonly BabylonSceneBoundaryReference[]) =>
   items.length > 0 && items.every((item) => hasText(item.id) && hasText(item.label));
+
+const hasResponsibilityItems = (items: readonly BabylonSceneBoundaryResponsibility[]) =>
+  hasReferenceItems(items) &&
+  items.every((item) =>
+    (item.status === "extracted" || item.status === "remaining") &&
+    (item.riskLevel === "low" || item.riskLevel === "medium" || item.riskLevel === "high") &&
+    hasText(item.ownerModule)
+  );
 
 const createIssue = (
   code: string,
@@ -50,8 +59,8 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   if (inventory.parentBoundaryIds.length === 0 || inventory.parentBoundaryIds.some((boundaryId) => !hasText(boundaryId))) {
     issues.push(createIssue("parent-boundary-ids-empty", "Babylon scene parentBoundaryIds must not be empty.", inventory.id));
   }
-  if (!hasReferenceItems(inventory.primaryResponsibilities)) {
-    issues.push(createIssue("primary-responsibilities-empty", "Babylon scene primaryResponsibilities must not be empty.", inventory.id));
+  if (!hasResponsibilityItems(inventory.primaryResponsibilities)) {
+    issues.push(createIssue("primary-responsibilities-empty", "Babylon scene primaryResponsibilities must include id, label, status, riskLevel, and ownerModule.", inventory.id));
   }
   if (!hasReferenceItems(inventory.knownUpstreamInputs)) {
     issues.push(createIssue("upstream-inputs-empty", "Babylon scene knownUpstreamInputs must not be empty.", inventory.id));

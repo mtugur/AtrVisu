@@ -10,9 +10,20 @@ export type BabylonSceneBoundaryCheckStatus = "pass" | "fail";
 
 export type BabylonSceneBoundaryIssueSeverity = "error" | "warning";
 
+export type BabylonSceneBoundaryRiskLevel = "low" | "medium" | "high";
+
+export type BabylonSceneBoundaryResponsibilityStatus = "extracted" | "remaining";
+
 export type BabylonSceneBoundaryReference = {
   id: string;
   label: string;
+};
+
+export type BabylonSceneBoundaryResponsibility = BabylonSceneBoundaryReference & {
+  status: BabylonSceneBoundaryResponsibilityStatus;
+  riskLevel: BabylonSceneBoundaryRiskLevel;
+  ownerModule: string;
+  nextRefactorCandidate: boolean;
 };
 
 export type BabylonSceneBoundaryInventory = {
@@ -24,7 +35,7 @@ export type BabylonSceneBoundaryInventory = {
   parentBoundaryIds: readonly string[];
   relatedSurfaceIds: readonly string[];
   relatedCommandIds: readonly string[];
-  primaryResponsibilities: readonly BabylonSceneBoundaryReference[];
+  primaryResponsibilities: readonly BabylonSceneBoundaryResponsibility[];
   knownUpstreamInputs: readonly BabylonSceneBoundaryReference[];
   knownDownstreamEffects: readonly BabylonSceneBoundaryReference[];
   boundaryRisks: readonly BabylonSceneBoundaryReference[];
@@ -58,6 +69,10 @@ export type PlatformBabylonSceneBoundaryReport = {
   sourceFileCount: number;
   parentBoundaryCount: number;
   responsibilityCount: number;
+  extractedResponsibilityCount: number;
+  remainingResponsibilityCount: number;
+  highRiskResponsibilityCount: number;
+  nextRefactorCandidates: readonly BabylonSceneBoundaryResponsibility[];
   upstreamInputCount: number;
   downstreamEffectCount: number;
   boundaryRiskCount: number;

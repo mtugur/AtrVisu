@@ -25,6 +25,9 @@ describe("platform babylon scene boundary report", () => {
     expect(report.sourceFileCount).toBe(currentBabylonSceneBoundary.sourceFiles.length);
     expect(report.parentBoundaryCount).toBe(currentBabylonSceneBoundary.parentBoundaryIds.length);
     expect(report.responsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length);
+    expect(report.extractedResponsibilityCount).toBe(2);
+    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 2);
+    expect(report.highRiskResponsibilityCount).toBe(4);
     expect(report.upstreamInputCount).toBe(currentBabylonSceneBoundary.knownUpstreamInputs.length);
     expect(report.downstreamEffectCount).toBe(currentBabylonSceneBoundary.knownDownstreamEffects.length);
     expect(report.boundaryRiskCount).toBe(currentBabylonSceneBoundary.boundaryRisks.length);
@@ -36,5 +39,15 @@ describe("platform babylon scene boundary report", () => {
 
     expect(report.inventory.id).toBe("babylon-scene");
     expect(report.audit.inventory.id).toBe("babylon-scene");
+  });
+
+  it("returns deterministic next refactor risk ordering", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+
+    expect(report.nextRefactorCandidates.map((item) => item.id)).toEqual([
+      "collision-clearance-visualization",
+      "visual-diagnostics-overlays"
+    ]);
+    expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
   });
 });

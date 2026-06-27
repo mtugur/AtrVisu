@@ -36,6 +36,22 @@ describe("babylon scene boundary audit failures", () => {
     expect(hasIssue(withInventory({ primaryResponsibilities: [] }), "primary-responsibilities-empty")).toBe(true);
   });
 
+  it("fails when primary responsibilities lack post-refactor metadata", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: [
+            {
+              id: "pointer-interaction-handling",
+              label: "Pointer interaction handling"
+            }
+          ] as unknown as BabylonSceneBoundaryInventory["primaryResponsibilities"]
+        }),
+        "primary-responsibilities-empty"
+      )
+    ).toBe(true);
+  });
+
   it("fails when upstream inputs are empty", () => {
     expect(hasIssue(withInventory({ knownUpstreamInputs: [] }), "upstream-inputs-empty")).toBe(true);
   });

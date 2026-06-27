@@ -53,7 +53,7 @@ export const babylonSceneExtractionPlan = {
   boundaryId: "babylon-scene",
   sourceBoundaryId: currentBabylonSceneBoundary.id,
   readinessIntegrated: true,
-  firstSafeRefactorCandidate: "visual-context-extraction",
+  firstSafeRefactorCandidate: "diagnostics-overlays-extraction",
   phases: [
     {
       id: "baseline-protection",
@@ -101,8 +101,8 @@ export const babylonSceneExtractionPlan = {
       ],
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
-        "src/scene/babylon/createBabylonSceneLifecycle.ts (conceptual)",
-        "src/scene/babylon/disposeBabylonSceneLifecycle.ts (conceptual)"
+        "src/components/babylonScene/sceneLifecycle.ts",
+        "src/scene/babylon/disposeBabylonSceneLifecycle.ts (future conceptual split)"
       ]
     },
     {
@@ -154,7 +154,7 @@ export const babylonSceneExtractionPlan = {
       ],
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
-        "src/scene/visualContext/createSceneVisualContext.ts (conceptual)"
+        "src/components/babylonScene/visualContext.ts"
       ]
     },
     {
