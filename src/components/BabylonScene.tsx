@@ -5,7 +5,6 @@ import {
   Camera,
   Color3,
   DynamicTexture,
-  Engine,
   LinesMesh,
   Matrix,
   Mesh,
@@ -49,6 +48,7 @@ import {
   getAnnotationVisualStyle,
   getRayPlanePlanPointMm
 } from "../utils/annotations";
+import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import { createSceneVisualContext } from "./babylonScene/visualContext";
 
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
@@ -1336,14 +1336,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       return;
     }
 
-    const engine = new Engine(canvas, true, {
-      adaptToDeviceRatio: true,
-      antialias: true,
-      preserveDrawingBuffer: true,
-      stencil: true
-    });
-
-    const scene = new Scene(engine);
+    const lifecycle = createBabylonSceneLifecycle(canvas, window);
+    const { engine, scene } = lifecycle;
     sceneRef.current = scene;
 
     const camera = new ArcRotateCamera(
@@ -1670,7 +1664,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
     });
 
-    engine.runRenderLoop(() => {
+    lifecycle.startRenderLoop(() => {
       const deltaSeconds = engine.getDeltaTime() / 1000;
       machineNodesRef.current.forEach((node, instanceId) => {
         const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
@@ -1717,57 +1711,51 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
     });
 
-    const handleResize = () => {
-      engine.resize();
-    };
-    window.addEventListener("resize", handleResize);
-
     return () => {
-      window.removeEventListener("resize", handleResize);
-      canvas.removeEventListener("contextmenu", handleContextMenu);
-      canvas.removeEventListener("wheel", handleWheel);
-      if (pointerObserver) {
-        scene.onPointerObservable.remove(pointerObserver);
-      }
-      machineNodesRef.current.forEach((node) => {
-        node.labelTexture.dispose();
-        node.material.dispose();
-        node.selectionFrame.dispose();
-        node.flowArrow?.dispose();
-        node.metadataFrame.dispose();
-        node.collisionFrame.dispose();
-        node.clearanceFrame?.dispose();
-        node.connectionPointMarkers.forEach((markerSet) => {
-          markerSet.texture.dispose();
-          markerSet.material.dispose();
-          markerSet.labelMaterial.dispose();
-          markerSet.label.dispose();
-          markerSet.marker.dispose();
+      lifecycle.dispose(() => {
+        canvas.removeEventListener("contextmenu", handleContextMenu);
+        canvas.removeEventListener("wheel", handleWheel);
+        if (pointerObserver) {
+          scene.onPointerObservable.remove(pointerObserver);
+        }
+        machineNodesRef.current.forEach((node) => {
+          node.labelTexture.dispose();
+          node.material.dispose();
+          node.selectionFrame.dispose();
+          node.flowArrow?.dispose();
+          node.metadataFrame.dispose();
+          node.collisionFrame.dispose();
+          node.clearanceFrame?.dispose();
+          node.connectionPointMarkers.forEach((markerSet) => {
+            markerSet.texture.dispose();
+            markerSet.material.dispose();
+            markerSet.labelMaterial.dispose();
+            markerSet.label.dispose();
+            markerSet.marker.dispose();
+          });
+          node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
+          node.visualRoot?.dispose(false, true);
+          node.loadedVisualMeshes.forEach((mesh) => {
+            if (!mesh.isDisposed()) {
+              mesh.dispose(false, true);
+            }
+          });
+          node.products.forEach((product) => {
+            product.material?.dispose();
+            product.dispose();
+          });
+          node.label.dispose();
+          node.box.dispose();
         });
-        node.placeholderMeshes.forEach((mesh) => mesh.dispose(false, true));
-        node.visualRoot?.dispose(false, true);
-        node.loadedVisualMeshes.forEach((mesh) => {
-          if (!mesh.isDisposed()) {
-            mesh.dispose(false, true);
-          }
-        });
-        node.products.forEach((product) => {
-          product.material?.dispose();
-          product.dispose();
-        });
-        node.label.dispose();
-        node.box.dispose();
+        machineNodesRef.current.clear();
+        civilReferenceNodesRef.current.forEach(disposeCivilReferenceNode);
+        civilReferenceNodesRef.current.clear();
+        annotationNodesRef.current.forEach(disposeAnnotationNode);
+        annotationNodesRef.current.clear();
+        cameraRef.current = null;
+        floorRef.current = null;
+        sceneRef.current = null;
       });
-      machineNodesRef.current.clear();
-      civilReferenceNodesRef.current.forEach(disposeCivilReferenceNode);
-      civilReferenceNodesRef.current.clear();
-      annotationNodesRef.current.forEach(disposeAnnotationNode);
-      annotationNodesRef.current.clear();
-      cameraRef.current = null;
-      floorRef.current = null;
-      sceneRef.current = null;
-      scene.dispose();
-      engine.dispose();
     };
   }, [
     onBeginObjectDrag,
