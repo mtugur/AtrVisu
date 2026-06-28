@@ -32,6 +32,7 @@ export const createPlatformBabylonSceneBoundaryReport = (): PlatformBabylonScene
       (responsibility) => responsibility.riskLevel === "high"
     ).length,
     nextRefactorCandidates,
+    cameraViewportContract: currentBabylonSceneBoundary.cameraViewportContract,
     upstreamInputCount: currentBabylonSceneBoundary.knownUpstreamInputs.length,
     downstreamEffectCount: currentBabylonSceneBoundary.knownDownstreamEffects.length,
     boundaryRiskCount: currentBabylonSceneBoundary.boundaryRisks.length,

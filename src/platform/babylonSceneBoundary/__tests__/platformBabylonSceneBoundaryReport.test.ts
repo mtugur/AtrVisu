@@ -50,4 +50,18 @@ describe("platform babylon scene boundary report", () => {
     ]);
     expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
   });
+
+  it("exposes the camera and viewport contract in the report", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+
+    expect(report.cameraViewportContract.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(report.cameraViewportContract.riskLevel).toBe("medium");
+    expect(report.cameraViewportContract.initialCamera.name).toBe("orbit-camera");
+    expect(report.cameraViewportContract.controls.lowerRadiusLimit).toBe(8);
+    expect(report.cameraViewportContract.controls.upperRadiusLimit).toBe(78);
+    expect(report.cameraViewportContract.imperativeHandle.supportedModes).toEqual([
+      "perspective",
+      "orthographic"
+    ]);
+  });
 });
