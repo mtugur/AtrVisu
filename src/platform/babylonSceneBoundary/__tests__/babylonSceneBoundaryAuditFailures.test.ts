@@ -26,6 +26,8 @@ const withResponsibilityUpdate = (
       : responsibility
   );
 
+const interactionResponsibilityId = "pointer-interaction-handling";
+
 describe("babylon scene boundary audit failures", () => {
   it("fails when id is empty", () => {
     expect(hasIssue(withInventory({ id: "" }), "boundary-id-empty")).toBe(true);
@@ -154,6 +156,69 @@ describe("babylon scene boundary audit failures", () => {
           })
         }),
         "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when an interaction responsibility is missing", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withoutResponsibility(interactionResponsibilityId)
+        }),
+        "interaction-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when an interaction responsibility is marked extracted", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(interactionResponsibilityId, {
+            status: "extracted"
+          })
+        }),
+        "interaction-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when an interaction responsibility has wrong owner", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(interactionResponsibilityId, {
+            ownerModule: "src/components/babylonScene/objectRendering.ts"
+          })
+        }),
+        "interaction-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when an interaction responsibility has wrong risk level", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(interactionResponsibilityId, {
+            riskLevel: "medium"
+          })
+        }),
+        "interaction-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when an interaction responsibility becomes a next refactor candidate", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(interactionResponsibilityId, {
+            nextRefactorCandidate: true
+          })
+        }),
+        "interaction-responsibility-invalid"
       )
     ).toBe(true);
   });

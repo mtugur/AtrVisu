@@ -210,9 +210,14 @@ export const babylonSceneExtractionPlan = {
       ],
       protectedBehaviors: [
         ...baselineProtectedBehaviors,
+        "pointer-interaction-handling",
         "single-and-multi-selection-order",
+        "selection-visualization",
+        "object-picking-metadata",
         "object-civil-annotation-drag-math",
+        "drag-move-placement-interaction",
         "placement-and-rotation-controls",
+        "rotation-transform-interaction",
         "camera-controls-not-triggered-during-drag"
       ],
       forbiddenChanges: sharedForbiddenChanges,
