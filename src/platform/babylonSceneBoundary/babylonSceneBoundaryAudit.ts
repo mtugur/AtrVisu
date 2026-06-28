@@ -20,6 +20,11 @@ const hasResponsibilityItems = (items: readonly BabylonSceneBoundaryResponsibili
     hasText(item.ownerModule)
   );
 
+const findResponsibilityById = (
+  responsibilities: readonly BabylonSceneBoundaryResponsibility[],
+  responsibilityId: string
+) => responsibilities.find((responsibility) => responsibility.id === responsibilityId);
+
 const createIssue = (
   code: string,
   message: string,
@@ -61,6 +66,17 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   }
   if (!hasResponsibilityItems(inventory.primaryResponsibilities)) {
     issues.push(createIssue("primary-responsibilities-empty", "Babylon scene primaryResponsibilities must include id, label, status, riskLevel, and ownerModule.", inventory.id));
+  }
+  const objectRenderingAdapterResponsibility = findResponsibilityById(
+    inventory.primaryResponsibilities,
+    "machine-object-rendering-adapter"
+  );
+  if (
+    !objectRenderingAdapterResponsibility ||
+    objectRenderingAdapterResponsibility.status !== "remaining" ||
+    objectRenderingAdapterResponsibility.ownerModule !== "src/components/BabylonScene.tsx"
+  ) {
+    issues.push(createIssue("object-rendering-adapter-responsibility-invalid", "Babylon scene primaryResponsibilities must keep machine-object-rendering-adapter as remaining BabylonScene work.", inventory.id, ["machine-object-rendering-adapter"]));
   }
   if (
     inventory.cameraViewportContract.responsibilityId !== "camera-creation-control" ||
