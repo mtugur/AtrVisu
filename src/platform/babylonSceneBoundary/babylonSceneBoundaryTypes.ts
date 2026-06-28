@@ -26,6 +26,37 @@ export type BabylonSceneBoundaryResponsibility = BabylonSceneBoundaryReference &
   nextRefactorCandidate: boolean;
 };
 
+export type BabylonSceneCameraViewportContract = {
+  responsibilityId: "camera-creation-control";
+  status: "remaining";
+  ownerModule: "src/components/BabylonScene.tsx";
+  riskLevel: BabylonSceneBoundaryRiskLevel;
+  refactorRiskRank: number;
+  protectedBehaviors: readonly string[];
+  initialCamera: {
+    name: "orbit-camera";
+    alphaExpression: "Math.PI / 4";
+    betaExpression: "Math.PI / 3";
+    radius: number;
+    targetExpression: "Vector3.Zero()";
+  };
+  controls: {
+    lowerRadiusLimit: number;
+    upperRadiusLimit: number;
+    wheelPrecision: number;
+    panningSensibility: number;
+    panningInertia: number;
+    inertia: number;
+    pointerButtons: readonly number[];
+    panningMouseButton: number;
+  };
+  imperativeHandle: {
+    exposesGetCameraState: true;
+    exposesApplyCameraState: true;
+    supportedModes: readonly ["perspective", "orthographic"];
+  };
+};
+
 export type BabylonSceneBoundaryInventory = {
   id: BabylonSceneBoundaryId;
   displayName: string;
@@ -36,6 +67,7 @@ export type BabylonSceneBoundaryInventory = {
   relatedSurfaceIds: readonly string[];
   relatedCommandIds: readonly string[];
   primaryResponsibilities: readonly BabylonSceneBoundaryResponsibility[];
+  cameraViewportContract: BabylonSceneCameraViewportContract;
   knownUpstreamInputs: readonly BabylonSceneBoundaryReference[];
   knownDownstreamEffects: readonly BabylonSceneBoundaryReference[];
   boundaryRisks: readonly BabylonSceneBoundaryReference[];
@@ -73,6 +105,7 @@ export type PlatformBabylonSceneBoundaryReport = {
   remainingResponsibilityCount: number;
   highRiskResponsibilityCount: number;
   nextRefactorCandidates: readonly BabylonSceneBoundaryResponsibility[];
+  cameraViewportContract: BabylonSceneCameraViewportContract;
   upstreamInputCount: number;
   downstreamEffectCount: number;
   boundaryRiskCount: number;

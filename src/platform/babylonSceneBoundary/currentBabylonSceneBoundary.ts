@@ -148,6 +148,53 @@ export const currentBabylonSceneBoundary = {
       nextRefactorCandidate: true
     }
   ],
+  cameraViewportContract: {
+    responsibilityId: "camera-creation-control",
+    status: "remaining",
+    ownerModule: "src/components/BabylonScene.tsx",
+    riskLevel: "medium",
+    refactorRiskRank: 2,
+    protectedBehaviors: [
+      "orbit-camera-name",
+      "initial-alpha-math-pi-over-4",
+      "initial-beta-math-pi-over-3",
+      "initial-radius-34",
+      "initial-target-vector3-zero",
+      "manual-camera-attach-control",
+      "radius-limits-8-to-78",
+      "wheel-precision-35",
+      "panning-sensibility-75",
+      "panning-inertia-0.18",
+      "camera-inertia-0.65",
+      "left-button-orbit",
+      "middle-button-pan",
+      "imperative-get-camera-state",
+      "imperative-apply-camera-state",
+      "perspective-orthographic-mode-restore"
+    ],
+    initialCamera: {
+      name: "orbit-camera",
+      alphaExpression: "Math.PI / 4",
+      betaExpression: "Math.PI / 3",
+      radius: 34,
+      targetExpression: "Vector3.Zero()"
+    },
+    controls: {
+      lowerRadiusLimit: 8,
+      upperRadiusLimit: 78,
+      wheelPrecision: 35,
+      panningSensibility: 75,
+      panningInertia: 0.18,
+      inertia: 0.65,
+      pointerButtons: [0],
+      panningMouseButton: 1
+    },
+    imperativeHandle: {
+      exposesGetCameraState: true,
+      exposesApplyCameraState: true,
+      supportedModes: ["perspective", "orthographic"]
+    }
+  },
   knownUpstreamInputs: [
     {
       id: "layout-machine-state",

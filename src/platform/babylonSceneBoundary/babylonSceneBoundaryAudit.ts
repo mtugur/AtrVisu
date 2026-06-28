@@ -62,6 +62,14 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   if (!hasResponsibilityItems(inventory.primaryResponsibilities)) {
     issues.push(createIssue("primary-responsibilities-empty", "Babylon scene primaryResponsibilities must include id, label, status, riskLevel, and ownerModule.", inventory.id));
   }
+  if (
+    inventory.cameraViewportContract.responsibilityId !== "camera-creation-control" ||
+    inventory.cameraViewportContract.status !== "remaining" ||
+    inventory.cameraViewportContract.ownerModule !== "src/components/BabylonScene.tsx" ||
+    inventory.cameraViewportContract.protectedBehaviors.length === 0
+  ) {
+    issues.push(createIssue("camera-viewport-contract-invalid", "Babylon scene cameraViewportContract must protect the remaining BabylonScene camera behavior.", inventory.id));
+  }
   if (!hasReferenceItems(inventory.knownUpstreamInputs)) {
     issues.push(createIssue("upstream-inputs-empty", "Babylon scene knownUpstreamInputs must not be empty.", inventory.id));
   }

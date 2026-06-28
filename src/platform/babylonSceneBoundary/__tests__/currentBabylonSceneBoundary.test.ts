@@ -56,6 +56,62 @@ describe("current babylon scene boundary", () => {
     expect(highRiskIds).toContain("rotation-transform-interaction");
   });
 
+  it("tracks camera and viewport behavior as a remaining BabylonScene responsibility", () => {
+    const cameraResponsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
+      (item) => item.id === "camera-creation-control"
+    );
+    const contract = currentBabylonSceneBoundary.cameraViewportContract;
+
+    expect(cameraResponsibility?.status).toBe("remaining");
+    expect(cameraResponsibility?.riskLevel).toBe("medium");
+    expect(cameraResponsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(contract.responsibilityId).toBe("camera-creation-control");
+    expect(contract.status).toBe("remaining");
+    expect(contract.ownerModule).toBe("src/components/BabylonScene.tsx");
+  });
+
+  it("protects existing camera initialization and control values", () => {
+    const contract = currentBabylonSceneBoundary.cameraViewportContract;
+
+    expect(contract.initialCamera).toEqual({
+      name: "orbit-camera",
+      alphaExpression: "Math.PI / 4",
+      betaExpression: "Math.PI / 3",
+      radius: 34,
+      targetExpression: "Vector3.Zero()"
+    });
+    expect(contract.controls).toEqual({
+      lowerRadiusLimit: 8,
+      upperRadiusLimit: 78,
+      wheelPrecision: 35,
+      panningSensibility: 75,
+      panningInertia: 0.18,
+      inertia: 0.65,
+      pointerButtons: [0],
+      panningMouseButton: 1
+    });
+  });
+
+  it("keeps camera and viewport refactor risk below interaction risks", () => {
+    const cameraContract = currentBabylonSceneBoundary.cameraViewportContract;
+    const highRiskInteractionRanks = currentBabylonSceneBoundary.primaryResponsibilities
+      .filter((item) => item.riskLevel === "high")
+      .map(() => 3);
+
+    expect(cameraContract.riskLevel).toBe("medium");
+    expect(highRiskInteractionRanks.every((rank) => cameraContract.refactorRiskRank < rank)).toBe(true);
+  });
+
+  it("protects camera state read and restore handles", () => {
+    const contract = currentBabylonSceneBoundary.cameraViewportContract;
+
+    expect(contract.imperativeHandle.exposesGetCameraState).toBe(true);
+    expect(contract.imperativeHandle.exposesApplyCameraState).toBe(true);
+    expect(contract.imperativeHandle.supportedModes).toEqual(["perspective", "orthographic"]);
+    expect(contract.protectedBehaviors).toContain("imperative-get-camera-state");
+    expect(contract.protectedBehaviors).toContain("imperative-apply-camera-state");
+  });
+
   it("documents controlled next refactor candidates", () => {
     const candidateIds = currentBabylonSceneBoundary.primaryResponsibilities
       .filter((item) => item.nextRefactorCandidate)
