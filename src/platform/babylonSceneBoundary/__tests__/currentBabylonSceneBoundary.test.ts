@@ -102,6 +102,7 @@ describe("current babylon scene boundary", () => {
 
     expect(adapterResponsibility?.status).toBe("remaining");
     expect(adapterResponsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(adapterResponsibility?.riskLevel).toBe("medium");
     expect(adapterResponsibility?.nextRefactorCandidate).toBe(true);
     expect(contract.protectedBehaviors).toContain("placeholder-visual-descriptor-calculation");
     expect(contract.protectedBehaviors).toContain("placeholder-visual-rendering");

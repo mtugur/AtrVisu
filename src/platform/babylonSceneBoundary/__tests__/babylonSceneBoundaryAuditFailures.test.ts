@@ -132,6 +132,32 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
+  it("fails when machine object rendering adapter responsibility is not a next refactor candidate", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate("machine-object-rendering-adapter", {
+            nextRefactorCandidate: false
+          })
+        }),
+        "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when machine object rendering adapter responsibility has wrong risk level", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate("machine-object-rendering-adapter", {
+            riskLevel: "low"
+          })
+        }),
+        "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
   it("fails when upstream inputs are empty", () => {
     expect(hasIssue(withInventory({ knownUpstreamInputs: [] }), "upstream-inputs-empty")).toBe(true);
   });

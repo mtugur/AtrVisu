@@ -74,9 +74,11 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   if (
     !objectRenderingAdapterResponsibility ||
     objectRenderingAdapterResponsibility.status !== "remaining" ||
-    objectRenderingAdapterResponsibility.ownerModule !== "src/components/BabylonScene.tsx"
+    objectRenderingAdapterResponsibility.ownerModule !== "src/components/BabylonScene.tsx" ||
+    objectRenderingAdapterResponsibility.riskLevel !== "medium" ||
+    objectRenderingAdapterResponsibility.nextRefactorCandidate !== true
   ) {
-    issues.push(createIssue("object-rendering-adapter-responsibility-invalid", "Babylon scene primaryResponsibilities must keep machine-object-rendering-adapter as remaining BabylonScene work.", inventory.id, ["machine-object-rendering-adapter"]));
+    issues.push(createIssue("object-rendering-adapter-responsibility-invalid", "Babylon scene primaryResponsibilities must keep machine-object-rendering-adapter as remaining medium-risk BabylonScene work and a controlled next refactor candidate.", inventory.id, ["machine-object-rendering-adapter"]));
   }
   if (
     inventory.cameraViewportContract.responsibilityId !== "camera-creation-control" ||
