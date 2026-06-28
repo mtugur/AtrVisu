@@ -85,9 +85,12 @@ describe("babylon scene extraction plan", () => {
     }
   });
 
-  it("documents extracted visual context and lifecycle modules", () => {
+  it("documents extracted visual context, lifecycle, and camera viewport modules", () => {
     expect(getBabylonSceneExtractionPhaseById("scene-lifecycle-extraction")?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/sceneLifecycle.ts"
+    );
+    expect(getBabylonSceneExtractionPhaseById("viewport-camera-extraction")?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/cameraViewport.ts"
     );
     expect(getBabylonSceneExtractionPhaseById("visual-context-extraction")?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/visualContext.ts"

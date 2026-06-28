@@ -25,8 +25,8 @@ describe("platform babylon scene boundary report", () => {
     expect(report.sourceFileCount).toBe(currentBabylonSceneBoundary.sourceFiles.length);
     expect(report.parentBoundaryCount).toBe(currentBabylonSceneBoundary.parentBoundaryIds.length);
     expect(report.responsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length);
-    expect(report.extractedResponsibilityCount).toBe(2);
-    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 2);
+    expect(report.extractedResponsibilityCount).toBe(3);
+    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 3);
     expect(report.highRiskResponsibilityCount).toBe(4);
     expect(report.upstreamInputCount).toBe(currentBabylonSceneBoundary.knownUpstreamInputs.length);
     expect(report.downstreamEffectCount).toBe(currentBabylonSceneBoundary.knownDownstreamEffects.length);
@@ -54,8 +54,11 @@ describe("platform babylon scene boundary report", () => {
   it("exposes the camera and viewport contract in the report", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
 
-    expect(report.cameraViewportContract.ownerModule).toBe("src/components/BabylonScene.tsx");
-    expect(report.cameraViewportContract.riskLevel).toBe("medium");
+    expect(report.cameraViewportContract.status).toBe("extracted");
+    expect(report.cameraViewportContract.ownerModule).toBe("src/components/babylonScene/cameraViewport.ts");
+    expect(report.cameraViewportContract.extractedModule).toBe("src/components/babylonScene/cameraViewport.ts");
+    expect(report.cameraViewportContract.remainingAdapterModule).toBe("src/components/BabylonScene.tsx");
+    expect(report.cameraViewportContract.riskLevel).toBe("low");
     expect(report.cameraViewportContract.initialCamera.name).toBe("orbit-camera");
     expect(report.cameraViewportContract.controls.lowerRadiusLimit).toBe(8);
     expect(report.cameraViewportContract.controls.upperRadiusLimit).toBe(78);
