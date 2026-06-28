@@ -11,6 +11,21 @@ const withInventory = (updates: Partial<BabylonSceneBoundaryInventory>) => ({
 const hasIssue = (inventory: BabylonSceneBoundaryInventory, code: string) =>
   createBabylonSceneBoundaryAuditReportFromInventory(inventory).issues.some((issue) => issue.code === code);
 
+const withoutResponsibility = (responsibilityId: string) =>
+  currentBabylonSceneBoundary.primaryResponsibilities.filter(
+    (responsibility) => responsibility.id !== responsibilityId
+  );
+
+const withResponsibilityUpdate = (
+  responsibilityId: string,
+  updates: Partial<BabylonSceneBoundaryInventory["primaryResponsibilities"][number]>
+) =>
+  currentBabylonSceneBoundary.primaryResponsibilities.map((responsibility) =>
+    responsibility.id === responsibilityId
+      ? { ...responsibility, ...updates }
+      : responsibility
+  );
+
 describe("babylon scene boundary audit failures", () => {
   it("fails when id is empty", () => {
     expect(hasIssue(withInventory({ id: "" }), "boundary-id-empty")).toBe(true);
@@ -76,6 +91,69 @@ describe("babylon scene boundary audit failures", () => {
           }
         }),
         "object-rendering-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when machine object rendering adapter responsibility is missing", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withoutResponsibility("machine-object-rendering-adapter")
+        }),
+        "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when machine object rendering adapter responsibility has wrong status", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate("machine-object-rendering-adapter", {
+            status: "extracted"
+          })
+        }),
+        "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when machine object rendering adapter responsibility has wrong owner", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate("machine-object-rendering-adapter", {
+            ownerModule: "src/components/babylonScene/objectRendering.ts"
+          })
+        }),
+        "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when machine object rendering adapter responsibility is not a next refactor candidate", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate("machine-object-rendering-adapter", {
+            nextRefactorCandidate: false
+          })
+        }),
+        "object-rendering-adapter-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when machine object rendering adapter responsibility has wrong risk level", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate("machine-object-rendering-adapter", {
+            riskLevel: "low"
+          })
+        }),
+        "object-rendering-adapter-responsibility-invalid"
       )
     ).toBe(true);
   });
