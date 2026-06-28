@@ -120,6 +120,15 @@ describe("babylon scene extraction plan", () => {
       "src/scene/rendering/createBabylonMachineMeshAdapter.ts (conceptual)"
     );
     expect(interactionPhase?.riskLevel).toBe("high");
+    expect(interactionPhase?.protectedBehaviors).toEqual(
+      expect.arrayContaining([
+        "pointer-interaction-handling",
+        "selection-visualization",
+        "object-picking-metadata",
+        "drag-move-placement-interaction",
+        "rotation-transform-interaction"
+      ])
+    );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/scene/interactions/createScenePointerController.ts (conceptual)"
     );

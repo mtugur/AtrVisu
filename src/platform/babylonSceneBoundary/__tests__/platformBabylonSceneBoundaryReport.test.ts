@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { currentBabylonSceneBoundary } from "../currentBabylonSceneBoundary";
 import { createPlatformBabylonSceneBoundaryReport } from "../platformBabylonSceneBoundaryReport";
 
+const interactionResponsibilityIds = [
+  "selection-visualization",
+  "pointer-interaction-handling",
+  "object-picking-metadata",
+  "drag-move-placement-interaction",
+  "rotation-transform-interaction"
+] as const;
+
 describe("platform babylon scene boundary report", () => {
   it("returns a ready report for current inventory", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
@@ -50,6 +58,24 @@ describe("platform babylon scene boundary report", () => {
       "visual-diagnostics-overlays"
     ]);
     expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
+  });
+
+  it("keeps remaining high-risk interaction responsibilities visible in the report inventory", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+    const interactionResponsibilities = report.inventory.primaryResponsibilities.filter((item) =>
+      interactionResponsibilityIds.includes(item.id as (typeof interactionResponsibilityIds)[number])
+    );
+
+    expect(interactionResponsibilities.map((item) => item.id)).toEqual(interactionResponsibilityIds);
+    expect(
+      interactionResponsibilities.every(
+        (item) =>
+          item.status === "remaining" &&
+          item.ownerModule === "src/components/BabylonScene.tsx" &&
+          item.riskLevel === "high" &&
+          item.nextRefactorCandidate === false
+      )
+    ).toBe(true);
   });
 
   it("exposes the camera and viewport contract in the report", () => {

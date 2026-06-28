@@ -25,6 +25,14 @@ const findResponsibilityById = (
   responsibilityId: string
 ) => responsibilities.find((responsibility) => responsibility.id === responsibilityId);
 
+const expectedInteractionResponsibilities = [
+  "pointer-interaction-handling",
+  "selection-visualization",
+  "object-picking-metadata",
+  "drag-move-placement-interaction",
+  "rotation-transform-interaction"
+] as const;
+
 const createIssue = (
   code: string,
   message: string,
@@ -79,6 +87,19 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
     objectRenderingAdapterResponsibility.nextRefactorCandidate !== true
   ) {
     issues.push(createIssue("object-rendering-adapter-responsibility-invalid", "Babylon scene primaryResponsibilities must keep machine-object-rendering-adapter as remaining medium-risk BabylonScene work and a controlled next refactor candidate.", inventory.id, ["machine-object-rendering-adapter"]));
+  }
+  for (const responsibilityId of expectedInteractionResponsibilities) {
+    const responsibility = findResponsibilityById(inventory.primaryResponsibilities, responsibilityId);
+
+    if (
+      !responsibility ||
+      responsibility.status !== "remaining" ||
+      responsibility.ownerModule !== "src/components/BabylonScene.tsx" ||
+      responsibility.riskLevel !== "high" ||
+      responsibility.nextRefactorCandidate !== false
+    ) {
+      issues.push(createIssue("interaction-responsibility-invalid", "Babylon scene primaryResponsibilities must keep runtime interaction responsibilities as remaining high-risk BabylonScene work and not controlled next refactor candidates.", inventory.id, [responsibilityId]));
+    }
   }
   if (
     inventory.cameraViewportContract.responsibilityId !== "camera-creation-control" ||

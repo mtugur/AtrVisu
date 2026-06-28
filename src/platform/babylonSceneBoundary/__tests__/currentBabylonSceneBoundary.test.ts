@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { currentBabylonSceneBoundary } from "../currentBabylonSceneBoundary";
 
+const interactionResponsibilityIds = [
+  "selection-visualization",
+  "pointer-interaction-handling",
+  "object-picking-metadata",
+  "drag-move-placement-interaction",
+  "rotation-transform-interaction"
+] as const;
+
 describe("current babylon scene boundary", () => {
   it("documents the Babylon scene identity", () => {
     expect(currentBabylonSceneBoundary.id).toBe("babylon-scene");
@@ -55,11 +63,22 @@ describe("current babylon scene boundary", () => {
       .filter((item) => item.riskLevel === "high")
       .map((item) => item.id);
 
-    expect(highRiskIds).toContain("selection-visualization");
-    expect(highRiskIds).toContain("pointer-interaction-handling");
-    expect(highRiskIds).toContain("object-picking-metadata");
-    expect(highRiskIds).toContain("drag-move-placement-interaction");
-    expect(highRiskIds).toContain("rotation-transform-interaction");
+    for (const responsibilityId of interactionResponsibilityIds) {
+      expect(highRiskIds).toContain(responsibilityId);
+    }
+  });
+
+  it("keeps interaction responsibilities as remaining BabylonScene work before extraction", () => {
+    for (const responsibilityId of interactionResponsibilityIds) {
+      const responsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
+        (item) => item.id === responsibilityId
+      );
+
+      expect(responsibility?.status).toBe("remaining");
+      expect(responsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
+      expect(responsibility?.riskLevel).toBe("high");
+      expect(responsibility?.nextRefactorCandidate).toBe(false);
+    }
   });
 
   it("tracks object and machine placeholder rendering descriptors as an extracted helper responsibility", () => {
