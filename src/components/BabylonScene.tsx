@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import {
   AbstractMesh,
-  ArcRotateCamera,
   Camera,
   Color3,
   DynamicTexture,
@@ -48,8 +47,10 @@ import {
   getAnnotationVisualStyle,
   getRayPlanePlanPointMm
 } from "../utils/annotations";
+import { createBabylonCameraViewport } from "./babylonScene/cameraViewport";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import { createSceneVisualContext } from "./babylonScene/visualContext";
+import type { ArcRotateCamera } from "@babylonjs/core";
 
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
@@ -1340,31 +1341,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const { engine, scene } = lifecycle;
     sceneRef.current = scene;
 
-    const camera = new ArcRotateCamera(
-      "orbit-camera",
-      Math.PI / 4,
-      Math.PI / 3,
-      34,
-      Vector3.Zero(),
-      scene
-    );
+    const camera = createBabylonCameraViewport(scene, canvas);
     cameraRef.current = camera;
-    camera.attachControl(canvas, true);
-    camera.lowerRadiusLimit = 8;
-    camera.upperRadiusLimit = 78;
-    camera.wheelPrecision = 35;
-    camera.panningSensibility = 75;
-    camera.panningInertia = 0.18;
-    camera.inertia = 0.65;
-
-    const pointerInput = camera.inputs.attached.pointers as unknown as {
-      buttons?: number[];
-      panningMouseButton?: number;
-    };
-    if (pointerInput) {
-      pointerInput.buttons = [0];
-      pointerInput.panningMouseButton = 1;
-    }
 
     const { floor } = createSceneVisualContext(scene);
     floorRef.current = floor;
