@@ -33,6 +33,7 @@ export const createPlatformBabylonSceneBoundaryReport = (): PlatformBabylonScene
     ).length,
     nextRefactorCandidates,
     cameraViewportContract: currentBabylonSceneBoundary.cameraViewportContract,
+    objectRenderingContract: currentBabylonSceneBoundary.objectRenderingContract,
     upstreamInputCount: currentBabylonSceneBoundary.knownUpstreamInputs.length,
     downstreamEffectCount: currentBabylonSceneBoundary.knownDownstreamEffects.length,
     boundaryRiskCount: currentBabylonSceneBoundary.boundaryRisks.length,

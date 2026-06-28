@@ -66,6 +66,20 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
+  it("fails when object rendering contract is detached from remaining BabylonScene ownership", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          objectRenderingContract: {
+            ...currentBabylonSceneBoundary.objectRenderingContract,
+            protectedBehaviors: []
+          }
+        }),
+        "object-rendering-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
   it("fails when upstream inputs are empty", () => {
     expect(hasIssue(withInventory({ knownUpstreamInputs: [] }), "upstream-inputs-empty")).toBe(true);
   });

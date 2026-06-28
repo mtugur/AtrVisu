@@ -46,6 +46,7 @@ describe("platform babylon scene boundary report", () => {
 
     expect(report.nextRefactorCandidates.map((item) => item.id)).toEqual([
       "collision-clearance-visualization",
+      "machine-object-mesh-rendering",
       "visual-diagnostics-overlays"
     ]);
     expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
@@ -66,5 +67,28 @@ describe("platform babylon scene boundary report", () => {
       "perspective",
       "orthographic"
     ]);
+  });
+
+  it("exposes the object and machine rendering contract in the report", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+
+    expect(report.objectRenderingContract.status).toBe("remaining");
+    expect(report.objectRenderingContract.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(report.objectRenderingContract.riskLevel).toBe("medium");
+    expect(report.objectRenderingContract.separatedFromResponsibilityIds).toContain("camera-creation-control");
+    expect(report.objectRenderingContract.separatedFromResponsibilityIds).toContain("pointer-interaction-handling");
+    expect(report.objectRenderingContract.renderingFlows).toEqual({
+      machineMeshCreation: true,
+      placeholderVisualRendering: true,
+      glbExternalVisualModelLoading: true,
+      fallbackVisualBehavior: true,
+      objectLabelsVisualIdentity: true,
+      renderingLifecycleCleanup: true
+    });
+    expect(report.objectRenderingContract.extractedDependencyModules).toEqual({
+      sceneLifecycle: "src/components/babylonScene/sceneLifecycle.ts",
+      visualContext: "src/components/babylonScene/visualContext.ts",
+      cameraViewport: "src/components/babylonScene/cameraViewport.ts"
+    });
   });
 });

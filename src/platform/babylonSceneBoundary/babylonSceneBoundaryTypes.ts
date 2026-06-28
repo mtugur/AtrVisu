@@ -59,6 +59,30 @@ export type BabylonSceneCameraViewportContract = {
   };
 };
 
+export type BabylonSceneObjectRenderingContract = {
+  responsibilityId: "machine-object-mesh-rendering";
+  status: "remaining";
+  ownerModule: "src/components/BabylonScene.tsx";
+  riskLevel: "medium";
+  refactorRiskRank: number;
+  separatedFromResponsibilityIds: readonly string[];
+  protectedBehaviors: readonly string[];
+  renderingFlows: {
+    machineMeshCreation: true;
+    placeholderVisualRendering: true;
+    glbExternalVisualModelLoading: true;
+    fallbackVisualBehavior: true;
+    objectLabelsVisualIdentity: true;
+    renderingLifecycleCleanup: true;
+  };
+  extractedDependencyModules: {
+    sceneLifecycle: "src/components/babylonScene/sceneLifecycle.ts";
+    visualContext: "src/components/babylonScene/visualContext.ts";
+    cameraViewport: "src/components/babylonScene/cameraViewport.ts";
+  };
+  futureModuleCandidates: readonly string[];
+};
+
 export type BabylonSceneBoundaryInventory = {
   id: BabylonSceneBoundaryId;
   displayName: string;
@@ -70,6 +94,7 @@ export type BabylonSceneBoundaryInventory = {
   relatedCommandIds: readonly string[];
   primaryResponsibilities: readonly BabylonSceneBoundaryResponsibility[];
   cameraViewportContract: BabylonSceneCameraViewportContract;
+  objectRenderingContract: BabylonSceneObjectRenderingContract;
   knownUpstreamInputs: readonly BabylonSceneBoundaryReference[];
   knownDownstreamEffects: readonly BabylonSceneBoundaryReference[];
   boundaryRisks: readonly BabylonSceneBoundaryReference[];
@@ -108,6 +133,7 @@ export type PlatformBabylonSceneBoundaryReport = {
   highRiskResponsibilityCount: number;
   nextRefactorCandidates: readonly BabylonSceneBoundaryResponsibility[];
   cameraViewportContract: BabylonSceneCameraViewportContract;
+  objectRenderingContract: BabylonSceneObjectRenderingContract;
   upstreamInputCount: number;
   downstreamEffectCount: number;
   boundaryRiskCount: number;
