@@ -57,6 +57,53 @@ describe("current babylon scene boundary", () => {
     expect(highRiskIds).toContain("rotation-transform-interaction");
   });
 
+  it("tracks object and machine rendering as a remaining medium-risk BabylonScene responsibility", () => {
+    const renderingResponsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
+      (item) => item.id === "machine-object-mesh-rendering"
+    );
+    const contract = currentBabylonSceneBoundary.objectRenderingContract;
+
+    expect(renderingResponsibility?.status).toBe("remaining");
+    expect(renderingResponsibility?.riskLevel).toBe("medium");
+    expect(renderingResponsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(renderingResponsibility?.nextRefactorCandidate).toBe(true);
+    expect(contract.responsibilityId).toBe("machine-object-mesh-rendering");
+    expect(contract.status).toBe("remaining");
+    expect(contract.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(contract.riskLevel).toBe("medium");
+  });
+
+  it("keeps rendering responsibility separate from extracted and high-risk interaction responsibilities", () => {
+    const separatedIds = currentBabylonSceneBoundary.objectRenderingContract.separatedFromResponsibilityIds;
+
+    expect(separatedIds).toContain("babylon-engine-scene-lifecycle");
+    expect(separatedIds).toContain("lighting-ground-grid-context");
+    expect(separatedIds).toContain("camera-creation-control");
+    expect(separatedIds).toContain("pointer-interaction-handling");
+    expect(separatedIds).toContain("selection-visualization");
+    expect(separatedIds).toContain("drag-move-placement-interaction");
+    expect(separatedIds).toContain("rotation-transform-interaction");
+  });
+
+  it("protects machine rendering, GLB loading, fallback visuals, labels, and cleanup", () => {
+    const contract = currentBabylonSceneBoundary.objectRenderingContract;
+
+    expect(contract.protectedBehaviors).toContain("machine-object-mesh-creation");
+    expect(contract.protectedBehaviors).toContain("placeholder-visual-rendering");
+    expect(contract.protectedBehaviors).toContain("glb-external-visual-model-loading-flow");
+    expect(contract.protectedBehaviors).toContain("fallback-visual-behavior");
+    expect(contract.protectedBehaviors).toContain("object-labels-and-visual-identity");
+    expect(contract.protectedBehaviors).toContain("rendering-lifecycle-cleanup");
+    expect(contract.renderingFlows).toEqual({
+      machineMeshCreation: true,
+      placeholderVisualRendering: true,
+      glbExternalVisualModelLoading: true,
+      fallbackVisualBehavior: true,
+      objectLabelsVisualIdentity: true,
+      renderingLifecycleCleanup: true
+    });
+  });
+
   it("marks camera and viewport setup as an extracted helper responsibility", () => {
     const cameraResponsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
       (item) => item.id === "camera-creation-control"
@@ -121,6 +168,7 @@ describe("current babylon scene boundary", () => {
       .map((item) => item.id);
 
     expect(candidateIds).toEqual([
+      "machine-object-mesh-rendering",
       "collision-clearance-visualization",
       "visual-diagnostics-overlays"
     ]);
@@ -151,5 +199,6 @@ describe("current babylon scene boundary", () => {
     expect(noteIds).toContain("scene-lifecycle-extracted");
     expect(noteIds).toContain("camera-viewport-extracted");
     expect(noteIds).toContain("camera-state-adapter-remains");
+    expect(noteIds).toContain("object-rendering-contract-added");
   });
 });

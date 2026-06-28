@@ -53,7 +53,7 @@ export const babylonSceneExtractionPlan = {
   boundaryId: "babylon-scene",
   sourceBoundaryId: currentBabylonSceneBoundary.id,
   readinessIntegrated: true,
-  firstSafeRefactorCandidate: "diagnostics-overlays-extraction",
+  firstSafeRefactorCandidate: "object-rendering-extraction",
   phases: [
     {
       id: "baseline-protection",
@@ -171,6 +171,10 @@ export const babylonSceneExtractionPlan = {
         ...baselineProtectedBehaviors,
         "machine-object-dimensions-remain-mm-authoritative",
         "library-visual-model-fallback-diagnostics",
+        "glb-external-visual-model-loading-flow",
+        "placeholder-and-fallback-visual-behavior",
+        "object-labels-and-visual-identity",
+        "rendering-lifecycle-cleanup",
         "civil-reference-rendering"
       ],
       forbiddenChanges: sharedForbiddenChanges,
@@ -183,6 +187,9 @@ export const babylonSceneExtractionPlan = {
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
         "src/scene/rendering/renderMachineObject.ts (conceptual)",
+        "src/scene/rendering/loadMachineVisualModel.ts (conceptual)",
+        "src/scene/rendering/createFallbackMachineVisual.ts (conceptual)",
+        "src/scene/rendering/createObjectLabel.ts (conceptual)",
         "src/scene/rendering/renderCivilReference.ts (conceptual)",
         "src/scene/rendering/renderAnnotationObject.ts (conceptual)"
       ]

@@ -78,11 +78,11 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "machine-object-mesh-rendering",
-      label: "Machine and object mesh rendering remains in BabylonScene",
+      label: "Machine and object mesh rendering remains in BabylonScene as a medium-risk refactor candidate",
       status: "remaining",
       riskLevel: "medium",
       ownerModule: "src/components/BabylonScene.tsx",
-      nextRefactorCandidate: false
+      nextRefactorCandidate: true
     },
     {
       id: "civil-building-reference-rendering",
@@ -198,6 +198,50 @@ export const currentBabylonSceneBoundary = {
       supportedModes: ["perspective", "orthographic"]
     }
   },
+  objectRenderingContract: {
+    responsibilityId: "machine-object-mesh-rendering",
+    status: "remaining",
+    ownerModule: "src/components/BabylonScene.tsx",
+    riskLevel: "medium",
+    refactorRiskRank: 2,
+    separatedFromResponsibilityIds: [
+      "babylon-engine-scene-lifecycle",
+      "lighting-ground-grid-context",
+      "camera-creation-control",
+      "pointer-interaction-handling",
+      "selection-visualization",
+      "drag-move-placement-interaction",
+      "rotation-transform-interaction"
+    ],
+    protectedBehaviors: [
+      "machine-object-mesh-creation",
+      "placeholder-visual-rendering",
+      "glb-external-visual-model-loading-flow",
+      "fallback-visual-behavior",
+      "object-labels-and-visual-identity",
+      "visual-model-diagnostics-callbacks",
+      "rendering-lifecycle-cleanup"
+    ],
+    renderingFlows: {
+      machineMeshCreation: true,
+      placeholderVisualRendering: true,
+      glbExternalVisualModelLoading: true,
+      fallbackVisualBehavior: true,
+      objectLabelsVisualIdentity: true,
+      renderingLifecycleCleanup: true
+    },
+    extractedDependencyModules: {
+      sceneLifecycle: "src/components/babylonScene/sceneLifecycle.ts",
+      visualContext: "src/components/babylonScene/visualContext.ts",
+      cameraViewport: "src/components/babylonScene/cameraViewport.ts"
+    },
+    futureModuleCandidates: [
+      "src/scene/rendering/renderMachineObject.ts (conceptual)",
+      "src/scene/rendering/loadMachineVisualModel.ts (conceptual)",
+      "src/scene/rendering/createFallbackMachineVisual.ts (conceptual)",
+      "src/scene/rendering/createObjectLabel.ts (conceptual)"
+    ]
+  },
   knownUpstreamInputs: [
     {
       id: "layout-machine-state",
@@ -273,7 +317,11 @@ export const currentBabylonSceneBoundary = {
   boundaryRisks: [
     {
       id: "multi-responsibility-component",
-      label: "BabylonScene still carries rendering, interaction, selection, drag, diagnostics, and camera state adapter responsibilities"
+      label: "BabylonScene still carries machine/object rendering, interaction, selection, drag, diagnostics, and camera state adapter responsibilities"
+    },
+    {
+      id: "rendering-lifecycle-cleanup-risk",
+      label: "Machine/object rendering owns GLB loading, placeholder fallback, labels, diagnostics callbacks, and cleanup paths"
     },
     {
       id: "render-interaction-coupling",
@@ -310,8 +358,12 @@ export const currentBabylonSceneBoundary = {
       label: "BabylonScene still owns getCameraState and applyCameraState as the imperative camera state adapter"
     },
     {
+      id: "object-rendering-contract-added",
+      label: "Machine/object rendering is explicitly tracked as a remaining medium-risk contract before any rendering refactor"
+    },
+    {
       id: "next-controlled-candidate",
-      label: "Diagnostics and overlay extraction is the next controlled candidate before high-risk interaction extraction"
+      label: "Machine/object rendering, diagnostics, and overlay extraction are controlled candidates before high-risk interaction extraction"
     },
     {
       id: "preserve-app-shell-scene-viewport-slot",
