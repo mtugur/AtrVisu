@@ -14,6 +14,8 @@ describe("current babylon scene boundary", () => {
     expect(currentBabylonSceneBoundary.sourceFiles.length).toBeGreaterThan(0);
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/BabylonScene.tsx");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/cameraViewport.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/objectRendering.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/objectRendering.test.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/sceneLifecycle.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/visualContext.ts");
     expect(currentBabylonSceneBoundary.sourceFiles.every((sourceFile) => sourceFile.trim())).toBe(true);
@@ -26,8 +28,10 @@ describe("current babylon scene boundary", () => {
     expect(responsibilityIds).toContain("canvas-rendering");
     expect(responsibilityIds).toContain("camera-creation-control");
     expect(responsibilityIds).toContain("machine-object-mesh-rendering");
+    expect(responsibilityIds).toContain("machine-object-rendering-adapter");
     expect(responsibilityIds).toContain("selection-visualization");
     expect(responsibilityIds).toContain("pointer-interaction-handling");
+    expect(responsibilityIds).toContain("object-picking-metadata");
     expect(responsibilityIds).toContain("drag-move-placement-interaction");
     expect(responsibilityIds).toContain("collision-clearance-visualization");
   });
@@ -53,24 +57,28 @@ describe("current babylon scene boundary", () => {
 
     expect(highRiskIds).toContain("selection-visualization");
     expect(highRiskIds).toContain("pointer-interaction-handling");
+    expect(highRiskIds).toContain("object-picking-metadata");
     expect(highRiskIds).toContain("drag-move-placement-interaction");
     expect(highRiskIds).toContain("rotation-transform-interaction");
   });
 
-  it("tracks object and machine rendering as a remaining medium-risk BabylonScene responsibility", () => {
+  it("tracks object and machine placeholder rendering descriptors as an extracted helper responsibility", () => {
     const renderingResponsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
       (item) => item.id === "machine-object-mesh-rendering"
     );
     const contract = currentBabylonSceneBoundary.objectRenderingContract;
 
-    expect(renderingResponsibility?.status).toBe("remaining");
-    expect(renderingResponsibility?.riskLevel).toBe("medium");
-    expect(renderingResponsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
-    expect(renderingResponsibility?.nextRefactorCandidate).toBe(true);
+    expect(renderingResponsibility?.status).toBe("extracted");
+    expect(renderingResponsibility?.riskLevel).toBe("low");
+    expect(renderingResponsibility?.ownerModule).toBe("src/components/babylonScene/objectRendering.ts");
+    expect(renderingResponsibility?.nextRefactorCandidate).toBe(false);
     expect(contract.responsibilityId).toBe("machine-object-mesh-rendering");
-    expect(contract.status).toBe("remaining");
-    expect(contract.ownerModule).toBe("src/components/BabylonScene.tsx");
-    expect(contract.riskLevel).toBe("medium");
+    expect(contract.status).toBe("extracted");
+    expect(contract.ownerModule).toBe("src/components/babylonScene/objectRendering.ts");
+    expect(contract.extractedModule).toBe("src/components/babylonScene/objectRendering.ts");
+    expect(contract.testModule).toBe("src/components/babylonScene/objectRendering.test.ts");
+    expect(contract.remainingAdapterModule).toBe("src/components/BabylonScene.tsx");
+    expect(contract.riskLevel).toBe("low");
   });
 
   it("keeps rendering responsibility separate from extracted and high-risk interaction responsibilities", () => {
@@ -81,25 +89,31 @@ describe("current babylon scene boundary", () => {
     expect(separatedIds).toContain("camera-creation-control");
     expect(separatedIds).toContain("pointer-interaction-handling");
     expect(separatedIds).toContain("selection-visualization");
+    expect(separatedIds).toContain("object-picking-metadata");
     expect(separatedIds).toContain("drag-move-placement-interaction");
     expect(separatedIds).toContain("rotation-transform-interaction");
   });
 
-  it("protects machine rendering, GLB loading, fallback visuals, labels, and cleanup", () => {
+  it("protects extracted placeholder descriptors and remaining rendering adapter responsibilities", () => {
     const contract = currentBabylonSceneBoundary.objectRenderingContract;
 
-    expect(contract.protectedBehaviors).toContain("machine-object-mesh-creation");
+    expect(contract.protectedBehaviors).toContain("placeholder-visual-descriptor-calculation");
     expect(contract.protectedBehaviors).toContain("placeholder-visual-rendering");
-    expect(contract.protectedBehaviors).toContain("glb-external-visual-model-loading-flow");
     expect(contract.protectedBehaviors).toContain("fallback-visual-behavior");
+    expect(contract.protectedBehaviors).toContain("babylon-mesh-instantiation-adapter");
+    expect(contract.protectedBehaviors).toContain("glb-external-visual-model-loading-flow");
     expect(contract.protectedBehaviors).toContain("object-labels-and-visual-identity");
     expect(contract.protectedBehaviors).toContain("rendering-lifecycle-cleanup");
-    expect(contract.renderingFlows).toEqual({
-      machineMeshCreation: true,
-      placeholderVisualRendering: true,
+    expect(contract.extractedFlows).toEqual({
+      placeholderVisualDescriptorCalculation: true,
+      fallbackVisualDescriptorBehavior: true,
+      placeholderDimensionMapping: true
+    });
+    expect(contract.remainingAdapterFlows).toEqual({
+      babylonMeshInstantiation: true,
       glbExternalVisualModelLoading: true,
-      fallbackVisualBehavior: true,
       objectLabelsVisualIdentity: true,
+      machinePickMetadata: true,
       renderingLifecycleCleanup: true
     });
   });
@@ -168,7 +182,7 @@ describe("current babylon scene boundary", () => {
       .map((item) => item.id);
 
     expect(candidateIds).toEqual([
-      "machine-object-mesh-rendering",
+      "machine-object-rendering-adapter",
       "collision-clearance-visualization",
       "visual-diagnostics-overlays"
     ]);
@@ -200,5 +214,6 @@ describe("current babylon scene boundary", () => {
     expect(noteIds).toContain("camera-viewport-extracted");
     expect(noteIds).toContain("camera-state-adapter-remains");
     expect(noteIds).toContain("object-rendering-contract-added");
+    expect(noteIds).toContain("object-rendering-adapter-remains");
   });
 });

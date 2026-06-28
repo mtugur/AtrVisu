@@ -66,8 +66,8 @@ describe("babylon scene extraction plan", () => {
     expect(firstCandidate?.riskLevel).not.toBe("high");
   });
 
-  it("uses object rendering as the next safe refactor candidate after extracted phases", () => {
-    expect(babylonSceneExtractionPlan.firstSafeRefactorCandidate).toBe("object-rendering-extraction");
+  it("uses diagnostics and overlays as the next safe refactor candidate after extracted rendering descriptors", () => {
+    expect(babylonSceneExtractionPlan.firstSafeRefactorCandidate).toBe("diagnostics-overlays-extraction");
   });
 
   it("protects the AppShell scene viewport slot and E2E smoke stability", () => {
@@ -102,15 +102,22 @@ describe("babylon scene extraction plan", () => {
     const interactionPhase = getBabylonSceneExtractionPhaseById("interaction-extraction");
 
     expect(renderingPhase?.riskLevel).toBe("medium");
+    expect(renderingPhase?.protectedBehaviors).toContain("placeholder-visual-descriptor-calculation");
     expect(renderingPhase?.protectedBehaviors).toContain("glb-external-visual-model-loading-flow");
     expect(renderingPhase?.protectedBehaviors).toContain("placeholder-and-fallback-visual-behavior");
     expect(renderingPhase?.protectedBehaviors).toContain("object-labels-and-visual-identity");
     expect(renderingPhase?.protectedBehaviors).toContain("rendering-lifecycle-cleanup");
     expect(renderingPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/objectRendering.ts"
+    );
+    expect(renderingPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/objectRendering.test.ts"
+    );
+    expect(renderingPhase?.expectedFilesOrModules).toContain(
       "src/scene/rendering/loadMachineVisualModel.ts (conceptual)"
     );
     expect(renderingPhase?.expectedFilesOrModules).toContain(
-      "src/scene/rendering/createFallbackMachineVisual.ts (conceptual)"
+      "src/scene/rendering/createBabylonMachineMeshAdapter.ts (conceptual)"
     );
     expect(interactionPhase?.riskLevel).toBe("high");
     expect(interactionPhase?.expectedFilesOrModules).toContain(

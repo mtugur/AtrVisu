@@ -25,9 +25,9 @@ describe("platform babylon scene boundary report", () => {
     expect(report.sourceFileCount).toBe(currentBabylonSceneBoundary.sourceFiles.length);
     expect(report.parentBoundaryCount).toBe(currentBabylonSceneBoundary.parentBoundaryIds.length);
     expect(report.responsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length);
-    expect(report.extractedResponsibilityCount).toBe(3);
-    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 3);
-    expect(report.highRiskResponsibilityCount).toBe(4);
+    expect(report.extractedResponsibilityCount).toBe(4);
+    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 4);
+    expect(report.highRiskResponsibilityCount).toBe(5);
     expect(report.upstreamInputCount).toBe(currentBabylonSceneBoundary.knownUpstreamInputs.length);
     expect(report.downstreamEffectCount).toBe(currentBabylonSceneBoundary.knownDownstreamEffects.length);
     expect(report.boundaryRiskCount).toBe(currentBabylonSceneBoundary.boundaryRisks.length);
@@ -46,7 +46,7 @@ describe("platform babylon scene boundary report", () => {
 
     expect(report.nextRefactorCandidates.map((item) => item.id)).toEqual([
       "collision-clearance-visualization",
-      "machine-object-mesh-rendering",
+      "machine-object-rendering-adapter",
       "visual-diagnostics-overlays"
     ]);
     expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
@@ -72,17 +72,25 @@ describe("platform babylon scene boundary report", () => {
   it("exposes the object and machine rendering contract in the report", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
 
-    expect(report.objectRenderingContract.status).toBe("remaining");
-    expect(report.objectRenderingContract.ownerModule).toBe("src/components/BabylonScene.tsx");
-    expect(report.objectRenderingContract.riskLevel).toBe("medium");
+    expect(report.objectRenderingContract.status).toBe("extracted");
+    expect(report.objectRenderingContract.ownerModule).toBe("src/components/babylonScene/objectRendering.ts");
+    expect(report.objectRenderingContract.extractedModule).toBe("src/components/babylonScene/objectRendering.ts");
+    expect(report.objectRenderingContract.testModule).toBe("src/components/babylonScene/objectRendering.test.ts");
+    expect(report.objectRenderingContract.remainingAdapterModule).toBe("src/components/BabylonScene.tsx");
+    expect(report.objectRenderingContract.riskLevel).toBe("low");
     expect(report.objectRenderingContract.separatedFromResponsibilityIds).toContain("camera-creation-control");
     expect(report.objectRenderingContract.separatedFromResponsibilityIds).toContain("pointer-interaction-handling");
-    expect(report.objectRenderingContract.renderingFlows).toEqual({
-      machineMeshCreation: true,
-      placeholderVisualRendering: true,
+    expect(report.objectRenderingContract.separatedFromResponsibilityIds).toContain("object-picking-metadata");
+    expect(report.objectRenderingContract.extractedFlows).toEqual({
+      placeholderVisualDescriptorCalculation: true,
+      fallbackVisualDescriptorBehavior: true,
+      placeholderDimensionMapping: true
+    });
+    expect(report.objectRenderingContract.remainingAdapterFlows).toEqual({
+      babylonMeshInstantiation: true,
       glbExternalVisualModelLoading: true,
-      fallbackVisualBehavior: true,
       objectLabelsVisualIdentity: true,
+      machinePickMetadata: true,
       renderingLifecycleCleanup: true
     });
     expect(report.objectRenderingContract.extractedDependencyModules).toEqual({

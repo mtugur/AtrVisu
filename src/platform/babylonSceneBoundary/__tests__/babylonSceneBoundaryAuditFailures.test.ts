@@ -66,7 +66,7 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
-  it("fails when object rendering contract is detached from remaining BabylonScene ownership", () => {
+  it("fails when object rendering contract loses extracted helper coverage", () => {
     expect(
       hasIssue(
         withInventory({

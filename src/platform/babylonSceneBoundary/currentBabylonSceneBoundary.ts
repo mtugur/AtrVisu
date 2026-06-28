@@ -8,6 +8,8 @@ export const currentBabylonSceneBoundary = {
   sourceFiles: [
     "src/components/BabylonScene.tsx",
     "src/components/babylonScene/cameraViewport.ts",
+    "src/components/babylonScene/objectRendering.ts",
+    "src/components/babylonScene/objectRendering.test.ts",
     "src/components/babylonScene/sceneLifecycle.ts",
     "src/components/babylonScene/visualContext.ts",
     "src/types/machine.ts",
@@ -78,7 +80,15 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "machine-object-mesh-rendering",
-      label: "Machine and object mesh rendering remains in BabylonScene as a medium-risk refactor candidate",
+      label: "Machine and object placeholder rendering descriptor logic extracted to objectRendering helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/objectRendering.ts",
+      nextRefactorCandidate: false
+    },
+    {
+      id: "machine-object-rendering-adapter",
+      label: "Babylon mesh instantiation, GLB loading, labels, diagnostics callbacks, and rendering cleanup remain in BabylonScene",
       status: "remaining",
       riskLevel: "medium",
       ownerModule: "src/components/BabylonScene.tsx",
@@ -111,6 +121,14 @@ export const currentBabylonSceneBoundary = {
     {
       id: "pointer-interaction-handling",
       label: "Pointer interaction handling remains in BabylonScene and is high risk to extract",
+      status: "remaining",
+      riskLevel: "high",
+      ownerModule: "src/components/BabylonScene.tsx",
+      nextRefactorCandidate: false
+    },
+    {
+      id: "object-picking-metadata",
+      label: "Object picking metadata and pickability remain in BabylonScene and are high risk to extract",
       status: "remaining",
       riskLevel: "high",
       ownerModule: "src/components/BabylonScene.tsx",
@@ -200,34 +218,44 @@ export const currentBabylonSceneBoundary = {
   },
   objectRenderingContract: {
     responsibilityId: "machine-object-mesh-rendering",
-    status: "remaining",
-    ownerModule: "src/components/BabylonScene.tsx",
-    riskLevel: "medium",
+    status: "extracted",
+    ownerModule: "src/components/babylonScene/objectRendering.ts",
+    riskLevel: "low",
     refactorRiskRank: 2,
+    extractedModule: "src/components/babylonScene/objectRendering.ts",
+    testModule: "src/components/babylonScene/objectRendering.test.ts",
+    remainingAdapterModule: "src/components/BabylonScene.tsx",
     separatedFromResponsibilityIds: [
       "babylon-engine-scene-lifecycle",
       "lighting-ground-grid-context",
       "camera-creation-control",
       "pointer-interaction-handling",
       "selection-visualization",
+      "object-picking-metadata",
       "drag-move-placement-interaction",
       "rotation-transform-interaction"
     ],
     protectedBehaviors: [
-      "machine-object-mesh-creation",
+      "placeholder-visual-descriptor-calculation",
       "placeholder-visual-rendering",
-      "glb-external-visual-model-loading-flow",
       "fallback-visual-behavior",
+      "placeholder-dimension-mapping",
+      "babylon-mesh-instantiation-adapter",
+      "glb-external-visual-model-loading-flow",
       "object-labels-and-visual-identity",
       "visual-model-diagnostics-callbacks",
       "rendering-lifecycle-cleanup"
     ],
-    renderingFlows: {
-      machineMeshCreation: true,
-      placeholderVisualRendering: true,
+    extractedFlows: {
+      placeholderVisualDescriptorCalculation: true,
+      fallbackVisualDescriptorBehavior: true,
+      placeholderDimensionMapping: true
+    },
+    remainingAdapterFlows: {
+      babylonMeshInstantiation: true,
       glbExternalVisualModelLoading: true,
-      fallbackVisualBehavior: true,
       objectLabelsVisualIdentity: true,
+      machinePickMetadata: true,
       renderingLifecycleCleanup: true
     },
     extractedDependencyModules: {
@@ -236,9 +264,8 @@ export const currentBabylonSceneBoundary = {
       cameraViewport: "src/components/babylonScene/cameraViewport.ts"
     },
     futureModuleCandidates: [
-      "src/scene/rendering/renderMachineObject.ts (conceptual)",
+      "src/scene/rendering/createBabylonMachineMeshAdapter.ts (conceptual)",
       "src/scene/rendering/loadMachineVisualModel.ts (conceptual)",
-      "src/scene/rendering/createFallbackMachineVisual.ts (conceptual)",
       "src/scene/rendering/createObjectLabel.ts (conceptual)"
     ]
   },
@@ -321,7 +348,7 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "rendering-lifecycle-cleanup-risk",
-      label: "Machine/object rendering owns GLB loading, placeholder fallback, labels, diagnostics callbacks, and cleanup paths"
+      label: "BabylonScene still owns GLB loading, labels, diagnostics callbacks, picking metadata, and cleanup paths after descriptor extraction"
     },
     {
       id: "render-interaction-coupling",
@@ -359,11 +386,15 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "object-rendering-contract-added",
-      label: "Machine/object rendering is explicitly tracked as a remaining medium-risk contract before any rendering refactor"
+      label: "Machine/object placeholder descriptor rendering is extracted to src/components/babylonScene/objectRendering.ts with deterministic unit coverage"
+    },
+    {
+      id: "object-rendering-adapter-remains",
+      label: "BabylonScene still adapts objectRendering descriptors into Babylon meshes, GLB loading, labels, picking metadata, and cleanup"
     },
     {
       id: "next-controlled-candidate",
-      label: "Machine/object rendering, diagnostics, and overlay extraction are controlled candidates before high-risk interaction extraction"
+      label: "Machine/object rendering adapter, diagnostics, and overlay extraction are controlled candidates before high-risk interaction extraction"
     },
     {
       id: "preserve-app-shell-scene-viewport-slot",
