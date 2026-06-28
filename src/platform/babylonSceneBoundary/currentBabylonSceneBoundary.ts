@@ -7,6 +7,7 @@ export const currentBabylonSceneBoundary = {
   runtimeStatus: "active",
   sourceFiles: [
     "src/components/BabylonScene.tsx",
+    "src/components/babylonScene/cameraViewport.ts",
     "src/components/babylonScene/sceneLifecycle.ts",
     "src/components/babylonScene/visualContext.ts",
     "src/types/machine.ts",
@@ -61,10 +62,10 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "camera-creation-control",
-      label: "Camera creation and viewport behavior remains in BabylonScene",
-      status: "remaining",
-      riskLevel: "medium",
-      ownerModule: "src/components/BabylonScene.tsx",
+      label: "Camera creation and viewport setup extracted to cameraViewport helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/cameraViewport.ts",
       nextRefactorCandidate: false
     },
     {
@@ -150,10 +151,12 @@ export const currentBabylonSceneBoundary = {
   ],
   cameraViewportContract: {
     responsibilityId: "camera-creation-control",
-    status: "remaining",
-    ownerModule: "src/components/BabylonScene.tsx",
-    riskLevel: "medium",
+    status: "extracted",
+    ownerModule: "src/components/babylonScene/cameraViewport.ts",
+    riskLevel: "low",
     refactorRiskRank: 2,
+    extractedModule: "src/components/babylonScene/cameraViewport.ts",
+    remainingAdapterModule: "src/components/BabylonScene.tsx",
     protectedBehaviors: [
       "orbit-camera-name",
       "initial-alpha-math-pi-over-4",
@@ -270,7 +273,7 @@ export const currentBabylonSceneBoundary = {
   boundaryRisks: [
     {
       id: "multi-responsibility-component",
-      label: "BabylonScene still carries camera, rendering, interaction, selection, drag, and diagnostics responsibilities"
+      label: "BabylonScene still carries rendering, interaction, selection, drag, diagnostics, and camera state adapter responsibilities"
     },
     {
       id: "render-interaction-coupling",
@@ -297,6 +300,14 @@ export const currentBabylonSceneBoundary = {
     {
       id: "scene-lifecycle-extracted",
       label: "Engine, scene, render loop, resize, and dispose lifecycle setup now lives in src/components/babylonScene/sceneLifecycle.ts"
+    },
+    {
+      id: "camera-viewport-extracted",
+      label: "Camera creation, initial viewport setup, attachControl, limits, and camera input setup now live in src/components/babylonScene/cameraViewport.ts"
+    },
+    {
+      id: "camera-state-adapter-remains",
+      label: "BabylonScene still owns getCameraState and applyCameraState as the imperative camera state adapter"
     },
     {
       id: "next-controlled-candidate",

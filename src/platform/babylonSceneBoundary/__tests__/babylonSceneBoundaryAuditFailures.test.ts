@@ -52,13 +52,13 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
-  it("fails when camera viewport contract is detached from BabylonScene ownership", () => {
+  it("fails when camera viewport contract is detached from extracted helper ownership", () => {
     expect(
       hasIssue(
         withInventory({
           cameraViewportContract: {
             ...currentBabylonSceneBoundary.cameraViewportContract,
-            ownerModule: "src/components/babylonScene/createViewportCamera.ts" as "src/components/BabylonScene.tsx"
+            ownerModule: "src/components/BabylonScene.tsx"
           }
         }),
         "camera-viewport-contract-invalid"

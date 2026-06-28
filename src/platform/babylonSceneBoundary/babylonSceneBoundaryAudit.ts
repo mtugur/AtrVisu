@@ -64,11 +64,13 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   }
   if (
     inventory.cameraViewportContract.responsibilityId !== "camera-creation-control" ||
-    inventory.cameraViewportContract.status !== "remaining" ||
-    inventory.cameraViewportContract.ownerModule !== "src/components/BabylonScene.tsx" ||
+    inventory.cameraViewportContract.status !== "extracted" ||
+    inventory.cameraViewportContract.ownerModule !== "src/components/babylonScene/cameraViewport.ts" ||
+    inventory.cameraViewportContract.extractedModule !== "src/components/babylonScene/cameraViewport.ts" ||
+    inventory.cameraViewportContract.remainingAdapterModule !== "src/components/BabylonScene.tsx" ||
     inventory.cameraViewportContract.protectedBehaviors.length === 0
   ) {
-    issues.push(createIssue("camera-viewport-contract-invalid", "Babylon scene cameraViewportContract must protect the remaining BabylonScene camera behavior.", inventory.id));
+    issues.push(createIssue("camera-viewport-contract-invalid", "Babylon scene cameraViewportContract must protect the extracted camera viewport helper and remaining BabylonScene camera state adapter.", inventory.id));
   }
   if (!hasReferenceItems(inventory.knownUpstreamInputs)) {
     issues.push(createIssue("upstream-inputs-empty", "Babylon scene knownUpstreamInputs must not be empty.", inventory.id));

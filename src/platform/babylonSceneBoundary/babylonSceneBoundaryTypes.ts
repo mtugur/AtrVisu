@@ -28,10 +28,12 @@ export type BabylonSceneBoundaryResponsibility = BabylonSceneBoundaryReference &
 
 export type BabylonSceneCameraViewportContract = {
   responsibilityId: "camera-creation-control";
-  status: "remaining";
-  ownerModule: "src/components/BabylonScene.tsx";
+  status: BabylonSceneBoundaryResponsibilityStatus;
+  ownerModule: string;
   riskLevel: BabylonSceneBoundaryRiskLevel;
   refactorRiskRank: number;
+  extractedModule: "src/components/babylonScene/cameraViewport.ts";
+  remainingAdapterModule: "src/components/BabylonScene.tsx";
   protectedBehaviors: readonly string[];
   initialCamera: {
     name: "orbit-camera";

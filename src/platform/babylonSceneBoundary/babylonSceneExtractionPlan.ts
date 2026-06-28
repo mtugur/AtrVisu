@@ -128,8 +128,8 @@ export const babylonSceneExtractionPlan = {
       ],
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
-        "src/scene/viewport/createViewportCamera.ts (conceptual)",
-        "src/scene/viewport/applyViewportCameraState.ts (conceptual)"
+        "src/components/babylonScene/cameraViewport.ts",
+        "src/scene/viewport/applyViewportCameraState.ts (future conceptual split)"
       ]
     },
     {

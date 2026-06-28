@@ -13,6 +13,7 @@ describe("current babylon scene boundary", () => {
   it("has non-empty source files", () => {
     expect(currentBabylonSceneBoundary.sourceFiles.length).toBeGreaterThan(0);
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/BabylonScene.tsx");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/cameraViewport.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/sceneLifecycle.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/visualContext.ts");
     expect(currentBabylonSceneBoundary.sourceFiles.every((sourceFile) => sourceFile.trim())).toBe(true);
@@ -56,18 +57,20 @@ describe("current babylon scene boundary", () => {
     expect(highRiskIds).toContain("rotation-transform-interaction");
   });
 
-  it("tracks camera and viewport behavior as a remaining BabylonScene responsibility", () => {
+  it("marks camera and viewport setup as an extracted helper responsibility", () => {
     const cameraResponsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
       (item) => item.id === "camera-creation-control"
     );
     const contract = currentBabylonSceneBoundary.cameraViewportContract;
 
-    expect(cameraResponsibility?.status).toBe("remaining");
-    expect(cameraResponsibility?.riskLevel).toBe("medium");
-    expect(cameraResponsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(cameraResponsibility?.status).toBe("extracted");
+    expect(cameraResponsibility?.riskLevel).toBe("low");
+    expect(cameraResponsibility?.ownerModule).toBe("src/components/babylonScene/cameraViewport.ts");
     expect(contract.responsibilityId).toBe("camera-creation-control");
-    expect(contract.status).toBe("remaining");
-    expect(contract.ownerModule).toBe("src/components/BabylonScene.tsx");
+    expect(contract.status).toBe("extracted");
+    expect(contract.ownerModule).toBe("src/components/babylonScene/cameraViewport.ts");
+    expect(contract.extractedModule).toBe("src/components/babylonScene/cameraViewport.ts");
+    expect(contract.remainingAdapterModule).toBe("src/components/BabylonScene.tsx");
   });
 
   it("protects existing camera initialization and control values", () => {
@@ -98,7 +101,7 @@ describe("current babylon scene boundary", () => {
       .filter((item) => item.riskLevel === "high")
       .map(() => 3);
 
-    expect(cameraContract.riskLevel).toBe("medium");
+    expect(cameraContract.riskLevel).toBe("low");
     expect(highRiskInteractionRanks.every((rank) => cameraContract.refactorRiskRank < rank)).toBe(true);
   });
 
@@ -146,5 +149,7 @@ describe("current babylon scene boundary", () => {
     expect(noteIds).toContain("no-platform-runtime-dependency");
     expect(noteIds).toContain("visual-context-extracted");
     expect(noteIds).toContain("scene-lifecycle-extracted");
+    expect(noteIds).toContain("camera-viewport-extracted");
+    expect(noteIds).toContain("camera-state-adapter-remains");
   });
 });
