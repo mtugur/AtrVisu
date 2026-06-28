@@ -48,6 +48,7 @@ import {
   getRayPlanePlanPointMm
 } from "../utils/annotations";
 import { createBabylonCameraViewport } from "./babylonScene/cameraViewport";
+import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import { createSceneVisualContext } from "./babylonScene/visualContext";
 import type { ArcRotateCamera } from "@babylonjs/core";
@@ -752,11 +753,15 @@ const addBoxPart = (
   name: string,
   size: { width: number; depth: number; height: number },
   position: Vector3,
-  material: StandardMaterial
+  material: StandardMaterial,
+  rotation?: Vector3
 ) => {
   const mesh = MeshBuilder.CreateBox(name, size, scene);
   mesh.parent = parent;
   mesh.position = position;
+  if (rotation) {
+    mesh.rotation = rotation;
+  }
   mesh.material = material;
   setMachinePickMetadata(mesh, parent.metadata.instanceId);
   return mesh;
@@ -781,95 +786,18 @@ const addCylinderPart = (
 };
 
 const createPlaceholderMeshes = (scene: Scene, machine: PlacedMachine, rootBox: Mesh, material: StandardMaterial) => {
-  const { width, depth, height } = getMachineDimensionsMeters(machine.definition);
-  const type = machine.definition.placeholderVisualType ?? "box-generic";
   const id = machine.instanceId;
-  const parts: Mesh[] = [];
-  const box = (suffix: string, w: number, d: number, h: number, x = 0, y = 0, z = 0) => {
-    parts.push(addBoxPart(scene, rootBox, `placeholder-${suffix}-${id}`, { width: w, depth: d, height: h }, new Vector3(x, y, z), material));
-  };
-  const cylinder = (suffix: string, diameter: number, h: number, x = 0, y = 0, z = 0, rotation = Vector3.Zero()) => {
-    parts.push(addCylinderPart(scene, rootBox, `placeholder-${suffix}-${id}`, { diameter, height: h }, new Vector3(x, y, z), material, rotation));
-  };
+  return getMachinePlaceholderVisualParts(machine.definition).map((part) => {
+    const position = new Vector3(part.position.x, part.position.y, part.position.z);
+    const rotation = part.rotation
+      ? new Vector3(part.rotation.x, part.rotation.y, part.rotation.z)
+      : undefined;
+    const name = `placeholder-${part.suffix}-${id}`;
 
-  switch (type) {
-    case "conveyor-belt":
-      box("conveyor-body", width, depth, Math.max(0.16, height * 0.35), 0, 0, 0);
-      box("conveyor-belt", width * 0.92, depth * 0.72, 0.035, 0, height * 0.2, 0);
-      break;
-    case "conveyor-roller":
-      box("roller-frame", width, depth, Math.max(0.14, height * 0.28), 0, 0, 0);
-      for (let i = -2; i <= 2; i += 1) {
-        cylinder("roller", Math.max(0.08, depth * 0.08), depth * 0.82, (i * width) / 6, height * 0.2, 0, new Vector3(Math.PI / 2, 0, 0));
-      }
-      break;
-    case "elevator-vertical":
-      box("elevator-tower", width * 0.45, depth * 0.55, height, 0, 0, 0);
-      box("elevator-head", width * 0.75, depth * 0.75, height * 0.12, 0, height * 0.44, 0);
-      break;
-    case "elevator-inclined":
-      box("inclined-base", width, depth * 0.55, height * 0.18, 0, -height * 0.3, 0);
-      box("inclined-run", width * 0.92, depth * 0.42, height * 0.18, 0, 0, 0);
-      parts[parts.length - 1].rotation.z = -Math.PI / 10;
-      break;
-    case "silo-cylinder":
-      cylinder("silo", Math.min(width, depth), height * 0.88, 0, 0, 0);
-      cylinder("silo-cone", Math.min(width, depth) * 0.82, height * 0.18, 0, -height * 0.46, 0);
-      break;
-    case "tank-cylinder":
-      cylinder("tank", Math.min(depth, height), width * 0.88, 0, 0, 0, new Vector3(0, 0, Math.PI / 2));
-      break;
-    case "hopper":
-      box("hopper-top", width, depth, height * 0.42, 0, height * 0.12, 0);
-      box("hopper-bottom", width * 0.5, depth * 0.5, height * 0.36, 0, -height * 0.28, 0);
-      break;
-    case "forklift-proxy":
-      box("forklift-body", width * 0.62, depth * 0.72, height * 0.42, -width * 0.08, -height * 0.12, 0);
-      box("forklift-mast", width * 0.08, depth * 0.72, height * 0.85, width * 0.28, height * 0.08, 0);
-      box("forklift-fork-a", width * 0.42, depth * 0.08, height * 0.04, width * 0.38, -height * 0.34, -depth * 0.18);
-      box("forklift-fork-b", width * 0.42, depth * 0.08, height * 0.04, width * 0.38, -height * 0.34, depth * 0.18);
-      break;
-    case "pallet-proxy":
-      box("pallet-deck", width, depth, height * 0.35, 0, height * 0.12, 0);
-      box("pallet-runner-a", width, depth * 0.12, height * 0.28, 0, -height * 0.22, -depth * 0.32);
-      box("pallet-runner-b", width, depth * 0.12, height * 0.28, 0, -height * 0.22, depth * 0.32);
-      break;
-    case "robot-cell":
-      cylinder("robot-base", Math.min(width, depth) * 0.28, height * 0.18, 0, -height * 0.35, 0);
-      box("robot-column", width * 0.16, depth * 0.16, height * 0.55, 0, -height * 0.02, 0);
-      box("robot-arm", width * 0.62, depth * 0.14, height * 0.12, width * 0.16, height * 0.24, 0);
-      break;
-    case "wrapper-proxy":
-      cylinder("wrapper-table", Math.min(width, depth) * 0.65, height * 0.16, 0, -height * 0.36, 0);
-      box("wrapper-post", width * 0.12, depth * 0.12, height, width * 0.32, 0, 0);
-      break;
-    case "safety-fence":
-      box("fence-panel", width, Math.max(0.04, depth * 0.25), height * 0.72, 0, 0, 0);
-      box("fence-post-a", width * 0.04, depth, height, -width * 0.48, 0, 0);
-      box("fence-post-b", width * 0.04, depth, height, width * 0.48, 0, 0);
-      break;
-    case "building-column":
-      box("column", width, depth, height, 0, 0, 0);
-      break;
-    case "building-wall":
-      box("wall", width, Math.max(0.06, depth), height, 0, 0, 0);
-      break;
-    case "platform":
-      box("platform-deck", width, depth, height * 0.16, 0, height * 0.36, 0);
-      box("platform-base", width * 0.12, depth * 0.12, height * 0.72, -width * 0.4, 0, -depth * 0.4);
-      box("platform-base", width * 0.12, depth * 0.12, height * 0.72, width * 0.4, 0, depth * 0.4);
-      break;
-    case "electrical-panel":
-      box("panel", width, Math.max(0.08, depth * 0.35), height, 0, 0, 0);
-      box("panel-door", width * 0.78, Math.max(0.02, depth * 0.08), height * 0.72, 0, 0, -depth * 0.22);
-      break;
-    case "box-generic":
-    default:
-      box("generic", width, depth, height, 0, 0, 0);
-      break;
-  }
-
-  return parts;
+    return part.kind === "box"
+      ? addBoxPart(scene, rootBox, name, part.size, position, material, rotation)
+      : addCylinderPart(scene, rootBox, name, part.size, position, material, rotation);
+  });
 };
 
 const radiansFromDegrees = (degrees: number) => (degrees * Math.PI) / 180;
