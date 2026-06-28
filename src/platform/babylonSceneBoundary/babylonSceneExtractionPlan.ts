@@ -53,7 +53,7 @@ export const babylonSceneExtractionPlan = {
   boundaryId: "babylon-scene",
   sourceBoundaryId: currentBabylonSceneBoundary.id,
   readinessIntegrated: true,
-  firstSafeRefactorCandidate: "object-rendering-extraction",
+  firstSafeRefactorCandidate: "diagnostics-overlays-extraction",
   phases: [
     {
       id: "baseline-protection",
@@ -160,7 +160,7 @@ export const babylonSceneExtractionPlan = {
     {
       id: "object-rendering-extraction",
       title: "Object rendering extraction",
-      goal: "Extract machine, civil, annotation, and object mesh rendering while preserving library visual model and dimension mapping.",
+      goal: "Track the extracted machine placeholder descriptor helper and future rendering adapter slices while preserving library visual model and dimension mapping.",
       riskLevel: "medium",
       prerequisites: [
         "scene-lifecycle-extraction",
@@ -172,6 +172,7 @@ export const babylonSceneExtractionPlan = {
         "machine-object-dimensions-remain-mm-authoritative",
         "library-visual-model-fallback-diagnostics",
         "glb-external-visual-model-loading-flow",
+        "placeholder-visual-descriptor-calculation",
         "placeholder-and-fallback-visual-behavior",
         "object-labels-and-visual-identity",
         "rendering-lifecycle-cleanup",
@@ -180,15 +181,17 @@ export const babylonSceneExtractionPlan = {
       forbiddenChanges: sharedForbiddenChanges,
       validationSignals: [
         ...sharedValidationSignals,
+        "object-rendering-descriptor-tests-pass",
         "machine-library-add-smoke",
         "building-civil-reference-smoke",
         "visual-model-diagnostics-remain-available"
       ],
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
-        "src/scene/rendering/renderMachineObject.ts (conceptual)",
+        "src/components/babylonScene/objectRendering.ts",
+        "src/components/babylonScene/objectRendering.test.ts",
+        "src/scene/rendering/createBabylonMachineMeshAdapter.ts (conceptual)",
         "src/scene/rendering/loadMachineVisualModel.ts (conceptual)",
-        "src/scene/rendering/createFallbackMachineVisual.ts (conceptual)",
         "src/scene/rendering/createObjectLabel.ts (conceptual)",
         "src/scene/rendering/renderCivilReference.ts (conceptual)",
         "src/scene/rendering/renderAnnotationObject.ts (conceptual)"

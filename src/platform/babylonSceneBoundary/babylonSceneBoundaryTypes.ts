@@ -61,18 +61,25 @@ export type BabylonSceneCameraViewportContract = {
 
 export type BabylonSceneObjectRenderingContract = {
   responsibilityId: "machine-object-mesh-rendering";
-  status: "remaining";
-  ownerModule: "src/components/BabylonScene.tsx";
-  riskLevel: "medium";
+  status: "extracted";
+  ownerModule: "src/components/babylonScene/objectRendering.ts";
+  riskLevel: "low";
   refactorRiskRank: number;
+  extractedModule: "src/components/babylonScene/objectRendering.ts";
+  testModule: "src/components/babylonScene/objectRendering.test.ts";
+  remainingAdapterModule: "src/components/BabylonScene.tsx";
   separatedFromResponsibilityIds: readonly string[];
   protectedBehaviors: readonly string[];
-  renderingFlows: {
-    machineMeshCreation: true;
-    placeholderVisualRendering: true;
+  extractedFlows: {
+    placeholderVisualDescriptorCalculation: true;
+    fallbackVisualDescriptorBehavior: true;
+    placeholderDimensionMapping: true;
+  };
+  remainingAdapterFlows: {
+    babylonMeshInstantiation: true;
     glbExternalVisualModelLoading: true;
-    fallbackVisualBehavior: true;
     objectLabelsVisualIdentity: true;
+    machinePickMetadata: true;
     renderingLifecycleCleanup: true;
   };
   extractedDependencyModules: {

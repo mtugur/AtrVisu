@@ -74,20 +74,26 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   }
   if (
     inventory.objectRenderingContract.responsibilityId !== "machine-object-mesh-rendering" ||
-    inventory.objectRenderingContract.status !== "remaining" ||
-    inventory.objectRenderingContract.ownerModule !== "src/components/BabylonScene.tsx" ||
-    inventory.objectRenderingContract.riskLevel !== "medium" ||
+    inventory.objectRenderingContract.status !== "extracted" ||
+    inventory.objectRenderingContract.ownerModule !== "src/components/babylonScene/objectRendering.ts" ||
+    inventory.objectRenderingContract.extractedModule !== "src/components/babylonScene/objectRendering.ts" ||
+    inventory.objectRenderingContract.testModule !== "src/components/babylonScene/objectRendering.test.ts" ||
+    inventory.objectRenderingContract.remainingAdapterModule !== "src/components/BabylonScene.tsx" ||
+    inventory.objectRenderingContract.riskLevel !== "low" ||
     inventory.objectRenderingContract.protectedBehaviors.length === 0 ||
-    !inventory.objectRenderingContract.renderingFlows.machineMeshCreation ||
-    !inventory.objectRenderingContract.renderingFlows.placeholderVisualRendering ||
-    !inventory.objectRenderingContract.renderingFlows.glbExternalVisualModelLoading ||
-    !inventory.objectRenderingContract.renderingFlows.fallbackVisualBehavior ||
-    !inventory.objectRenderingContract.renderingFlows.objectLabelsVisualIdentity ||
-    !inventory.objectRenderingContract.renderingFlows.renderingLifecycleCleanup ||
+    !inventory.objectRenderingContract.extractedFlows.placeholderVisualDescriptorCalculation ||
+    !inventory.objectRenderingContract.extractedFlows.fallbackVisualDescriptorBehavior ||
+    !inventory.objectRenderingContract.extractedFlows.placeholderDimensionMapping ||
+    !inventory.objectRenderingContract.remainingAdapterFlows.babylonMeshInstantiation ||
+    !inventory.objectRenderingContract.remainingAdapterFlows.glbExternalVisualModelLoading ||
+    !inventory.objectRenderingContract.remainingAdapterFlows.objectLabelsVisualIdentity ||
+    !inventory.objectRenderingContract.remainingAdapterFlows.machinePickMetadata ||
+    !inventory.objectRenderingContract.remainingAdapterFlows.renderingLifecycleCleanup ||
     !inventory.objectRenderingContract.separatedFromResponsibilityIds.includes("pointer-interaction-handling") ||
+    !inventory.objectRenderingContract.separatedFromResponsibilityIds.includes("object-picking-metadata") ||
     !inventory.objectRenderingContract.separatedFromResponsibilityIds.includes("camera-creation-control")
   ) {
-    issues.push(createIssue("object-rendering-contract-invalid", "Babylon scene objectRenderingContract must protect remaining machine/object rendering without merging it into extracted camera, lifecycle, visual context, or high-risk interaction responsibilities.", inventory.id));
+    issues.push(createIssue("object-rendering-contract-invalid", "Babylon scene objectRenderingContract must protect extracted placeholder rendering descriptors while keeping BabylonScene adapter, picking, and high-risk interaction responsibilities separate.", inventory.id));
   }
   if (!hasReferenceItems(inventory.knownUpstreamInputs)) {
     issues.push(createIssue("upstream-inputs-empty", "Babylon scene knownUpstreamInputs must not be empty.", inventory.id));
