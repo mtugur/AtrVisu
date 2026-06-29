@@ -129,16 +129,26 @@ describe("babylon scene extraction plan", () => {
         "machine-drag-position-updates",
         "civil-drag-position-calculation",
         "floor-delta-mm-conversion",
+        "rotation-gizmo-helper-contract",
+        "plan-rotation-degrees-to-radians",
+        "manual-rotation-input-commit",
+        "rotation-snap-nudge-calculation",
         "pointer-interaction-handling",
-        "rotation-transform-interaction"
       ])
     );
     expect(interactionPhase?.prerequisites).toContain("drag-placement-helper-extracted");
+    expect(interactionPhase?.prerequisites).toContain("rotation-gizmo-helper-extracted");
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/dragPlacement.ts"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/dragPlacement.test.ts"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/rotationGizmo.ts"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/rotationGizmo.test.ts"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/selectionPicking.ts"
@@ -148,9 +158,6 @@ describe("babylon scene extraction plan", () => {
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/scene/interactions/createScenePointerController.ts (conceptual)"
-    );
-    expect(interactionPhase?.expectedFilesOrModules).toContain(
-      "src/scene/interactions/createRotationGizmoController.ts (conceptual)"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)"

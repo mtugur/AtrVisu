@@ -226,19 +226,6 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
-  it("fails when rotation and gizmo responsibility stops being the next interaction refactor candidate", () => {
-    expect(
-      hasIssue(
-        withInventory({
-          primaryResponsibilities: withResponsibilityUpdate(rotationResponsibilityId, {
-            nextRefactorCandidate: false
-          })
-        }),
-        "interaction-responsibility-invalid"
-      )
-    ).toBe(true);
-  });
-
   it("fails when a selection picking responsibility is missing", () => {
     expect(
       hasIssue(
@@ -397,6 +384,87 @@ describe("babylon scene boundary audit failures", () => {
           } as unknown as BabylonSceneBoundaryInventory["dragPlacementContract"]
         }),
         "drag-placement-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when rotation and gizmo responsibility is missing", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withoutResponsibility(rotationResponsibilityId)
+        }),
+        "rotation-gizmo-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when rotation and gizmo responsibility is still marked remaining", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(rotationResponsibilityId, {
+            status: "remaining"
+          })
+        }),
+        "rotation-gizmo-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when rotation and gizmo responsibility has wrong owner", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(rotationResponsibilityId, {
+            ownerModule: "src/components/BabylonScene.tsx"
+          })
+        }),
+        "rotation-gizmo-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when rotation and gizmo responsibility has wrong risk level", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(rotationResponsibilityId, {
+            riskLevel: "high"
+          })
+        }),
+        "rotation-gizmo-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when rotation gizmo contract is detached from extracted helper ownership", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          rotationGizmoContract: {
+            ...currentBabylonSceneBoundary.rotationGizmoContract,
+            ownerModule: "src/components/BabylonScene.tsx"
+          } as unknown as BabylonSceneBoundaryInventory["rotationGizmoContract"]
+        }),
+        "rotation-gizmo-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when rotation gizmo contract loses extracted flow coverage", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          rotationGizmoContract: {
+            ...currentBabylonSceneBoundary.rotationGizmoContract,
+            extractedFlows: {
+              ...currentBabylonSceneBoundary.rotationGizmoContract.extractedFlows,
+              rotationSnapNudgeCalculation: false
+            }
+          } as unknown as BabylonSceneBoundaryInventory["rotationGizmoContract"]
+        }),
+        "rotation-gizmo-contract-invalid"
       )
     ).toBe(true);
   });
