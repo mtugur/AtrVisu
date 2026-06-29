@@ -49,6 +49,12 @@ import {
 } from "../utils/annotations";
 import { createBabylonCameraViewport } from "./babylonScene/cameraViewport";
 import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
+import {
+  applyMachinePickMetadataToHierarchy,
+  getSelectionPickTarget,
+  isToggleSelectionEvent,
+  setMachinePickMetadata
+} from "./babylonScene/selectionPicking";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import { createSceneVisualContext } from "./babylonScene/visualContext";
 import type { ArcRotateCamera } from "@babylonjs/core";
@@ -742,11 +748,6 @@ const createProductMeshes = (scene: Scene, machine: PlacedMachine) => {
   });
 };
 
-const setMachinePickMetadata = (mesh: Mesh, instanceId: string) => {
-  mesh.metadata = { ...(mesh.metadata ?? {}), instanceId };
-  mesh.isPickable = true;
-};
-
 const addBoxPart = (
   scene: Scene,
   parent: Mesh,
@@ -814,15 +815,6 @@ const splitModelPath = (modelPath: string) => {
   };
 };
 
-const applyMetadataToHierarchy = (mesh: AbstractMesh, instanceId: string) => {
-  mesh.metadata = { ...(mesh.metadata ?? {}), instanceId };
-  mesh.isPickable = true;
-  mesh.getChildMeshes(false).forEach((child) => {
-    child.metadata = { ...(child.metadata ?? {}), instanceId };
-    child.isPickable = true;
-  });
-};
-
 const loadVisualModel = async (
   scene: Scene,
   machine: PlacedMachine,
@@ -845,7 +837,7 @@ const loadVisualModel = async (
     result.meshes.forEach((mesh) => {
       if (mesh !== visualRoot) {
         mesh.parent = visualRoot;
-        applyMetadataToHierarchy(mesh, machine.instanceId);
+        applyMachinePickMetadataToHierarchy(mesh, machine.instanceId);
       }
     });
 
@@ -1356,11 +1348,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const pointerObserver: Nullable<Observer<PointerInfo>> = scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         const pick = pointerInfo.pickInfo;
-        const instanceId = pick?.pickedMesh?.metadata?.instanceId as string | undefined;
-        const civilReferenceId = pick?.pickedMesh?.metadata?.civilReferenceId as string | undefined;
-        const annotationId = pick?.pickedMesh?.metadata?.annotationId as string | undefined;
+        const { instanceId, civilReferenceId, annotationId } = getSelectionPickTarget(pick);
         const sourceEvent = pointerInfo.event as PointerEvent | undefined;
-        const isToggleSelection = Boolean(sourceEvent?.ctrlKey || sourceEvent?.shiftKey);
+        const isToggleSelection = isToggleSelectionEvent(sourceEvent);
         const panPoint = pickFloorPoint();
 
         if (isPanPointer(sourceEvent) && panPoint) {
