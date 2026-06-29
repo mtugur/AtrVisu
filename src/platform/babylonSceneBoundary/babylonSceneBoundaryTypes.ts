@@ -109,7 +109,6 @@ export type BabylonSceneSelectionPickingContract = {
   };
   remainingInteractionFlows: {
     pointerObserverOrchestration: true;
-    rotationTransformGizmo: true;
   };
   futureModuleCandidates: readonly string[];
 };
@@ -134,7 +133,30 @@ export type BabylonSceneDragPlacementContract = {
   };
   remainingInteractionFlows: {
     pointerObserverOrchestration: true;
-    rotationTransformGizmo: true;
+  };
+  futureModuleCandidates: readonly string[];
+};
+
+export type BabylonSceneRotationGizmoContract = {
+  responsibilityId: "rotation-transform-interaction";
+  status: "extracted";
+  ownerModule: "src/components/babylonScene/rotationGizmo.ts";
+  riskLevel: "low";
+  refactorRiskRank: number;
+  extractedModule: "src/components/babylonScene/rotationGizmo.ts";
+  testModule: "src/components/babylonScene/rotationGizmo.test.ts";
+  remainingPointerOrchestrationModule: "src/components/BabylonScene.tsx";
+  separatedFromResponsibilityIds: readonly string[];
+  protectedBehaviors: readonly string[];
+  extractedFlows: {
+    planRotationDegreesToRadians: true;
+    planRotationYApplication: true;
+    visualModelRotationOffsetConversion: true;
+    manualRotationInputCommit: true;
+    rotationSnapNudgeCalculation: true;
+  };
+  remainingInteractionFlows: {
+    pointerObserverOrchestration: true;
   };
   futureModuleCandidates: readonly string[];
 };
@@ -153,6 +175,7 @@ export type BabylonSceneBoundaryInventory = {
   objectRenderingContract: BabylonSceneObjectRenderingContract;
   selectionPickingContract: BabylonSceneSelectionPickingContract;
   dragPlacementContract: BabylonSceneDragPlacementContract;
+  rotationGizmoContract: BabylonSceneRotationGizmoContract;
   knownUpstreamInputs: readonly BabylonSceneBoundaryReference[];
   knownDownstreamEffects: readonly BabylonSceneBoundaryReference[];
   boundaryRisks: readonly BabylonSceneBoundaryReference[];
@@ -194,6 +217,7 @@ export type PlatformBabylonSceneBoundaryReport = {
   objectRenderingContract: BabylonSceneObjectRenderingContract;
   selectionPickingContract: BabylonSceneSelectionPickingContract;
   dragPlacementContract: BabylonSceneDragPlacementContract;
+  rotationGizmoContract: BabylonSceneRotationGizmoContract;
   upstreamInputCount: number;
   downstreamEffectCount: number;
   boundaryRiskCount: number;
