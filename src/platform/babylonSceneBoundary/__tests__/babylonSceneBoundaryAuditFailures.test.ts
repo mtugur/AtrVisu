@@ -27,7 +27,9 @@ const withResponsibilityUpdate = (
   );
 
 const interactionResponsibilityId = "pointer-interaction-handling";
+const rotationResponsibilityId = "rotation-transform-interaction";
 const selectionPickingResponsibilityId = "selection-visualization";
+const dragPlacementResponsibilityId = "drag-move-placement-interaction";
 
 describe("babylon scene boundary audit failures", () => {
   it("fails when id is empty", () => {
@@ -224,6 +226,19 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
+  it("fails when rotation and gizmo responsibility stops being the next interaction refactor candidate", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(rotationResponsibilityId, {
+            nextRefactorCandidate: false
+          })
+        }),
+        "interaction-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
   it("fails when a selection picking responsibility is missing", () => {
     expect(
       hasIssue(
@@ -301,6 +316,87 @@ describe("babylon scene boundary audit failures", () => {
           } as unknown as BabylonSceneBoundaryInventory["selectionPickingContract"]
         }),
         "selection-picking-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when drag move and placement responsibility is missing", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withoutResponsibility(dragPlacementResponsibilityId)
+        }),
+        "drag-placement-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when drag move and placement responsibility is still marked remaining", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(dragPlacementResponsibilityId, {
+            status: "remaining"
+          })
+        }),
+        "drag-placement-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when drag move and placement responsibility has wrong owner", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(dragPlacementResponsibilityId, {
+            ownerModule: "src/components/BabylonScene.tsx"
+          })
+        }),
+        "drag-placement-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when drag move and placement responsibility has wrong risk level", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(dragPlacementResponsibilityId, {
+            riskLevel: "high"
+          })
+        }),
+        "drag-placement-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when drag placement contract is detached from extracted helper ownership", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          dragPlacementContract: {
+            ...currentBabylonSceneBoundary.dragPlacementContract,
+            ownerModule: "src/components/BabylonScene.tsx"
+          } as unknown as BabylonSceneBoundaryInventory["dragPlacementContract"]
+        }),
+        "drag-placement-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when drag placement contract loses extracted flow coverage", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          dragPlacementContract: {
+            ...currentBabylonSceneBoundary.dragPlacementContract,
+            extractedFlows: {
+              ...currentBabylonSceneBoundary.dragPlacementContract.extractedFlows,
+              floorDeltaMmConversion: false
+            }
+          } as unknown as BabylonSceneBoundaryInventory["dragPlacementContract"]
+        }),
+        "drag-placement-contract-invalid"
       )
     ).toBe(true);
   });

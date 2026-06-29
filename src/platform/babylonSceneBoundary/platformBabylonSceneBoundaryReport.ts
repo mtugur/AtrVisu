@@ -35,6 +35,7 @@ export const createPlatformBabylonSceneBoundaryReport = (): PlatformBabylonScene
     cameraViewportContract: currentBabylonSceneBoundary.cameraViewportContract,
     objectRenderingContract: currentBabylonSceneBoundary.objectRenderingContract,
     selectionPickingContract: currentBabylonSceneBoundary.selectionPickingContract,
+    dragPlacementContract: currentBabylonSceneBoundary.dragPlacementContract,
     upstreamInputCount: currentBabylonSceneBoundary.knownUpstreamInputs.length,
     downstreamEffectCount: currentBabylonSceneBoundary.knownDownstreamEffects.length,
     boundaryRiskCount: currentBabylonSceneBoundary.boundaryRisks.length,

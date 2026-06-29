@@ -8,9 +8,10 @@ const selectionPickingResponsibilityIds = [
 
 const remainingInteractionResponsibilityIds = [
   "pointer-interaction-handling",
-  "drag-move-placement-interaction",
   "rotation-transform-interaction"
 ] as const;
+
+const dragPlacementResponsibilityId = "drag-move-placement-interaction";
 
 describe("current babylon scene boundary", () => {
   it("documents the Babylon scene identity", () => {
@@ -29,6 +30,8 @@ describe("current babylon scene boundary", () => {
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/objectRendering.test.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/selectionPicking.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/selectionPicking.test.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/dragPlacement.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/dragPlacement.test.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/sceneLifecycle.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/visualContext.ts");
     expect(currentBabylonSceneBoundary.sourceFiles.every((sourceFile) => sourceFile.trim())).toBe(true);
@@ -76,6 +79,17 @@ describe("current babylon scene boundary", () => {
     }
   });
 
+  it("marks drag move and placement responsibility as extracted helper work", () => {
+    const responsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
+      (item) => item.id === dragPlacementResponsibilityId
+    );
+
+    expect(responsibility?.status).toBe("extracted");
+    expect(responsibility?.ownerModule).toBe("src/components/babylonScene/dragPlacement.ts");
+    expect(responsibility?.riskLevel).toBe("low");
+    expect(responsibility?.nextRefactorCandidate).toBe(false);
+  });
+
   it("keeps remaining interaction responsibilities visible as high risk", () => {
     const highRiskIds = currentBabylonSceneBoundary.primaryResponsibilities
       .filter((item) => item.riskLevel === "high")
@@ -91,11 +105,12 @@ describe("current babylon scene boundary", () => {
       const responsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
         (item) => item.id === responsibilityId
       );
+      const expectedNextCandidate = responsibilityId === "rotation-transform-interaction";
 
       expect(responsibility?.status).toBe("remaining");
       expect(responsibility?.ownerModule).toBe("src/components/BabylonScene.tsx");
       expect(responsibility?.riskLevel).toBe("high");
-      expect(responsibility?.nextRefactorCandidate).toBe(false);
+      expect(responsibility?.nextRefactorCandidate).toBe(expectedNextCandidate);
     }
   });
 
@@ -136,9 +151,33 @@ describe("current babylon scene boundary", () => {
     });
     expect(contract.remainingInteractionFlows).toEqual({
       pointerObserverOrchestration: true,
-      dragMovePlacement: true,
       rotationTransformGizmo: true
     });
+  });
+
+  it("tracks drag move and placement as an extracted helper contract", () => {
+    const contract = currentBabylonSceneBoundary.dragPlacementContract;
+
+    expect(contract.responsibilityId).toBe(dragPlacementResponsibilityId);
+    expect(contract.status).toBe("extracted");
+    expect(contract.ownerModule).toBe("src/components/babylonScene/dragPlacement.ts");
+    expect(contract.extractedModule).toBe("src/components/babylonScene/dragPlacement.ts");
+    expect(contract.testModule).toBe("src/components/babylonScene/dragPlacement.test.ts");
+    expect(contract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
+    expect(contract.riskLevel).toBe("low");
+    expect(contract.extractedFlows).toEqual({
+      machineDragInstanceSelection: true,
+      machineStartPositionCapture: true,
+      floorDeltaMmConversion: true,
+      civilDragPositionCalculation: true,
+      machineDragPositionUpdates: true
+    });
+    expect(contract.remainingInteractionFlows).toEqual({
+      pointerObserverOrchestration: true,
+      rotationTransformGizmo: true
+    });
+    expect(contract.separatedFromResponsibilityIds).toContain("pointer-interaction-handling");
+    expect(contract.separatedFromResponsibilityIds).toContain("rotation-transform-interaction");
   });
 
   it("keeps rendering responsibility separate from extracted and high-risk interaction responsibilities", () => {
@@ -250,6 +289,7 @@ describe("current babylon scene boundary", () => {
 
     expect(candidateIds).toEqual([
       "machine-object-rendering-adapter",
+      "rotation-transform-interaction",
       "collision-clearance-visualization",
       "visual-diagnostics-overlays"
     ]);
@@ -283,6 +323,7 @@ describe("current babylon scene boundary", () => {
     expect(noteIds).toContain("object-rendering-contract-added");
     expect(noteIds).toContain("object-rendering-adapter-remains");
     expect(noteIds).toContain("selection-picking-extracted");
+    expect(noteIds).toContain("drag-placement-extracted");
     expect(noteIds).toContain("pointer-orchestration-remains");
   });
 });
