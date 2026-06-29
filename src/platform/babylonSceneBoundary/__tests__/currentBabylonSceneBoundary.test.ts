@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { currentBabylonSceneBoundary } from "../currentBabylonSceneBoundary";
 
-const interactionResponsibilityIds = [
+const selectionPickingResponsibilityIds = [
   "selection-visualization",
+  "object-picking-metadata"
+] as const;
+
+const remainingInteractionResponsibilityIds = [
   "pointer-interaction-handling",
-  "object-picking-metadata",
   "drag-move-placement-interaction",
   "rotation-transform-interaction"
 ] as const;
@@ -24,6 +27,8 @@ describe("current babylon scene boundary", () => {
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/cameraViewport.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/objectRendering.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/objectRendering.test.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/selectionPicking.ts");
+    expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/selectionPicking.test.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/sceneLifecycle.ts");
     expect(currentBabylonSceneBoundary.sourceFiles).toContain("src/components/babylonScene/visualContext.ts");
     expect(currentBabylonSceneBoundary.sourceFiles.every((sourceFile) => sourceFile.trim())).toBe(true);
@@ -58,18 +63,31 @@ describe("current babylon scene boundary", () => {
     expect(visualContext?.ownerModule).toBe("src/components/babylonScene/visualContext.ts");
   });
 
-  it("keeps interaction responsibilities visible as high risk", () => {
+  it("marks selection and object picking responsibilities as extracted helper work", () => {
+    for (const responsibilityId of selectionPickingResponsibilityIds) {
+      const responsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
+        (item) => item.id === responsibilityId
+      );
+
+      expect(responsibility?.status).toBe("extracted");
+      expect(responsibility?.ownerModule).toBe("src/components/babylonScene/selectionPicking.ts");
+      expect(responsibility?.riskLevel).toBe("low");
+      expect(responsibility?.nextRefactorCandidate).toBe(false);
+    }
+  });
+
+  it("keeps remaining interaction responsibilities visible as high risk", () => {
     const highRiskIds = currentBabylonSceneBoundary.primaryResponsibilities
       .filter((item) => item.riskLevel === "high")
       .map((item) => item.id);
 
-    for (const responsibilityId of interactionResponsibilityIds) {
+    for (const responsibilityId of remainingInteractionResponsibilityIds) {
       expect(highRiskIds).toContain(responsibilityId);
     }
   });
 
-  it("keeps interaction responsibilities as remaining BabylonScene work before extraction", () => {
-    for (const responsibilityId of interactionResponsibilityIds) {
+  it("keeps remaining interaction responsibilities as BabylonScene work before extraction", () => {
+    for (const responsibilityId of remainingInteractionResponsibilityIds) {
       const responsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
         (item) => item.id === responsibilityId
       );
@@ -98,6 +116,29 @@ describe("current babylon scene boundary", () => {
     expect(contract.testModule).toBe("src/components/babylonScene/objectRendering.test.ts");
     expect(contract.remainingAdapterModule).toBe("src/components/BabylonScene.tsx");
     expect(contract.riskLevel).toBe("low");
+  });
+
+  it("tracks selection and object picking as an extracted helper contract", () => {
+    const contract = currentBabylonSceneBoundary.selectionPickingContract;
+
+    expect(contract.responsibilityIds).toEqual(selectionPickingResponsibilityIds);
+    expect(contract.status).toBe("extracted");
+    expect(contract.ownerModule).toBe("src/components/babylonScene/selectionPicking.ts");
+    expect(contract.extractedModule).toBe("src/components/babylonScene/selectionPicking.ts");
+    expect(contract.testModule).toBe("src/components/babylonScene/selectionPicking.test.ts");
+    expect(contract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
+    expect(contract.riskLevel).toBe("low");
+    expect(contract.extractedFlows).toEqual({
+      pickTargetMetadataDecoding: true,
+      machinePickMetadataAssignment: true,
+      hierarchyPickMetadataPropagation: true,
+      toggleSelectionEventDetection: true
+    });
+    expect(contract.remainingInteractionFlows).toEqual({
+      pointerObserverOrchestration: true,
+      dragMovePlacement: true,
+      rotationTransformGizmo: true
+    });
   });
 
   it("keeps rendering responsibility separate from extracted and high-risk interaction responsibilities", () => {
@@ -241,5 +282,7 @@ describe("current babylon scene boundary", () => {
     expect(noteIds).toContain("camera-state-adapter-remains");
     expect(noteIds).toContain("object-rendering-contract-added");
     expect(noteIds).toContain("object-rendering-adapter-remains");
+    expect(noteIds).toContain("selection-picking-extracted");
+    expect(noteIds).toContain("pointer-orchestration-remains");
   });
 });

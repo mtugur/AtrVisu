@@ -27,6 +27,7 @@ const withResponsibilityUpdate = (
   );
 
 const interactionResponsibilityId = "pointer-interaction-handling";
+const selectionPickingResponsibilityId = "selection-visualization";
 
 describe("babylon scene boundary audit failures", () => {
   it("fails when id is empty", () => {
@@ -219,6 +220,87 @@ describe("babylon scene boundary audit failures", () => {
           })
         }),
         "interaction-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when a selection picking responsibility is missing", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withoutResponsibility(selectionPickingResponsibilityId)
+        }),
+        "selection-picking-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when a selection picking responsibility is still marked remaining", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(selectionPickingResponsibilityId, {
+            status: "remaining"
+          })
+        }),
+        "selection-picking-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when a selection picking responsibility has wrong owner", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(selectionPickingResponsibilityId, {
+            ownerModule: "src/components/BabylonScene.tsx"
+          })
+        }),
+        "selection-picking-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when a selection picking responsibility has wrong risk level", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          primaryResponsibilities: withResponsibilityUpdate(selectionPickingResponsibilityId, {
+            riskLevel: "high"
+          })
+        }),
+        "selection-picking-responsibility-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when selection picking contract is detached from extracted helper ownership", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          selectionPickingContract: {
+            ...currentBabylonSceneBoundary.selectionPickingContract,
+            ownerModule: "src/components/BabylonScene.tsx"
+          } as unknown as BabylonSceneBoundaryInventory["selectionPickingContract"]
+        }),
+        "selection-picking-contract-invalid"
+      )
+    ).toBe(true);
+  });
+
+  it("fails when selection picking contract loses extracted flow coverage", () => {
+    expect(
+      hasIssue(
+        withInventory({
+          selectionPickingContract: {
+            ...currentBabylonSceneBoundary.selectionPickingContract,
+            extractedFlows: {
+              ...currentBabylonSceneBoundary.selectionPickingContract.extractedFlows,
+              pickTargetMetadataDecoding: false
+            }
+          } as unknown as BabylonSceneBoundaryInventory["selectionPickingContract"]
+        }),
+        "selection-picking-contract-invalid"
       )
     ).toBe(true);
   });
