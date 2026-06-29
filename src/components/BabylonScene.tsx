@@ -58,6 +58,10 @@ import {
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
 import {
+  applyPlanRotationY,
+  getRotationVectorRadians
+} from "./babylonScene/rotationGizmo";
+import {
   applyMachinePickMetadataToHierarchy,
   getSelectionPickTarget,
   isToggleSelectionEvent,
@@ -657,7 +661,7 @@ const positionCivilReferenceNode = (
     mmToMeters(item.positionMm.zMm ?? 0) + height / 2,
     mmToMeters(center.yMm)
   );
-  node.mesh.rotation.y = radiansFromDegrees(item.rotationDeg);
+  applyPlanRotationY(node.mesh, item.rotationDeg);
   node.selectionFrame.isVisible = selectedCivilReferenceId === item.id;
   node.label.position = new Vector3(
     node.mesh.position.x,
@@ -809,8 +813,6 @@ const createPlaceholderMeshes = (scene: Scene, machine: PlacedMachine, rootBox: 
   });
 };
 
-const radiansFromDegrees = (degrees: number) => (degrees * Math.PI) / 180;
-
 const splitModelPath = (modelPath: string) => {
   const slashIndex = modelPath.lastIndexOf("/");
   if (slashIndex < 0) {
@@ -884,10 +886,11 @@ const loadVisualModel = async (
       calibratedY + mmToMeters(visualModel.positionOffsetMm.yMm),
       calibratedZ + mmToMeters(visualModel.positionOffsetMm.zMm)
     );
+    const rotationOffsetRadians = getRotationVectorRadians(visualModel.rotationOffsetDeg);
     visualRoot.rotation = new Vector3(
-      radiansFromDegrees(visualModel.rotationOffsetDeg.x),
-      radiansFromDegrees(visualModel.rotationOffsetDeg.y),
-      radiansFromDegrees(visualModel.rotationOffsetDeg.z)
+      rotationOffsetRadians.x,
+      rotationOffsetRadians.y,
+      rotationOffsetRadians.z
     );
 
     placeholderMaterial.alpha = 0.98;
@@ -1699,7 +1702,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         scene
       );
       box.position = new Vector3(renderCenter.x, dimensions.height / 2, renderCenter.z);
-      box.rotation.y = (machine.rotationY * Math.PI) / 180;
+      applyPlanRotationY(box, machine.rotationY);
       box.material = material;
       box.metadata = { instanceId };
       box.visibility = 0;
@@ -1867,7 +1870,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       node.box.position.x = renderCenter.x;
       node.box.position.y = dimensions.height / 2;
       node.box.position.z = renderCenter.z;
-      node.box.rotation.y = (machine.rotationY * Math.PI) / 180;
+      applyPlanRotationY(node.box, machine.rotationY);
       if (node.flowArrow) {
         node.flowArrow.rotation.y = machine.flowDirection === "reverse" ? Math.PI : 0;
       }
