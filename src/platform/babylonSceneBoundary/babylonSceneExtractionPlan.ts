@@ -200,13 +200,14 @@ export const babylonSceneExtractionPlan = {
     {
       id: "interaction-extraction",
       title: "Remaining interaction extraction",
-      goal: "Track extracted selection/picking helper coverage and extract remaining pointer orchestration in ordered slices for drag/move, placement, rotation, and gizmo behavior.",
+      goal: "Track extracted selection/picking and drag placement helper coverage, then extract remaining rotation/gizmo behavior before post-interaction inventory and multi-select readiness work.",
       riskLevel: "high",
       prerequisites: [
         "scene-lifecycle-extraction",
         "viewport-camera-extraction",
         "object-rendering-extraction",
         "selection-picking-helper-extracted",
+        "drag-placement-helper-extracted",
         "selection-and-drag-contract-tests-ready"
       ],
       protectedBehaviors: [
@@ -214,10 +215,13 @@ export const babylonSceneExtractionPlan = {
         "selection-picking-helper-contract",
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
+        "drag-placement-helper-contract",
+        "machine-drag-position-updates",
+        "civil-drag-position-calculation",
+        "floor-delta-mm-conversion",
         "pointer-interaction-handling",
         "single-and-multi-selection-order",
         "object-civil-annotation-drag-math",
-        "drag-move-placement-interaction",
         "placement-and-rotation-controls",
         "rotation-transform-interaction",
         "camera-controls-not-triggered-during-drag"
@@ -232,12 +236,15 @@ export const babylonSceneExtractionPlan = {
       ],
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
+        "src/components/babylonScene/dragPlacement.ts",
+        "src/components/babylonScene/dragPlacement.test.ts",
         "src/components/babylonScene/selectionPicking.ts",
         "src/components/babylonScene/selectionPicking.test.ts",
         "src/scene/interactions/createScenePointerController.ts (conceptual)",
-        "src/scene/interactions/createDragPlacementController.ts (conceptual)",
         "src/scene/interactions/createRotationGizmoController.ts (conceptual)",
-        "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)"
+        "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)",
+        "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)",
+        "src/scene/interactions/createAlignmentSnapPreparationAdapter.ts (conceptual)"
       ]
     },
     {

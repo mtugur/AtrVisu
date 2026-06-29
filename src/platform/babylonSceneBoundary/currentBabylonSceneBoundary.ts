@@ -8,6 +8,8 @@ export const currentBabylonSceneBoundary = {
   sourceFiles: [
     "src/components/BabylonScene.tsx",
     "src/components/babylonScene/cameraViewport.ts",
+    "src/components/babylonScene/dragPlacement.ts",
+    "src/components/babylonScene/dragPlacement.test.ts",
     "src/components/babylonScene/objectRendering.ts",
     "src/components/babylonScene/objectRendering.test.ts",
     "src/components/babylonScene/selectionPicking.ts",
@@ -138,10 +140,10 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "drag-move-placement-interaction",
-      label: "Drag, move, and placement interaction handling remains in BabylonScene and is high risk to extract",
-      status: "remaining",
-      riskLevel: "high",
-      ownerModule: "src/components/BabylonScene.tsx",
+      label: "Drag, move, placement, and floor-delta calculation logic extracted to dragPlacement helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/dragPlacement.ts",
       nextRefactorCandidate: false
     },
     {
@@ -150,7 +152,7 @@ export const currentBabylonSceneBoundary = {
       status: "remaining",
       riskLevel: "high",
       ownerModule: "src/components/BabylonScene.tsx",
-      nextRefactorCandidate: false
+      nextRefactorCandidate: true
     },
     {
       id: "collision-clearance-visualization",
@@ -300,12 +302,51 @@ export const currentBabylonSceneBoundary = {
     },
     remainingInteractionFlows: {
       pointerObserverOrchestration: true,
-      dragMovePlacement: true,
       rotationTransformGizmo: true
     },
     futureModuleCandidates: [
       "src/scene/interactions/createSelectionController.ts (conceptual)",
       "src/scene/interactions/createPickingMetadataAdapter.ts (conceptual)"
+    ]
+  },
+  dragPlacementContract: {
+    responsibilityId: "drag-move-placement-interaction",
+    status: "extracted",
+    ownerModule: "src/components/babylonScene/dragPlacement.ts",
+    riskLevel: "low",
+    refactorRiskRank: 2,
+    extractedModule: "src/components/babylonScene/dragPlacement.ts",
+    testModule: "src/components/babylonScene/dragPlacement.test.ts",
+    remainingPointerOrchestrationModule: "src/components/BabylonScene.tsx",
+    separatedFromResponsibilityIds: [
+      "pointer-interaction-handling",
+      "rotation-transform-interaction",
+      "selection-visualization",
+      "object-picking-metadata"
+    ],
+    protectedBehaviors: [
+      "machine-drag-instance-selection",
+      "locked-machine-drag-filtering",
+      "machine-start-position-capture",
+      "floor-delta-mm-conversion",
+      "civil-drag-position-calculation",
+      "machine-drag-position-updates",
+      "remaining-pointer-observer-orchestration"
+    ],
+    extractedFlows: {
+      machineDragInstanceSelection: true,
+      machineStartPositionCapture: true,
+      floorDeltaMmConversion: true,
+      civilDragPositionCalculation: true,
+      machineDragPositionUpdates: true
+    },
+    remainingInteractionFlows: {
+      pointerObserverOrchestration: true,
+      rotationTransformGizmo: true
+    },
+    futureModuleCandidates: [
+      "src/scene/interactions/createDragPlacementController.ts (conceptual)",
+      "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)"
     ]
   },
   knownUpstreamInputs: [
@@ -383,7 +424,7 @@ export const currentBabylonSceneBoundary = {
   boundaryRisks: [
     {
       id: "multi-responsibility-component",
-      label: "BabylonScene still carries machine/object rendering adapter, pointer orchestration, drag, diagnostics, and camera state adapter responsibilities"
+      label: "BabylonScene still carries machine/object rendering adapter, pointer orchestration, rotation/gizmo, diagnostics, and camera state adapter responsibilities"
     },
     {
       id: "rendering-lifecycle-cleanup-risk",
@@ -395,17 +436,17 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "selection-placement-viewport-coupling",
-      label: "Pointer orchestration, placement, and viewport concerns remain coupled after selection/picking helper extraction"
+      label: "Pointer orchestration, rotation/gizmo, and viewport concerns remain coupled after selection/picking and drag placement helper extraction"
     },
     {
       id: "pointer-camera-regression-risk",
-      label: "Pointer, drag, and camera interactions are sensitive regression areas"
+      label: "Pointer orchestration, rotation/gizmo, and camera interactions are sensitive regression areas"
     }
   ],
   extractionNotes: [
     {
       id: "extract-gradually",
-      label: "Visual context, scene lifecycle, camera, rendering descriptor, and selection/picking helpers are extracted; remaining drag, rotation, diagnostics, and overlay concerns should be extracted gradually"
+      label: "Visual context, scene lifecycle, camera, rendering descriptor, selection/picking, and drag placement helpers are extracted; remaining rotation, diagnostics, and overlay concerns should be extracted gradually"
     },
     {
       id: "visual-context-extracted",
@@ -437,11 +478,15 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "pointer-orchestration-remains",
-      label: "BabylonScene still owns pointer observer orchestration, drag/move/placement, and rotation/gizmo interaction flow"
+      label: "BabylonScene still owns pointer observer orchestration and rotation/gizmo interaction flow"
+    },
+    {
+      id: "drag-placement-extracted",
+      label: "Machine and civil drag state, floor-delta millimeter conversion, and drag position update calculations now live in src/components/babylonScene/dragPlacement.ts"
     },
     {
       id: "next-controlled-candidate",
-      label: "Machine/object rendering adapter, diagnostics, overlays, drag/move/placement, and rotation/gizmo remain controlled candidates after selection/picking extraction"
+      label: "Rotation/gizmo is the next controlled interaction candidate after drag placement extraction, followed by post-interaction inventory and multi-select/alignment/snap readiness work"
     },
     {
       id: "preserve-app-shell-scene-viewport-slot",

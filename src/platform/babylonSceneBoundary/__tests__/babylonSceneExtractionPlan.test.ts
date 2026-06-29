@@ -125,10 +125,20 @@ describe("babylon scene extraction plan", () => {
         "selection-picking-helper-contract",
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
+        "drag-placement-helper-contract",
+        "machine-drag-position-updates",
+        "civil-drag-position-calculation",
+        "floor-delta-mm-conversion",
         "pointer-interaction-handling",
-        "drag-move-placement-interaction",
         "rotation-transform-interaction"
       ])
+    );
+    expect(interactionPhase?.prerequisites).toContain("drag-placement-helper-extracted");
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/dragPlacement.ts"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/dragPlacement.test.ts"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/selectionPicking.ts"
@@ -140,13 +150,16 @@ describe("babylon scene extraction plan", () => {
       "src/scene/interactions/createScenePointerController.ts (conceptual)"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
-      "src/scene/interactions/createDragPlacementController.ts (conceptual)"
-    );
-    expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/scene/interactions/createRotationGizmoController.ts (conceptual)"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/scene/interactions/createAlignmentSnapPreparationAdapter.ts (conceptual)"
     );
   });
 });

@@ -30,9 +30,10 @@ const expectedSelectionPickingResponsibilities = [
   "object-picking-metadata"
 ] as const;
 
+const expectedDragPlacementResponsibility = "drag-move-placement-interaction";
+
 const expectedRemainingInteractionResponsibilities = [
   "pointer-interaction-handling",
-  "drag-move-placement-interaction",
   "rotation-transform-interaction"
 ] as const;
 
@@ -106,16 +107,30 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
   }
   for (const responsibilityId of expectedRemainingInteractionResponsibilities) {
     const responsibility = findResponsibilityById(inventory.primaryResponsibilities, responsibilityId);
+    const isRotationTransform = responsibilityId === "rotation-transform-interaction";
 
     if (
       !responsibility ||
       responsibility.status !== "remaining" ||
       responsibility.ownerModule !== "src/components/BabylonScene.tsx" ||
       responsibility.riskLevel !== "high" ||
-      responsibility.nextRefactorCandidate !== false
+      responsibility.nextRefactorCandidate !== isRotationTransform
     ) {
-      issues.push(createIssue("interaction-responsibility-invalid", "Babylon scene primaryResponsibilities must keep remaining runtime interaction responsibilities as remaining high-risk BabylonScene work and not controlled next refactor candidates.", inventory.id, [responsibilityId]));
+      issues.push(createIssue("interaction-responsibility-invalid", "Babylon scene primaryResponsibilities must keep pointer orchestration and rotation/gizmo responsibilities as remaining high-risk BabylonScene work with the expected next-candidate classification.", inventory.id, [responsibilityId]));
     }
+  }
+  const dragPlacementResponsibility = findResponsibilityById(
+    inventory.primaryResponsibilities,
+    expectedDragPlacementResponsibility
+  );
+  if (
+    !dragPlacementResponsibility ||
+    dragPlacementResponsibility.status !== "extracted" ||
+    dragPlacementResponsibility.ownerModule !== "src/components/babylonScene/dragPlacement.ts" ||
+    dragPlacementResponsibility.riskLevel !== "low" ||
+    dragPlacementResponsibility.nextRefactorCandidate !== false
+  ) {
+    issues.push(createIssue("drag-placement-responsibility-invalid", "Babylon scene primaryResponsibilities must keep drag/move/placement as extracted dragPlacement helper work.", inventory.id, [expectedDragPlacementResponsibility]));
   }
   if (
     inventory.cameraViewportContract.responsibilityId !== "camera-creation-control" ||
@@ -166,13 +181,33 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
     !inventory.selectionPickingContract.extractedFlows.hierarchyPickMetadataPropagation ||
     !inventory.selectionPickingContract.extractedFlows.toggleSelectionEventDetection ||
     !inventory.selectionPickingContract.remainingInteractionFlows.pointerObserverOrchestration ||
-    !inventory.selectionPickingContract.remainingInteractionFlows.dragMovePlacement ||
     !inventory.selectionPickingContract.remainingInteractionFlows.rotationTransformGizmo ||
     !inventory.selectionPickingContract.separatedFromResponsibilityIds.includes("pointer-interaction-handling") ||
     !inventory.selectionPickingContract.separatedFromResponsibilityIds.includes("drag-move-placement-interaction") ||
     !inventory.selectionPickingContract.separatedFromResponsibilityIds.includes("rotation-transform-interaction")
   ) {
     issues.push(createIssue("selection-picking-contract-invalid", "Babylon scene selectionPickingContract must protect extracted selection/object-picking helper behavior while keeping pointer orchestration, drag, and rotation responsibilities separate.", inventory.id));
+  }
+  if (
+    inventory.dragPlacementContract.responsibilityId !== "drag-move-placement-interaction" ||
+    inventory.dragPlacementContract.status !== "extracted" ||
+    inventory.dragPlacementContract.ownerModule !== "src/components/babylonScene/dragPlacement.ts" ||
+    inventory.dragPlacementContract.extractedModule !== "src/components/babylonScene/dragPlacement.ts" ||
+    inventory.dragPlacementContract.testModule !== "src/components/babylonScene/dragPlacement.test.ts" ||
+    inventory.dragPlacementContract.remainingPointerOrchestrationModule !== "src/components/BabylonScene.tsx" ||
+    inventory.dragPlacementContract.riskLevel !== "low" ||
+    inventory.dragPlacementContract.protectedBehaviors.length === 0 ||
+    !inventory.dragPlacementContract.extractedFlows.machineDragInstanceSelection ||
+    !inventory.dragPlacementContract.extractedFlows.machineStartPositionCapture ||
+    !inventory.dragPlacementContract.extractedFlows.floorDeltaMmConversion ||
+    !inventory.dragPlacementContract.extractedFlows.civilDragPositionCalculation ||
+    !inventory.dragPlacementContract.extractedFlows.machineDragPositionUpdates ||
+    !inventory.dragPlacementContract.remainingInteractionFlows.pointerObserverOrchestration ||
+    !inventory.dragPlacementContract.remainingInteractionFlows.rotationTransformGizmo ||
+    !inventory.dragPlacementContract.separatedFromResponsibilityIds.includes("pointer-interaction-handling") ||
+    !inventory.dragPlacementContract.separatedFromResponsibilityIds.includes("rotation-transform-interaction")
+  ) {
+    issues.push(createIssue("drag-placement-contract-invalid", "Babylon scene dragPlacementContract must protect extracted drag/move/placement helper behavior while keeping pointer orchestration and rotation responsibilities separate.", inventory.id));
   }
   if (!hasReferenceItems(inventory.knownUpstreamInputs)) {
     issues.push(createIssue("upstream-inputs-empty", "Babylon scene knownUpstreamInputs must not be empty.", inventory.id));

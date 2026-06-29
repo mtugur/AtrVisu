@@ -109,7 +109,31 @@ export type BabylonSceneSelectionPickingContract = {
   };
   remainingInteractionFlows: {
     pointerObserverOrchestration: true;
-    dragMovePlacement: true;
+    rotationTransformGizmo: true;
+  };
+  futureModuleCandidates: readonly string[];
+};
+
+export type BabylonSceneDragPlacementContract = {
+  responsibilityId: "drag-move-placement-interaction";
+  status: "extracted";
+  ownerModule: "src/components/babylonScene/dragPlacement.ts";
+  riskLevel: "low";
+  refactorRiskRank: number;
+  extractedModule: "src/components/babylonScene/dragPlacement.ts";
+  testModule: "src/components/babylonScene/dragPlacement.test.ts";
+  remainingPointerOrchestrationModule: "src/components/BabylonScene.tsx";
+  separatedFromResponsibilityIds: readonly string[];
+  protectedBehaviors: readonly string[];
+  extractedFlows: {
+    machineDragInstanceSelection: true;
+    machineStartPositionCapture: true;
+    floorDeltaMmConversion: true;
+    civilDragPositionCalculation: true;
+    machineDragPositionUpdates: true;
+  };
+  remainingInteractionFlows: {
+    pointerObserverOrchestration: true;
     rotationTransformGizmo: true;
   };
   futureModuleCandidates: readonly string[];
@@ -128,6 +152,7 @@ export type BabylonSceneBoundaryInventory = {
   cameraViewportContract: BabylonSceneCameraViewportContract;
   objectRenderingContract: BabylonSceneObjectRenderingContract;
   selectionPickingContract: BabylonSceneSelectionPickingContract;
+  dragPlacementContract: BabylonSceneDragPlacementContract;
   knownUpstreamInputs: readonly BabylonSceneBoundaryReference[];
   knownDownstreamEffects: readonly BabylonSceneBoundaryReference[];
   boundaryRisks: readonly BabylonSceneBoundaryReference[];
@@ -168,6 +193,7 @@ export type PlatformBabylonSceneBoundaryReport = {
   cameraViewportContract: BabylonSceneCameraViewportContract;
   objectRenderingContract: BabylonSceneObjectRenderingContract;
   selectionPickingContract: BabylonSceneSelectionPickingContract;
+  dragPlacementContract: BabylonSceneDragPlacementContract;
   upstreamInputCount: number;
   downstreamEffectCount: number;
   boundaryRiskCount: number;

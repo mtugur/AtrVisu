@@ -9,9 +9,10 @@ const selectionPickingResponsibilityIds = [
 
 const remainingInteractionResponsibilityIds = [
   "pointer-interaction-handling",
-  "drag-move-placement-interaction",
   "rotation-transform-interaction"
 ] as const;
+
+const dragPlacementResponsibilityId = "drag-move-placement-interaction";
 
 describe("platform babylon scene boundary report", () => {
   it("returns a ready report for current inventory", () => {
@@ -36,9 +37,9 @@ describe("platform babylon scene boundary report", () => {
     expect(report.sourceFileCount).toBe(currentBabylonSceneBoundary.sourceFiles.length);
     expect(report.parentBoundaryCount).toBe(currentBabylonSceneBoundary.parentBoundaryIds.length);
     expect(report.responsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length);
-    expect(report.extractedResponsibilityCount).toBe(6);
-    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 6);
-    expect(report.highRiskResponsibilityCount).toBe(3);
+    expect(report.extractedResponsibilityCount).toBe(7);
+    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 7);
+    expect(report.highRiskResponsibilityCount).toBe(2);
     expect(report.upstreamInputCount).toBe(currentBabylonSceneBoundary.knownUpstreamInputs.length);
     expect(report.downstreamEffectCount).toBe(currentBabylonSceneBoundary.knownDownstreamEffects.length);
     expect(report.boundaryRiskCount).toBe(currentBabylonSceneBoundary.boundaryRisks.length);
@@ -58,9 +59,9 @@ describe("platform babylon scene boundary report", () => {
     expect(report.nextRefactorCandidates.map((item) => item.id)).toEqual([
       "collision-clearance-visualization",
       "machine-object-rendering-adapter",
-      "visual-diagnostics-overlays"
+      "visual-diagnostics-overlays",
+      "rotation-transform-interaction"
     ]);
-    expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
   });
 
   it("keeps extracted selection and object picking responsibilities visible in the report inventory", () => {
@@ -81,6 +82,18 @@ describe("platform babylon scene boundary report", () => {
     ).toBe(true);
   });
 
+  it("keeps extracted drag move and placement responsibility visible in the report inventory", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+    const dragPlacementResponsibility = report.inventory.primaryResponsibilities.find(
+      (item) => item.id === dragPlacementResponsibilityId
+    );
+
+    expect(dragPlacementResponsibility?.status).toBe("extracted");
+    expect(dragPlacementResponsibility?.ownerModule).toBe("src/components/babylonScene/dragPlacement.ts");
+    expect(dragPlacementResponsibility?.riskLevel).toBe("low");
+    expect(dragPlacementResponsibility?.nextRefactorCandidate).toBe(false);
+  });
+
   it("keeps remaining high-risk interaction responsibilities visible in the report inventory", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
     const interactionResponsibilities = report.inventory.primaryResponsibilities.filter((item) =>
@@ -93,9 +106,14 @@ describe("platform babylon scene boundary report", () => {
         (item) =>
           item.status === "remaining" &&
           item.ownerModule === "src/components/BabylonScene.tsx" &&
-          item.riskLevel === "high" &&
-          item.nextRefactorCandidate === false
+          item.riskLevel === "high"
       )
+    ).toBe(true);
+    expect(
+      interactionResponsibilities.find((item) => item.id === "pointer-interaction-handling")?.nextRefactorCandidate
+    ).toBe(false);
+    expect(
+      interactionResponsibilities.find((item) => item.id === "rotation-transform-interaction")?.nextRefactorCandidate
     ).toBe(true);
   });
 
@@ -156,12 +174,39 @@ describe("platform babylon scene boundary report", () => {
     expect(report.selectionPickingContract.extractedModule).toBe("src/components/babylonScene/selectionPicking.ts");
     expect(report.selectionPickingContract.testModule).toBe("src/components/babylonScene/selectionPicking.test.ts");
     expect(report.selectionPickingContract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
-    expect(report.selectionPickingContract.separatedFromResponsibilityIds).toEqual(remainingInteractionResponsibilityIds);
+    expect(report.selectionPickingContract.separatedFromResponsibilityIds).toEqual([
+      "pointer-interaction-handling",
+      "drag-move-placement-interaction",
+      "rotation-transform-interaction"
+    ]);
     expect(report.selectionPickingContract.extractedFlows).toEqual({
       pickTargetMetadataDecoding: true,
       machinePickMetadataAssignment: true,
       hierarchyPickMetadataPropagation: true,
       toggleSelectionEventDetection: true
+    });
+  });
+
+  it("exposes the drag move and placement contract in the report", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+
+    expect(report.dragPlacementContract.responsibilityId).toBe(dragPlacementResponsibilityId);
+    expect(report.dragPlacementContract.status).toBe("extracted");
+    expect(report.dragPlacementContract.ownerModule).toBe("src/components/babylonScene/dragPlacement.ts");
+    expect(report.dragPlacementContract.extractedModule).toBe("src/components/babylonScene/dragPlacement.ts");
+    expect(report.dragPlacementContract.testModule).toBe("src/components/babylonScene/dragPlacement.test.ts");
+    expect(report.dragPlacementContract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
+    expect(report.dragPlacementContract.riskLevel).toBe("low");
+    expect(report.dragPlacementContract.extractedFlows).toEqual({
+      machineDragInstanceSelection: true,
+      machineStartPositionCapture: true,
+      floorDeltaMmConversion: true,
+      civilDragPositionCalculation: true,
+      machineDragPositionUpdates: true
+    });
+    expect(report.dragPlacementContract.remainingInteractionFlows).toEqual({
+      pointerObserverOrchestration: true,
+      rotationTransformGizmo: true
     });
   });
 });
