@@ -199,21 +199,23 @@ export const babylonSceneExtractionPlan = {
     },
     {
       id: "interaction-extraction",
-      title: "Interaction extraction",
-      goal: "Extract pointer handling in ordered slices for selection, drag/move, placement, rotation, and gizmo behavior.",
+      title: "Remaining interaction extraction",
+      goal: "Track extracted selection/picking helper coverage and extract remaining pointer orchestration in ordered slices for drag/move, placement, rotation, and gizmo behavior.",
       riskLevel: "high",
       prerequisites: [
         "scene-lifecycle-extraction",
         "viewport-camera-extraction",
         "object-rendering-extraction",
+        "selection-picking-helper-extracted",
         "selection-and-drag-contract-tests-ready"
       ],
       protectedBehaviors: [
         ...baselineProtectedBehaviors,
+        "selection-picking-helper-contract",
+        "pick-target-metadata-decoding",
+        "machine-pick-metadata-assignment",
         "pointer-interaction-handling",
         "single-and-multi-selection-order",
-        "selection-visualization",
-        "object-picking-metadata",
         "object-civil-annotation-drag-math",
         "drag-move-placement-interaction",
         "placement-and-rotation-controls",
@@ -230,10 +232,12 @@ export const babylonSceneExtractionPlan = {
       ],
       expectedFilesOrModules: [
         "src/components/BabylonScene.tsx",
+        "src/components/babylonScene/selectionPicking.ts",
+        "src/components/babylonScene/selectionPicking.test.ts",
         "src/scene/interactions/createScenePointerController.ts (conceptual)",
-        "src/scene/interactions/createSelectionController.ts (conceptual)",
         "src/scene/interactions/createDragPlacementController.ts (conceptual)",
-        "src/scene/interactions/createRotationGizmoController.ts (conceptual)"
+        "src/scene/interactions/createRotationGizmoController.ts (conceptual)",
+        "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)"
       ]
     },
     {

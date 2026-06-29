@@ -90,6 +90,31 @@ export type BabylonSceneObjectRenderingContract = {
   futureModuleCandidates: readonly string[];
 };
 
+export type BabylonSceneSelectionPickingContract = {
+  responsibilityIds: readonly ["selection-visualization", "object-picking-metadata"];
+  status: "extracted";
+  ownerModule: "src/components/babylonScene/selectionPicking.ts";
+  riskLevel: "low";
+  refactorRiskRank: number;
+  extractedModule: "src/components/babylonScene/selectionPicking.ts";
+  testModule: "src/components/babylonScene/selectionPicking.test.ts";
+  remainingPointerOrchestrationModule: "src/components/BabylonScene.tsx";
+  separatedFromResponsibilityIds: readonly string[];
+  protectedBehaviors: readonly string[];
+  extractedFlows: {
+    pickTargetMetadataDecoding: true;
+    machinePickMetadataAssignment: true;
+    hierarchyPickMetadataPropagation: true;
+    toggleSelectionEventDetection: true;
+  };
+  remainingInteractionFlows: {
+    pointerObserverOrchestration: true;
+    dragMovePlacement: true;
+    rotationTransformGizmo: true;
+  };
+  futureModuleCandidates: readonly string[];
+};
+
 export type BabylonSceneBoundaryInventory = {
   id: BabylonSceneBoundaryId;
   displayName: string;
@@ -102,6 +127,7 @@ export type BabylonSceneBoundaryInventory = {
   primaryResponsibilities: readonly BabylonSceneBoundaryResponsibility[];
   cameraViewportContract: BabylonSceneCameraViewportContract;
   objectRenderingContract: BabylonSceneObjectRenderingContract;
+  selectionPickingContract: BabylonSceneSelectionPickingContract;
   knownUpstreamInputs: readonly BabylonSceneBoundaryReference[];
   knownDownstreamEffects: readonly BabylonSceneBoundaryReference[];
   boundaryRisks: readonly BabylonSceneBoundaryReference[];
@@ -141,6 +167,7 @@ export type PlatformBabylonSceneBoundaryReport = {
   nextRefactorCandidates: readonly BabylonSceneBoundaryResponsibility[];
   cameraViewportContract: BabylonSceneCameraViewportContract;
   objectRenderingContract: BabylonSceneObjectRenderingContract;
+  selectionPickingContract: BabylonSceneSelectionPickingContract;
   upstreamInputCount: number;
   downstreamEffectCount: number;
   boundaryRiskCount: number;

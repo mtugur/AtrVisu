@@ -122,15 +122,31 @@ describe("babylon scene extraction plan", () => {
     expect(interactionPhase?.riskLevel).toBe("high");
     expect(interactionPhase?.protectedBehaviors).toEqual(
       expect.arrayContaining([
+        "selection-picking-helper-contract",
+        "pick-target-metadata-decoding",
+        "machine-pick-metadata-assignment",
         "pointer-interaction-handling",
-        "selection-visualization",
-        "object-picking-metadata",
         "drag-move-placement-interaction",
         "rotation-transform-interaction"
       ])
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/selectionPicking.ts"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/components/babylonScene/selectionPicking.test.ts"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/scene/interactions/createScenePointerController.ts (conceptual)"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/scene/interactions/createDragPlacementController.ts (conceptual)"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/scene/interactions/createRotationGizmoController.ts (conceptual)"
+    );
+    expect(interactionPhase?.expectedFilesOrModules).toContain(
+      "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)"
     );
   });
 });

@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { currentBabylonSceneBoundary } from "../currentBabylonSceneBoundary";
 import { createPlatformBabylonSceneBoundaryReport } from "../platformBabylonSceneBoundaryReport";
 
-const interactionResponsibilityIds = [
+const selectionPickingResponsibilityIds = [
   "selection-visualization",
+  "object-picking-metadata"
+] as const;
+
+const remainingInteractionResponsibilityIds = [
   "pointer-interaction-handling",
-  "object-picking-metadata",
   "drag-move-placement-interaction",
   "rotation-transform-interaction"
 ] as const;
@@ -33,9 +36,9 @@ describe("platform babylon scene boundary report", () => {
     expect(report.sourceFileCount).toBe(currentBabylonSceneBoundary.sourceFiles.length);
     expect(report.parentBoundaryCount).toBe(currentBabylonSceneBoundary.parentBoundaryIds.length);
     expect(report.responsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length);
-    expect(report.extractedResponsibilityCount).toBe(4);
-    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 4);
-    expect(report.highRiskResponsibilityCount).toBe(5);
+    expect(report.extractedResponsibilityCount).toBe(6);
+    expect(report.remainingResponsibilityCount).toBe(currentBabylonSceneBoundary.primaryResponsibilities.length - 6);
+    expect(report.highRiskResponsibilityCount).toBe(3);
     expect(report.upstreamInputCount).toBe(currentBabylonSceneBoundary.knownUpstreamInputs.length);
     expect(report.downstreamEffectCount).toBe(currentBabylonSceneBoundary.knownDownstreamEffects.length);
     expect(report.boundaryRiskCount).toBe(currentBabylonSceneBoundary.boundaryRisks.length);
@@ -60,13 +63,31 @@ describe("platform babylon scene boundary report", () => {
     expect(report.nextRefactorCandidates.every((item) => item.riskLevel !== "high")).toBe(true);
   });
 
+  it("keeps extracted selection and object picking responsibilities visible in the report inventory", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+    const selectionPickingResponsibilities = report.inventory.primaryResponsibilities.filter((item) =>
+      selectionPickingResponsibilityIds.includes(item.id as (typeof selectionPickingResponsibilityIds)[number])
+    );
+
+    expect(selectionPickingResponsibilities.map((item) => item.id)).toEqual(selectionPickingResponsibilityIds);
+    expect(
+      selectionPickingResponsibilities.every(
+        (item) =>
+          item.status === "extracted" &&
+          item.ownerModule === "src/components/babylonScene/selectionPicking.ts" &&
+          item.riskLevel === "low" &&
+          item.nextRefactorCandidate === false
+      )
+    ).toBe(true);
+  });
+
   it("keeps remaining high-risk interaction responsibilities visible in the report inventory", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
     const interactionResponsibilities = report.inventory.primaryResponsibilities.filter((item) =>
-      interactionResponsibilityIds.includes(item.id as (typeof interactionResponsibilityIds)[number])
+      remainingInteractionResponsibilityIds.includes(item.id as (typeof remainingInteractionResponsibilityIds)[number])
     );
 
-    expect(interactionResponsibilities.map((item) => item.id)).toEqual(interactionResponsibilityIds);
+    expect(interactionResponsibilities.map((item) => item.id)).toEqual(remainingInteractionResponsibilityIds);
     expect(
       interactionResponsibilities.every(
         (item) =>
@@ -123,6 +144,24 @@ describe("platform babylon scene boundary report", () => {
       sceneLifecycle: "src/components/babylonScene/sceneLifecycle.ts",
       visualContext: "src/components/babylonScene/visualContext.ts",
       cameraViewport: "src/components/babylonScene/cameraViewport.ts"
+    });
+  });
+
+  it("exposes the selection and object picking contract in the report", () => {
+    const report = createPlatformBabylonSceneBoundaryReport();
+
+    expect(report.selectionPickingContract.status).toBe("extracted");
+    expect(report.selectionPickingContract.responsibilityIds).toEqual(selectionPickingResponsibilityIds);
+    expect(report.selectionPickingContract.ownerModule).toBe("src/components/babylonScene/selectionPicking.ts");
+    expect(report.selectionPickingContract.extractedModule).toBe("src/components/babylonScene/selectionPicking.ts");
+    expect(report.selectionPickingContract.testModule).toBe("src/components/babylonScene/selectionPicking.test.ts");
+    expect(report.selectionPickingContract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
+    expect(report.selectionPickingContract.separatedFromResponsibilityIds).toEqual(remainingInteractionResponsibilityIds);
+    expect(report.selectionPickingContract.extractedFlows).toEqual({
+      pickTargetMetadataDecoding: true,
+      machinePickMetadataAssignment: true,
+      hierarchyPickMetadataPropagation: true,
+      toggleSelectionEventDetection: true
     });
   });
 });

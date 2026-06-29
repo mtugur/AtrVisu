@@ -10,6 +10,8 @@ export const currentBabylonSceneBoundary = {
     "src/components/babylonScene/cameraViewport.ts",
     "src/components/babylonScene/objectRendering.ts",
     "src/components/babylonScene/objectRendering.test.ts",
+    "src/components/babylonScene/selectionPicking.ts",
+    "src/components/babylonScene/selectionPicking.test.ts",
     "src/components/babylonScene/sceneLifecycle.ts",
     "src/components/babylonScene/visualContext.ts",
     "src/types/machine.ts",
@@ -112,10 +114,10 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "selection-visualization",
-      label: "Selection visualization remains in BabylonScene and is high risk to extract",
-      status: "remaining",
-      riskLevel: "high",
-      ownerModule: "src/components/BabylonScene.tsx",
+      label: "Selection pick target and toggle-selection helper logic extracted to selectionPicking helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/selectionPicking.ts",
       nextRefactorCandidate: false
     },
     {
@@ -128,10 +130,10 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "object-picking-metadata",
-      label: "Object picking metadata and pickability remain in BabylonScene and are high risk to extract",
-      status: "remaining",
-      riskLevel: "high",
-      ownerModule: "src/components/BabylonScene.tsx",
+      label: "Object picking metadata decoding and hierarchy propagation extracted to selectionPicking helper",
+      status: "extracted",
+      riskLevel: "low",
+      ownerModule: "src/components/babylonScene/selectionPicking.ts",
       nextRefactorCandidate: false
     },
     {
@@ -269,6 +271,43 @@ export const currentBabylonSceneBoundary = {
       "src/scene/rendering/createObjectLabel.ts (conceptual)"
     ]
   },
+  selectionPickingContract: {
+    responsibilityIds: ["selection-visualization", "object-picking-metadata"],
+    status: "extracted",
+    ownerModule: "src/components/babylonScene/selectionPicking.ts",
+    riskLevel: "low",
+    refactorRiskRank: 2,
+    extractedModule: "src/components/babylonScene/selectionPicking.ts",
+    testModule: "src/components/babylonScene/selectionPicking.test.ts",
+    remainingPointerOrchestrationModule: "src/components/BabylonScene.tsx",
+    separatedFromResponsibilityIds: [
+      "pointer-interaction-handling",
+      "drag-move-placement-interaction",
+      "rotation-transform-interaction"
+    ],
+    protectedBehaviors: [
+      "pick-target-metadata-decoding",
+      "machine-pick-metadata-assignment",
+      "hierarchy-pick-metadata-propagation",
+      "toggle-selection-event-detection",
+      "remaining-pointer-observer-orchestration"
+    ],
+    extractedFlows: {
+      pickTargetMetadataDecoding: true,
+      machinePickMetadataAssignment: true,
+      hierarchyPickMetadataPropagation: true,
+      toggleSelectionEventDetection: true
+    },
+    remainingInteractionFlows: {
+      pointerObserverOrchestration: true,
+      dragMovePlacement: true,
+      rotationTransformGizmo: true
+    },
+    futureModuleCandidates: [
+      "src/scene/interactions/createSelectionController.ts (conceptual)",
+      "src/scene/interactions/createPickingMetadataAdapter.ts (conceptual)"
+    ]
+  },
   knownUpstreamInputs: [
     {
       id: "layout-machine-state",
@@ -344,7 +383,7 @@ export const currentBabylonSceneBoundary = {
   boundaryRisks: [
     {
       id: "multi-responsibility-component",
-      label: "BabylonScene still carries machine/object rendering, interaction, selection, drag, diagnostics, and camera state adapter responsibilities"
+      label: "BabylonScene still carries machine/object rendering adapter, pointer orchestration, drag, diagnostics, and camera state adapter responsibilities"
     },
     {
       id: "rendering-lifecycle-cleanup-risk",
@@ -356,7 +395,7 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "selection-placement-viewport-coupling",
-      label: "Selection, placement, and viewport concerns are coupled"
+      label: "Pointer orchestration, placement, and viewport concerns remain coupled after selection/picking helper extraction"
     },
     {
       id: "pointer-camera-regression-risk",
@@ -366,7 +405,7 @@ export const currentBabylonSceneBoundary = {
   extractionNotes: [
     {
       id: "extract-gradually",
-      label: "Visual context and scene lifecycle setup are extracted; remaining selection, placement, and viewport concerns should be extracted gradually"
+      label: "Visual context, scene lifecycle, camera, rendering descriptor, and selection/picking helpers are extracted; remaining drag, rotation, diagnostics, and overlay concerns should be extracted gradually"
     },
     {
       id: "visual-context-extracted",
@@ -393,8 +432,16 @@ export const currentBabylonSceneBoundary = {
       label: "BabylonScene still adapts objectRendering descriptors into Babylon meshes, GLB loading, labels, picking metadata, and cleanup"
     },
     {
+      id: "selection-picking-extracted",
+      label: "Selection pick target decoding, toggle selection event detection, and machine pick metadata propagation now live in src/components/babylonScene/selectionPicking.ts"
+    },
+    {
+      id: "pointer-orchestration-remains",
+      label: "BabylonScene still owns pointer observer orchestration, drag/move/placement, and rotation/gizmo interaction flow"
+    },
+    {
       id: "next-controlled-candidate",
-      label: "Machine/object rendering adapter, diagnostics, and overlay extraction are controlled candidates before high-risk interaction extraction"
+      label: "Machine/object rendering adapter, diagnostics, overlays, drag/move/placement, and rotation/gizmo remain controlled candidates after selection/picking extraction"
     },
     {
       id: "preserve-app-shell-scene-viewport-slot",
