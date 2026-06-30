@@ -413,6 +413,49 @@ select:disabled {
   font-size: 0.82rem;
 }
 
+.multi-selection-list {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.multi-selection-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 1px solid rgba(164, 190, 178, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.multi-selection-item.is-primary {
+  border-color: rgba(255, 219, 112, 0.42);
+  background: rgba(255, 219, 112, 0.08);
+}
+
+.multi-selection-item span,
+.multi-selection-item strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.multi-selection-item span {
+  color: #f4f7f2;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.multi-selection-item strong {
+  color: #ffd76d;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .selection-actions,
 .alignment-group,
 .alignment-button-grid {
