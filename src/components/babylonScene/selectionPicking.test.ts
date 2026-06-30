@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applySelectionModeToIds,
   applyMachinePickMetadataToHierarchy,
   getSelectionPickTarget,
   isToggleSelectionEvent,
@@ -54,6 +55,38 @@ describe("selection picking helpers", () => {
     expect(isToggleSelectionEvent({ shiftKey: true })).toBe(true);
     expect(isToggleSelectionEvent({ ctrlKey: false, shiftKey: false })).toBe(false);
     expect(isToggleSelectionEvent(undefined)).toBe(false);
+  });
+
+  it("replaces selection for normal single click", () => {
+    expect(applySelectionModeToIds(["machine-1", "machine-2"], "machine-3", "replace")).toEqual({
+      selectedIds: ["machine-3"],
+      primaryId: "machine-3"
+    });
+  });
+
+  it("adds a Ctrl or Shift toggled machine while preserving the primary selection", () => {
+    expect(applySelectionModeToIds(["machine-1"], "machine-2", "toggle")).toEqual({
+      selectedIds: ["machine-1", "machine-2"],
+      primaryId: "machine-1"
+    });
+  });
+
+  it("removes a toggled selected machine and promotes the next selected machine to primary", () => {
+    expect(applySelectionModeToIds(["machine-1", "machine-2", "machine-3"], "machine-1", "toggle")).toEqual({
+      selectedIds: ["machine-2", "machine-3"],
+      primaryId: "machine-2"
+    });
+  });
+
+  it("clears selection for empty or explicit clear selection", () => {
+    expect(applySelectionModeToIds(["machine-1"], null, "replace")).toEqual({
+      selectedIds: [],
+      primaryId: null
+    });
+    expect(applySelectionModeToIds(["machine-1"], "machine-1", "clear")).toEqual({
+      selectedIds: [],
+      primaryId: null
+    });
   });
 
   it("marks a machine mesh pickable while preserving existing metadata", () => {

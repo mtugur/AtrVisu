@@ -19,6 +19,13 @@ export type SelectionToggleEvent = {
   shiftKey?: boolean;
 };
 
+export type SelectionMode = "replace" | "toggle" | "clear";
+
+export type MultiSelectionState = {
+  selectedIds: string[];
+  primaryId: string | null;
+};
+
 const getStringMetadata = (
   metadata: Record<string, unknown> | null | undefined,
   key: string
@@ -43,6 +50,35 @@ export const getSelectionPickTarget = (
 export const isToggleSelectionEvent = (
   event: SelectionToggleEvent | undefined
 ) => Boolean(event?.ctrlKey || event?.shiftKey);
+
+export const applySelectionModeToIds = (
+  currentIds: readonly string[],
+  targetId: string | null,
+  mode: SelectionMode
+): MultiSelectionState => {
+  if (!targetId || mode === "clear") {
+    return {
+      selectedIds: [],
+      primaryId: null
+    };
+  }
+
+  if (mode === "replace") {
+    return {
+      selectedIds: [targetId],
+      primaryId: targetId
+    };
+  }
+
+  const selectedIds = currentIds.includes(targetId)
+    ? currentIds.filter((id) => id !== targetId)
+    : [...currentIds, targetId];
+
+  return {
+    selectedIds,
+    primaryId: selectedIds[0] ?? null
+  };
+};
 
 export const setMachinePickMetadata = <TMesh extends SelectionPickMesh>(
   mesh: TMesh,

@@ -30,6 +30,17 @@ export function MultiSelectionProperties({
           <span>Primary</span>
           <strong>{primarySelectedMachine?.definition.name ?? primarySelectedMachine?.instanceId ?? "None"}</strong>
         </div>
+        <div className="multi-selection-list" aria-label="Selected objects">
+          {selectedMachines.map((machine) => (
+            <div
+              className={machine.instanceId === primarySelectedMachine?.instanceId ? "multi-selection-item is-primary" : "multi-selection-item"}
+              key={machine.instanceId}
+            >
+              <span>{machine.definition.name}</span>
+              {machine.instanceId === primarySelectedMachine?.instanceId ? <strong>Primary</strong> : null}
+            </div>
+          ))}
+        </div>
         {selectionBounds ? (
           <div className="diagnostics-grid compact-grid" aria-label="Selection bounds">
             <span>Min Plan X</span>

@@ -27,6 +27,10 @@ describe("drag placement helpers", () => {
     expect(getMachineDragInstanceIds("m1", ["m1", "m2"], [], false)).toEqual(["m1", "m2"]);
   });
 
+  it("drags only the picked machine when replacing a selection from an unselected machine", () => {
+    expect(getMachineDragInstanceIds("m3", ["m1", "m2"], [], false)).toEqual(["m3"]);
+  });
+
   it("drags only the picked machine during toggle selection", () => {
     expect(getMachineDragInstanceIds("m1", ["m1", "m2"], [], true)).toEqual(["m1"]);
   });

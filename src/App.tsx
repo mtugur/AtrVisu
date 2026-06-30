@@ -22,6 +22,7 @@ import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModa
 import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import { ViewpointsPanel } from "./components/ViewpointsPanel";
+import { applySelectionModeToIds } from "./components/babylonScene/selectionPicking";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 import type { AlignmentAction, DistributionAction, EqualGapAction, FootprintAnchor, PairAlignmentAction } from "./types/alignment";
 import type { NudgeSettings, SelectionMode } from "./types/selection";
@@ -731,12 +732,9 @@ export function App() {
 
     if (mode === "toggle") {
       setSelectedMachineIds((current) => {
-        const isAlreadySelected = current.includes(instanceId);
-        const nextSelection = isAlreadySelected
-          ? current.filter((id) => id !== instanceId)
-          : [...current, instanceId];
-        setPrimarySelectedMachineId(nextSelection[0] ?? null);
-        return nextSelection;
+        const nextSelection = applySelectionModeToIds(current, instanceId, mode);
+        setPrimarySelectedMachineId(nextSelection.primaryId);
+        return nextSelection.selectedIds;
       });
       setSelectedEntityKeys((current) => {
         const key = getAlignableEntityKey("machine", instanceId);
@@ -777,12 +775,9 @@ export function App() {
 
     if (mode === "toggle") {
       setSelectedCivilReferenceIds((current) => {
-        const isAlreadySelected = current.includes(id);
-        const nextSelection = isAlreadySelected
-          ? current.filter((itemId) => itemId !== id)
-          : [...current, id];
-        setSelectedCivilReferenceId(nextSelection[0] ?? null);
-        return nextSelection;
+        const nextSelection = applySelectionModeToIds(current, id, mode);
+        setSelectedCivilReferenceId(nextSelection.primaryId);
+        return nextSelection.selectedIds;
       });
       setSelectedEntityKeys((current) => {
         const key = getAlignableEntityKey("civil", id);
