@@ -96,6 +96,26 @@ describe("layout history", () => {
     ]);
   });
 
+  it("preserves multi-machine alignment snapshots through undo and redo", () => {
+    const initial = [machine("primary", 0), machine("secondary", 2500), machine("third", 5000)];
+    const aligned = [machine("primary", 0), machine("secondary", 0), machine("third", 0)];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    const undone = undoHistory(history, aligned);
+    expect(undone?.machines.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["primary", 0],
+      ["secondary", 2500],
+      ["third", 5000]
+    ]);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["primary", 0],
+      ["secondary", 0],
+      ["third", 0]
+    ]);
+  });
+
   it("keeps viewpoint-only layout changes undoable", () => {
     const machines = [machine("a", 0)];
     const annotations = [annotation("same")];
