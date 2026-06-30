@@ -108,6 +108,54 @@ describe("alignment helpers", () => {
     expect(result.find((item) => item.instanceId === "b")?.positionMm?.xMm).toBe(0);
   });
 
+  it("aligns multi-selected machines deterministically to the primary footprint edge", () => {
+    const machines = [
+      machine("primary", 1000, 0, 1000, 1000),
+      machine("secondary", 4000, 1500, 2000, 1000),
+      machine("third", -1000, -500, 1000, 1000)
+    ];
+    const updates = alignEntitiesToAnchor(
+      machines.map((item) => ({
+        id: item.instanceId,
+        kind: "machine" as const,
+        label: item.definition.name,
+        bounds: getObjectPlanBounds(item),
+        positionMm: item.positionMm ?? { xMm: item.position.x * 1000, yMm: item.position.z * 1000 }
+      })),
+      [
+        getAlignableEntityKey("machine", "primary"),
+        getAlignableEntityKey("machine", "secondary"),
+        getAlignableEntityKey("machine", "third")
+      ],
+      getAlignableEntityKey("machine", "primary"),
+      "left"
+    );
+
+    expect(updates).toEqual([
+      { kind: "machine", id: "secondary", xMm: 1500, yMm: 1500 },
+      { kind: "machine", id: "third", xMm: 1000, yMm: -500 }
+    ]);
+  });
+
+  it("aligns multi-selected machines to aggregate selection bounds when no primary is provided", () => {
+    const result = alignObjectsToAnchor(
+      [
+        machine("a", 0, 0, 1000, 1000),
+        machine("b", 3000, 0, 1000, 1000),
+        machine("c", 6000, 0, 1000, 1000)
+      ],
+      ["a", "b", "c"],
+      null,
+      "centerX"
+    );
+
+    expect(result.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["a", 3000],
+      ["b", 3000],
+      ["c", 3000]
+    ]);
+  });
+
   it("distributes selected objects by center", () => {
     const result = distributeObjectsByCenter(
       [machine("a", 0, 0), machine("b", 1000, 0), machine("c", 5000, 0)],
@@ -117,6 +165,24 @@ describe("alignment helpers", () => {
     expect(result.map((item) => item.positionMm?.xMm)).toEqual([0, 2500, 5000]);
   });
 
+  it("distributes multi-selected machines by center regardless of selection order", () => {
+    const result = distributeObjectsByCenter(
+      [
+        machine("left", 0, 0, 1000, 1000),
+        machine("middle", 4500, 0, 1000, 1000),
+        machine("right", 9000, 0, 1000, 1000)
+      ],
+      ["right", "left", "middle"],
+      "horizontal"
+    );
+
+    expect(result.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["left", 0],
+      ["middle", 4500],
+      ["right", 9000]
+    ]);
+  });
+
   it("equalizes gaps between selected objects", () => {
     const result = equalizeGaps(
       [machine("a", 0, 0, 1000, 1000), machine("b", 1500, 0, 1000, 1000), machine("c", 5000, 0, 1000, 1000)],
@@ -124,6 +190,24 @@ describe("alignment helpers", () => {
       "gapX"
     );
     expect(result.map((item) => item.positionMm?.xMm)).toEqual([0, 2500, 5000]);
+  });
+
+  it("equalizes multi-selected machine gaps while preserving the outer span", () => {
+    const result = equalizeGaps(
+      [
+        machine("a", 0, 0, 1000, 1000),
+        machine("b", 2000, 0, 2000, 1000),
+        machine("c", 7000, 0, 1000, 1000)
+      ],
+      ["a", "b", "c"],
+      "gapX"
+    );
+
+    expect(result.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["a", 0],
+      ["b", 3500],
+      ["c", 7000]
+    ]);
   });
 
   it("moves the primary object relative to the secondary in pair alignment", () => {
