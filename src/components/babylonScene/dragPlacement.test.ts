@@ -120,4 +120,30 @@ describe("drag placement helpers", () => {
       { instanceId: "m2", xMm: 750, yMm: -1300 }
     ]);
   });
+
+  it("preserves relative offsets when multiple selected machines move together", () => {
+    const dragState = createMachineDragState({
+      targetInstanceId: "m2",
+      floorPoint: { x: 4, z: -1 },
+      selectedInstanceIds: ["m1", "m2", "m3"],
+      lockedInstanceIds: [],
+      machines: [
+        machine("m1", 0, 0, { xMm: -1000, yMm: 500 }),
+        machine("m2", 0, 0, { xMm: 250, yMm: -750 }),
+        machine("m3", 0, 0, { xMm: 1750, yMm: 1250 })
+      ],
+      isToggleSelection: false
+    });
+
+    expect(dragState).not.toBeNull();
+
+    const updates = calculateMachineDragPositionUpdates(dragState as MachineDragState, { x: 4.5, z: -2.25 });
+    const byId = new Map(updates.map((update) => [update.instanceId, update]));
+
+    expect(byId.get("m1")).toMatchObject({ xMm: -500, yMm: -750 });
+    expect(byId.get("m2")).toMatchObject({ xMm: 750, yMm: -2000 });
+    expect(byId.get("m3")).toMatchObject({ xMm: 2250, yMm: 0 });
+    expect((byId.get("m2")?.xMm ?? 0) - (byId.get("m1")?.xMm ?? 0)).toBe(1250);
+    expect((byId.get("m3")?.yMm ?? 0) - (byId.get("m2")?.yMm ?? 0)).toBe(2000);
+  });
 });

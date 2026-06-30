@@ -76,6 +76,26 @@ describe("layout history", () => {
     expect(redone?.viewpoints[0].name).toBe("After");
   });
 
+  it("preserves multi-machine move snapshots through undo and redo", () => {
+    const initial = [machine("a", -500), machine("b", 1250), machine("c", 3000)];
+    const moved = [machine("a", 250), machine("b", 2000), machine("c", 3000)];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    const undone = undoHistory(history, moved);
+    expect(undone?.machines.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["a", -500],
+      ["b", 1250],
+      ["c", 3000]
+    ]);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["a", 250],
+      ["b", 2000],
+      ["c", 3000]
+    ]);
+  });
+
   it("keeps viewpoint-only layout changes undoable", () => {
     const machines = [machine("a", 0)];
     const annotations = [annotation("same")];
