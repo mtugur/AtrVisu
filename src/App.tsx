@@ -2216,6 +2216,9 @@ export function App() {
                   selectedMachines={selectedMachines}
                   primarySelectedMachine={selectedMachine}
                   selectionBounds={selectionBounds}
+                  onAlign={applyAlignmentAction}
+                  onDistribute={applyDistributionAction}
+                  onEqualGap={applyEqualGapAction}
                   onClearSelection={clearSelection}
                   onDeleteSelected={deleteSelectedMachines}
                 />

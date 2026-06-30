@@ -1,4 +1,5 @@
 import type { PlanBounds } from "../types/alignment";
+import type { AlignmentAction, DistributionAction, EqualGapAction } from "../types/alignment";
 import type { PlacedMachine } from "../types/machine";
 import { formatLength } from "../utils/units";
 
@@ -6,6 +7,9 @@ type MultiSelectionPropertiesProps = {
   selectedMachines: PlacedMachine[];
   primarySelectedMachine?: PlacedMachine;
   selectionBounds: PlanBounds | null;
+  onAlign: (action: AlignmentAction) => void;
+  onDistribute: (action: DistributionAction) => void;
+  onEqualGap: (action: EqualGapAction) => void;
   onClearSelection: () => void;
   onDeleteSelected: () => void;
 };
@@ -16,9 +20,14 @@ export function MultiSelectionProperties({
   selectedMachines,
   primarySelectedMachine,
   selectionBounds,
+  onAlign,
+  onDistribute,
+  onEqualGap,
   onClearSelection,
   onDeleteSelected
 }: MultiSelectionPropertiesProps) {
+  const canDistribute = selectedMachines.length >= 3;
+
   return (
     <section className="properties-section multi-selection-panel" data-testid="multi-selection-panel" aria-label="Multi-selection properties">
       <header className="section-header">
@@ -57,6 +66,46 @@ export function MultiSelectionProperties({
             <strong>{formatMm(selectionBounds.depthMm)}</strong>
           </div>
         ) : null}
+        <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-alignment-actions">
+          <strong>Align Selection</strong>
+          <div className="alignment-button-grid">
+            <button type="button" onClick={() => onAlign("left")}>
+              Align Left
+            </button>
+            <button type="button" onClick={() => onAlign("centerX")}>
+              Align Center X
+            </button>
+            <button type="button" onClick={() => onAlign("right")}>
+              Align Right
+            </button>
+            <button type="button" onClick={() => onAlign("front")}>
+              Align Top
+            </button>
+            <button type="button" onClick={() => onAlign("centerY")}>
+              Align Center Y
+            </button>
+            <button type="button" onClick={() => onAlign("back")}>
+              Align Bottom
+            </button>
+          </div>
+        </div>
+        <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-distribution-actions">
+          <strong>Distribute Selection</strong>
+          <div className="alignment-button-grid">
+            <button type="button" disabled={!canDistribute} onClick={() => onDistribute("horizontal")}>
+              Distribute Horizontal Center
+            </button>
+            <button type="button" disabled={!canDistribute} onClick={() => onDistribute("vertical")}>
+              Distribute Vertical Center
+            </button>
+            <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapX")}>
+              Equal Gap X
+            </button>
+            <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapY")}>
+              Equal Gap Y
+            </button>
+          </div>
+        </div>
         <div className="selection-actions">
           <button type="button" onClick={onClearSelection}>
             Clear Selection
