@@ -44,6 +44,13 @@ describe("surface coverage audit", () => {
     expect(getSurfaceIdsByFeatureId("library.manager")).toContain("surface.libraryManager");
   });
 
+  it("covers the multi-selection alignment panel surface", () => {
+    expect(getSurfaceIdsByFeatureId("selection.multiSelect")).toContain("surface.multiSelectionAlignment");
+    expect(getSurfaceIdsByFeatureId("alignment.alignSelection")).toContain("surface.multiSelectionAlignment");
+    expect(getSurfaceIdsByCommandId("alignment.alignSelection")).toContain("surface.multiSelectionAlignment");
+    expect(getSurfaceIdsByPanelId("panel.inspector")).toContain("surface.multiSelectionAlignment");
+  });
+
   it("covers the previously missing command and panel links", () => {
     expect(getSurfaceIdsByCommandId("view.fitView").length).toBeGreaterThan(0);
     expect(getSurfaceIdsByCommandId("diagnostics.noRedConsole").length).toBeGreaterThan(0);

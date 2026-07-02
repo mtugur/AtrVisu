@@ -42,6 +42,18 @@ describe("surface inventory audit", () => {
     expect(getSurfaceInventoryItemsByFeatureId("library.manager").map((item) => item.surfaceId)).toContain("surface.libraryManager");
   });
 
+  it("finds the multi-selection alignment surface by feature, command, and panel links", () => {
+    expect(getSurfaceInventoryItemsByFeatureId("selection.multiSelect").map((item) => item.surfaceId)).toContain(
+      "surface.multiSelectionAlignment"
+    );
+    expect(getSurfaceInventoryItemsByCommandId("alignment.alignSelection").map((item) => item.surfaceId)).toContain(
+      "surface.multiSelectionAlignment"
+    );
+    expect(getSurfaceInventoryItemsByPanelId("panel.inspector").map((item) => item.surfaceId)).toContain(
+      "surface.multiSelectionAlignment"
+    );
+  });
+
   it("validates current inventory without errors", () => {
     expect(validateSurfaceInventory().errors).toEqual([]);
   });

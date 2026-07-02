@@ -45,4 +45,12 @@ describe("current app shell boundary", () => {
       zone.sourceFiles.every((sourceFile) => typeof sourceFile === "string" && sourceFile.trim().length > 0)
     )).toBe(true);
   });
+
+  it("links the machine-properties zone to the multi-selection alignment surface", () => {
+    const machinePropertiesZone = currentAppShellBoundaryZones.find((zone) => zone.id === "machine-properties");
+
+    expect(machinePropertiesZone?.sourceFiles).toContain("src/components/MultiSelectionProperties.tsx");
+    expect(machinePropertiesZone?.relatedSurfaceIds).toContain("surface.multiSelectionAlignment");
+    expect(machinePropertiesZone?.relatedCommandIds).toContain("alignment.alignSelection");
+  });
 });

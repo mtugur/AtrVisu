@@ -122,6 +122,7 @@ export const currentAppShellBoundaryZones = [
       "surface.rotationSnap",
       "surface.connectionPointSnap",
       "surface.alignment",
+      "surface.multiSelectionAlignment",
       "surface.labels",
       "surface.connectionPoints"
     ],
