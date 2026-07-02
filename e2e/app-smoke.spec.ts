@@ -92,6 +92,73 @@ test("selected object and numeric rotation smoke has no red console errors", asy
   expect(errors).toEqual([]);
 });
 
+test("multi-selection alignment panel actions render without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const firstMachineCard = page.locator(".machine-card").first();
+  await firstMachineCard.click();
+  const assemblySection = page.getByRole("button", { name: /Assembly Tree/i });
+  if ((await assemblySection.getAttribute("aria-expanded")) !== "true") {
+    await assemblySection.click();
+  }
+  await expect(page.getByTestId("assembly-tree-panel")).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("Alignment Smoke Group");
+  });
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: "Alignment Smoke Group" });
+  await expect(group).toBeVisible();
+  await expect(group).toContainText("1 item");
+
+  await firstMachineCard.click();
+  await group.getByRole("button", { name: "Add Selected" }).click();
+  await expect(group).toContainText("2 items");
+  await group.locator(".assembly-group-button").click();
+
+  const multiSelectionSection = page.getByRole("button", { name: /Multi-Selection/i });
+  await expect(multiSelectionSection).toBeVisible();
+  if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
+    await multiSelectionSection.click();
+  }
+  const multiSelectionPanel = page.getByTestId("multi-selection-panel");
+  await expect(multiSelectionPanel).toBeVisible();
+  await expect(page.getByTestId("multi-selection-alignment-actions")).toBeVisible();
+
+  for (const label of ["Align Left", "Align Center X", "Align Right", "Align Top", "Align Center Y", "Align Bottom"]) {
+    await expect(multiSelectionPanel.getByRole("button", { name: label })).toBeVisible();
+  }
+
+  const distributeHorizontal = multiSelectionPanel.getByRole("button", { name: "Distribute Horizontal Center" });
+  const distributeVertical = multiSelectionPanel.getByRole("button", { name: "Distribute Vertical Center" });
+  const equalGapX = multiSelectionPanel.getByRole("button", { name: "Equal Gap X" });
+  const equalGapY = multiSelectionPanel.getByRole("button", { name: "Equal Gap Y" });
+  await expect(distributeHorizontal).toBeVisible();
+  await expect(distributeVertical).toBeVisible();
+  await expect(equalGapX).toBeVisible();
+  await expect(equalGapY).toBeVisible();
+  await expect(distributeHorizontal).toBeDisabled();
+  await expect(distributeVertical).toBeDisabled();
+  await expect(equalGapX).toBeDisabled();
+  await expect(equalGapY).toBeDisabled();
+
+  await firstMachineCard.click();
+  await group.getByRole("button", { name: "Add Selected" }).click();
+  await expect(group).toContainText("3 items");
+  await group.locator(".assembly-group-button").click();
+  if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
+    await multiSelectionSection.click();
+  }
+  await expect(multiSelectionPanel).toContainText("3 objects");
+  await expect(distributeHorizontal).toBeEnabled();
+  await expect(distributeVertical).toBeEnabled();
+  await expect(equalGapX).toBeEnabled();
+  await expect(equalGapY).toBeEnabled();
+
+  expect(errors).toEqual([]);
+});
+
 test("project and performance modals open and close deterministically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
