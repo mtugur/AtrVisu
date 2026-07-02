@@ -9,6 +9,7 @@ const criticalSurfaceIds = [
   "surface.projectImportJson",
   "surface.deleteSelected",
   "surface.undoRedo",
+  "surface.multiSelectionAlignment",
   "surface.annotations",
   "surface.layers",
   "surface.groups",
@@ -55,6 +56,20 @@ describe("current surface inventory", () => {
     criticalSurfaceIds.forEach((surfaceId) => {
       expect(surfaceIds.has(surfaceId)).toBe(true);
     });
+  });
+
+  it("documents the multi-selection alignment panel surface", () => {
+    const multiSelectionSurface = currentPlatformSurfaceInventory.find(
+      (item) => item.surfaceId === "surface.multiSelectionAlignment"
+    );
+
+    expect(multiSelectionSurface?.sourceFiles).toContain("src/components/MultiSelectionProperties.tsx");
+    expect(multiSelectionSurface?.commandIds).toContain("alignment.alignSelection");
+    expect(multiSelectionSurface?.panelIds).toContain("panel.inspector");
+    expect(multiSelectionSurface?.featureIds).toEqual(
+      expect.arrayContaining(["selection.multiSelect", "alignment.alignSelection", "object.movePlan"])
+    );
+    expect(multiSelectionSurface?.notes).toContain("PR #69-#73");
   });
 });
 
