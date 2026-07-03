@@ -1,6 +1,8 @@
-import { createElement } from "react";
+import { Children, createElement, isValidElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { AlignmentAction, DistributionAction, EqualGapAction } from "../types/alignment";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import { MultiSelectionProperties } from "./MultiSelectionProperties";
 
@@ -59,6 +61,76 @@ const renderPanel = (selectedMachines: PlacedMachine[]) =>
     })
   );
 
+type ButtonProps = {
+  children?: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+};
+
+const createPanelCallbacks = () => ({
+  onAlign: vi.fn<(action: AlignmentAction) => void>(),
+  onDistribute: vi.fn<(action: DistributionAction) => void>(),
+  onEqualGap: vi.fn<(action: EqualGapAction) => void>(),
+  onClearSelection: vi.fn<() => void>(),
+  onDeleteSelected: vi.fn<() => void>()
+});
+
+const renderInteractivePanel = (selectedMachines: PlacedMachine[]) => {
+  const callbacks = createPanelCallbacks();
+
+  return {
+    callbacks,
+    tree: MultiSelectionProperties({
+      selectedMachines,
+      primarySelectedMachine: selectedMachines[0],
+      selectionBounds: null,
+      ...callbacks
+    })
+  };
+};
+
+const getNodeText = (node: ReactNode): string => {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(getNodeText).join("");
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return getNodeText(node.props.children);
+  }
+
+  return "";
+};
+
+const findButtonByText = (node: ReactNode, label: string): ReactElement<ButtonProps> => {
+  const matches: ReactElement<ButtonProps>[] = [];
+  const visit = (currentNode: ReactNode) => {
+    if (!isValidElement<ButtonProps>(currentNode)) {
+      return;
+    }
+
+    if (currentNode.type === "button" && getNodeText(currentNode.props.children).trim() === label) {
+      matches.push(currentNode);
+    }
+
+    Children.forEach(currentNode.props.children, visit);
+  };
+
+  visit(node);
+
+  expect(matches).toHaveLength(1);
+  return matches[0];
+};
+
+const clickButton = (button: ReactElement<ButtonProps>) => {
+  if (!button.props.disabled) {
+    button.props.onClick?.();
+  }
+};
+
 describe("MultiSelectionProperties", () => {
   it("renders alignment action controls for a machine multi-selection", () => {
     const markup = renderPanel([machine("a", "Packer"), machine("b", "Conveyor")]);
@@ -83,5 +155,68 @@ describe("MultiSelectionProperties", () => {
     expect(twoMachineMarkup).toContain("Distribute Horizontal Center");
     expect(twoMachineMarkup.match(/disabled=""/g)?.length).toBe(4);
     expect(threeMachineMarkup).not.toContain('disabled=""');
+  });
+
+  it("calls the expected alignment callback action for each alignment button", () => {
+    const { callbacks, tree } = renderInteractivePanel([machine("a", "Packer"), machine("b", "Conveyor")]);
+    const expectedActions = [
+      ["Align Left", "left"],
+      ["Align Center X", "centerX"],
+      ["Align Right", "right"],
+      ["Align Top", "front"],
+      ["Align Center Y", "centerY"],
+      ["Align Bottom", "back"]
+    ] as const satisfies readonly (readonly [string, AlignmentAction])[];
+
+    expectedActions.forEach(([label, action]) => {
+      clickButton(findButtonByText(tree, label));
+      expect(callbacks.onAlign).toHaveBeenLastCalledWith(action);
+    });
+
+    expect(callbacks.onAlign).toHaveBeenCalledTimes(expectedActions.length);
+    expect(callbacks.onDistribute).not.toHaveBeenCalled();
+    expect(callbacks.onEqualGap).not.toHaveBeenCalled();
+  });
+
+  it("calls the expected distribution and equal-gap callback actions when three machines are selected", () => {
+    const { callbacks, tree } = renderInteractivePanel([
+      machine("a", "Packer"),
+      machine("b", "Conveyor"),
+      machine("c", "Wrapper")
+    ]);
+
+    clickButton(findButtonByText(tree, "Distribute Horizontal Center"));
+    clickButton(findButtonByText(tree, "Distribute Vertical Center"));
+    clickButton(findButtonByText(tree, "Equal Gap X"));
+    clickButton(findButtonByText(tree, "Equal Gap Y"));
+
+    expect(callbacks.onDistribute).toHaveBeenNthCalledWith(1, "horizontal");
+    expect(callbacks.onDistribute).toHaveBeenNthCalledWith(2, "vertical");
+    expect(callbacks.onDistribute).toHaveBeenCalledTimes(2);
+    expect(callbacks.onEqualGap).toHaveBeenNthCalledWith(1, "gapX");
+    expect(callbacks.onEqualGap).toHaveBeenNthCalledWith(2, "gapY");
+    expect(callbacks.onEqualGap).toHaveBeenCalledTimes(2);
+    expect(callbacks.onAlign).not.toHaveBeenCalled();
+  });
+
+  it("does not call distribution or equal-gap callbacks from disabled buttons with two machines selected", () => {
+    const { callbacks, tree } = renderInteractivePanel([machine("a", "Packer"), machine("b", "Conveyor")]);
+    const disabledActionLabels = [
+      "Distribute Horizontal Center",
+      "Distribute Vertical Center",
+      "Equal Gap X",
+      "Equal Gap Y"
+    ] as const;
+
+    disabledActionLabels.forEach((label) => {
+      const button = findButtonByText(tree, label);
+
+      expect(button.props.disabled).toBe(true);
+      clickButton(button);
+    });
+
+    expect(callbacks.onDistribute).not.toHaveBeenCalled();
+    expect(callbacks.onEqualGap).not.toHaveBeenCalled();
+    expect(callbacks.onAlign).not.toHaveBeenCalled();
   });
 });
