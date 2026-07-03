@@ -88,6 +88,33 @@ const summarizeConnectionPointMetadata = (metadata?: {
   return parts.length ? parts.join(" | ") : "No metadata";
 };
 
+export const getRotationAngleInputStep = (placementSettings: PlacementSettings) =>
+  placementSettings.rotationSnapEnabled ? placementSettings.rotationSnapStepDeg : 1;
+
+export const commitMachineRotationDraft = (
+  rotationDraft: string,
+  currentRotation: number,
+  placementSettings: PlacementSettings
+) => {
+  const numericValue = Number(rotationDraft);
+
+  if (!Number.isFinite(numericValue)) {
+    return {
+      shouldCommit: false,
+      rotationDeg: currentRotation,
+      displayValue: String(currentRotation)
+    };
+  }
+
+  const committedRotation = commitRotationAngle(numericValue, placementSettings);
+
+  return {
+    shouldCommit: true,
+    rotationDeg: committedRotation,
+    displayValue: String(committedRotation)
+  };
+};
+
 export const getSelectedAtaraMachineDataState = (selectedMachine?: PlacedMachine) => {
   const dimensionsMm = selectedMachine ? getMachineDimensionsMm(selectedMachine.definition) : null;
   const ataraSnapshotData = selectedMachine
@@ -181,17 +208,15 @@ export function MachineProperties({
       return;
     }
 
-    const numericValue = Number(rotationDraft);
-    if (!Number.isFinite(numericValue)) {
-      setRotationDraft(String(currentRotation));
+    const committedRotation = commitMachineRotationDraft(rotationDraft, currentRotation, placementSettings);
+    setRotationDraft(committedRotation.displayValue);
+    if (!committedRotation.shouldCommit) {
       return;
     }
 
-    const committedRotation = commitRotationAngle(numericValue, placementSettings);
-    setRotationDraft(String(committedRotation));
     onUpdateMachine(selectedMachine.instanceId, {
-      rotationY: committedRotation,
-      rotationDeg: committedRotation
+      rotationY: committedRotation.rotationDeg,
+      rotationDeg: committedRotation.rotationDeg
     }, { snapRotation: false });
   };
 
@@ -307,7 +332,7 @@ export function MachineProperties({
             <input
               type="number"
               disabled={isLocked}
-              step={placementSettings.rotationSnapEnabled ? placementSettings.rotationSnapStepDeg : 1}
+              step={getRotationAngleInputStep(placementSettings)}
               value={rotationDraft}
               onChange={(event) => setRotationDraft(event.target.value)}
               onBlur={commitRotation}
