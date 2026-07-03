@@ -53,4 +53,14 @@ describe("current app shell boundary", () => {
     expect(machinePropertiesZone?.relatedSurfaceIds).toContain("surface.multiSelectionAlignment");
     expect(machinePropertiesZone?.relatedCommandIds).toContain("alignment.alignSelection");
   });
+
+  it("links the machine-properties zone to selected-machine lifecycle actions", () => {
+    const machinePropertiesZone = currentAppShellBoundaryZones.find((zone) => zone.id === "machine-properties");
+
+    expect(machinePropertiesZone?.sourceFiles).toContain("src/components/MachineProperties.tsx");
+    expect(machinePropertiesZone?.relatedSurfaceIds).toContain("surface.duplicateSelected");
+    expect(machinePropertiesZone?.relatedCommandIds).toEqual(
+      expect.arrayContaining(["edit.deleteSelected", "edit.duplicateSelected"])
+    );
+  });
 });

@@ -144,6 +144,12 @@ describe("MultiSelectionProperties", () => {
     expect(markup).toContain("Align Bottom");
   });
 
+  it("does not expose duplicate actions for machine multi-selection", () => {
+    const markup = renderPanel([machine("a", "Packer"), machine("b", "Conveyor")]);
+
+    expect(markup).not.toContain("Duplicate Selected");
+  });
+
   it("disables distribution and equal gap actions until at least three machines are selected", () => {
     const twoMachineMarkup = renderPanel([machine("a", "Packer"), machine("b", "Conveyor")]);
     const threeMachineMarkup = renderPanel([

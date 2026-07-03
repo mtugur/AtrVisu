@@ -41,7 +41,13 @@ import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT, getCivilReference
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
 import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
-import { applyPositionSnap, applyRotationSnap, getMachinePlanPositionMm } from "./utils/placement";
+import {
+  applyPositionSnap,
+  applyRotationSnap,
+  createMachineInstanceId,
+  duplicatePlacedMachine,
+  getMachinePlanPositionMm
+} from "./utils/placement";
 import {
   alignObjectsToAnchor,
   alignEntitiesToAnchor,
@@ -119,6 +125,7 @@ const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   largeNudgeStepMm: 1000,
   smallNudgeStepMm: 10
 };
+const DUPLICATE_MACHINE_OFFSET_MM = 250;
 
 const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined): NudgeSettings => ({
   nudgeStepMm:
@@ -805,7 +812,10 @@ export function App() {
   const addMachine = useCallback((selection: { libraryId: string; definition: MachineDefinition }) => {
     const { libraryId } = selection;
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(selection.definition));
-    const instanceId = `${definition.id}-${Date.now()}-${Math.round(Math.random() * 10000)}`;
+    const instanceId = createMachineInstanceId(
+      definition.id,
+      placedMachinesRef.current.map((machine) => machine.instanceId)
+    );
 
     markLayoutChanged();
     setPlacedMachines((current) => {
@@ -843,6 +853,29 @@ export function App() {
     });
     replaceSelection([instanceId], instanceId);
   }, [markLayoutChanged, replaceSelection]);
+
+  const duplicateSelectedMachine = useCallback(() => {
+    if (!singleSelectedMachine || selectedMachineIds.length !== 1) {
+      return;
+    }
+    if (isLayerLocked(singleSelectedMachine.layerId, layersRef.current)) {
+      return;
+    }
+
+    const duplicateId = createMachineInstanceId(
+      singleSelectedMachine.machineDefinitionId,
+      placedMachinesRef.current.map((machine) => machine.instanceId)
+    );
+    const duplicate = duplicatePlacedMachine(singleSelectedMachine, {
+      instanceId: duplicateId,
+      offsetMm: DUPLICATE_MACHINE_OFFSET_MM
+    });
+
+    markLayoutChanged();
+    setPlacedMachines((current) => [...current, duplicate]);
+    setSelectedGroupId(null);
+    replaceSelection([duplicateId], duplicateId);
+  }, [markLayoutChanged, replaceSelection, selectedMachineIds.length, singleSelectedMachine]);
 
   const updateMachine = useCallback((
     instanceId: string,
@@ -2243,6 +2276,7 @@ export function App() {
                   collisionPairs={selectedCollisionPairs}
                   onUpdateMachine={updateMachine}
                   onChangeLayer={changeMachineLayer}
+                  onDuplicateSelected={duplicateSelectedMachine}
                   onDeleteSelected={deleteSelectedMachines}
                 />
               )}

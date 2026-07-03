@@ -30,6 +30,7 @@ type MachinePropertiesProps = {
     options?: { snapPosition?: boolean; snapRotation?: boolean }
   ) => void;
   onChangeLayer: (instanceId: string, layerId: string) => void;
+  onDuplicateSelected: () => void;
   onDeleteSelected: () => void;
 };
 
@@ -140,6 +141,7 @@ export function MachineProperties({
   collisionPairs,
   onUpdateMachine,
   onChangeLayer,
+  onDuplicateSelected,
   onDeleteSelected
 }: MachinePropertiesProps) {
   const currentRotation = selectedMachine?.rotationDeg ?? selectedMachine?.rotationY ?? 0;
@@ -549,9 +551,14 @@ export function MachineProperties({
             </label>
           ) : null}
 
-          <button className="delete-object-button" type="button" disabled={isLocked} onClick={onDeleteSelected}>
-            Delete Selected Object
-          </button>
+          <div className="selection-actions">
+            <button type="button" disabled={isLocked} onClick={onDuplicateSelected}>
+              Duplicate Selected
+            </button>
+            <button className="delete-object-button" type="button" disabled={isLocked} onClick={onDeleteSelected}>
+              Delete Selected Object
+            </button>
+          </div>
         </div>
       ) : (
         <p className="empty-selection">Click a machine in the scene to inspect and transform it.</p>

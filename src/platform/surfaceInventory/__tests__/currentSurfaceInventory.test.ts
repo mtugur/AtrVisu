@@ -71,5 +71,20 @@ describe("current surface inventory", () => {
     );
     expect(multiSelectionSurface?.notes).toContain("PR #69-#73");
   });
+
+  it("documents the selected-machine duplicate action as an inspector surface", () => {
+    const duplicateSurface = currentPlatformSurfaceInventory.find(
+      (item) => item.surfaceId === "surface.duplicateSelected"
+    );
+
+    expect(duplicateSurface?.owner).toBe("existing-ui");
+    expect(duplicateSurface?.sourceFiles).toEqual(
+      expect.arrayContaining(["src/App.tsx", "src/components/MachineProperties.tsx", "src/utils/placement.ts"])
+    );
+    expect(duplicateSurface?.commandIds).toContain("edit.duplicateSelected");
+    expect(duplicateSurface?.panelIds).toContain("panel.inspector");
+    expect(duplicateSurface?.featureIds).toEqual(expect.arrayContaining(["object.duplicate", "panel.inspector"]));
+    expect(duplicateSurface?.notes).toContain("multi-select duplicate remains out of scope");
+  });
 });
 
