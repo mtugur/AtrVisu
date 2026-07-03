@@ -1,6 +1,14 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_PLACEMENT_SETTINGS } from "../utils/placementSettings";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
-import { getSelectedAtaraMachineDataState } from "./MachineProperties";
+import {
+  MachineProperties,
+  commitMachineRotationDraft,
+  getRotationAngleInputStep,
+  getSelectedAtaraMachineDataState
+} from "./MachineProperties";
 
 const baseDefinition: MachineDefinition = {
   id: "machine",
@@ -25,6 +33,41 @@ const createPlacedMachine = (definitionSnapshot: MachineDefinition, definition =
   rotationY: 0,
   flowDirection: "forward"
 });
+
+const renderSelectedMachineProperties = (machine: PlacedMachine, isLocked = false) =>
+  renderToStaticMarkup(
+    createElement(MachineProperties, {
+      selectedMachine: machine,
+      layers: [{
+        id: "default",
+        name: "Default",
+        visible: true,
+        locked: false,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z"
+      }],
+      isLocked,
+      placementSettings: {
+        ...DEFAULT_PLACEMENT_SETTINGS,
+        rotationSnapEnabled: true,
+        rotationSnapStepDeg: 45
+      },
+      collisionPairs: [],
+      onUpdateMachine: () => undefined,
+      onChangeLayer: () => undefined,
+      onDeleteSelected: () => undefined
+    })
+  );
+
+const getRotationFieldMarkup = (markup: string) => {
+  const rotationLabelIndex = markup.indexOf("Rotation Angle");
+  const fieldEndIndex = markup.indexOf("</label>", rotationLabelIndex);
+
+  expect(rotationLabelIndex).toBeGreaterThanOrEqual(0);
+  expect(fieldEndIndex).toBeGreaterThan(rotationLabelIndex);
+
+  return markup.slice(rotationLabelIndex, fieldEndIndex);
+};
 
 describe("MachineProperties ATARA diagnostics", () => {
   it("reads ATARA data from the definition snapshot first", () => {
@@ -60,5 +103,75 @@ describe("MachineProperties ATARA diagnostics", () => {
 
     expect(state.ataraMachineData?.identity?.atrId).toBe("ATR-LIBRARY");
     expect(state.hasNewerLibraryAtaraData).toBe(true);
+  });
+});
+
+describe("MachineProperties rotation editing", () => {
+  it("keeps the rotation angle input enabled and uses the active snap step", () => {
+    const markup = renderSelectedMachineProperties(createPlacedMachine(baseDefinition));
+    const rotationFieldMarkup = getRotationFieldMarkup(markup);
+
+    expect(rotationFieldMarkup).toContain('step="45"');
+    expect(rotationFieldMarkup).toContain('value="0"');
+    expect(rotationFieldMarkup).not.toContain('disabled=""');
+  });
+
+  it("disables the rotation angle input only when the selected machine is locked", () => {
+    const markup = renderSelectedMachineProperties(createPlacedMachine(baseDefinition), true);
+    const rotationFieldMarkup = getRotationFieldMarkup(markup);
+
+    expect(rotationFieldMarkup).toContain('disabled=""');
+    expect(rotationFieldMarkup).toContain('step="45"');
+  });
+
+  it("uses the active snap step for the native Rotation Angle number input +/- spinner", () => {
+    // MachineProperties does not render explicit +/- rotation buttons for this field;
+    // the browser's native number input spinner is the supported field-level +/- mechanism.
+    expect(getRotationAngleInputStep({
+      ...DEFAULT_PLACEMENT_SETTINGS,
+      rotationSnapEnabled: true,
+      rotationSnapStepDeg: 45
+    })).toBe(45);
+    expect(getRotationAngleInputStep({
+      ...DEFAULT_PLACEMENT_SETTINGS,
+      rotationSnapEnabled: false,
+      rotationSnapStepDeg: 45
+    })).toBe(1);
+  });
+
+  it("normalizes committed manual rotation input to the nearest snap step when snap is enabled", () => {
+    expect(commitMachineRotationDraft("50", 0, {
+      ...DEFAULT_PLACEMENT_SETTINGS,
+      rotationSnapEnabled: true,
+      rotationSnapStepDeg: 45
+    })).toEqual({
+      shouldCommit: true,
+      rotationDeg: 45,
+      displayValue: "45"
+    });
+  });
+
+  it("preserves committed manual rotation input apart from normalization when snap is disabled", () => {
+    expect(commitMachineRotationDraft("50", 0, {
+      ...DEFAULT_PLACEMENT_SETTINGS,
+      rotationSnapEnabled: false,
+      rotationSnapStepDeg: 45
+    })).toEqual({
+      shouldCommit: true,
+      rotationDeg: 50,
+      displayValue: "50"
+    });
+  });
+
+  it("reverts invalid manual rotation drafts without committing", () => {
+    expect(commitMachineRotationDraft("-", 90, {
+      ...DEFAULT_PLACEMENT_SETTINGS,
+      rotationSnapEnabled: true,
+      rotationSnapStepDeg: 45
+    })).toEqual({
+      shouldCommit: false,
+      rotationDeg: 90,
+      displayValue: "90"
+    });
   });
 });
