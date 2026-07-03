@@ -26,13 +26,17 @@ const definition: MachineDefinition = {
   }
 };
 
-const machine = (instanceId: string, name: string): PlacedMachine => ({
+const machine = (
+  instanceId: string,
+  name: string,
+  positionMm: { xMm: number; yMm: number } = { xMm: 0, yMm: 0 }
+): PlacedMachine => ({
   instanceId,
   machineDefinitionId: definition.id,
   definition: { ...definition, name },
   definitionSnapshot: { ...definition, name },
-  position: { x: 0, z: 0 },
-  positionMm: { xMm: 0, yMm: 0 },
+  position: { x: positionMm.xMm / 1000, z: positionMm.yMm / 1000 },
+  positionMm,
   rotationY: 0,
   rotationDeg: 0,
   flowDirection: "forward"
@@ -148,6 +152,33 @@ describe("MultiSelectionProperties", () => {
     const markup = renderPanel([machine("a", "Packer"), machine("b", "Conveyor")]);
 
     expect(markup).not.toContain("Duplicate Selected");
+  });
+
+  it("renders pair reference point measurement for exactly two selected machines", () => {
+    const markup = renderPanel([
+      machine("a", "Packer", { xMm: -1000, yMm: 2000 }),
+      machine("b", "Conveyor", { xMm: 2000, yMm: -2000 })
+    ]);
+
+    expect(markup).toContain('data-testid="pair-measurement-readout"');
+    expect(markup).toContain("Delta X");
+    expect(markup).toContain("3000 mm");
+    expect(markup).toContain("Delta Y");
+    expect(markup).toContain("-4000 mm");
+    expect(markup).toContain("Reference Point Distance");
+    expect(markup).toContain("5000 mm / 5.000 m");
+    expect(markup).not.toContain("Clearance");
+  });
+
+  it("does not render pair reference point measurement for three selected machines", () => {
+    const markup = renderPanel([
+      machine("a", "Packer"),
+      machine("b", "Conveyor"),
+      machine("c", "Wrapper")
+    ]);
+
+    expect(markup).not.toContain('data-testid="pair-measurement-readout"');
+    expect(markup).not.toContain("Reference Point Distance");
   });
 
   it("disables distribution and equal gap actions until at least three machines are selected", () => {

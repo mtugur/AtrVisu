@@ -104,13 +104,13 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   {
     surfaceId: "surface.multiSelectionAlignment",
     surfaceType: "property-editor",
-    label: "Multi-Selection Alignment Actions",
+    label: "Multi-Selection Layout Assistance",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/MultiSelectionProperties.tsx", "src/utils/alignment.ts", "src/utils/layoutHistory.ts"],
+    sourceFiles: ["src/App.tsx", "src/components/MultiSelectionProperties.tsx", "src/utils/alignment.ts", "src/utils/layoutHistory.ts", "src/utils/placement.ts"],
     commandIds: ["alignment.alignSelection"],
     panelIds: ["panel.inspector"],
-    featureIds: ["selection.multiSelect", "alignment.alignSelection", "object.movePlan", "panel.inspector"],
-    notes: "Tracks PR #69-#73 multi-select foundation, together-move coverage, alignment/distribution/equal-gap panel actions, and E2E smoke coverage."
+    featureIds: ["selection.multiSelect", "alignment.alignSelection", "object.movePlan", "measurements.show", "panel.inspector"],
+    notes: "Tracks PR #69-#73 multi-select foundation, alignment/distribution/equal-gap panel actions, and v01 pair reference-point measurement readout."
   },
   {
     surfaceId: "surface.transformEditor",

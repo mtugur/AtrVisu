@@ -3,6 +3,7 @@ import type { MachineConnectionPoint } from "../types/ataraMachineData";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import {
   applyConnectionPointSnap,
+  evaluateConnectionPointSnapCandidate,
   formatConnectionPointSelectorLabel,
   getConnectionPointCompatibility,
   getConnectionPointSnapDelta
@@ -96,6 +97,55 @@ describe("connection point snap helpers", () => {
     expect(getConnectionPointCompatibility(undefined, undefined, undefined, undefined)).toMatchObject({
       level: "invalid"
     });
+  });
+
+  it("marks snap candidate missing when one or both machines have no connection points", () => {
+    const moving = machine("moving", 0, 0, 0, []);
+    const fixed = machine("fixed", 5000, 0, 0, [fixedIn]);
+
+    expect(evaluateConnectionPointSnapCandidate(moving, fixed, undefined, fixedIn)).toMatchObject({
+      status: "missing-points",
+      canSnap: false
+    });
+    expect(evaluateConnectionPointSnapCandidate(moving, machine("empty-fixed", 5000, 0, 0, []), undefined, undefined)).toMatchObject({
+      status: "missing-points",
+      canSnap: false
+    });
+  });
+
+  it("does not allow snap candidate when snap is disabled", () => {
+    const moving = machine("moving", 0, 0, 0, [movingOut]);
+    const fixed = machine("fixed", 5000, 0, 0, [fixedIn]);
+
+    expect(evaluateConnectionPointSnapCandidate(moving, fixed, movingOut, fixedIn, { enabled: false })).toEqual({
+      status: "disabled",
+      canSnap: false
+    });
+  });
+
+  it("rejects snap candidate outside the configured distance threshold", () => {
+    const moving = machine("moving", 0, 0, 0, [movingOut]);
+    const fixed = machine("fixed", 5000, 0, 0, [fixedIn]);
+    const evaluation = evaluateConnectionPointSnapCandidate(moving, fixed, movingOut, fixedIn, {
+      maxSnapDistanceMm: 2500
+    });
+
+    expect(evaluation.status).toBe("out-of-threshold");
+    expect(evaluation.canSnap).toBe(false);
+    expect(evaluation.distanceMm).toBe(3000);
+  });
+
+  it("accepts snap candidate inside the configured distance threshold", () => {
+    const moving = machine("moving", 0, 0, 0, [movingOut]);
+    const fixed = machine("fixed", 5000, 0, 0, [fixedIn]);
+    const evaluation = evaluateConnectionPointSnapCandidate(moving, fixed, movingOut, fixedIn, {
+      maxSnapDistanceMm: 3500
+    });
+
+    expect(evaluation.status).toBe("ready");
+    expect(evaluation.canSnap).toBe(true);
+    expect(evaluation.distanceMm).toBe(3000);
+    expect(evaluation.delta).toMatchObject({ deltaXMm: 3000, deltaYMm: 0 });
   });
 
   it("calculates zero-gap delta without rotation", () => {
