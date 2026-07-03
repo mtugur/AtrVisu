@@ -55,6 +55,7 @@ const renderSelectedMachineProperties = (machine: PlacedMachine, isLocked = fals
       collisionPairs: [],
       onUpdateMachine: () => undefined,
       onChangeLayer: () => undefined,
+      onDuplicateSelected: () => undefined,
       onDeleteSelected: () => undefined
     })
   );
@@ -67,6 +68,18 @@ const getRotationFieldMarkup = (markup: string) => {
   expect(fieldEndIndex).toBeGreaterThan(rotationLabelIndex);
 
   return markup.slice(rotationLabelIndex, fieldEndIndex);
+};
+
+const getButtonMarkup = (markup: string, label: string) => {
+  const labelIndex = markup.indexOf(label);
+  const buttonStartIndex = markup.lastIndexOf("<button", labelIndex);
+  const buttonEndIndex = markup.indexOf("</button>", labelIndex);
+
+  expect(labelIndex).toBeGreaterThanOrEqual(0);
+  expect(buttonStartIndex).toBeGreaterThanOrEqual(0);
+  expect(buttonEndIndex).toBeGreaterThan(labelIndex);
+
+  return markup.slice(buttonStartIndex, buttonEndIndex);
 };
 
 describe("MachineProperties ATARA diagnostics", () => {
@@ -173,5 +186,21 @@ describe("MachineProperties rotation editing", () => {
       rotationDeg: 90,
       displayValue: "90"
     });
+  });
+});
+
+describe("MachineProperties lifecycle actions", () => {
+  it("renders duplicate and delete actions for a selected unlocked machine", () => {
+    const markup = renderSelectedMachineProperties(createPlacedMachine(baseDefinition));
+
+    expect(getButtonMarkup(markup, "Duplicate Selected")).not.toContain('disabled=""');
+    expect(getButtonMarkup(markup, "Delete Selected Object")).not.toContain('disabled=""');
+  });
+
+  it("disables duplicate and delete actions when the selected machine is locked", () => {
+    const markup = renderSelectedMachineProperties(createPlacedMachine(baseDefinition), true);
+
+    expect(getButtonMarkup(markup, "Duplicate Selected")).toContain('disabled=""');
+    expect(getButtonMarkup(markup, "Delete Selected Object")).toContain('disabled=""');
   });
 });

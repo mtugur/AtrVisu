@@ -4,6 +4,7 @@ import type { MeasurementResult, PlacementSettings } from "../types/placement";
 import { getCollisionEnvelopeForMachine } from "./collision";
 import { getMachineReferencePositionMm } from "./coordinateReference";
 import { getMachineDimensionsMm } from "./machineDimensions";
+import { mmToMeters } from "./units";
 
 export const snapMm = (valueMm: number, stepMm: number) => {
   if (!Number.isFinite(valueMm) || !Number.isFinite(stepMm) || stepMm <= 0) {
@@ -60,6 +61,47 @@ export const distanceBetweenPlanPositionsMm = (a: PlanPositionMm, b: PlanPositio
 
 export const getMachinePlanPositionMm = (machine: PlacedMachine): PlanPositionMm => {
   return getMachineReferencePositionMm(machine);
+};
+
+export const createMachineInstanceId = (
+  machineDefinitionId: string,
+  existingInstanceIds: Iterable<string>,
+  seed = `${Date.now()}-${Math.round(Math.random() * 10000)}`
+) => {
+  const existingIds = new Set(existingInstanceIds);
+  let candidate = `${machineDefinitionId}-${seed}`;
+  let attempt = 1;
+
+  while (existingIds.has(candidate)) {
+    candidate = `${machineDefinitionId}-${seed}-${attempt}`;
+    attempt += 1;
+  }
+
+  return candidate;
+};
+
+export const duplicatePlacedMachine = (
+  machine: PlacedMachine,
+  options: {
+    instanceId: string;
+    offsetMm: number;
+  }
+): PlacedMachine => {
+  const positionMm = getMachinePlanPositionMm(machine);
+  const nextPositionMm = {
+    xMm: positionMm.xMm + options.offsetMm,
+    yMm: positionMm.yMm + options.offsetMm
+  };
+
+  return {
+    ...machine,
+    instanceId: options.instanceId,
+    position: {
+      x: mmToMeters(nextPositionMm.xMm),
+      z: mmToMeters(nextPositionMm.yMm)
+    },
+    positionMm: nextPositionMm
+  };
 };
 
 export const calculateMeasurementBetweenMachines = (

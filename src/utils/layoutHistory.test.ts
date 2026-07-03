@@ -116,6 +116,45 @@ describe("layout history", () => {
     ]);
   });
 
+  it("restores a deleted selected machine through undo and redo", () => {
+    const initial = [machine("a", 0), machine("b", 1000)];
+    const afterDelete = [machine("b", 1000)];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    const undone = undoHistory(history, afterDelete);
+    expect(undone?.machines.map((item) => item.instanceId)).toEqual(["a", "b"]);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines.map((item) => item.instanceId)).toEqual(["b"]);
+  });
+
+  it("restores multiple deleted selected machines through undo and redo", () => {
+    const initial = [machine("a", 0), machine("b", 1000), machine("c", 2000)];
+    const afterDelete = [machine("c", 2000)];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    const undone = undoHistory(history, afterDelete);
+    expect(undone?.machines.map((item) => item.instanceId)).toEqual(["a", "b", "c"]);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines.map((item) => item.instanceId)).toEqual(["c"]);
+  });
+
+  it("restores duplicated selected machine snapshots through undo and redo", () => {
+    const initial = [machine("a", 0)];
+    const afterDuplicate = [machine("a", 0), machine("a-copy", 250)];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    const undone = undoHistory(history, afterDuplicate);
+    expect(undone?.machines.map((item) => item.instanceId)).toEqual(["a"]);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["a", 0],
+      ["a-copy", 250]
+    ]);
+  });
+
   it("keeps viewpoint-only layout changes undoable", () => {
     const machines = [machine("a", 0)];
     const annotations = [annotation("same")];

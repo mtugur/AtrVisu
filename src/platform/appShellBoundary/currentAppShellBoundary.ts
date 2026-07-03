@@ -119,6 +119,7 @@ export const currentAppShellBoundaryZones = [
     relatedSurfaceIds: [
       "surface.inspector",
       "surface.transformEditor",
+      "surface.duplicateSelected",
       "surface.rotationSnap",
       "surface.connectionPointSnap",
       "surface.alignment",
@@ -129,6 +130,7 @@ export const currentAppShellBoundaryZones = [
     relatedPanelIds: ["panel.inspector"],
     relatedCommandIds: [
       "edit.deleteSelected",
+      "edit.duplicateSelected",
       "snap.rotation",
       "snap.connectionPoint",
       "alignment.alignSelection",

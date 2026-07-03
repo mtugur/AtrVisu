@@ -133,11 +133,12 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     surfaceId: "surface.duplicateSelected",
     surfaceType: "toolbar-action",
     label: "Duplicate Selected",
-    owner: "platform",
-    sourceFiles: ["src/platform/registrySeeds/commandSeedDefinitions.ts"],
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/utils/placement.ts"],
     commandIds: ["edit.duplicateSelected"],
-    featureIds: ["object.duplicate"],
-    notes: "Inventory tracks platform seed coverage; runtime UI integration is not part of this branch."
+    panelIds: ["panel.inspector"],
+    featureIds: ["object.duplicate", "panel.inspector"],
+    notes: "Single selected-machine duplicate control is exposed in Selected Object Properties; multi-select duplicate remains out of scope."
   },
   {
     surfaceId: "surface.undoRedo",
