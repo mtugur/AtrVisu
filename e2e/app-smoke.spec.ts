@@ -125,6 +125,8 @@ test("multi-selection alignment panel actions render without red console errors"
   const multiSelectionPanel = page.getByTestId("multi-selection-panel");
   await expect(multiSelectionPanel).toBeVisible();
   await expect(page.getByTestId("multi-selection-alignment-actions")).toBeVisible();
+  await expect(page.getByTestId("pair-measurement-readout")).toBeVisible();
+  await expect(page.getByTestId("pair-measurement-readout")).toContainText("Reference Point Distance");
 
   for (const label of ["Align Left", "Align Center X", "Align Right", "Align Top", "Align Center Y", "Align Bottom"]) {
     await expect(multiSelectionPanel.getByRole("button", { name: label })).toBeVisible();
@@ -151,6 +153,7 @@ test("multi-selection alignment panel actions render without red console errors"
     await multiSelectionSection.click();
   }
   await expect(multiSelectionPanel).toContainText("3 objects");
+  await expect(page.getByTestId("pair-measurement-readout")).toHaveCount(0);
   await expect(distributeHorizontal).toBeEnabled();
   await expect(distributeVertical).toBeEnabled();
   await expect(equalGapX).toBeEnabled();

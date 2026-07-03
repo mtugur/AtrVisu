@@ -1,6 +1,7 @@
 import type { PlanBounds } from "../types/alignment";
 import type { AlignmentAction, DistributionAction, EqualGapAction } from "../types/alignment";
 import type { PlacedMachine } from "../types/machine";
+import { calculateReferencePointMeasurementBetweenMachines } from "../utils/placement";
 import { formatLength } from "../utils/units";
 
 type MultiSelectionPropertiesProps = {
@@ -27,6 +28,9 @@ export function MultiSelectionProperties({
   onDeleteSelected
 }: MultiSelectionPropertiesProps) {
   const canDistribute = selectedMachines.length >= 3;
+  const pairMeasurement = selectedMachines.length === 2
+    ? calculateReferencePointMeasurementBetweenMachines(selectedMachines[0], selectedMachines[1])
+    : null;
 
   return (
     <section className="properties-section multi-selection-panel" data-testid="multi-selection-panel" aria-label="Multi-selection properties">
@@ -64,6 +68,22 @@ export function MultiSelectionProperties({
             <strong>{formatMm(selectionBounds.widthMm)}</strong>
             <span>Selection Depth</span>
             <strong>{formatMm(selectionBounds.depthMm)}</strong>
+          </div>
+        ) : null}
+        {pairMeasurement ? (
+          <div
+            className="diagnostics-grid compact-grid"
+            data-testid="pair-measurement-readout"
+            aria-label="Pair reference point measurement"
+          >
+            <span>Delta X</span>
+            <strong>{formatMm(pairMeasurement.deltaXMm)}</strong>
+            <span>Delta Y</span>
+            <strong>{formatMm(pairMeasurement.deltaYMm)}</strong>
+            <span>Reference Point Distance</span>
+            <strong>
+              {formatMm(pairMeasurement.referencePointDistanceMm)} / {pairMeasurement.referencePointDistanceMeters.toFixed(3)} m
+            </strong>
           </div>
         ) : null}
         <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-alignment-actions">

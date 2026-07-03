@@ -63,13 +63,15 @@ describe("current surface inventory", () => {
       (item) => item.surfaceId === "surface.multiSelectionAlignment"
     );
 
-    expect(multiSelectionSurface?.sourceFiles).toContain("src/components/MultiSelectionProperties.tsx");
+    expect(multiSelectionSurface?.sourceFiles).toEqual(
+      expect.arrayContaining(["src/components/MultiSelectionProperties.tsx", "src/utils/placement.ts"])
+    );
     expect(multiSelectionSurface?.commandIds).toContain("alignment.alignSelection");
     expect(multiSelectionSurface?.panelIds).toContain("panel.inspector");
     expect(multiSelectionSurface?.featureIds).toEqual(
-      expect.arrayContaining(["selection.multiSelect", "alignment.alignSelection", "object.movePlan"])
+      expect.arrayContaining(["selection.multiSelect", "alignment.alignSelection", "object.movePlan", "measurements.show"])
     );
-    expect(multiSelectionSurface?.notes).toContain("PR #69-#73");
+    expect(multiSelectionSurface?.notes).toContain("pair reference-point measurement readout");
   });
 
   it("documents the selected-machine duplicate action as an inspector surface", () => {

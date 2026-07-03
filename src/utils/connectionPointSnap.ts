@@ -34,6 +34,13 @@ export type ConnectionPointCompatibility = {
   messages: string[];
 };
 
+export type ConnectionPointSnapCandidateEvaluation = {
+  status: "disabled" | "missing-points" | "out-of-threshold" | "ready";
+  canSnap: boolean;
+  distanceMm?: number;
+  delta?: ConnectionPointSnapDelta;
+};
+
 const directionVectors: Record<AtaraConnectionDirection, { xMm: number; yMm: number; zMm: number }> = {
   "x+": { xMm: 1, yMm: 0, zMm: 0 },
   "x-": { xMm: -1, yMm: 0, zMm: 0 },
@@ -80,6 +87,49 @@ export const getConnectionPointSnapDelta = (
     targetPointXMm,
     targetPointYMm,
     currentDistanceMm: Math.hypot(fixedWorld.xMm - movingWorld.xMm, fixedWorld.yMm - movingWorld.yMm)
+  };
+};
+
+export const evaluateConnectionPointSnapCandidate = (
+  movingMachine: PlacedMachine | null | undefined,
+  fixedMachine: PlacedMachine | null | undefined,
+  movingPoint: MachineConnectionPoint | null | undefined,
+  fixedPoint: MachineConnectionPoint | null | undefined,
+  options: {
+    enabled?: boolean;
+    gapMm?: number;
+    maxSnapDistanceMm?: number;
+  } = {}
+): ConnectionPointSnapCandidateEvaluation => {
+  if (options.enabled === false) {
+    return { status: "disabled", canSnap: false };
+  }
+
+  if (!movingMachine || !fixedMachine || !movingPoint || !fixedPoint) {
+    return { status: "missing-points", canSnap: false };
+  }
+
+  const delta = getConnectionPointSnapDelta(movingMachine, fixedMachine, movingPoint, fixedPoint, options.gapMm ?? 0);
+  const maxSnapDistanceMm = options.maxSnapDistanceMm;
+  if (
+    typeof maxSnapDistanceMm === "number" &&
+    Number.isFinite(maxSnapDistanceMm) &&
+    maxSnapDistanceMm >= 0 &&
+    delta.currentDistanceMm > maxSnapDistanceMm
+  ) {
+    return {
+      status: "out-of-threshold",
+      canSnap: false,
+      distanceMm: delta.currentDistanceMm,
+      delta
+    };
+  }
+
+  return {
+    status: "ready",
+    canSnap: true,
+    distanceMm: delta.currentDistanceMm,
+    delta
   };
 };
 

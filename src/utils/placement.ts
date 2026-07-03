@@ -63,6 +63,35 @@ export const getMachinePlanPositionMm = (machine: PlacedMachine): PlanPositionMm
   return getMachineReferencePositionMm(machine);
 };
 
+export type PairReferencePointMeasurement = {
+  objectAId: string;
+  objectBId: string;
+  deltaXMm: number;
+  deltaYMm: number;
+  referencePointDistanceMm: number;
+  referencePointDistanceMeters: number;
+};
+
+export const calculateReferencePointMeasurementBetweenMachines = (
+  objectA: PlacedMachine,
+  objectB: PlacedMachine
+): PairReferencePointMeasurement => {
+  const a = getMachinePlanPositionMm(objectA);
+  const b = getMachinePlanPositionMm(objectB);
+  const deltaXMm = b.xMm - a.xMm;
+  const deltaYMm = b.yMm - a.yMm;
+  const referencePointDistanceMm = distanceBetweenPlanPositionsMm(a, b);
+
+  return {
+    objectAId: objectA.instanceId,
+    objectBId: objectB.instanceId,
+    deltaXMm,
+    deltaYMm,
+    referencePointDistanceMm,
+    referencePointDistanceMeters: referencePointDistanceMm / 1000
+  };
+};
+
 export const createMachineInstanceId = (
   machineDefinitionId: string,
   existingInstanceIds: Iterable<string>,

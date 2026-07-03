@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyPositionSnap,
   applyRotationSnap,
+  calculateReferencePointMeasurementBetweenMachines,
+  calculateMeasurementBetweenMachines,
   commitRotationAngle,
   createMachineInstanceId,
   duplicatePlacedMachine,
@@ -107,6 +109,44 @@ describe("placement helpers", () => {
 
   it("calculates plan distance in millimeters", () => {
     expect(distanceBetweenPlanPositionsMm({ xMm: 0, yMm: 0 }, { xMm: 3000, yMm: 4000 })).toBe(5000);
+  });
+
+  it("calculates deterministic reference-point measurement between placed machines", () => {
+    expect(calculateReferencePointMeasurementBetweenMachines(
+      placedMachine({ instanceId: "a", position: { x: -1.25, z: 2 }, positionMm: { xMm: -1250, yMm: 2000 } }),
+      placedMachine({ instanceId: "b", position: { x: 2.75, z: -1 }, positionMm: { xMm: 2750, yMm: -1000 } })
+    )).toEqual({
+      objectAId: "a",
+      objectBId: "b",
+      deltaXMm: 4000,
+      deltaYMm: -3000,
+      referencePointDistanceMm: 5000,
+      referencePointDistanceMeters: 5
+    });
+  });
+
+  it("falls back to meter position when reference-point positionMm is missing", () => {
+    expect(calculateReferencePointMeasurementBetweenMachines(
+      placedMachine({ instanceId: "a", position: { x: -1.5, z: -2.25 }, positionMm: undefined }),
+      placedMachine({ instanceId: "b", position: { x: 1.5, z: 1.75 }, positionMm: undefined })
+    )).toMatchObject({
+      deltaXMm: 3000,
+      deltaYMm: 4000,
+      referencePointDistanceMm: 5000,
+      referencePointDistanceMeters: 5
+    });
+  });
+
+  it("keeps existing machine measurement output consistent between millimeters and meters", () => {
+    const measurement = calculateMeasurementBetweenMachines(
+      placedMachine({ instanceId: "a", position: { x: -1.5, z: -2.25 }, positionMm: undefined }),
+      placedMachine({ instanceId: "b", position: { x: 1.5, z: 1.75 }, positionMm: undefined })
+    );
+
+    expect(measurement.deltaXMm).toBe(3000);
+    expect(measurement.deltaYMm).toBe(4000);
+    expect(measurement.distanceMm).toBe(5000);
+    expect(measurement.distanceMeters).toBe(5);
   });
 
   it("creates a unique machine instance id from the existing project ids", () => {
