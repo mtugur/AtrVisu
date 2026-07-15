@@ -86,7 +86,10 @@ import {
   updateCivilReference
 } from "./utils/civil";
 import { addViewpoint, createViewpoint, deleteViewpoint, updateViewpoint } from "./utils/viewpoints";
-import { shouldHandleGlobalUndoRedo } from "./utils/keyboardShortcuts";
+import {
+  resolveEditorShortcut,
+  shouldPreventEditorShortcutDefault
+} from "./utils/keyboardShortcuts";
 import {
   addObjectsToGroup,
   createObjectGroup,
@@ -1447,16 +1450,22 @@ export function App() {
     if (selectedGroupHasLockedVisibleMembers) {
       return;
     }
-    const unlockedIds = selectedMachineIds.filter((id) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
-      return machine ? !isLayerLocked(machine.layerId, layersRef.current) : false;
+    const selectedById = new Map(
+      placedMachinesRef.current.map((machine) => [machine.instanceId, machine])
+    );
+    const selectedForMove = selectedMachineIds.flatMap((id) => {
+      const machine = selectedById.get(id);
+      return machine ? [machine] : [];
     });
-    if (unlockedIds.length === 0) {
+    if (
+      selectedForMove.length !== selectedMachineIds.length
+      || selectedForMove.some((machine) => isLayerLocked(machine.layerId, layersRef.current))
+    ) {
       return;
     }
 
     markLayoutChanged(options);
-    setPlacedMachines((current) => moveObjectsByDelta(current, unlockedIds, deltaXMm, deltaYMm));
+    setPlacedMachines((current) => moveObjectsByDelta(current, selectedMachineIds, deltaXMm, deltaYMm));
   }, [markLayoutChanged, selectedGroupHasLockedVisibleMembers, selectedMachineIds]);
 
   const applyAlignablePositionUpdates = useCallback((updates: Array<{ kind: "machine" | "civil"; id: string; xMm: number; yMm: number }>) => {
@@ -1827,57 +1836,86 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      if (shouldHandleGlobalUndoRedo(event) && key === "z") {
-        event.preventDefault();
-        if (event.shiftKey) {
-          redoLayoutChange();
-        } else {
-          undoLayoutChange();
+      const action = resolveEditorShortcut({
+        key: event.key,
+        target: event.target,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        repeat: event.repeat,
+        modalOpen: document.querySelector('[role="dialog"][aria-modal="true"], dialog[open]') !== null
+      });
+      if (!action) {
+        return;
+      }
+
+      const runHandledAction = (handled: boolean, execute: () => void) => {
+        if (!shouldPreventEditorShortcutDefault(action, handled)) {
+          return false;
         }
-        return;
-      }
-
-      if (shouldHandleGlobalUndoRedo(event) && key === "y") {
         event.preventDefault();
-        redoLayoutChange();
+        execute();
+        return true;
+      };
+
+      if (action === "duplicate-selected") {
+        runHandledAction(canDuplicateSelectedMachines, duplicateSelectedMachines);
         return;
       }
 
-      if (event.target instanceof HTMLElement && (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement ||
-        event.target instanceof HTMLSelectElement ||
-        event.target.isContentEditable
-      )) {
+      if (action === "undo") {
+        runHandledAction(canUndo, undoLayoutChange);
         return;
       }
 
-      if (event.key === "Escape" && (selectedMachineIds.length > 0 || selectedCivilReferenceId || selectedAnnotationId || editingAnnotationId)) {
-        event.preventDefault();
-        clearSelection();
+      if (action === "redo") {
+        runHandledAction(canRedo, redoLayoutChange);
         return;
       }
 
-      if (event.key === "Delete" && selectedCivilReferenceId) {
-        event.preventDefault();
-        removeCivilReference(selectedCivilReferenceId);
+      if (action === "clear-selection") {
+        runHandledAction(
+          selectedMachineIds.length > 0
+            || Boolean(selectedCivilReferenceId || selectedAnnotationId || editingAnnotationId),
+          clearSelection
+        );
         return;
       }
 
-      if (event.key === "Delete" && (editingAnnotationId || selectedAnnotationId)) {
-        event.preventDefault();
-        removeAnnotation(editingAnnotationId ?? selectedAnnotationId ?? "");
+      if (action === "delete-selected") {
+        if (selectedCivilReferenceId) {
+          const selectedCivil = civilReferencesRef.current.find((item) => item.id === selectedCivilReferenceId);
+          runHandledAction(
+            Boolean(selectedCivil && !selectedCivil.locked && !isLayerLocked(selectedCivil.layerId, layersRef.current)),
+            () => removeCivilReference(selectedCivilReferenceId)
+          );
+          return;
+        }
+
+        const annotationId = editingAnnotationId || selectedAnnotationId;
+        if (annotationId) {
+          const selectedAnnotation = annotationsRef.current.find((item) => item.id === annotationId);
+          runHandledAction(
+            Boolean(selectedAnnotation && !isLayerLocked(selectedAnnotation.layerId, layersRef.current)),
+            () => removeAnnotation(annotationId)
+          );
+          return;
+        }
+
+        runHandledAction(
+          selectedMachines.some((machine) => !isLayerLocked(machine.layerId, layersRef.current)),
+          deleteSelectedMachines
+        );
         return;
       }
 
-      if (event.key === "Delete" && selectedMachineIds.length > 0) {
-        event.preventDefault();
-        deleteSelectedMachines();
-        return;
-      }
-
-      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) || selectedMachineIds.length === 0) {
+      const canNudgeSelection =
+        !selectedGroupHasLockedVisibleMembers
+        && selectedMachineIds.length > 0
+        && selectedMachines.length === selectedMachineIds.length
+        && selectedMachines.every((machine) => !isLayerLocked(machine.layerId, layersRef.current));
+      if (!canNudgeSelection) {
         return;
       }
 
@@ -1887,15 +1925,14 @@ export function App() {
           ? nudgeSettings.smallNudgeStepMm
           : nudgeSettings.nudgeStepMm;
       const delta = {
-        ArrowLeft: { x: -step, y: 0 },
-        ArrowRight: { x: step, y: 0 },
-        ArrowUp: { x: 0, y: -step },
-        ArrowDown: { x: 0, y: step }
-      }[event.key];
+        "nudge-left": { x: -step, y: 0 },
+        "nudge-right": { x: step, y: 0 },
+        "nudge-forward": { x: 0, y: -step },
+        "nudge-back": { x: 0, y: step }
+      }[action];
 
       if (delta) {
-        event.preventDefault();
-        moveSelectedByDelta(delta.x, delta.y);
+        runHandledAction(true, () => moveSelectedByDelta(delta.x, delta.y));
       }
     };
 
@@ -1905,17 +1942,23 @@ export function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
+    canDuplicateSelectedMachines,
+    canRedo,
+    canUndo,
     clearSelection,
     deleteSelectedMachines,
+    duplicateSelectedMachines,
     moveSelectedByDelta,
     nudgeSettings,
     removeAnnotation,
     removeCivilReference,
     redoLayoutChange,
     editingAnnotationId,
+    selectedGroupHasLockedVisibleMembers,
     selectedCivilReferenceId,
     selectedAnnotationId,
     selectedMachineIds.length,
+    selectedMachines,
     undoLayoutChange
   ]);
 

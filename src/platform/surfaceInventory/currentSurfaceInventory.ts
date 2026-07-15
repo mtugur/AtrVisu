@@ -125,20 +125,21 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     surfaceType: "toolbar-action",
     label: "Delete Selected",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx"],
+    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/utils/keyboardShortcuts.ts"],
     commandIds: ["edit.deleteSelected"],
-    featureIds: ["edit.deleteSelected"]
+    featureIds: ["edit.deleteSelected"],
+    notes: "Delete is available from selected-object controls and the guarded Delete keyboard shortcut; repeated keydown and editable targets are ignored."
   },
   {
     surfaceId: "surface.duplicateSelected",
     surfaceType: "toolbar-action",
     label: "Duplicate Selected",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/components/MultiSelectionProperties.tsx", "src/utils/placement.ts"],
+    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/components/MultiSelectionProperties.tsx", "src/utils/placement.ts", "src/utils/keyboardShortcuts.ts"],
     commandIds: ["edit.duplicateSelected"],
     panelIds: ["panel.inspector"],
     featureIds: ["object.duplicate", "panel.inspector"],
-    notes: "Duplicate Selected is exposed for single selected-machine properties and machine multi-selection; multi-select duplicate preserves selected pack offsets and does not mutate group membership."
+    notes: "Duplicate Selected is exposed for single selected-machine properties, machine multi-selection, and guarded Ctrl/Cmd+D; multi-select duplicate preserves selected pack offsets and does not mutate group membership."
   },
   {
     surfaceId: "surface.undoRedo",
@@ -147,7 +148,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/utils/layoutHistory.ts", "src/utils/keyboardShortcuts.ts"],
     commandIds: ["edit.undo", "edit.redo"],
-    featureIds: ["edit.undo", "edit.redo"]
+    featureIds: ["edit.undo", "edit.redo"],
+    notes: "Undo uses Ctrl/Cmd+Z; redo uses Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z. Editable targets and modal dialogs keep priority."
   },
   {
     surfaceId: "surface.labels",

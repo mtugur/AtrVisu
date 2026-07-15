@@ -7,12 +7,14 @@ const createCommandSeed = (
   group: CommandGroup,
   label: string,
   tooltip: string,
-  mutatesData = false
+  mutatesData = false,
+  shortcut?: string
 ): CommandDefinition => ({
   id,
   group,
   label,
   tooltip,
+  shortcut,
   execute: noopExecute,
   mutatesData,
   requiresUndoTransaction: mutatesData
@@ -24,10 +26,10 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("project.importJson", "file", "Import Project JSON", "Import a project JSON file."),
   createCommandSeed("project.restorePrompt", "file", "Restore Autosave", "Restore a previously autosaved layout when available."),
 
-  createCommandSeed("edit.undo", "edit", "Undo", "Undo the last layout transaction."),
-  createCommandSeed("edit.redo", "edit", "Redo", "Redo the next layout transaction."),
-  createCommandSeed("edit.deleteSelected", "edit", "Delete Selected", "Delete the selected layout entities.", true),
-  createCommandSeed("edit.duplicateSelected", "edit", "Duplicate Selected", "Duplicate the selected layout entities.", true),
+  createCommandSeed("edit.undo", "edit", "Undo", "Undo the last layout transaction.", false, "Ctrl/Cmd+Z"),
+  createCommandSeed("edit.redo", "edit", "Redo", "Redo the next layout transaction.", false, "Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z"),
+  createCommandSeed("edit.deleteSelected", "edit", "Delete Selected", "Delete the selected layout entities.", true, "Delete"),
+  createCommandSeed("edit.duplicateSelected", "edit", "Duplicate Selected", "Duplicate the selected layout entities.", true, "Ctrl/Cmd+D"),
 
   createCommandSeed("view.fitView", "view", "Fit View", "Fit the viewport to the current layout."),
   createCommandSeed("view.toggleLabels", "view", "Toggle Labels", "Show or hide layout labels."),
