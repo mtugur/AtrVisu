@@ -1,3 +1,8 @@
+import {
+  CORE_EDITOR_COMMAND_IDS,
+  type CoreEditorCommandId
+} from "../platform/runtimeCommands/coreEditorRuntimeCommands";
+
 export const isTextEditingElement = (target: EventTarget | null): boolean => {
   if (typeof HTMLElement === "undefined" || !(target instanceof HTMLElement)) {
     return false;
@@ -33,6 +38,17 @@ export type EditorShortcutEvent = {
   repeat?: boolean;
   modalOpen?: boolean;
 };
+
+const editorShortcutCommandIds: Partial<Record<EditorShortcutAction, CoreEditorCommandId>> = {
+  "duplicate-selected": CORE_EDITOR_COMMAND_IDS.duplicateSelected,
+  "delete-selected": CORE_EDITOR_COMMAND_IDS.deleteSelected,
+  undo: CORE_EDITOR_COMMAND_IDS.undo,
+  redo: CORE_EDITOR_COMMAND_IDS.redo
+};
+
+export const getEditorCommandIdForShortcutAction = (
+  action: EditorShortcutAction
+) => editorShortcutCommandIds[action] ?? null;
 
 export const shouldIgnoreEditorShortcuts = (
   target: EventTarget | null,

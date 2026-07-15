@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  getEditorCommandIdForShortcutAction,
   isTextEditingElement,
   resolveEditorShortcut,
   shouldHandleGlobalUndoRedo,
@@ -111,6 +112,15 @@ describe("keyboard shortcut guards", () => {
 });
 
 describe("editor shortcut resolution", () => {
+  it("maps command-backed shortcuts to the core runtime command ids", () => {
+    expect(getEditorCommandIdForShortcutAction("duplicate-selected")).toBe("edit.duplicateSelected");
+    expect(getEditorCommandIdForShortcutAction("delete-selected")).toBe("edit.deleteSelected");
+    expect(getEditorCommandIdForShortcutAction("undo")).toBe("edit.undo");
+    expect(getEditorCommandIdForShortcutAction("redo")).toBe("edit.redo");
+    expect(getEditorCommandIdForShortcutAction("clear-selection")).toBeNull();
+    expect(getEditorCommandIdForShortcutAction("nudge-left")).toBeNull();
+  });
+
   it("resolves Ctrl+D and Meta+D to duplicate selected", () => {
     installFakeDomClasses();
 

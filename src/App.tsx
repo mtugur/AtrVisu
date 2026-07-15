@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { AppShell } from "./components/AppShell";
@@ -87,9 +87,19 @@ import {
 } from "./utils/civil";
 import { addViewpoint, createViewpoint, deleteViewpoint, updateViewpoint } from "./utils/viewpoints";
 import {
+  getEditorCommandIdForShortcutAction,
   resolveEditorShortcut,
   shouldPreventEditorShortcutDefault
 } from "./utils/keyboardShortcuts";
+import {
+  CORE_EDITOR_COMMAND_IDS,
+  createCoreEditorCommandAction,
+  createCoreEditorRuntimeCommandBridge,
+  isDeleteSelectionEligible,
+  isMachineSelectionDuplicable,
+  type CoreEditorCommandId,
+  type CoreEditorRuntimeCommandBindings
+} from "./platform/runtimeCommands/coreEditorRuntimeCommands";
 import {
   addObjectsToGroup,
   createObjectGroup,
@@ -222,6 +232,11 @@ export function App() {
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
+  const runtimeCommandBindingsRef = useRef<CoreEditorRuntimeCommandBindings>({});
+  const runtimeCommandBridge = useMemo(
+    () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
+    []
+  );
 
   const selectedMachineId = primarySelectedMachineId;
   const selectedMachine = placedMachines.find((machine) => machine.instanceId === selectedMachineId);
@@ -272,12 +287,50 @@ export function App() {
     [placedMachines, selectedMachineIdSet]
   );
   const canDuplicateSelectedMachines = useMemo(
-    () =>
-      selectedMachineIds.length > 0
-      && selectedMachines.length === selectedMachineIds.length
-      && selectedMachines.every((machine) => !isLayerLocked(machine.layerId, layers)),
+    () => isMachineSelectionDuplicable(
+      selectedMachineIds,
+      selectedMachines.map((machine) => ({
+        id: machine.instanceId,
+        locked: isLayerLocked(machine.layerId, layers)
+      }))
+    ),
     [layers, selectedMachineIds.length, selectedMachines]
   );
+  const selectedAnnotationForDeleteId = editingAnnotationId || selectedAnnotationId;
+  const canDeleteSelectedEntities = useMemo(() => {
+    const selectedCivil = selectedCivilReferenceId
+      ? civilReferences.find((item) => item.id === selectedCivilReferenceId)
+      : undefined;
+    const selectedAnnotation = selectedAnnotationForDeleteId
+      ? annotations.find((item) => item.id === selectedAnnotationForDeleteId)
+      : undefined;
+
+    return isDeleteSelectionEligible({
+      civil: selectedCivilReferenceId
+        ? {
+            exists: Boolean(selectedCivil),
+            locked: Boolean(selectedCivil?.locked || isLayerLocked(selectedCivil?.layerId, layers))
+          }
+        : null,
+      annotation: selectedAnnotationForDeleteId
+        ? {
+            exists: Boolean(selectedAnnotation),
+            locked: isLayerLocked(selectedAnnotation?.layerId, layers)
+          }
+        : null,
+      machines: selectedMachines.map((machine) => ({
+        id: machine.instanceId,
+        locked: isLayerLocked(machine.layerId, layers)
+      }))
+    });
+  }, [
+    annotations,
+    civilReferences,
+    layers,
+    selectedAnnotationForDeleteId,
+    selectedCivilReferenceId,
+    selectedMachines
+  ]);
   const selectedCivilReferences = useMemo(
     () => civilReferences.filter((item) => selectedCivilReferenceIdSet.has(item.id)),
     [civilReferences, selectedCivilReferenceIdSet]
@@ -1754,6 +1807,110 @@ export function App() {
     clearSelection();
   }, [clearSelection, markLayoutChanged, selectedMachines]);
 
+  const deleteSelectedEntities = useCallback(() => {
+    if (selectedCivilReferenceId) {
+      removeCivilReference(selectedCivilReferenceId);
+      return;
+    }
+    if (selectedAnnotationForDeleteId) {
+      removeAnnotation(selectedAnnotationForDeleteId);
+      return;
+    }
+    deleteSelectedMachines();
+  }, [
+    deleteSelectedMachines,
+    removeAnnotation,
+    removeCivilReference,
+    selectedAnnotationForDeleteId,
+    selectedCivilReferenceId
+  ]);
+
+  const runtimeCommandBindings = useMemo<CoreEditorRuntimeCommandBindings>(() => ({
+    [CORE_EDITOR_COMMAND_IDS.undo]: {
+      getEnableState: () => canUndo
+        ? { enabled: true }
+        : { enabled: false, reason: "Nothing to undo." },
+      execute: undoLayoutChange
+    },
+    [CORE_EDITOR_COMMAND_IDS.redo]: {
+      getEnableState: () => canRedo
+        ? { enabled: true }
+        : { enabled: false, reason: "Nothing to redo." },
+      execute: redoLayoutChange
+    },
+    [CORE_EDITOR_COMMAND_IDS.deleteSelected]: {
+      getEnableState: () => canDeleteSelectedEntities
+        ? { enabled: true }
+        : { enabled: false, reason: "Select an unlocked deletable object." },
+      execute: deleteSelectedEntities
+    },
+    [CORE_EDITOR_COMMAND_IDS.duplicateSelected]: {
+      getEnableState: () => canDuplicateSelectedMachines
+        ? { enabled: true }
+        : { enabled: false, reason: "Select only machines on unlocked layers." },
+      execute: duplicateSelectedMachines
+    }
+  }), [
+    canDeleteSelectedEntities,
+    canDuplicateSelectedMachines,
+    canRedo,
+    canUndo,
+    deleteSelectedEntities,
+    duplicateSelectedMachines,
+    redoLayoutChange,
+    undoLayoutChange
+  ]);
+
+  useLayoutEffect(() => {
+    runtimeCommandBindingsRef.current = runtimeCommandBindings;
+  }, [runtimeCommandBindings]);
+
+  const coreEditorCommandContext = useMemo(() => ({
+    selectionIds: selectedEntityKeys,
+    primarySelectionId: selectedEntityKeys[0],
+    hasUnsavedChanges: hasUnsavedProjectChanges
+  }), [hasUnsavedProjectChanges, selectedEntityKeys]);
+
+  const canExecuteCoreEditorCommand = useCallback(
+    (commandId: CoreEditorCommandId) => runtimeCommandBridge.canExecuteCommand(
+      commandId,
+      coreEditorCommandContext,
+      runtimeCommandBindings
+    ),
+    [coreEditorCommandContext, runtimeCommandBindings, runtimeCommandBridge]
+  );
+
+  const executeCoreEditorCommand = useCallback(
+    (commandId: CoreEditorCommandId) => runtimeCommandBridge.executeCommand(
+      commandId,
+      coreEditorCommandContext
+    ).handled,
+    [coreEditorCommandContext, runtimeCommandBridge]
+  );
+
+  const canExecuteUndoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.undo).enabled;
+  const canExecuteRedoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.redo).enabled;
+  const canExecuteDuplicateSelectedCommand = canExecuteCoreEditorCommand(
+    CORE_EDITOR_COMMAND_IDS.duplicateSelected
+  ).enabled;
+
+  const executeUndoCommand = useMemo(
+    () => createCoreEditorCommandAction(CORE_EDITOR_COMMAND_IDS.undo, executeCoreEditorCommand),
+    [executeCoreEditorCommand]
+  );
+  const executeRedoCommand = useMemo(
+    () => createCoreEditorCommandAction(CORE_EDITOR_COMMAND_IDS.redo, executeCoreEditorCommand),
+    [executeCoreEditorCommand]
+  );
+  const executeDeleteSelectedCommand = useMemo(
+    () => createCoreEditorCommandAction(CORE_EDITOR_COMMAND_IDS.deleteSelected, executeCoreEditorCommand),
+    [executeCoreEditorCommand]
+  );
+  const executeDuplicateSelectedCommand = useMemo(
+    () => createCoreEditorCommandAction(CORE_EDITOR_COMMAND_IDS.duplicateSelected, executeCoreEditorCommand),
+    [executeCoreEditorCommand]
+  );
+
   useEffect(() => {
     try {
       const rawLayout = window.localStorage.getItem(AUTOSAVE_KEY);
@@ -1850,6 +2007,15 @@ export function App() {
         return;
       }
 
+      const commandId = getEditorCommandIdForShortcutAction(action);
+      if (commandId) {
+        const handled = executeCoreEditorCommand(commandId);
+        if (shouldPreventEditorShortcutDefault(action, handled)) {
+          event.preventDefault();
+        }
+        return;
+      }
+
       const runHandledAction = (handled: boolean, execute: () => void) => {
         if (!shouldPreventEditorShortcutDefault(action, handled)) {
           return false;
@@ -1859,53 +2025,11 @@ export function App() {
         return true;
       };
 
-      if (action === "duplicate-selected") {
-        runHandledAction(canDuplicateSelectedMachines, duplicateSelectedMachines);
-        return;
-      }
-
-      if (action === "undo") {
-        runHandledAction(canUndo, undoLayoutChange);
-        return;
-      }
-
-      if (action === "redo") {
-        runHandledAction(canRedo, redoLayoutChange);
-        return;
-      }
-
       if (action === "clear-selection") {
         runHandledAction(
           selectedMachineIds.length > 0
             || Boolean(selectedCivilReferenceId || selectedAnnotationId || editingAnnotationId),
           clearSelection
-        );
-        return;
-      }
-
-      if (action === "delete-selected") {
-        if (selectedCivilReferenceId) {
-          const selectedCivil = civilReferencesRef.current.find((item) => item.id === selectedCivilReferenceId);
-          runHandledAction(
-            Boolean(selectedCivil && !selectedCivil.locked && !isLayerLocked(selectedCivil.layerId, layersRef.current)),
-            () => removeCivilReference(selectedCivilReferenceId)
-          );
-          return;
-        }
-
-        const annotationId = editingAnnotationId || selectedAnnotationId;
-        if (annotationId) {
-          const selectedAnnotation = annotationsRef.current.find((item) => item.id === annotationId);
-          runHandledAction(
-            Boolean(selectedAnnotation && !isLayerLocked(selectedAnnotation.layerId, layersRef.current)),
-            () => removeAnnotation(annotationId)
-          );
-          return;
-        }
-
-        runHandledAction(
-          selectedMachines.some((machine) => !isLayerLocked(machine.layerId, layersRef.current)),
-          deleteSelectedMachines
         );
         return;
       }
@@ -1929,10 +2053,11 @@ export function App() {
         "nudge-right": { x: step, y: 0 },
         "nudge-forward": { x: 0, y: -step },
         "nudge-back": { x: 0, y: step }
-      }[action];
+      } as Partial<Record<string, { x: number; y: number }>>;
+      const nudgeDelta = delta[action];
 
-      if (delta) {
-        runHandledAction(true, () => moveSelectedByDelta(delta.x, delta.y));
+      if (nudgeDelta) {
+        runHandledAction(true, () => moveSelectedByDelta(nudgeDelta.x, nudgeDelta.y));
       }
     };
 
@@ -1942,24 +2067,16 @@ export function App() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [
-    canDuplicateSelectedMachines,
-    canRedo,
-    canUndo,
     clearSelection,
-    deleteSelectedMachines,
-    duplicateSelectedMachines,
+    executeCoreEditorCommand,
     moveSelectedByDelta,
     nudgeSettings,
-    removeAnnotation,
-    removeCivilReference,
-    redoLayoutChange,
     editingAnnotationId,
     selectedGroupHasLockedVisibleMembers,
     selectedCivilReferenceId,
     selectedAnnotationId,
     selectedMachineIds.length,
-    selectedMachines,
-    undoLayoutChange
+    selectedMachines
   ]);
 
   return (
@@ -2021,10 +2138,10 @@ export function App() {
           <div className="panel-toolbar" data-app-shell-zone="top-toolbar">
             <span>AtrVisu Tools</span>
             <div className="toolbar-button-group" aria-label="Undo and redo">
-              <button type="button" disabled={!canUndo} onClick={undoLayoutChange}>
+              <button type="button" disabled={!canExecuteUndoCommand} onClick={executeUndoCommand}>
                 Undo
               </button>
-              <button type="button" disabled={!canRedo} onClick={redoLayoutChange}>
+              <button type="button" disabled={!canExecuteRedoCommand} onClick={executeRedoCommand}>
                 Redo
               </button>
             </div>
@@ -2222,7 +2339,7 @@ export function App() {
               onUpdateAnnotation={updateSelectedAnnotation}
               onChangeAnnotationLayer={changeAnnotationLayer}
               onCommitAnnotationEdit={commitAnnotationEdit}
-              onDeleteAnnotation={removeAnnotation}
+              onDeleteAnnotation={executeDeleteSelectedCommand}
             />
           </PanelSection>
           <PanelSection
@@ -2305,7 +2422,7 @@ export function App() {
                   isLocked={selectedCivilReferenceLocked}
                   onUpdateCivilReference={updateSelectedCivilReference}
                   onChangeLayer={changeCivilReferenceLayer}
-                  onDeleteCivilReference={removeCivilReference}
+                  onDeleteCivilReference={executeDeleteSelectedCommand}
                 />
               ) : selectedMachineIds.length > 1 && selectedCivilReferenceIds.length === 0 ? (
                 <MultiSelectionProperties
@@ -2315,10 +2432,10 @@ export function App() {
                   onAlign={applyAlignmentAction}
                   onDistribute={applyDistributionAction}
                   onEqualGap={applyEqualGapAction}
-                  canDuplicateSelected={canDuplicateSelectedMachines}
-                  onDuplicateSelected={duplicateSelectedMachines}
+                  canDuplicateSelected={canExecuteDuplicateSelectedCommand}
+                  onDuplicateSelected={executeDuplicateSelectedCommand}
                   onClearSelection={clearSelection}
-                  onDeleteSelected={deleteSelectedMachines}
+                  onDeleteSelected={executeDeleteSelectedCommand}
                 />
               ) : selectedAlignableEntities.length > 1 ? (
                 <div className="property-grid">
@@ -2341,8 +2458,8 @@ export function App() {
                   collisionPairs={selectedCollisionPairs}
                   onUpdateMachine={updateMachine}
                   onChangeLayer={changeMachineLayer}
-                  onDuplicateSelected={duplicateSelectedMachines}
-                  onDeleteSelected={deleteSelectedMachines}
+                  onDuplicateSelected={executeDuplicateSelectedCommand}
+                  onDeleteSelected={executeDeleteSelectedCommand}
                 />
               )}
             </PanelSection>
