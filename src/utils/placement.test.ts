@@ -7,6 +7,7 @@ import {
   commitRotationAngle,
   createMachineInstanceId,
   duplicatePlacedMachine,
+  duplicatePlacedMachines,
   distanceBetweenPlanPositionsMm,
   getRotationNudgeStepDeg,
   normalizeRotationDeg,
@@ -171,6 +172,56 @@ describe("placement helpers", () => {
     expect(duplicate.layerId).toBe("layer-1");
     expect(duplicate.flowDirection).toBe("reverse");
     expect(duplicate.elevationMm).toBe(120);
+  });
+
+  it("duplicates a selected machine pack with unique ids and preserved relative offsets", () => {
+    const sourceA = placedMachine({
+      instanceId: "a",
+      position: { x: -1, z: -2 },
+      positionMm: { xMm: -1000, yMm: -2000 }
+    });
+    const sourceB = placedMachine({
+      instanceId: "b",
+      position: { x: 0.5, z: 0.75 },
+      positionMm: { xMm: 500, yMm: 750 },
+      rotationDeg: 180,
+      rotationY: 180,
+      flowDirection: "forward"
+    });
+
+    const duplicates = duplicatePlacedMachines([sourceA, sourceB], {
+      existingInstanceIds: ["machine-copy", "machine-copy-1"],
+      offsetMm: 250,
+      createSeed: () => "copy"
+    });
+
+    expect(duplicates.map((machine) => machine.instanceId)).toEqual(["machine-copy-2", "machine-copy-3"]);
+    expect(duplicates.map((machine) => machine.positionMm)).toEqual([
+      { xMm: -750, yMm: -1750 },
+      { xMm: 750, yMm: 1000 }
+    ]);
+    expect(duplicates[1].positionMm!.xMm - duplicates[0].positionMm!.xMm).toBe(
+      sourceB.positionMm!.xMm - sourceA.positionMm!.xMm
+    );
+    expect(duplicates[1].positionMm!.yMm - duplicates[0].positionMm!.yMm).toBe(
+      sourceB.positionMm!.yMm - sourceA.positionMm!.yMm
+    );
+    expect(duplicates[0]).toMatchObject({
+      libraryId: sourceA.libraryId,
+      machineDefinitionId: sourceA.machineDefinitionId,
+      definitionSnapshot: sourceA.definitionSnapshot,
+      layerId: sourceA.layerId,
+      referencePoint: sourceA.referencePoint,
+      coordinateReferenceVersion: sourceA.coordinateReferenceVersion,
+      elevationMm: sourceA.elevationMm,
+      rotationDeg: sourceA.rotationDeg,
+      rotationY: sourceA.rotationY,
+      flowDirection: sourceA.flowDirection
+    });
+    expect(duplicates[1].rotationDeg).toBe(180);
+    expect(duplicates[1].flowDirection).toBe("forward");
+    expect(sourceA.positionMm).toEqual({ xMm: -1000, yMm: -2000 });
+    expect(sourceB.positionMm).toEqual({ xMm: 500, yMm: 750 });
   });
 
   it("normalizes invalid placement settings safely", () => {

@@ -145,6 +145,13 @@ test("multi-selection alignment panel actions render without red console errors"
   await expect(equalGapX).toBeDisabled();
   await expect(equalGapY).toBeDisabled();
 
+  const duplicateSelected = multiSelectionPanel.getByRole("button", { name: "Duplicate Selected" });
+  await expect(duplicateSelected).toBeVisible();
+  await expect(duplicateSelected).toBeEnabled();
+  await duplicateSelected.click();
+  await expect(multiSelectionPanel).toContainText("2 objects");
+  await expect(page.getByTestId("pair-measurement-readout")).toBeVisible();
+
   await firstMachineCard.click();
   await group.getByRole("button", { name: "Add Selected" }).click();
   await expect(group).toContainText("3 items");

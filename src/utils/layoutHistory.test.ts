@@ -155,6 +155,30 @@ describe("layout history", () => {
     ]);
   });
 
+  it("restores batch duplicated selected machine snapshots through undo and redo", () => {
+    const initial = [machine("a", -500), machine("b", 1250), machine("c", 3000)];
+    const afterDuplicate = [
+      machine("a", -500),
+      machine("b", 1250),
+      machine("c", 3000),
+      machine("a-copy", -250),
+      machine("b-copy", 1500)
+    ];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    const undone = undoHistory(history, afterDuplicate);
+    expect(undone?.machines.map((item) => item.instanceId)).toEqual(["a", "b", "c"]);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines.map((item) => [item.instanceId, item.positionMm?.xMm])).toEqual([
+      ["a", -500],
+      ["b", 1250],
+      ["c", 3000],
+      ["a-copy", -250],
+      ["b-copy", 1500]
+    ]);
+  });
+
   it("keeps viewpoint-only layout changes undoable", () => {
     const machines = [machine("a", 0)];
     const annotations = [annotation("same")];

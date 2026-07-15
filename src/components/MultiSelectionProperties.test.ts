@@ -60,6 +60,8 @@ const renderPanel = (selectedMachines: PlacedMachine[]) =>
       onAlign: () => undefined,
       onDistribute: () => undefined,
       onEqualGap: () => undefined,
+      canDuplicateSelected: true,
+      onDuplicateSelected: () => undefined,
       onClearSelection: () => undefined,
       onDeleteSelected: () => undefined
     })
@@ -75,11 +77,12 @@ const createPanelCallbacks = () => ({
   onAlign: vi.fn<(action: AlignmentAction) => void>(),
   onDistribute: vi.fn<(action: DistributionAction) => void>(),
   onEqualGap: vi.fn<(action: EqualGapAction) => void>(),
+  onDuplicateSelected: vi.fn<() => void>(),
   onClearSelection: vi.fn<() => void>(),
   onDeleteSelected: vi.fn<() => void>()
 });
 
-const renderInteractivePanel = (selectedMachines: PlacedMachine[]) => {
+const renderInteractivePanel = (selectedMachines: PlacedMachine[], canDuplicateSelected = true) => {
   const callbacks = createPanelCallbacks();
 
   return {
@@ -88,6 +91,7 @@ const renderInteractivePanel = (selectedMachines: PlacedMachine[]) => {
       selectedMachines,
       primarySelectedMachine: selectedMachines[0],
       selectionBounds: null,
+      canDuplicateSelected,
       ...callbacks
     })
   };
@@ -148,10 +152,11 @@ describe("MultiSelectionProperties", () => {
     expect(markup).toContain("Align Bottom");
   });
 
-  it("does not expose duplicate actions for machine multi-selection", () => {
+  it("renders duplicate and delete actions for machine multi-selection", () => {
     const markup = renderPanel([machine("a", "Packer"), machine("b", "Conveyor")]);
 
-    expect(markup).not.toContain("Duplicate Selected");
+    expect(markup).toContain("Duplicate Selected");
+    expect(markup).toContain("Delete Selected Objects");
   });
 
   it("renders pair reference point measurement for exactly two selected machines", () => {
@@ -255,5 +260,26 @@ describe("MultiSelectionProperties", () => {
     expect(callbacks.onDistribute).not.toHaveBeenCalled();
     expect(callbacks.onEqualGap).not.toHaveBeenCalled();
     expect(callbacks.onAlign).not.toHaveBeenCalled();
+  });
+
+  it("calls duplicate callback from Duplicate Selected when duplication is allowed", () => {
+    const { callbacks, tree } = renderInteractivePanel([machine("a", "Packer"), machine("b", "Conveyor")]);
+
+    clickButton(findButtonByText(tree, "Duplicate Selected"));
+
+    expect(callbacks.onDuplicateSelected).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call duplicate callback when Duplicate Selected is disabled", () => {
+    const { callbacks, tree } = renderInteractivePanel(
+      [machine("a", "Packer"), machine("b", "Conveyor")],
+      false
+    );
+    const button = findButtonByText(tree, "Duplicate Selected");
+
+    expect(button.props.disabled).toBe(true);
+    clickButton(button);
+
+    expect(callbacks.onDuplicateSelected).not.toHaveBeenCalled();
   });
 });

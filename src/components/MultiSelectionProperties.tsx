@@ -11,6 +11,8 @@ type MultiSelectionPropertiesProps = {
   onAlign: (action: AlignmentAction) => void;
   onDistribute: (action: DistributionAction) => void;
   onEqualGap: (action: EqualGapAction) => void;
+  canDuplicateSelected: boolean;
+  onDuplicateSelected: () => void;
   onClearSelection: () => void;
   onDeleteSelected: () => void;
 };
@@ -24,6 +26,8 @@ export function MultiSelectionProperties({
   onAlign,
   onDistribute,
   onEqualGap,
+  canDuplicateSelected,
+  onDuplicateSelected,
   onClearSelection,
   onDeleteSelected
 }: MultiSelectionPropertiesProps) {
@@ -127,6 +131,9 @@ export function MultiSelectionProperties({
           </div>
         </div>
         <div className="selection-actions">
+          <button type="button" disabled={!canDuplicateSelected} onClick={onDuplicateSelected}>
+            Duplicate Selected
+          </button>
           <button type="button" onClick={onClearSelection}>
             Clear Selection
           </button>
