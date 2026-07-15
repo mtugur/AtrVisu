@@ -45,7 +45,7 @@ import {
   applyPositionSnap,
   applyRotationSnap,
   createMachineInstanceId,
-  duplicatePlacedMachine,
+  duplicatePlacedMachines,
   getMachinePlanPositionMm
 } from "./utils/placement";
 import {
@@ -267,6 +267,13 @@ export function App() {
   const selectedMachines = useMemo(
     () => placedMachines.filter((machine) => selectedMachineIdSet.has(machine.instanceId)),
     [placedMachines, selectedMachineIdSet]
+  );
+  const canDuplicateSelectedMachines = useMemo(
+    () =>
+      selectedMachineIds.length > 0
+      && selectedMachines.length === selectedMachineIds.length
+      && selectedMachines.every((machine) => !isLayerLocked(machine.layerId, layers)),
+    [layers, selectedMachineIds.length, selectedMachines]
   );
   const selectedCivilReferences = useMemo(
     () => civilReferences.filter((item) => selectedCivilReferenceIdSet.has(item.id)),
@@ -854,28 +861,41 @@ export function App() {
     replaceSelection([instanceId], instanceId);
   }, [markLayoutChanged, replaceSelection]);
 
-  const duplicateSelectedMachine = useCallback(() => {
-    if (!singleSelectedMachine || selectedMachineIds.length !== 1) {
-      return;
-    }
-    if (isLayerLocked(singleSelectedMachine.layerId, layersRef.current)) {
+  const duplicateSelectedMachines = useCallback(() => {
+    if (selectedMachineIds.length === 0) {
       return;
     }
 
-    const duplicateId = createMachineInstanceId(
-      singleSelectedMachine.machineDefinitionId,
-      placedMachinesRef.current.map((machine) => machine.instanceId)
-    );
-    const duplicate = duplicatePlacedMachine(singleSelectedMachine, {
-      instanceId: duplicateId,
-      offsetMm: DUPLICATE_MACHINE_OFFSET_MM
+    const selectedById = new Map(selectedMachines.map((machine) => [machine.instanceId, machine]));
+    const sourceMachines = selectedMachineIds.flatMap((machineId) => {
+      const machine = selectedById.get(machineId);
+      return machine ? [machine] : [];
     });
 
+    if (sourceMachines.length !== selectedMachineIds.length) {
+      return;
+    }
+
+    if (sourceMachines.some((machine) => isLayerLocked(machine.layerId, layersRef.current))) {
+      return;
+    }
+
+    const duplicates = duplicatePlacedMachines(sourceMachines, {
+      existingInstanceIds: placedMachinesRef.current.map((machine) => machine.instanceId),
+      offsetMm: DUPLICATE_MACHINE_OFFSET_MM
+    });
+    const duplicateIds = duplicates.map((machine) => machine.instanceId);
+    const primarySourceId = primarySelectedMachineId && selectedMachineIds.includes(primarySelectedMachineId)
+      ? primarySelectedMachineId
+      : selectedMachineIds[0];
+    const primarySourceIndex = sourceMachines.findIndex((machine) => machine.instanceId === primarySourceId);
+    const duplicatePrimaryId = duplicates[Math.max(0, primarySourceIndex)]?.instanceId ?? duplicateIds[0] ?? null;
+
     markLayoutChanged();
-    setPlacedMachines((current) => [...current, duplicate]);
+    setPlacedMachines((current) => [...current, ...duplicates]);
     setSelectedGroupId(null);
-    replaceSelection([duplicateId], duplicateId);
-  }, [markLayoutChanged, replaceSelection, selectedMachineIds.length, singleSelectedMachine]);
+    replaceSelection(duplicateIds, duplicatePrimaryId);
+  }, [markLayoutChanged, primarySelectedMachineId, replaceSelection, selectedMachineIds, selectedMachines]);
 
   const updateMachine = useCallback((
     instanceId: string,
@@ -2252,6 +2272,8 @@ export function App() {
                   onAlign={applyAlignmentAction}
                   onDistribute={applyDistributionAction}
                   onEqualGap={applyEqualGapAction}
+                  canDuplicateSelected={canDuplicateSelectedMachines}
+                  onDuplicateSelected={duplicateSelectedMachines}
                   onClearSelection={clearSelection}
                   onDeleteSelected={deleteSelectedMachines}
                 />
@@ -2276,7 +2298,7 @@ export function App() {
                   collisionPairs={selectedCollisionPairs}
                   onUpdateMachine={updateMachine}
                   onChangeLayer={changeMachineLayer}
-                  onDuplicateSelected={duplicateSelectedMachine}
+                  onDuplicateSelected={duplicateSelectedMachines}
                   onDeleteSelected={deleteSelectedMachines}
                 />
               )}

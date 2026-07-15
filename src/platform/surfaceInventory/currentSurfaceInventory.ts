@@ -134,11 +134,11 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     surfaceType: "toolbar-action",
     label: "Duplicate Selected",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/utils/placement.ts"],
+    sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/components/MultiSelectionProperties.tsx", "src/utils/placement.ts"],
     commandIds: ["edit.duplicateSelected"],
     panelIds: ["panel.inspector"],
     featureIds: ["object.duplicate", "panel.inspector"],
-    notes: "Single selected-machine duplicate control is exposed in Selected Object Properties; multi-select duplicate remains out of scope."
+    notes: "Duplicate Selected is exposed for single selected-machine properties and machine multi-selection; multi-select duplicate preserves selected pack offsets and does not mutate group membership."
   },
   {
     surfaceId: "surface.undoRedo",

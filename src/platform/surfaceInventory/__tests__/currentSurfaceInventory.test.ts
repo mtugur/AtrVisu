@@ -81,12 +81,18 @@ describe("current surface inventory", () => {
 
     expect(duplicateSurface?.owner).toBe("existing-ui");
     expect(duplicateSurface?.sourceFiles).toEqual(
-      expect.arrayContaining(["src/App.tsx", "src/components/MachineProperties.tsx", "src/utils/placement.ts"])
+      expect.arrayContaining([
+        "src/App.tsx",
+        "src/components/MachineProperties.tsx",
+        "src/components/MultiSelectionProperties.tsx",
+        "src/utils/placement.ts"
+      ])
     );
     expect(duplicateSurface?.commandIds).toContain("edit.duplicateSelected");
     expect(duplicateSurface?.panelIds).toContain("panel.inspector");
     expect(duplicateSurface?.featureIds).toEqual(expect.arrayContaining(["object.duplicate", "panel.inspector"]));
-    expect(duplicateSurface?.notes).toContain("multi-select duplicate remains out of scope");
+    expect(duplicateSurface?.notes).toContain("machine multi-selection");
+    expect(duplicateSurface?.notes).toContain("does not mutate group membership");
   });
 });
 

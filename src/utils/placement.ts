@@ -133,6 +133,31 @@ export const duplicatePlacedMachine = (
   };
 };
 
+export const duplicatePlacedMachines = (
+  machines: readonly PlacedMachine[],
+  options: {
+    existingInstanceIds: Iterable<string>;
+    offsetMm: number;
+    createSeed?: (machine: PlacedMachine, index: number) => string;
+  }
+): PlacedMachine[] => {
+  const usedInstanceIds = new Set(options.existingInstanceIds);
+
+  return machines.map((machine, index) => {
+    const instanceId = createMachineInstanceId(
+      machine.machineDefinitionId,
+      usedInstanceIds,
+      options.createSeed?.(machine, index)
+    );
+    usedInstanceIds.add(instanceId);
+
+    return duplicatePlacedMachine(machine, {
+      instanceId,
+      offsetMm: options.offsetMm
+    });
+  });
+};
+
 export const calculateMeasurementBetweenMachines = (
   objectA: PlacedMachine,
   objectB: PlacedMachine
