@@ -12,15 +12,83 @@ export const isTextEditingElement = (target: EventTarget | null): boolean => {
   );
 };
 
-export const shouldHandleGlobalUndoRedo = (event: Pick<KeyboardEvent, "target" | "ctrlKey" | "metaKey" | "key">) => {
-  if (!event.ctrlKey && !event.metaKey) {
-    return false;
+export type EditorShortcutAction =
+  | "duplicate-selected"
+  | "delete-selected"
+  | "undo"
+  | "redo"
+  | "clear-selection"
+  | "nudge-left"
+  | "nudge-right"
+  | "nudge-forward"
+  | "nudge-back";
+
+export type EditorShortcutEvent = {
+  key: string;
+  target: EventTarget | null;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  shiftKey?: boolean;
+  altKey?: boolean;
+  repeat?: boolean;
+  modalOpen?: boolean;
+};
+
+export const shouldIgnoreEditorShortcuts = (
+  target: EventTarget | null,
+  modalOpen = false
+) => modalOpen || isTextEditingElement(target);
+
+export const resolveEditorShortcut = (
+  event: EditorShortcutEvent
+): EditorShortcutAction | null => {
+  if (shouldIgnoreEditorShortcuts(event.target, event.modalOpen)) {
+    return null;
   }
 
   const key = event.key.toLowerCase();
-  if (key !== "z" && key !== "y") {
-    return false;
+  const commandModifier = Boolean(event.ctrlKey || event.metaKey);
+
+  if (commandModifier && !event.altKey && key === "d" && !event.shiftKey) {
+    return event.repeat ? null : "duplicate-selected";
   }
 
-  return !isTextEditingElement(event.target);
+  if (commandModifier && !event.altKey && key === "z") {
+    return event.shiftKey ? "redo" : "undo";
+  }
+
+  if (commandModifier && !event.altKey && key === "y" && !event.shiftKey) {
+    return "redo";
+  }
+
+  if (!commandModifier && !event.altKey && !event.shiftKey && key === "delete") {
+    return event.repeat ? null : "delete-selected";
+  }
+
+  if (!commandModifier && !event.altKey && !event.shiftKey && key === "escape") {
+    return event.repeat ? null : "clear-selection";
+  }
+
+  if (event.metaKey) {
+    return null;
+  }
+
+  return ({
+    arrowleft: "nudge-left",
+    arrowright: "nudge-right",
+    arrowup: "nudge-forward",
+    arrowdown: "nudge-back"
+  } as const)[key] ?? null;
+};
+
+export const shouldPreventEditorShortcutDefault = (
+  action: EditorShortcutAction | null,
+  handled: boolean
+) => action !== null && handled;
+
+export const shouldHandleGlobalUndoRedo = (
+  event: Pick<KeyboardEvent, "target" | "ctrlKey" | "metaKey" | "key"> & { shiftKey?: boolean }
+) => {
+  const action = resolveEditorShortcut(event);
+  return action === "undo" || action === "redo";
 };

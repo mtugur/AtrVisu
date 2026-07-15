@@ -148,7 +148,7 @@ test("multi-selection alignment panel actions render without red console errors"
   const duplicateSelected = multiSelectionPanel.getByRole("button", { name: "Duplicate Selected" });
   await expect(duplicateSelected).toBeVisible();
   await expect(duplicateSelected).toBeEnabled();
-  await duplicateSelected.click();
+  await page.keyboard.press("Control+d");
   await expect(multiSelectionPanel).toContainText("2 objects");
   await expect(page.getByTestId("pair-measurement-readout")).toBeVisible();
 

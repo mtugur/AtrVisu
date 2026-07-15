@@ -85,14 +85,30 @@ describe("current surface inventory", () => {
         "src/App.tsx",
         "src/components/MachineProperties.tsx",
         "src/components/MultiSelectionProperties.tsx",
-        "src/utils/placement.ts"
+        "src/utils/placement.ts",
+        "src/utils/keyboardShortcuts.ts"
       ])
     );
     expect(duplicateSurface?.commandIds).toContain("edit.duplicateSelected");
     expect(duplicateSurface?.panelIds).toContain("panel.inspector");
     expect(duplicateSurface?.featureIds).toEqual(expect.arrayContaining(["object.duplicate", "panel.inspector"]));
     expect(duplicateSurface?.notes).toContain("machine multi-selection");
+    expect(duplicateSurface?.notes).toContain("Ctrl/Cmd+D");
     expect(duplicateSurface?.notes).toContain("does not mutate group membership");
+  });
+
+  it("documents guarded delete and undo/redo keyboard surfaces", () => {
+    const deleteSurface = currentPlatformSurfaceInventory.find(
+      (item) => item.surfaceId === "surface.deleteSelected"
+    );
+    const undoRedoSurface = currentPlatformSurfaceInventory.find(
+      (item) => item.surfaceId === "surface.undoRedo"
+    );
+
+    expect(deleteSurface?.sourceFiles).toContain("src/utils/keyboardShortcuts.ts");
+    expect(deleteSurface?.notes).toContain("guarded Delete keyboard shortcut");
+    expect(undoRedoSurface?.notes).toContain("Ctrl/Cmd+Z");
+    expect(undoRedoSurface?.notes).toContain("Ctrl/Cmd+Shift+Z");
   });
 });
 

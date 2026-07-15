@@ -58,5 +58,14 @@ describe("platform command seed definitions", () => {
       expect(commandIds.has(commandId)).toBe(true);
     });
   });
+
+  it("documents the implemented editor shortcuts", () => {
+    const shortcuts = new Map(commandSeeds.map((command) => [command.id, command.shortcut]));
+
+    expect(shortcuts.get("edit.undo")).toBe("Ctrl/Cmd+Z");
+    expect(shortcuts.get("edit.redo")).toBe("Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z");
+    expect(shortcuts.get("edit.deleteSelected")).toBe("Delete");
+    expect(shortcuts.get("edit.duplicateSelected")).toBe("Ctrl/Cmd+D");
+  });
 });
 
