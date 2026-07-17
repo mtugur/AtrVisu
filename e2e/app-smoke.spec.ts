@@ -169,6 +169,60 @@ test("multi-selection alignment panel actions render without red console errors"
   expect(errors).toEqual([]);
 });
 
+test("locked member blocks atomic multi-selection movement without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const layersSection = page.getByRole("button", { name: /Layers/i });
+  if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
+    await layersSection.click();
+  }
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("Atomic Lock Layer");
+  });
+  await page.getByTestId("add-layer").click();
+  const lockedLayerRow = page.locator(".layer-row").filter({ hasText: "Atomic Lock Layer" });
+  await expect(lockedLayerRow).toBeVisible();
+
+  const firstMachineCard = page.locator(".machine-card").first();
+  await firstMachineCard.click();
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  await page.getByLabel("Selected machine properties").getByLabel("Layer").selectOption({
+    label: "Atomic Lock Layer"
+  });
+
+  const assemblySection = page.getByRole("button", { name: /Assembly Tree/i });
+  if ((await assemblySection.getAttribute("aria-expanded")) !== "true") {
+    await assemblySection.click();
+  }
+  page.once("dialog", async (dialog) => {
+    await dialog.accept("Atomic Lock Group");
+  });
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: "Atomic Lock Group" });
+  await expect(group).toContainText("1 item");
+
+  await firstMachineCard.click();
+  await group.getByRole("button", { name: "Add Selected" }).click();
+  await expect(group).toContainText("2 items");
+  await lockedLayerRow.getByRole("button", { name: "Lock" }).click();
+  await group.locator(".assembly-group-button").click();
+
+  const multiSelectionPanel = page.getByTestId("multi-selection-panel");
+  await expect(multiSelectionPanel).toContainText("2 objects");
+  const bounds = multiSelectionPanel.getByLabel("Selection bounds");
+  const beforeMovement = await bounds.textContent();
+  expect(beforeMovement).not.toBeNull();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(bounds).toHaveText(beforeMovement ?? "");
+  await expect(multiSelectionPanel).toContainText("2 objects");
+  expect(errors).toEqual([]);
+});
+
 test("project and performance modals open and close deterministically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

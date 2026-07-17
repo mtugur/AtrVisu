@@ -50,7 +50,7 @@ export const getMachineDragInstanceIds = (
     : [targetInstanceId];
   const lockedIds = new Set(lockedInstanceIds);
 
-  return candidateIds.filter((id) => !lockedIds.has(id));
+  return candidateIds.some((id) => lockedIds.has(id)) ? [] : [...candidateIds];
 };
 
 export const getMachineStartPositionMm = (machine: DraggableMachine): PlanPositionMm => ({
@@ -90,6 +90,9 @@ export const createMachineDragState = ({
     }
     return positions;
   }, {});
+  if (Object.keys(startPositions).length !== instanceIds.length) {
+    return null;
+  }
 
   return {
     instanceIds,
