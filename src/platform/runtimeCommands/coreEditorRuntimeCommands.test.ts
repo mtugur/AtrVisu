@@ -59,14 +59,65 @@ describe("core editor runtime command bridge", () => {
     });
   });
 
-  it("registers definitions that execute the live binding instead of the seed noop", () => {
+  it("direct registry execution evaluates enablement once and invokes an enabled live binding once", () => {
     const execute = vi.fn();
-    const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute));
+    const getEnableState = vi.fn(enabled);
+    const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
     const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
 
     command?.execute({ selectionIds: [], hasUnsavedChanges: false });
 
+    expect(getEnableState).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("direct registry execution evaluates enablement once and skips a disabled binding", () => {
+    const execute = vi.fn();
+    const getEnableState = vi.fn(() => disabled());
+    const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
+    const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.redo);
+
+    command?.execute({ selectionIds: [], hasUnsavedChanges: false });
+
+    expect(getEnableState).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("direct registry execution uses a replaced bindings object without rebuilding the registry", () => {
+    const oldExecute = vi.fn();
+    const replacementExecute = vi.fn();
+    let bindings = createBindings(oldExecute);
+    const bridge = createCoreEditorRuntimeCommandBridge(() => bindings);
+    const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
+
+    command?.execute({ selectionIds: [], hasUnsavedChanges: false });
+    bindings = createBindings(replacementExecute);
+    command?.execute({ selectionIds: [], hasUnsavedChanges: false });
+
+    expect(bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo)).toBe(command);
+    expect(oldExecute).toHaveBeenCalledOnce();
+    expect(replacementExecute).toHaveBeenCalledOnce();
+  });
+
+  it("direct registry execution invokes the live binding and never the seed noop", () => {
+    const execute = vi.fn();
+    const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute));
+    const seed = getPlatformCommandSeedById(CORE_EDITOR_COMMAND_IDS.undo);
+    const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
+
+    expect(command?.execute).not.toBe(seed?.execute);
+    command?.execute({ selectionIds: [], hasUnsavedChanges: false });
+
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("direct registry execution throws when its required live binding is absent", () => {
+    const bridge = createCoreEditorRuntimeCommandBridge(() => ({}));
+    const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
+
+    expect(() => command?.execute({ selectionIds: [], hasUnsavedChanges: false })).toThrow(
+      'Runtime command "edit.undo" is not bound.'
+    );
   });
 
   it("evaluates enablement once and executes an enabled command exactly once", () => {

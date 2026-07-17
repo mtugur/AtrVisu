@@ -109,6 +109,9 @@ const createRuntimeCommandDefinition = (
       if (!binding) {
         throw new Error(`Runtime command "${commandId}" is not bound.`);
       }
+      if (!binding.getEnableState(context).enabled) {
+        return;
+      }
       binding.execute(context);
     }
   };
