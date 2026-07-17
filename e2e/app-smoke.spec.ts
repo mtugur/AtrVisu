@@ -208,7 +208,7 @@ test("locked member blocks atomic multi-selection movement without red console e
   await firstMachineCard.click();
   await group.getByRole("button", { name: "Add Selected" }).click();
   await expect(group).toContainText("2 items");
-  await lockedLayerRow.getByRole("button", { name: "Lock" }).click();
+  await lockedLayerRow.getByRole("button", { name: "Lock", exact: true }).click();
   await group.locator(".assembly-group-button").click();
 
   const multiSelectionPanel = page.getByTestId("multi-selection-panel");

@@ -1561,8 +1561,11 @@ export function App() {
     const item = createCivilReference(type, positionMm);
     markLayoutChanged();
     setCivilReferences((current) => [...current, item]);
-    selectCivilReferenceForEditing(item.id);
-  }, [markLayoutChanged, selectCivilReferenceForEditing]);
+    setRuntimeSelection(replaceRuntimeSelection([
+      createLegacyPlatformEntityId("civil", item.id)
+    ], "inspector"));
+    setIsPanelCollapsed(false);
+  }, [markLayoutChanged]);
 
   const updateSelectedCivilReference = useCallback((
     id: string,
