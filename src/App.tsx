@@ -104,6 +104,7 @@ import {
   applyRuntimeSelectionRequest,
   areRuntimeSelectionsEqual,
   createEmptyRuntimeSelection,
+  createRuntimeSelectionMovementPreflight,
   evaluateAtomicMovement,
   executeAtomicSelectionMutation,
   getAtomicMovementEntityIds,
@@ -226,6 +227,7 @@ export function App() {
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
   const placementSettingsRef = useRef(placementSettings);
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
+  const runtimeSelectionRef = useRef(runtimeSelection);
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
@@ -246,6 +248,7 @@ export function App() {
     annotations,
     layers
   }), [annotations, civilReferences, layers, placedMachines]);
+  const platformEntitiesRef = useRef(platformEntities);
   const selectionProjection = useMemo(
     () => projectRuntimeSelection(runtimeSelection),
     [runtimeSelection]
@@ -486,27 +489,32 @@ export function App() {
     });
   }, [platformEntities]);
 
+  useLayoutEffect(() => {
+    runtimeSelectionRef.current = runtimeSelection;
+    platformEntitiesRef.current = platformEntities;
+  }, [platformEntities, runtimeSelection]);
+
   useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
   }, [isBenchmarkMode]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     placedMachinesRef.current = placedMachines;
   }, [placedMachines]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     civilReferencesRef.current = civilReferences;
   }, [civilReferences]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     annotationsRef.current = annotations;
   }, [annotations]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     layersRef.current = layers;
   }, [layers]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     groupsRef.current = groups;
   }, [groups]);
 
@@ -558,7 +566,7 @@ export function App() {
     }
   }, [layers, selectedLayerId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     viewpointsRef.current = viewpoints;
   }, [viewpoints]);
 
@@ -758,8 +766,8 @@ export function App() {
       targetId: instanceId ? createLegacyPlatformEntityId("machine", instanceId) : null,
       mode: !instanceId ? "clear" : mode,
       source: "scene"
-    }, platformEntities));
-  }, [platformEntities]);
+    }, platformEntitiesRef.current));
+  }, []);
 
   const selectAnnotationForEditing = useCallback((annotationId: string | null) => {
     if (!annotationId) {
@@ -773,10 +781,10 @@ export function App() {
       targetId: createLegacyPlatformEntityId("annotation", annotationId),
       mode: "replace",
       source: "scene"
-    }, platformEntities));
+    }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
     setIsPanelCollapsed(false);
-  }, [platformEntities]);
+  }, []);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
     setIsPanelCollapsed(false);
@@ -784,8 +792,8 @@ export function App() {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
-    }, platformEntities));
-  }, [platformEntities]);
+    }, platformEntitiesRef.current));
+  }, []);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
     const orderedIds = primaryId
@@ -1345,24 +1353,23 @@ export function App() {
     clearLayoutHistory();
   }, [clearLayoutHistory, clearSelection, refreshProjects]);
 
-  const canBeginObjectDrag = useCallback((
-    entityId: string,
-    includeCurrentSelection: boolean
-  ) => evaluateAtomicMovement(
-    getAtomicMovementEntityIds(runtimeSelection, [entityId], includeCurrentSelection),
-    platformEntities
-  ).allowed, [platformEntities, runtimeSelection]);
+  const canBeginObjectDrag = useMemo(() => createRuntimeSelectionMovementPreflight(() => ({
+    selection: runtimeSelectionRef.current,
+    entities: platformEntitiesRef.current
+  })), []);
 
   const setMachinePositions = useCallback((
     updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
     options: { recordHistory?: boolean } = {}
   ) => {
+    const currentSelection = runtimeSelectionRef.current;
+    const currentEntities = platformEntitiesRef.current;
     const affectedEntityIds = getAtomicMovementEntityIds(
-      runtimeSelection,
+      currentSelection,
       updates.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
       true
     );
-    const evaluation = evaluateAtomicMovement(affectedEntityIds, platformEntities);
+    const evaluation = evaluateAtomicMovement(affectedEntityIds, currentEntities);
     if (!evaluation.allowed) {
       return false;
     }
@@ -1378,7 +1385,7 @@ export function App() {
 
     executeAtomicSelectionMutation({
       entityIds: affectedEntityIds,
-      entities: platformEntities,
+      entities: currentEntities,
       beforeMutation: () => markLayoutChanged(options),
       mutate: () => setPlacedMachines((current) => {
         if (!placementSettingsRef.current.gridSnapEnabled || updates.length === 1) {
@@ -1419,7 +1426,7 @@ export function App() {
       })
     });
     return true;
-  }, [markLayoutChanged, platformEntities, runtimeSelection]);
+  }, [markLayoutChanged]);
 
   const moveSelectedByDelta = useCallback((
     deltaXMm: number,
@@ -1594,14 +1601,15 @@ export function App() {
     }
 
     const entityId = createLegacyPlatformEntityId("civil", id);
+    const currentSelection = runtimeSelectionRef.current;
     const evaluation = executeAtomicSelectionMutation({
-      entityIds: getAtomicMovementEntityIds(runtimeSelection, [entityId], true),
-      entities: platformEntities,
+      entityIds: getAtomicMovementEntityIds(currentSelection, [entityId], true),
+      entities: platformEntitiesRef.current,
       beforeMutation: () => markLayoutChanged(options),
       mutate: () => setCivilReferences((current) => updateCivilReference(current, id, { positionMm }))
     });
     return evaluation.allowed;
-  }, [markLayoutChanged, platformEntities, runtimeSelection]);
+  }, [markLayoutChanged]);
 
   const changeCivilReferenceLayer = useCallback((id: string, layerId: string) => {
     const item = civilReferencesRef.current.find((reference) => reference.id === id);
@@ -1681,9 +1689,10 @@ export function App() {
     }
 
     const entityId = createLegacyPlatformEntityId("annotation", annotationId);
+    const currentSelection = runtimeSelectionRef.current;
     const evaluation = executeAtomicSelectionMutation({
-      entityIds: getAtomicMovementEntityIds(runtimeSelection, [entityId], true),
-      entities: platformEntities,
+      entityIds: getAtomicMovementEntityIds(currentSelection, [entityId], true),
+      entities: platformEntitiesRef.current,
       beforeMutation: () => markLayoutChanged(options),
       mutate: () => setAnnotations((current) =>
         updateAnnotation(current, annotationId, {
@@ -1696,7 +1705,7 @@ export function App() {
       )
     });
     return evaluation.allowed;
-  }, [markLayoutChanged, platformEntities, runtimeSelection]);
+  }, [markLayoutChanged]);
 
   const commitAnnotationEdit = useCallback(() => {
     annotationEditHistoryRecordedRef.current = false;

@@ -223,6 +223,52 @@ test("locked member blocks atomic multi-selection movement without red console e
   expect(errors).toEqual([]);
 });
 
+test("scene lifecycle stays stable through selection and accepted pointer drag", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+  const initialLifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  expect(initialLifecycleGeneration).not.toBeNull();
+
+  await page.locator(".machine-card").first().click();
+  await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toBeVisible();
+  await expect(canvas).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    initialLifecycleGeneration ?? ""
+  );
+
+  const annotationsSection = page.getByRole("button", { name: /Annotations/i });
+  if ((await annotationsSection.getAttribute("aria-expanded")) !== "true") {
+    await annotationsSection.click();
+  }
+  await page.getByTestId("add-note-annotation").click();
+  const planXInput = page.getByTestId("annotation-plan-x-input");
+  await expect(planXInput).toBeVisible();
+  const initialPlanX = await planXInput.inputValue();
+
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  if (!canvasBox) {
+    throw new Error("Scene canvas bounds are unavailable.");
+  }
+
+  const startX = canvasBox.x + canvasBox.width / 2;
+  const startY = canvasBox.y + canvasBox.height / 2 - 18;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 90, startY + 45, { steps: 8 });
+  await page.mouse.up();
+
+  await expect.poll(() => planXInput.inputValue()).not.toBe(initialPlanX);
+  await expect(canvas).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    initialLifecycleGeneration ?? ""
+  );
+  expect(errors).toEqual([]);
+});
+
 test("project and performance modals open and close deterministically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

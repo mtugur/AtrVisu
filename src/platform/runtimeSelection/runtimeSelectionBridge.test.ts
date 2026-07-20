@@ -3,6 +3,7 @@ import type { PlatformEntity } from "../contracts";
 import {
   applyRuntimeSelectionRequest,
   createEmptyRuntimeSelection,
+  createRuntimeSelectionMovementPreflight,
   evaluateAtomicMovement,
   executeAtomicSelectionMutation,
   getAtomicMovementEntityIds,
@@ -172,6 +173,33 @@ describe("runtime selection bridge", () => {
 });
 
 describe("atomic selection movement", () => {
+  it("keeps one preflight callback while reading the latest selection and lock snapshot", () => {
+    let currentSelection = replaceRuntimeSelection(["machine:m1"], "scene");
+    let currentEntities: readonly PlatformEntity[] = [entity("machine:m1", "machine")];
+    const preflight = createRuntimeSelectionMovementPreflight(() => ({
+      selection: currentSelection,
+      entities: currentEntities
+    }));
+    const originalPreflight = preflight;
+
+    expect(preflight("machine:m1", true)).toBe(true);
+
+    currentSelection = replaceRuntimeSelection(["machine:m1", "civil:c1"], "scene");
+    currentEntities = [
+      entity("machine:m1", "machine"),
+      entity("civil:c1", "civil", { locked: true })
+    ];
+
+    expect(preflight).toBe(originalPreflight);
+    expect(preflight("machine:m1", true)).toBe(false);
+
+    currentEntities = [
+      entity("machine:m1", "machine"),
+      entity("civil:c1", "civil")
+    ];
+    expect(preflight("machine:m1", true)).toBe(true);
+  });
+
   it("allows an all-unlocked multi-selection and executes it exactly once", () => {
     const beforeMutation = vi.fn();
     const mutate = vi.fn();

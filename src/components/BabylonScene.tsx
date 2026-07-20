@@ -962,6 +962,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const sceneRef = useRef<Scene | null>(null);
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const floorRef = useRef<Mesh | null>(null);
+  const sceneLifecycleGenerationRef = useRef(0);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
   const civilReferenceNodesRef = useRef<Map<string, CivilReferenceNode>>(new Map());
   const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
@@ -1260,6 +1261,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       return;
     }
 
+    sceneLifecycleGenerationRef.current += 1;
+    canvas.dataset.sceneLifecycleGeneration = String(sceneLifecycleGenerationRef.current);
     const lifecycle = createBabylonSceneLifecycle(canvas, window);
     const { engine, scene } = lifecycle;
     sceneRef.current = scene;

@@ -47,6 +47,11 @@ export type AtomicSelectionMutationOptions = {
   mutate: () => void;
 };
 
+export type RuntimeSelectionMovementSnapshot = {
+  selection: SelectionState;
+  entities: readonly PlatformEntity[];
+};
+
 const FAMILY_BY_ENTITY_TYPE: Readonly<Partial<Record<PlatformEntity["type"], RuntimeSelectionFamily>>> = {
   machine: "machine",
   civil: "civil",
@@ -218,6 +223,16 @@ export const evaluateAtomicMovement = (
   }
 
   return { allowed: true, entityIds: normalizedIds };
+};
+
+export const createRuntimeSelectionMovementPreflight = (
+  getSnapshot: () => RuntimeSelectionMovementSnapshot
+) => (entityId: EntityId, includeCurrentSelection: boolean) => {
+  const { selection, entities } = getSnapshot();
+  return evaluateAtomicMovement(
+    getAtomicMovementEntityIds(selection, [entityId], includeCurrentSelection),
+    entities
+  ).allowed;
 };
 
 export const executeAtomicSelectionMutation = ({
