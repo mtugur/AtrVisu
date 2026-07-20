@@ -35,8 +35,8 @@ describe("drag placement helpers", () => {
     expect(getMachineDragInstanceIds("m1", ["m1", "m2"], [], true)).toEqual(["m1"]);
   });
 
-  it("filters locked machines out of the drag set", () => {
-    expect(getMachineDragInstanceIds("m1", ["m1", "m2"], ["m2"], false)).toEqual(["m1"]);
+  it("blocks the complete drag set when any selected machine is locked", () => {
+    expect(getMachineDragInstanceIds("m1", ["m1", "m2"], ["m2"], false)).toEqual([]);
     expect(getMachineDragInstanceIds("m1", ["m1"], ["m1"], false)).toEqual([]);
   });
 
@@ -82,6 +82,19 @@ describe("drag placement helpers", () => {
         floorPoint: { x: 0, z: 0 },
         selectedInstanceIds: ["m1"],
         lockedInstanceIds: ["m1"],
+        machines: [machine("m1", 0, 0)],
+        isToggleSelection: false
+      })
+    ).toBeNull();
+  });
+
+  it("returns null without a partial drag state when any selected machine is unresolved", () => {
+    expect(
+      createMachineDragState({
+        targetInstanceId: "m1",
+        floorPoint: { x: 0, z: 0 },
+        selectedInstanceIds: ["m1", "missing"],
+        lockedInstanceIds: [],
         machines: [machine("m1", 0, 0)],
         isToggleSelection: false
       })

@@ -26,6 +26,7 @@ import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays"
 import type { ScenePerformanceMetrics } from "../types/performance";
 import type { AnnotationObject } from "../types/annotations";
 import type { ViewpointCameraState } from "../types/viewpoints";
+import { createLegacyPlatformEntityId } from "../platform/adapters/legacyEntityAdapter";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getCivilReferenceRenderCenterMm, getMachineRenderCenterMm } from "../utils/coordinateReference";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
@@ -97,18 +98,18 @@ type BabylonSceneProps = {
   onSetMachinePositions: (
     updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
     options?: { recordHistory?: boolean }
-  ) => void;
+  ) => boolean;
   onSetAnnotationPosition: (
     annotationId: string,
     positionMm: { xMm: number; yMm: number },
     options?: { recordHistory?: boolean }
-  ) => void;
+  ) => boolean;
   onSetCivilReferencePosition: (
     id: string,
     positionMm: { xMm: number; yMm: number },
     options?: { recordHistory?: boolean }
-  ) => void;
-  onBeginObjectDrag: () => void;
+  ) => boolean;
+  canBeginObjectDrag: (entityId: string, includeCurrentSelection: boolean) => boolean;
   isSimulationRunning: boolean;
   simulationSpeed: number;
   overlaySettings: OverlaySettings;
@@ -949,7 +950,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   onSetMachinePositions,
   onSetAnnotationPosition,
   onSetCivilReferencePosition,
-  onBeginObjectDrag,
+  canBeginObjectDrag,
   isSimulationRunning,
   simulationSpeed,
   overlaySettings,
@@ -961,6 +962,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const sceneRef = useRef<Scene | null>(null);
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const floorRef = useRef<Mesh | null>(null);
+  const sceneLifecycleGenerationRef = useRef(0);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
   const civilReferenceNodesRef = useRef<Map<string, CivilReferenceNode>>(new Map());
   const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
@@ -982,6 +984,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<MachineDragState | null>(null);
   const civilDragStateRef = useRef<CivilDragState | null>(null);
+  const dragHistoryRecordedRef = useRef(false);
   const annotationDragStateRef = useRef<{
     annotationId: string;
     planeElevationMeters: number;
@@ -1258,6 +1261,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       return;
     }
 
+    sceneLifecycleGenerationRef.current += 1;
+    canvas.dataset.sceneLifecycleGeneration = String(sceneLifecycleGenerationRef.current);
     const lifecycle = createBabylonSceneLifecycle(canvas, window);
     const { engine, scene } = lifecycle;
     sceneRef.current = scene;
@@ -1367,16 +1372,23 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (annotationId) {
           sourceEvent?.preventDefault();
           dragStateRef.current = null;
+          civilDragStateRef.current = null;
+          annotationDragStateRef.current = null;
+          dragHistoryRecordedRef.current = false;
           panStateRef.current = null;
           const annotation = annotationsRef.current.find((item) => item.id === annotationId);
-          if (annotation && !lockedAnnotationIdsRef.current.includes(annotationId)) {
+          const annotationEntityId = createLegacyPlatformEntityId("annotation", annotationId);
+          if (
+            annotation
+            && !lockedAnnotationIdsRef.current.includes(annotationId)
+            && canBeginObjectDrag(annotationEntityId, false)
+          ) {
             const planeElevationMeters = (annotation.positionMm.zMm ?? 1600) / 1000;
             const pointerPlanPoint = pickPlanPointMm(planeElevationMeters);
             if (!pointerPlanPoint) {
               onSelectAnnotation(annotationId);
               return;
             }
-            onBeginObjectDrag();
             annotationDragStateRef.current = {
               annotationId,
               planeElevationMeters,
@@ -1398,10 +1410,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           const floorPoint = pickFloorPoint();
           sourceEvent?.preventDefault();
           dragStateRef.current = null;
+          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
+          dragHistoryRecordedRef.current = false;
           panStateRef.current = null;
-          if (civilReference && floorPoint && !lockedCivilReferenceIdsRef.current.includes(civilReferenceId)) {
-            onBeginObjectDrag();
+          const civilEntityId = createLegacyPlatformEntityId("civil", civilReferenceId);
+          if (
+            civilReference
+            && floorPoint
+            && !lockedCivilReferenceIdsRef.current.includes(civilReferenceId)
+            && canBeginObjectDrag(civilEntityId, !isToggleSelection)
+          ) {
             civilDragStateRef.current = createCivilDragState(civilReferenceId, floorPoint, {
               xMm: civilReference.positionMm.xMm,
               yMm: civilReference.positionMm.yMm
@@ -1419,8 +1438,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (instanceId) {
           const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
           const floorPoint = pickFloorPoint();
-          if (machine && floorPoint && !lockedMachineIdsRef.current.includes(instanceId)) {
-            onBeginObjectDrag();
+          dragStateRef.current = null;
+          civilDragStateRef.current = null;
+          annotationDragStateRef.current = null;
+          dragHistoryRecordedRef.current = false;
+          panStateRef.current = null;
+          const machineEntityId = createLegacyPlatformEntityId("machine", instanceId);
+          if (
+            machine
+            && floorPoint
+            && !lockedMachineIdsRef.current.includes(instanceId)
+            && canBeginObjectDrag(machineEntityId, !isToggleSelection)
+          ) {
             const nextDragState = createMachineDragState({
               targetInstanceId: instanceId,
               floorPoint,
@@ -1488,11 +1517,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             initialPointerPosition: annotationDragState.initialPointerPosition,
             currentPointerPosition: pointerPlanPoint
           });
-          onSetAnnotationPosition(
+          const applied = onSetAnnotationPosition(
             annotationDragState.annotationId,
             nextPosition,
-            { recordHistory: false }
+            { recordHistory: !dragHistoryRecordedRef.current }
           );
+          dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
+          if (!applied) {
+            annotationDragStateRef.current = null;
+            dragHistoryRecordedRef.current = false;
+            cameraRef.current?.attachControl(canvasRef.current, true);
+          }
           return;
         }
 
@@ -1501,11 +1536,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
 
         if (civilDragState) {
-          onSetCivilReferencePosition(
+          const applied = onSetCivilReferencePosition(
             civilDragState.id,
             calculateCivilDragPosition(civilDragState, floorPoint),
-            { recordHistory: false }
+            { recordHistory: !dragHistoryRecordedRef.current }
           );
+          dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
+          if (!applied) {
+            civilDragStateRef.current = null;
+            dragHistoryRecordedRef.current = false;
+            cameraRef.current?.attachControl(canvasRef.current, true);
+          }
           return;
         }
 
@@ -1513,10 +1554,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
-        onSetMachinePositions(
+        const applied = onSetMachinePositions(
           calculateMachineDragPositionUpdates(dragState, floorPoint),
-          { recordHistory: false }
+          { recordHistory: !dragHistoryRecordedRef.current }
         );
+        dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
+        if (!applied) {
+          dragStateRef.current = null;
+          dragHistoryRecordedRef.current = false;
+          cameraRef.current?.attachControl(canvasRef.current, true);
+        }
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERUP) {
@@ -1525,6 +1572,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
           panStateRef.current = null;
+          dragHistoryRecordedRef.current = false;
           cameraRef.current?.attachControl(canvasRef.current, true);
         }
       }
@@ -1624,7 +1672,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       });
     };
   }, [
-    onBeginObjectDrag,
+    canBeginObjectDrag,
     onSelectAnnotation,
     onSelectCivilReference,
     onSelectMachine,
