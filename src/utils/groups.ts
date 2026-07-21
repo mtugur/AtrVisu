@@ -83,6 +83,9 @@ export const normalizeGroups = (
       claimedObjectIds.add(entityId);
       return [entityId];
     });
+    if (objectIds.length === 0) {
+      return;
+    }
     byId.set(group.id, {
       ...group,
       objectIds,
@@ -134,46 +137,87 @@ export const addObjectsToGroup = (groups: ObjectGroup[], groupId: string, object
     const entityId = getCanonicalGroupMemberEntityId(objectId);
     return entityId ? [entityId] : [];
   }))];
-  return groups.map((group) =>
-    group.id === groupId
-      ? {
-          ...group,
-          objectIds: [...new Set([
-            ...group.objectIds.flatMap((objectId) => {
-              const entityId = getCanonicalGroupMemberEntityId(objectId);
-              return entityId ? [entityId] : [];
-            }),
-            ...ids
-          ])],
-          updatedAt: nowIso()
-        }
-      : {
-          ...group,
-          objectIds: group.objectIds.filter((objectId) => {
-            const entityId = getCanonicalGroupMemberEntityId(objectId);
-            return !entityId || !ids.includes(entityId);
-          })
-        }
-  );
+  if (ids.length === 0 || !groups.some((group) => group.id === groupId)) {
+    return groups;
+  }
+
+  let changed = false;
+  const updatedAt = nowIso();
+  const nextGroups = groups.map((group) => {
+    const canonicalObjectIds = group.objectIds.flatMap((objectId) => {
+      const entityId = getCanonicalGroupMemberEntityId(objectId);
+      return entityId ? [entityId] : [];
+    });
+    const nextObjectIds = group.id === groupId
+      ? [...new Set([...canonicalObjectIds, ...ids])]
+      : canonicalObjectIds.filter((entityId) => !ids.includes(entityId));
+    const groupChanged = nextObjectIds.length !== canonicalObjectIds.length
+      || nextObjectIds.some((entityId, index) => entityId !== canonicalObjectIds[index]);
+    if (!groupChanged) {
+      return group;
+    }
+    changed = true;
+    return {
+      ...group,
+      objectIds: nextObjectIds,
+      updatedAt: group.id === groupId ? updatedAt : group.updatedAt
+    };
+  });
+
+  if (!changed) {
+    return groups;
+  }
+  return nextGroups.filter((group) => group.id === groupId || group.objectIds.length > 0);
 };
 
-export const removeObjectsFromGroup = (groups: ObjectGroup[], groupId: string, objectIds: string[]) => {
+export type RemoveObjectsFromGroupResult = {
+  groups: ObjectGroup[];
+  removedObjectIds: string[];
+  removedGroup: boolean;
+};
+
+export const removeObjectsFromGroupWithResult = (
+  groups: ObjectGroup[],
+  groupId: string,
+  objectIds: string[]
+): RemoveObjectsFromGroupResult | null => {
   const ids = new Set(objectIds.flatMap((objectId) => {
     const entityId = getCanonicalGroupMemberEntityId(objectId);
     return entityId ? [entityId] : [];
   }));
-  return groups.map((group) =>
-    group.id === groupId
-      ? {
-          ...group,
-          objectIds: group.objectIds.filter((objectId) => {
-            const entityId = getCanonicalGroupMemberEntityId(objectId);
-            return !entityId || !ids.has(entityId);
-          }),
-          updatedAt: nowIso()
-        }
-      : group
-  );
+  const group = groups.find((item) => item.id === groupId);
+  if (!group || ids.size === 0) {
+    return null;
+  }
+
+  const removedObjectIds = group.objectIds.flatMap((objectId) => {
+    const entityId = getCanonicalGroupMemberEntityId(objectId);
+    return entityId && ids.has(entityId) ? [entityId] : [];
+  });
+  if (removedObjectIds.length === 0) {
+    return null;
+  }
+
+  const remainingObjectIds = group.objectIds.flatMap((objectId) => {
+    const entityId = getCanonicalGroupMemberEntityId(objectId);
+    return entityId && !ids.has(entityId) ? [entityId] : [];
+  });
+  const removedGroup = remainingObjectIds.length === 0;
+  const updatedAt = nowIso();
+
+  return {
+    groups: removedGroup
+      ? groups.filter((item) => item.id !== groupId)
+      : groups.map((item) => item.id === groupId
+        ? { ...item, objectIds: remainingObjectIds, updatedAt }
+        : item),
+    removedObjectIds,
+    removedGroup
+  };
+};
+
+export const removeObjectsFromGroup = (groups: ObjectGroup[], groupId: string, objectIds: string[]) => {
+  return removeObjectsFromGroupWithResult(groups, groupId, objectIds)?.groups ?? groups;
 };
 
 export const getVisibleGroupObjectIds = (

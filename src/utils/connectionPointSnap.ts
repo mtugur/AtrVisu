@@ -4,6 +4,8 @@ import type {
   MachineConnectionPoint
 } from "../types/ataraMachineData";
 import type { PlacedMachine } from "../types/machine";
+import type { PlatformEntity, SelectionState } from "../platform/contracts";
+import { evaluateAtomicMovement } from "../platform/runtimeSelection";
 import {
   getConnectionPointTypeLabel,
   getConnectionPointWorldDirection,
@@ -39,6 +41,21 @@ export type ConnectionPointSnapCandidateEvaluation = {
   canSnap: boolean;
   distanceMm?: number;
   delta?: ConnectionPointSnapDelta;
+};
+
+export type ConnectionPointSnapRuntimeAccessEvaluation =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason: "unresolved" | "moving-unavailable" | "assembly-edit-required" | "explicit-selection-required" | "locked";
+    };
+
+export type ConnectionPointSnapRuntimeAccessInput = {
+  selection: SelectionState;
+  entities: readonly PlatformEntity[];
+  activeGroupEditId?: string | null;
+  movingMachineId: string;
+  fixedMachineId: string;
 };
 
 const directionVectors: Record<AtaraConnectionDirection, { xMm: number; yMm: number; zMm: number }> = {
@@ -172,6 +189,60 @@ export const applyConnectionPointSnap = (
         }
       : machine
   );
+};
+
+export const evaluateConnectionPointSnapRuntimeAccess = ({
+  selection,
+  entities,
+  activeGroupEditId = null,
+  movingMachineId,
+  fixedMachineId
+}: ConnectionPointSnapRuntimeAccessInput): ConnectionPointSnapRuntimeAccessEvaluation => {
+  const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+  const movingEntityId = `machine:${movingMachineId}`;
+  const fixedEntityId = `machine:${fixedMachineId}`;
+  const movingEntity = entityById.get(movingEntityId);
+  const fixedEntity = entityById.get(fixedEntityId);
+
+  if (movingEntity?.type !== "machine" || fixedEntity?.type !== "machine") {
+    return { allowed: false, reason: "unresolved" };
+  }
+  if (!movingEntity.visible || !movingEntity.selectable || movingEntity.locked) {
+    return { allowed: false, reason: movingEntity.locked ? "locked" : "moving-unavailable" };
+  }
+
+  const hasAssemblyMember = Boolean(movingEntity.parentId || fixedEntity.parentId);
+  if (!hasAssemblyMember) {
+    return { allowed: true };
+  }
+
+  const activeGroupEntityId = activeGroupEditId ? `group:${activeGroupEditId}` : null;
+  if (
+    !activeGroupEntityId
+    || movingEntity.parentId !== activeGroupEntityId
+    || fixedEntity.parentId !== activeGroupEntityId
+  ) {
+    return { allowed: false, reason: "assembly-edit-required" };
+  }
+  if (!selection.ids.includes(movingEntityId) || !selection.ids.includes(fixedEntityId)) {
+    return { allowed: false, reason: "explicit-selection-required" };
+  }
+
+  const movement = evaluateAtomicMovement([movingEntityId, fixedEntityId], entities);
+  return movement.allowed
+    ? { allowed: true }
+    : { allowed: false, reason: movement.reason === "locked" ? "locked" : "moving-unavailable" };
+};
+
+export const executeGuardedConnectionPointSnap = (
+  input: ConnectionPointSnapRuntimeAccessInput,
+  mutate: () => void
+): ConnectionPointSnapRuntimeAccessEvaluation => {
+  const evaluation = evaluateConnectionPointSnapRuntimeAccess(input);
+  if (evaluation.allowed) {
+    mutate();
+  }
+  return evaluation;
 };
 
 export const getConnectionPointCompatibility = (

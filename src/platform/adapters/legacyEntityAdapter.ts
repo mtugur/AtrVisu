@@ -212,7 +212,7 @@ export const adaptObjectGroupToPlatformEntity = (
     layerId: layer.layerId,
     visible: layer.visible,
     locked: layer.locked,
-    selectable: layer.visible
+    selectable: layer.visible && childrenIds.length > 0
   };
 };
 
@@ -239,7 +239,9 @@ export const createLegacyEntitySnapshot = ({
     ...civilReferences.map((item) => adaptCivilReferenceToPlatformEntity(item, layers)),
     ...annotations.map((annotation) => adaptAnnotationToPlatformEntity(annotation, layers))
   ];
-  const groupEntities = groups.map((group) => adaptObjectGroupToPlatformEntity(group, sourceEntities, layers));
+  const groupEntities = groups
+    .map((group) => adaptObjectGroupToPlatformEntity(group, sourceEntities, layers))
+    .filter((entity) => entity.childrenIds.length > 0);
   const parentByChildId = new Map<string, string>();
   groupEntities.forEach((groupEntity) => {
     groupEntity.childrenIds.forEach((childId) => {

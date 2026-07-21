@@ -26,6 +26,12 @@ export type RuntimeSelectionProjection = {
   selectedAlignableEntityIds: string[];
 };
 
+export type ExplicitRuntimeSelectionProjection = {
+  selectedMachineIds: string[];
+  selectedCivilReferenceIds: string[];
+  selectedAlignableEntityIds: string[];
+};
+
 export type AtomicMovementBlockReason =
   | "empty-selection"
   | "unresolved"
@@ -217,6 +223,35 @@ export const projectRuntimeSelection = (
   };
 };
 
+export const projectExplicitRuntimeSelection = (
+  selection: SelectionState,
+  entities: readonly PlatformEntity[] = []
+): ExplicitRuntimeSelectionProjection => {
+  const selectedMachineIds: string[] = [];
+  const selectedCivilReferenceIds: string[] = [];
+  const selectedAlignableEntityIds: string[] = [];
+  const activeIds = entities.length > 0
+    ? getActiveSelectionIds(selection.ids, entities)
+    : createSelectionStateFromIds(selection.ids, selection.source).ids;
+
+  activeIds.forEach((entityId) => {
+    const parsedId = parseRuntimeSelectionEntityId(entityId);
+    if (parsedId?.family === "machine") {
+      selectedMachineIds.push(parsedId.sourceId);
+      selectedAlignableEntityIds.push(entityId);
+    } else if (parsedId?.family === "civil") {
+      selectedCivilReferenceIds.push(parsedId.sourceId);
+      selectedAlignableEntityIds.push(entityId);
+    }
+  });
+
+  return {
+    selectedMachineIds,
+    selectedCivilReferenceIds,
+    selectedAlignableEntityIds
+  };
+};
+
 export const resolveRuntimeSelectionTargetId = (
   targetId: EntityId,
   entities: readonly PlatformEntity[],
@@ -294,6 +329,9 @@ export const evaluateAtomicMovement = (
     const entity = entityById.get(entityId);
     if (!entity || !isCanonicalEntityMatch(entity)) {
       return { allowed: false, entityIds: normalizedIds, blockedEntityId: entityId, reason: "unresolved" };
+    }
+    if (entity.type === "group" && entity.childrenIds.length === 0) {
+      return { allowed: false, entityIds: normalizedIds, blockedEntityId: entityId, reason: "non-selectable" };
     }
     if (!entity.visible) {
       return { allowed: false, entityIds: normalizedIds, blockedEntityId: entityId, reason: "hidden" };

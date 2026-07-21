@@ -340,6 +340,19 @@ describe("legacy entity adapter", () => {
     expect(groupEntity).toMatchObject({ visible: true, selectable: true, locked: true, layerId: "locked-layer" });
   });
 
+  it("does not expose an empty object group as a selectable runtime entity", () => {
+    const emptyGroup = group({ objectIds: [] });
+
+    expect(adaptObjectGroupToPlatformEntity(emptyGroup, [], layers).selectable).toBe(false);
+    expect(createLegacyEntitySnapshot({
+      machines: [],
+      civilReferences: [],
+      annotations: [],
+      groups: [emptyGroup],
+      layers
+    })).toEqual([]);
+  });
+
   it("rejects duplicate platform identities without silently overwriting", () => {
     expect(() => createLegacyEntitySnapshot({
       machines: [placedMachine({ instanceId: "duplicate" }), placedMachine({ instanceId: "duplicate" })],

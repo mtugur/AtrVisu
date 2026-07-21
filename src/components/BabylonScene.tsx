@@ -118,6 +118,7 @@ type BabylonSceneProps = {
   simulationSpeed: number;
   overlaySettings: OverlaySettings;
   collisionResult: CollisionCheckResult;
+  enableE2EDiagnostics?: boolean;
   onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
   onPerformanceMetricsChange?: (metrics: ScenePerformanceMetrics) => void;
 };
@@ -962,6 +963,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   simulationSpeed,
   overlaySettings,
   collisionResult,
+  enableE2EDiagnostics = false,
   onVisualDiagnosticsChange,
   onPerformanceMetricsChange
 }: BabylonSceneProps, ref) {
@@ -989,6 +991,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
   const collisionResultRef = useRef<CollisionCheckResult>(collisionResult);
   const onPerformanceMetricsChangeRef = useRef(onPerformanceMetricsChange);
+  const enableE2EDiagnosticsRef = useRef(enableE2EDiagnostics);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<MachineDragState | null>(null);
   const civilDragStateRef = useRef<CivilDragState | null>(null);
@@ -1010,6 +1013,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     civilReferencesRef.current = civilReferences;
   }, [civilReferences]);
+
+  useEffect(() => {
+    enableE2EDiagnosticsRef.current = enableE2EDiagnostics;
+    if (!enableE2EDiagnostics) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        delete canvas.dataset.machineScreenPoints;
+        delete canvas.dataset.machinePlanPositions;
+        delete canvas.dataset.civilPlanPositions;
+      }
+    }
+  }, [enableE2EDiagnostics]);
 
   useEffect(() => {
     annotationsRef.current = annotations;
@@ -1658,32 +1673,36 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           node.plane.scaling.setAll(readableScale);
           node.hitTarget.scaling.setAll(readableScale);
         });
-        const renderWidth = engine.getRenderWidth();
-        const renderHeight = engine.getRenderHeight();
-        const viewport = activeCamera.viewport.toGlobal(renderWidth, renderHeight);
-        const screenPoints = Object.fromEntries([...machineNodesRef.current.entries()].slice(0, 16).map(([instanceId, node]) => {
-          const point = Vector3.Project(
-            node.box.getAbsolutePosition(),
-            Matrix.Identity(),
-            scene.getTransformMatrix(),
-            viewport
-          );
-          return [instanceId, {
-            x: point.x * canvas.clientWidth / renderWidth,
-            y: point.y * canvas.clientHeight / renderHeight
-          }];
-        }));
-        canvas.dataset.machineScreenPoints = JSON.stringify(screenPoints);
+        if (enableE2EDiagnosticsRef.current) {
+          const renderWidth = engine.getRenderWidth();
+          const renderHeight = engine.getRenderHeight();
+          const viewport = activeCamera.viewport.toGlobal(renderWidth, renderHeight);
+          const screenPoints = Object.fromEntries([...machineNodesRef.current.entries()].slice(0, 16).map(([instanceId, node]) => {
+            const point = Vector3.Project(
+              node.box.getAbsolutePosition(),
+              Matrix.Identity(),
+              scene.getTransformMatrix(),
+              viewport
+            );
+            return [instanceId, {
+              x: point.x * canvas.clientWidth / renderWidth,
+              y: point.y * canvas.clientHeight / renderHeight
+            }];
+          }));
+          canvas.dataset.machineScreenPoints = JSON.stringify(screenPoints);
+        }
       }
-      canvas.dataset.machinePlanPositions = JSON.stringify(Object.fromEntries(
-        placedMachinesRef.current.slice(0, 16).map((machine) => [machine.instanceId, getMachineStartPositionMm(machine)])
-      ));
-      canvas.dataset.civilPlanPositions = JSON.stringify(Object.fromEntries(
-        civilReferencesRef.current.slice(0, 16).map((item) => [item.id, {
-          xMm: item.positionMm.xMm,
-          yMm: item.positionMm.yMm
-        }])
-      ));
+      if (enableE2EDiagnosticsRef.current) {
+        canvas.dataset.machinePlanPositions = JSON.stringify(Object.fromEntries(
+          placedMachinesRef.current.slice(0, 16).map((machine) => [machine.instanceId, getMachineStartPositionMm(machine)])
+        ));
+        canvas.dataset.civilPlanPositions = JSON.stringify(Object.fromEntries(
+          civilReferencesRef.current.slice(0, 16).map((item) => [item.id, {
+            xMm: item.positionMm.xMm,
+            yMm: item.positionMm.yMm
+          }])
+        ));
+      }
       scene.render();
       if (onPerformanceMetricsChangeRef.current) {
         onPerformanceMetricsChangeRef.current(collectScenePerformanceMetrics(scene, engine));

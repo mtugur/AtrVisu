@@ -18,7 +18,7 @@ const props = {
   civilReferences: [],
   selectedGroupId: "assembly-1",
   activeGroupEditId: null,
-  selectedEntityCount: 2,
+  explicitSelectedEntityCount: 2,
   onCreateGroupFromSelection: vi.fn(),
   onAddSelectionToGroup: vi.fn(),
   onRemoveSelectionFromGroup: vi.fn(),
@@ -49,5 +49,27 @@ describe("AssemblyTreePanel", () => {
     expect(markup).toContain("is-editing");
     expect(markup).toContain("Editing members");
     expect(markup).toContain('aria-label="Exit Group Edit Packaging module"');
+  });
+
+  it("keeps membership actions disabled when only a projected group root is selected", () => {
+    const markup = renderToStaticMarkup(createElement(AssemblyTreePanel, {
+      ...props,
+      explicitSelectedEntityCount: 0,
+      activeGroupEditId: "assembly-1"
+    }));
+
+    expect(markup).toMatch(/data-testid="create-group-from-selection" disabled=""/);
+    expect(markup).toMatch(/data-testid="add-selection-to-group-assembly-1" disabled=""/);
+    expect(markup).toMatch(/data-testid="remove-selection-from-group-assembly-1" disabled=""/);
+  });
+
+  it("enables removal for an explicitly selected child during group edit", () => {
+    const markup = renderToStaticMarkup(createElement(AssemblyTreePanel, {
+      ...props,
+      explicitSelectedEntityCount: 1,
+      activeGroupEditId: "assembly-1"
+    }));
+
+    expect(markup).not.toMatch(/data-testid="remove-selection-from-group-assembly-1" disabled=""/);
   });
 });

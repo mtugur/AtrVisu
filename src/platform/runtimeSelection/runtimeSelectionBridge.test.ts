@@ -8,6 +8,7 @@ import {
   executeAtomicSelectionMutation,
   getAtomicMovementEntityIds,
   parseRuntimeSelectionEntityId,
+  projectExplicitRuntimeSelection,
   projectRuntimeSelection,
   reconcileRuntimeSelection,
   replaceRuntimeSelection
@@ -194,6 +195,30 @@ describe("runtime selection bridge", () => {
       selectedMachineIds: ["m1"],
       selectedCivilReferenceIds: ["c1"],
       selectedAlignableEntityIds: ["machine:m1", "civil:c1"]
+    });
+  });
+
+  it("keeps explicit child selection separate from group compatibility projection", () => {
+    const groupSelection = replaceRuntimeSelection(["group:g1"], "explorer");
+
+    expect(projectRuntimeSelection(groupSelection, groupedEntities).selectedAlignableEntityIds).toEqual([
+      "machine:m1",
+      "civil:c1"
+    ]);
+    expect(projectExplicitRuntimeSelection(groupSelection, groupedEntities)).toEqual({
+      selectedMachineIds: [],
+      selectedCivilReferenceIds: [],
+      selectedAlignableEntityIds: []
+    });
+  });
+
+  it("projects only children that were explicitly selected in active group edit mode", () => {
+    const explicitSelection = replaceRuntimeSelection(["machine:m1"], "scene");
+
+    expect(projectExplicitRuntimeSelection(explicitSelection, groupedEntities)).toEqual({
+      selectedMachineIds: ["m1"],
+      selectedCivilReferenceIds: [],
+      selectedAlignableEntityIds: ["machine:m1"]
     });
   });
 
@@ -396,6 +421,25 @@ describe("atomic selection movement", () => {
     });
     expect(beforeMutation).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an empty group before history or dirty callbacks can run", () => {
+    const beforeMutation = vi.fn();
+    const mutate = vi.fn();
+    const evaluation = executeAtomicSelectionMutation({
+      entityIds: ["group:empty"],
+      entities: [entity("group:empty", "group")],
+      beforeMutation,
+      mutate
+    });
+
+    expect(evaluation).toMatchObject({
+      allowed: false,
+      blockedEntityId: "group:empty",
+      reason: "non-selectable"
+    });
+    expect(beforeMutation).not.toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it.each([

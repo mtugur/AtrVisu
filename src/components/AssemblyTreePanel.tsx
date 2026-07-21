@@ -9,7 +9,7 @@ type AssemblyTreePanelProps = {
   civilReferences: CivilReferenceItem[];
   selectedGroupId: string | null;
   activeGroupEditId: string | null;
-  selectedEntityCount: number;
+  explicitSelectedEntityCount: number;
   onCreateGroupFromSelection: (name: string) => void;
   onAddSelectionToGroup: (groupId: string) => void;
   onRemoveSelectionFromGroup: (groupId: string) => void;
@@ -27,7 +27,7 @@ export function AssemblyTreePanel({
   civilReferences,
   selectedGroupId,
   activeGroupEditId,
-  selectedEntityCount,
+  explicitSelectedEntityCount,
   onCreateGroupFromSelection,
   onAddSelectionToGroup,
   onRemoveSelectionFromGroup,
@@ -40,7 +40,7 @@ export function AssemblyTreePanel({
 }: AssemblyTreePanelProps) {
   const machinesById = new Map(placedMachines.map((machine) => [machine.instanceId, machine]));
   const civilById = new Map(civilReferences.map((item) => [item.id, item]));
-  const selectedCount = selectedEntityCount;
+  const selectedCount = explicitSelectedEntityCount;
 
   return (
     <section className="assembly-panel" data-testid="assembly-tree-panel" aria-label="Assembly Tree">
@@ -107,10 +107,20 @@ export function AssemblyTreePanel({
                 </div>
               ) : null}
               <div className="assembly-actions">
-                <button type="button" disabled={selectedCount === 0} onClick={() => onAddSelectionToGroup(group.id)}>
+                <button
+                  type="button"
+                  data-testid={`add-selection-to-group-${group.id}`}
+                  disabled={selectedCount === 0}
+                  onClick={() => onAddSelectionToGroup(group.id)}
+                >
                   Add Selected
                 </button>
-                <button type="button" disabled={!isEditing || selectedCount === 0} onClick={() => onRemoveSelectionFromGroup(group.id)}>
+                <button
+                  type="button"
+                  data-testid={`remove-selection-from-group-${group.id}`}
+                  disabled={!isEditing || selectedCount === 0}
+                  onClick={() => onRemoveSelectionFromGroup(group.id)}
+                >
                   Remove Selected
                 </button>
                 {isEditing ? (

@@ -8,6 +8,7 @@ import {
   getVisibleGroupObjectIds,
   normalizeGroups,
   removeObjectsFromGroup,
+  removeObjectsFromGroupWithResult,
   removeObjectsFromGroups,
   ungroupObjectGroup
 } from "./groups";
@@ -81,7 +82,7 @@ describe("object groups", () => {
     const second = createObjectGroup("Second", []);
     const added = addObjectsToGroup([first, second], second.id, ["a", "b"]);
 
-    expect(added.find((group) => group.id === first.id)?.objectIds).toEqual([]);
+    expect(added.find((group) => group.id === first.id)).toBeUndefined();
     expect(added.find((group) => group.id === second.id)?.objectIds).toEqual(["machine:a", "machine:b"]);
 
     const removed = removeObjectsFromGroup(added, second.id, ["a"]);
@@ -117,7 +118,7 @@ describe("object groups", () => {
       { id: "second", name: "Second", objectIds: ["object:a", "machine:a"] }
     ], [machine("a")], [createDefaultLayer()]);
 
-    expect(groups.map((group) => group.objectIds)).toEqual([["machine:a"], []]);
+    expect(groups.map((group) => group.objectIds)).toEqual([["machine:a"]]);
   });
 
   it("reparents a member to the target group regardless of its legacy id form", () => {
@@ -125,7 +126,7 @@ describe("object groups", () => {
     const second = createObjectGroup("Second", []);
     const result = addObjectsToGroup([first, second], second.id, ["a"]);
 
-    expect(result.find((group) => group.id === first.id)?.objectIds).toEqual([]);
+    expect(result.find((group) => group.id === first.id)).toBeUndefined();
     expect(result.find((group) => group.id === second.id)?.objectIds).toEqual(["machine:a"]);
   });
 
@@ -135,6 +136,36 @@ describe("object groups", () => {
     ], [machine("a")], [createDefaultLayer()]);
 
     expect(groups[0].objectIds).toEqual(["machine:a"]);
+  });
+
+  it("removes only explicit members and prunes the group after its final member", () => {
+    const group = createObjectGroup("Line", ["machine:a", "machine:b"]);
+    const firstRemoval = removeObjectsFromGroupWithResult([group], group.id, ["machine:a"]);
+
+    expect(firstRemoval).toMatchObject({
+      removedObjectIds: ["machine:a"],
+      removedGroup: false
+    });
+    expect(firstRemoval?.groups[0].objectIds).toEqual(["machine:b"]);
+
+    const finalRemoval = removeObjectsFromGroupWithResult(
+      firstRemoval?.groups ?? [],
+      group.id,
+      ["machine:b"]
+    );
+    expect(finalRemoval).toMatchObject({
+      groups: [],
+      removedObjectIds: ["machine:b"],
+      removedGroup: true
+    });
+  });
+
+  it("keeps group membership unchanged for a group-root identity", () => {
+    const group = createObjectGroup("Line", ["machine:a", "machine:b"]);
+    const groups = [group];
+
+    expect(addObjectsToGroup(groups, group.id, ["group:source"])).toBe(groups);
+    expect(removeObjectsFromGroupWithResult(groups, group.id, ["group:source"])).toBeNull();
   });
 
   it("resolves visible civil group members and hides hidden civil members", () => {

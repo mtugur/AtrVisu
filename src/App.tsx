@@ -70,7 +70,11 @@ import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
-import { applyConnectionPointSnap, type ConnectionPointSnapSelection } from "./utils/connectionPointSnap";
+import {
+  applyConnectionPointSnap,
+  executeGuardedConnectionPointSnap,
+  type ConnectionPointSnapSelection
+} from "./utils/connectionPointSnap";
 import {
   createAnnotation,
   deleteAnnotation,
@@ -115,6 +119,7 @@ import {
   executeAtomicSelectionMutation,
   getAtomicMovementEntityIds,
   parseRuntimeSelectionEntityId,
+  projectExplicitRuntimeSelection,
   projectRuntimeSelection,
   reconcileRuntimeSelection,
   replaceRuntimeSelection
@@ -123,7 +128,7 @@ import {
   addObjectsToGroup,
   createObjectGroup,
   normalizeGroups,
-  removeObjectsFromGroup,
+  removeObjectsFromGroupWithResult,
   removeObjectsFromGroups,
   ungroupObjectGroup
 } from "./utils/groups";
@@ -179,6 +184,9 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 });
 
 export function App() {
+  const [enableE2EDiagnostics] = useState(() =>
+    new URLSearchParams(window.location.search).get("e2eDiagnostics") === "1"
+  );
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [civilReferences, setCivilReferences] = useState<CivilReferenceItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
@@ -269,6 +277,10 @@ export function App() {
   const platformEntitiesRef = useRef(platformEntities);
   const selectionProjection = useMemo(
     () => projectRuntimeSelection(runtimeSelection, platformEntities),
+    [platformEntities, runtimeSelection]
+  );
+  const explicitSelectionProjection = useMemo(
+    () => projectExplicitRuntimeSelection(runtimeSelection, platformEntities),
     [platformEntities, runtimeSelection]
   );
   const {
@@ -419,6 +431,7 @@ export function App() {
   const selectedAlignableEntityIds = useMemo(() => [
     ...selectedEntityKeys
   ], [selectedEntityKeys]);
+  const explicitSelectedAlignableEntityIds = explicitSelectionProjection.selectedAlignableEntityIds;
   const selectedAlignableEntities = useMemo(() => {
     const byKey = new Map(alignableEntities.map((entity) => [getAlignableEntityKey(entity.kind, entity.id), entity]));
     return selectedAlignableEntityIds.flatMap((key) => {
@@ -1231,7 +1244,7 @@ export function App() {
   }, []);
 
   const createGroupFromSelection = useCallback((name: string) => {
-    const objectIds = selectedAlignableEntityIds.filter((key) => {
+    const objectIds = explicitSelectedAlignableEntityIds.filter((key) => {
       if (key.startsWith("civil:")) {
         const civil = civilReferencesRef.current.find((item) => item.id === key.slice("civil:".length));
         return civil ? isLayerVisible(civil.layerId, layersRef.current) : false;
@@ -1254,26 +1267,48 @@ export function App() {
     } catch (caught) {
       window.alert(caught instanceof Error ? caught.message : "Group could not be created.");
     }
-  }, [markLayoutChanged, selectedAlignableEntityIds]);
+  }, [explicitSelectedAlignableEntityIds, markLayoutChanged]);
 
   const addSelectionToGroup = useCallback((groupId: string) => {
-    if (selectedAlignableEntityIds.length === 0) {
+    if (explicitSelectedAlignableEntityIds.length === 0) {
+      return;
+    }
+    const nextGroups = addObjectsToGroup(groupsRef.current, groupId, explicitSelectedAlignableEntityIds);
+    if (nextGroups === groupsRef.current) {
       return;
     }
     markLayoutChanged();
-    setGroups((current) => addObjectsToGroup(current, groupId, selectedAlignableEntityIds));
+    setGroups(nextGroups);
+    if (
+      activeGroupEditIdRef.current
+      && !nextGroups.some((group) => group.id === activeGroupEditIdRef.current)
+    ) {
+      setActiveGroupEditId(null);
+    }
     setRuntimeSelection(replaceRuntimeSelection([
       createLegacyPlatformEntityId("group", groupId)
     ], "command"));
-  }, [markLayoutChanged, selectedAlignableEntityIds]);
+  }, [explicitSelectedAlignableEntityIds, markLayoutChanged]);
 
   const removeSelectionFromGroup = useCallback((groupId: string) => {
-    if (activeGroupEditId !== groupId || selectedAlignableEntityIds.length === 0) {
+    if (activeGroupEditId !== groupId || explicitSelectedAlignableEntityIds.length === 0) {
+      return;
+    }
+    const result = removeObjectsFromGroupWithResult(
+      groupsRef.current,
+      groupId,
+      explicitSelectedAlignableEntityIds
+    );
+    if (!result) {
       return;
     }
     markLayoutChanged();
-    setGroups((current) => removeObjectsFromGroup(current, groupId, selectedAlignableEntityIds));
-  }, [activeGroupEditId, markLayoutChanged, selectedAlignableEntityIds]);
+    setGroups(result.groups);
+    if (result.removedGroup) {
+      setActiveGroupEditId(null);
+      setRuntimeSelection(createEmptyRuntimeSelection("command"));
+    }
+  }, [activeGroupEditId, explicitSelectedAlignableEntityIds, markLayoutChanged]);
 
   const renameObjectGroup = useCallback((groupId: string, name: string) => {
     if (!name.trim()) {
@@ -1690,12 +1725,21 @@ export function App() {
     movingPoint: MachineConnectionPoint,
     fixedPoint: MachineConnectionPoint
   ) => {
-    const movingMachine = placedMachinesRef.current.find((item) => item.instanceId === selection.movingMachineId);
-    if (movingMachine && isLayerLocked(movingMachine.layerId, layersRef.current)) {
-      return;
-    }
-    markLayoutChanged();
-    setPlacedMachines((current) => applyConnectionPointSnap(current, selection, movingPoint, fixedPoint));
+    executeGuardedConnectionPointSnap({
+      selection: runtimeSelectionRef.current,
+      entities: platformEntitiesRef.current,
+      activeGroupEditId: activeGroupEditIdRef.current,
+      movingMachineId: selection.movingMachineId,
+      fixedMachineId: selection.fixedMachineId
+    }, () => {
+      const currentMachines = placedMachinesRef.current;
+      const nextMachines = applyConnectionPointSnap(currentMachines, selection, movingPoint, fixedPoint);
+      if (nextMachines === currentMachines) {
+        return;
+      }
+      markLayoutChanged();
+      setPlacedMachines(nextMachines);
+    });
   }, [markLayoutChanged]);
 
   const addCivilReference = useCallback((type: CivilReferenceType) => {
@@ -2275,6 +2319,7 @@ export function App() {
           simulationSpeed={simulationSpeed}
           overlaySettings={overlaySettings}
           collisionResult={collisionResult}
+          enableE2EDiagnostics={enableE2EDiagnostics}
           onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
           onPerformanceMetricsChange={setLatestPerformanceMetrics}
         />
@@ -2404,7 +2449,7 @@ export function App() {
               civilReferences={civilReferences}
               selectedGroupId={selectedGroupId}
               activeGroupEditId={activeGroupEditId}
-              selectedEntityCount={selectedAlignableEntities.length}
+              explicitSelectedEntityCount={explicitSelectedAlignableEntityIds.length}
               onCreateGroupFromSelection={createGroupFromSelection}
               onAddSelectionToGroup={addSelectionToGroup}
               onRemoveSelectionFromGroup={removeSelectionFromGroup}
@@ -2545,7 +2590,7 @@ export function App() {
               onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
-          {selectedMachineIds.length === 2 ? (
+          {selectedMachineIds.length === 2 && !selectedGroupId ? (
             <PanelSection
               title="Connection Point Snap"
               storageKey="atrvisu.panelSection.connectionPointSnap.v1"

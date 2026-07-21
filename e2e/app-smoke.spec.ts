@@ -21,7 +21,7 @@ const openCleanApp = async (page: Page) => {
     window.sessionStorage.clear();
   });
 
-  await page.goto("/");
+  await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
   await expect(page.getByTestId("right-panel")).toBeVisible();
   await expect(page.getByTestId("machine-library-panel")).toBeVisible();
@@ -116,6 +116,29 @@ const createTwoMachineAssembly = async (
   };
 };
 
+test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+
+  await page.goto("/");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+  await expect(canvas).not.toHaveAttribute("data-machine-screen-points");
+  await expect(canvas).not.toHaveAttribute("data-machine-plan-positions");
+  await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
+
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(canvas).toHaveAttribute("data-machine-screen-points", "{}");
+  await expect(canvas).toHaveAttribute("data-machine-plan-positions", "{}");
+  await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
+  expect(errors).toEqual([]);
+});
+
 test("app loads and core panels have no red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -201,6 +224,11 @@ test("rigid assembly projection renders without exposing member arrange actions"
   await group.getByRole("button", { name: "Add Selected" }).click();
   await expect(group).toContainText("2 items");
   await group.locator(".assembly-group-button").click();
+
+  await expect(page.getByTestId("create-group-from-selection")).toBeDisabled();
+  await expect(group.getByRole("button", { name: "Add Selected" })).toBeDisabled();
+  await expect(group.getByRole("button", { name: "Remove Selected" })).toBeDisabled();
+  await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
 
   const multiSelectionSection = page.getByRole("button", { name: /Assembly Properties/i });
   await expect(multiSelectionSection).toBeVisible();
@@ -434,7 +462,9 @@ test("group edit mode moves one member and restores rigid scene selection on exi
   await group.getByRole("button", { name: /Edit Group Editable Rigid Assembly/i }).click();
   await expect(canvas).toHaveAttribute("data-active-group-edit-id", groupId ?? "");
   await expect(group).toContainText("Editing members");
+  await expect(group.getByRole("button", { name: "Remove Selected" })).toBeDisabled();
   await clickSceneMachine(page, machineIds[0]);
+  await expect(group.getByRole("button", { name: "Remove Selected" })).toBeEnabled();
   await expect(canvas).not.toHaveAttribute("data-selected-assembly-id", /.+/);
 
   const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
