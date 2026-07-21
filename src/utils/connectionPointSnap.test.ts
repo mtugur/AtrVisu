@@ -1,9 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { PlatformEntity } from "../platform/contracts";
+import { replaceRuntimeSelection } from "../platform/runtimeSelection";
 import type { MachineConnectionPoint } from "../types/ataraMachineData";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import {
   applyConnectionPointSnap,
+  evaluateConnectionPointSnapRuntimeAccess,
   evaluateConnectionPointSnapCandidate,
+  executeGuardedConnectionPointSnap,
   formatConnectionPointSelectorLabel,
   getConnectionPointCompatibility,
   getConnectionPointSnapDelta
@@ -68,6 +72,38 @@ const machine = (
     flowDirection: "forward"
   };
 };
+
+const platformMachine = (
+  id: string,
+  overrides: Partial<PlatformEntity> = {}
+): PlatformEntity => ({
+  id: `machine:${id}`,
+  type: "machine",
+  name: id,
+  transform: { planX: 0, planY: 0, elevation: 0, rotationDeg: 0 },
+  properties: [],
+  connectors: [],
+  childrenIds: [],
+  layerId: "default",
+  visible: true,
+  locked: false,
+  selectable: true,
+  ...overrides
+});
+
+const platformGroup = (id: string, childrenIds: string[]): PlatformEntity => ({
+  id: `group:${id}`,
+  type: "group",
+  name: id,
+  transform: { planX: 0, planY: 0, elevation: 0, rotationDeg: 0 },
+  properties: [],
+  connectors: [],
+  childrenIds,
+  layerId: "default",
+  visible: true,
+  locked: false,
+  selectable: true
+});
 
 describe("connection point snap helpers", () => {
   const movingOut = point("CP-OUT", "product-out", 1000, 0, "x+", "Product Out");
@@ -189,6 +225,94 @@ describe("connection point snap helpers", () => {
       fixedIn
     );
     expect(result.find((item) => item.instanceId === "moving")?.positionMm).toEqual({ xMm: 2500, yMm: 0 });
+  });
+
+  it("preserves snap access for two explicitly selected ungrouped machines", () => {
+    expect(evaluateConnectionPointSnapRuntimeAccess({
+      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene"),
+      entities: [platformMachine("moving"), platformMachine("fixed")],
+      movingMachineId: "moving",
+      fixedMachineId: "fixed"
+    })).toEqual({ allowed: true });
+  });
+
+  it("rejects grouped-member snap outside group edit without movement, history, or dirty state", () => {
+    const moving = machine("moving", 0, 0, 0, [movingOut]);
+    const fixed = machine("fixed", 5000, 0, 0, [fixedIn]);
+    const originalPositions = [moving, fixed].map((item) => ({ ...item.positionMm }));
+    const recordHistory = vi.fn();
+    const markDirty = vi.fn();
+    let machines = [moving, fixed];
+    const parentId = "group:assembly";
+    const entities = [
+      platformMachine("moving", { parentId }),
+      platformMachine("fixed", { parentId }),
+      platformGroup("assembly", ["machine:moving", "machine:fixed"])
+    ];
+
+    const evaluation = executeGuardedConnectionPointSnap({
+      selection: replaceRuntimeSelection([parentId], "scene"),
+      entities,
+      movingMachineId: "moving",
+      fixedMachineId: "fixed"
+    }, () => {
+      recordHistory();
+      markDirty();
+      machines = applyConnectionPointSnap(
+        machines,
+        { movingMachineId: "moving", fixedMachineId: "fixed", movingPointId: "CP-OUT", fixedPointId: "CP-IN", gapMm: 0 },
+        movingOut,
+        fixedIn
+      );
+    });
+
+    expect(evaluation).toEqual({ allowed: false, reason: "assembly-edit-required" });
+    expect(machines.map((item) => item.positionMm)).toEqual(originalPositions);
+    expect(recordHistory).not.toHaveBeenCalled();
+    expect(markDirty).not.toHaveBeenCalled();
+  });
+
+  it("allows explicitly selected editable children only in their matching group edit mode", () => {
+    const parentId = "group:assembly";
+    const entities = [
+      platformMachine("moving", { parentId }),
+      platformMachine("fixed", { parentId }),
+      platformGroup("assembly", ["machine:moving", "machine:fixed"])
+    ];
+    const groupRootSelection = replaceRuntimeSelection([parentId], "scene");
+    const explicitChildren = replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene");
+
+    expect(evaluateConnectionPointSnapRuntimeAccess({
+      selection: groupRootSelection,
+      entities,
+      activeGroupEditId: "assembly",
+      movingMachineId: "moving",
+      fixedMachineId: "fixed"
+    })).toEqual({ allowed: false, reason: "explicit-selection-required" });
+    expect(evaluateConnectionPointSnapRuntimeAccess({
+      selection: explicitChildren,
+      entities,
+      activeGroupEditId: "assembly",
+      movingMachineId: "moving",
+      fixedMachineId: "fixed"
+    })).toEqual({ allowed: true });
+  });
+
+  it("keeps active group edit snap subject to atomic lock rules", () => {
+    const parentId = "group:assembly";
+    const entities = [
+      platformMachine("moving", { parentId }),
+      platformMachine("fixed", { parentId, locked: true }),
+      platformGroup("assembly", ["machine:moving", "machine:fixed"])
+    ];
+
+    expect(evaluateConnectionPointSnapRuntimeAccess({
+      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene"),
+      entities,
+      activeGroupEditId: "assembly",
+      movingMachineId: "moving",
+      fixedMachineId: "fixed"
+    })).toEqual({ allowed: false, reason: "locked" });
   });
 });
 

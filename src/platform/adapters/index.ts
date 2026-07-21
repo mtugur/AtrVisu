@@ -3,6 +3,7 @@ export { createPlatformFeatureAccessRegistry, findFeatureAccessById, getRequired
 export {
   adaptAnnotationToPlatformEntity,
   adaptCivilReferenceToPlatformEntity,
+  adaptObjectGroupToPlatformEntity,
   adaptPlacedMachineToPlatformEntity,
   createLegacyEntitySnapshot,
   createLegacyPlatformEntityId

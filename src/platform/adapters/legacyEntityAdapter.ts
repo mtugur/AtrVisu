@@ -1,19 +1,22 @@
 import type { AnnotationObject } from "../../types/annotations";
 import type { CivilReferenceItem } from "../../types/civil";
+import type { ObjectGroup } from "../../types/groups";
 import type { LayoutLayer } from "../../types/layers";
 import { DEFAULT_LAYER_ID } from "../../types/layers";
 import type { PlacedMachine } from "../../types/machine";
 import { getMachineReferencePositionMm } from "../../utils/coordinateReference";
 import { getMachineDimensionsMm } from "../../utils/machineDimensions";
+import { getGroupEntityKeys } from "../../utils/groups";
 import type { EntityProperty, PlatformEntity } from "../contracts";
 
-export type LegacyEntityFamily = "machine" | "civil" | "annotation";
+export type LegacyEntityFamily = "machine" | "civil" | "annotation" | "group";
 
 export type LegacyEntitySnapshotInput = {
   machines: readonly PlacedMachine[];
   civilReferences: readonly CivilReferenceItem[];
   annotations: readonly AnnotationObject[];
   layers: readonly LayoutLayer[];
+  groups?: readonly ObjectGroup[];
 };
 
 type EffectiveLayerContext = {
@@ -170,6 +173,49 @@ export const adaptAnnotationToPlatformEntity = (
   };
 };
 
+export const adaptObjectGroupToPlatformEntity = (
+  group: ObjectGroup,
+  childEntities: readonly PlatformEntity[],
+  layers: readonly LayoutLayer[]
+): PlatformEntity => {
+  const layer = resolveEffectiveLayerContext(group.layerId, layers);
+  const childrenIds = getGroupEntityKeys(group);
+  const childById = new Map(childEntities.map((entity) => [entity.id, entity]));
+  const resolvedChildren = childrenIds.flatMap((entityId) => {
+    const entity = childById.get(entityId);
+    return entity ? [entity] : [];
+  });
+
+  return {
+    id: createLegacyPlatformEntityId("group", group.id),
+    type: "group",
+    name: group.name,
+    transform: {
+      planX: resolvedChildren.length > 0
+        ? Math.min(...resolvedChildren.map((entity) => entity.transform.planX))
+        : 0,
+      planY: resolvedChildren.length > 0
+        ? Math.min(...resolvedChildren.map((entity) => entity.transform.planY))
+        : 0,
+      elevation: resolvedChildren.length > 0
+        ? Math.min(...resolvedChildren.map((entity) => entity.transform.elevation))
+        : 0,
+      rotationDeg: 0
+    },
+    properties: [
+      property("sourceFamily", "Source family", "group"),
+      property("sourceId", "Source ID", group.id),
+      property("memberCount", "Member count", childrenIds.length)
+    ],
+    connectors: [],
+    childrenIds,
+    layerId: layer.layerId,
+    visible: layer.visible,
+    locked: layer.locked,
+    selectable: layer.visible && childrenIds.length > 0
+  };
+};
+
 const assertUniqueEntityIds = (entities: readonly PlatformEntity[]) => {
   const seenIds = new Set<string>();
 
@@ -185,12 +231,31 @@ export const createLegacyEntitySnapshot = ({
   machines,
   civilReferences,
   annotations,
-  layers
+  layers,
+  groups = []
 }: LegacyEntitySnapshotInput): readonly PlatformEntity[] => {
-  const entities = [
+  const sourceEntities = [
     ...machines.map((machine) => adaptPlacedMachineToPlatformEntity(machine, layers)),
     ...civilReferences.map((item) => adaptCivilReferenceToPlatformEntity(item, layers)),
     ...annotations.map((annotation) => adaptAnnotationToPlatformEntity(annotation, layers))
+  ];
+  const groupEntities = groups
+    .map((group) => adaptObjectGroupToPlatformEntity(group, sourceEntities, layers))
+    .filter((entity) => entity.childrenIds.length > 0);
+  const parentByChildId = new Map<string, string>();
+  groupEntities.forEach((groupEntity) => {
+    groupEntity.childrenIds.forEach((childId) => {
+      if (!parentByChildId.has(childId)) {
+        parentByChildId.set(childId, groupEntity.id);
+      }
+    });
+  });
+  const entities = [
+    ...sourceEntities.map((entity) => {
+      const parentId = parentByChildId.get(entity.id);
+      return parentId ? { ...entity, parentId } : entity;
+    }),
+    ...groupEntities
   ];
 
   assertUniqueEntityIds(entities);

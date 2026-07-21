@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationObject } from "../../../types/annotations";
 import type { CivilReferenceItem } from "../../../types/civil";
+import type { ObjectGroup } from "../../../types/groups";
 import type { LayoutLayer } from "../../../types/layers";
 import type { MachineDefinition, PlacedMachine } from "../../../types/machine";
 import {
   adaptAnnotationToPlatformEntity,
   adaptCivilReferenceToPlatformEntity,
+  adaptObjectGroupToPlatformEntity,
   adaptPlacedMachineToPlatformEntity,
   createLegacyEntitySnapshot,
   createLegacyPlatformEntityId
@@ -102,6 +104,15 @@ const annotation = (updates: Partial<AnnotationObject> = {}): AnnotationObject =
   rotationDeg: 15,
   targetObjectId: "machine-instance-01",
   style: { sizeScale: 4, emphasis: "important", background: true },
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-02T00:00:00.000Z",
+  ...updates
+});
+
+const group = (updates: Partial<ObjectGroup> = {}): ObjectGroup => ({
+  id: "assembly-01",
+  name: "Packaging module",
+  objectIds: ["machine:machine-instance-01", "civil:civil-01"],
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-02T00:00:00.000Z",
   ...updates
@@ -263,6 +274,83 @@ describe("legacy entity adapter", () => {
       "annotation:a2",
       "annotation:a1"
     ]);
+  });
+
+  it.each([
+    ["machine-only", ["machine:machine-instance-01"]],
+    ["civil-only", ["civil:civil-01"]],
+    ["mixed", ["machine:machine-instance-01", "civil:civil-01"]]
+  ])("adapts a %s group with canonical deterministic children", (_label, objectIds) => {
+    const entities = createLegacyEntitySnapshot({
+      machines: [placedMachine()],
+      civilReferences: [civilReference()],
+      annotations: [],
+      groups: [group({ objectIds })],
+      layers
+    });
+    const groupEntity = entities.find((entity) => entity.id === "group:assembly-01");
+
+    expect(groupEntity).toMatchObject({
+      id: "group:assembly-01",
+      type: "group",
+      name: "Packaging module",
+      childrenIds: objectIds
+    });
+    objectIds.forEach((childId) => {
+      expect(entities.find((entity) => entity.id === childId)?.parentId).toBe("group:assembly-01");
+    });
+  });
+
+  it("derives a deterministic group transform from existing member references", () => {
+    const sourceEntities = [
+      adaptPlacedMachineToPlatformEntity(placedMachine(), layers),
+      adaptCivilReferenceToPlatformEntity(civilReference(), layers)
+    ];
+
+    expect(adaptObjectGroupToPlatformEntity(group(), sourceEntities, layers).transform).toEqual({
+      planX: -4000,
+      planY: 2500,
+      elevation: 125,
+      rotationDeg: 0
+    });
+  });
+
+  it("preserves unresolved canonical members so atomic movement can reject them", () => {
+    const entities = createLegacyEntitySnapshot({
+      machines: [placedMachine()],
+      civilReferences: [],
+      annotations: [],
+      groups: [group({ objectIds: ["machine:machine-instance-01", "civil:missing"] })],
+      layers
+    });
+
+    expect(entities.find((entity) => entity.id === "group:assembly-01")?.childrenIds).toEqual([
+      "machine:machine-instance-01",
+      "civil:missing"
+    ]);
+  });
+
+  it("uses the group layer as its own selectable lock context", () => {
+    const groupEntity = adaptObjectGroupToPlatformEntity(
+      group({ layerId: "locked-layer" }),
+      [adaptPlacedMachineToPlatformEntity(placedMachine(), layers)],
+      layers
+    );
+
+    expect(groupEntity).toMatchObject({ visible: true, selectable: true, locked: true, layerId: "locked-layer" });
+  });
+
+  it("does not expose an empty object group as a selectable runtime entity", () => {
+    const emptyGroup = group({ objectIds: [] });
+
+    expect(adaptObjectGroupToPlatformEntity(emptyGroup, [], layers).selectable).toBe(false);
+    expect(createLegacyEntitySnapshot({
+      machines: [],
+      civilReferences: [],
+      annotations: [],
+      groups: [emptyGroup],
+      layers
+    })).toEqual([]);
   });
 
   it("rejects duplicate platform identities without silently overwriting", () => {

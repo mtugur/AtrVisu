@@ -8,6 +8,7 @@ import {
   executeAtomicSelectionMutation,
   getAtomicMovementEntityIds,
   parseRuntimeSelectionEntityId,
+  projectExplicitRuntimeSelection,
   projectRuntimeSelection,
   reconcileRuntimeSelection,
   replaceRuntimeSelection
@@ -15,7 +16,7 @@ import {
 
 const entity = (
   id: string,
-  type: "machine" | "civil" | "annotation",
+  type: "machine" | "civil" | "annotation" | "group",
   overrides: Partial<PlatformEntity> = {}
 ): PlatformEntity => ({
   id,
@@ -37,6 +38,21 @@ const entities = [
   entity("machine:m2", "machine"),
   entity("civil:c1", "civil"),
   entity("annotation:a1", "annotation")
+];
+
+const groupedEntities = [
+  entity("machine:m1", "machine", { parentId: "group:g1" }),
+  entity("civil:c1", "civil", { parentId: "group:g1" }),
+  entity("machine:free", "machine"),
+  entity("group:g1", "group", { childrenIds: ["machine:m1", "civil:c1"] })
+];
+
+const editableMachineGroupEntities = [
+  entity("machine:m1", "machine", { parentId: "group:g1" }),
+  entity("machine:m2", "machine", { parentId: "group:g1" }),
+  entity("machine:other", "machine", { parentId: "group:g2" }),
+  entity("group:g1", "group", { childrenIds: ["machine:m1", "machine:m2"] }),
+  entity("group:g2", "group", { childrenIds: ["machine:other"] })
 ];
 
 describe("runtime selection bridge", () => {
@@ -168,7 +184,123 @@ describe("runtime selection bridge", () => {
       family: "civil",
       sourceId: "machine:m1"
     });
-    expect(parseRuntimeSelectionEntityId("group:machine:m1")).toBeNull();
+    expect(parseRuntimeSelectionEntityId("group:machine:m1")).toEqual({
+      family: "group",
+      sourceId: "machine:m1"
+    });
+  });
+
+  it.each(["machine:m1", "civil:c1"])("promotes grouped member %s to its canonical assembly", (targetId) => {
+    const selection = applyRuntimeSelectionRequest(createEmptyRuntimeSelection("scene"), {
+      targetId,
+      mode: "replace",
+      source: "scene"
+    }, groupedEntities);
+
+    expect(selection).toMatchObject({ ids: ["group:g1"], primaryId: "group:g1" });
+    expect(projectRuntimeSelection(selection, groupedEntities)).toMatchObject({
+      selectedGroupId: "g1",
+      selectedMachineIds: ["m1"],
+      selectedCivilReferenceIds: ["c1"],
+      selectedAlignableEntityIds: ["machine:m1", "civil:c1"]
+    });
+  });
+
+  it("keeps explicit child selection separate from group compatibility projection", () => {
+    const groupSelection = replaceRuntimeSelection(["group:g1"], "explorer");
+
+    expect(projectRuntimeSelection(groupSelection, groupedEntities).selectedAlignableEntityIds).toEqual([
+      "machine:m1",
+      "civil:c1"
+    ]);
+    expect(projectExplicitRuntimeSelection(groupSelection, groupedEntities)).toEqual({
+      selectedMachineIds: [],
+      selectedCivilReferenceIds: [],
+      selectedAlignableEntityIds: []
+    });
+  });
+
+  it("projects only children that were explicitly selected in active group edit mode", () => {
+    const explicitSelection = replaceRuntimeSelection(["machine:m1"], "scene");
+
+    expect(projectExplicitRuntimeSelection(explicitSelection, groupedEntities)).toEqual({
+      selectedMachineIds: ["m1"],
+      selectedCivilReferenceIds: [],
+      selectedAlignableEntityIds: ["machine:m1"]
+    });
+  });
+
+  it("keeps one assembly identity when different members are clicked", () => {
+    const first = applyRuntimeSelectionRequest(createEmptyRuntimeSelection("scene"), {
+      targetId: "machine:m1",
+      mode: "replace",
+      source: "scene"
+    }, groupedEntities);
+    const second = applyRuntimeSelectionRequest(first, {
+      targetId: "civil:c1",
+      mode: "replace",
+      source: "scene"
+    }, groupedEntities);
+
+    expect(first.ids).toEqual(["group:g1"]);
+    expect(second.ids).toEqual(["group:g1"]);
+  });
+
+  it("bypasses promotion only for members of the active group edit mode", () => {
+    const activeMember = applyRuntimeSelectionRequest(createEmptyRuntimeSelection("scene"), {
+      targetId: "machine:m1",
+      mode: "replace",
+      source: "scene"
+    }, groupedEntities, { activeGroupEditId: "g1" });
+    const freeEntity = applyRuntimeSelectionRequest(createEmptyRuntimeSelection("scene"), {
+      targetId: "machine:free",
+      mode: "replace",
+      source: "scene"
+    }, groupedEntities, { activeGroupEditId: "g1" });
+
+    expect(activeMember.ids).toEqual(["machine:m1"]);
+    expect(freeEntity.ids).toEqual(["machine:free"]);
+  });
+
+  it("replaces the active group root on the first toggle-selected edit child", () => {
+    const rootSelection = replaceRuntimeSelection(["group:g1"], "command");
+    const firstChild = applyRuntimeSelectionRequest(rootSelection, {
+      targetId: "machine:m1",
+      mode: "toggle",
+      source: "scene"
+    }, editableMachineGroupEntities, { activeGroupEditId: "g1" });
+    const secondChild = applyRuntimeSelectionRequest(firstChild, {
+      targetId: "machine:m2",
+      mode: "toggle",
+      source: "scene"
+    }, editableMachineGroupEntities, { activeGroupEditId: "g1" });
+
+    expect(firstChild.ids).toEqual(["machine:m1"]);
+    expect(secondChild.ids).toEqual(["machine:m1", "machine:m2"]);
+    expect(secondChild.ids).not.toContain("group:g1");
+    expect(projectRuntimeSelection(secondChild, editableMachineGroupEntities)).toMatchObject({
+      selectedMachineIds: ["m1", "m2"],
+      selectedGroupId: null
+    });
+  });
+
+  it("returns to only the active group root when it is selected again", () => {
+    const children = replaceRuntimeSelection(["machine:m1", "machine:m2"], "scene");
+
+    expect(applyRuntimeSelectionRequest(children, {
+      targetId: "group:g1",
+      mode: "toggle",
+      source: "explorer"
+    }, editableMachineGroupEntities, { activeGroupEditId: "g1" }).ids).toEqual(["group:g1"]);
+  });
+
+  it("continues promoting another group's child while one group is being edited", () => {
+    expect(applyRuntimeSelectionRequest(
+      replaceRuntimeSelection(["machine:m1"], "scene"),
+      { targetId: "machine:other", mode: "toggle", source: "scene" },
+      editableMachineGroupEntities,
+      { activeGroupEditId: "g1" }
+    ).ids).toEqual(["machine:m1", "group:g2"]);
   });
 });
 
@@ -320,5 +452,125 @@ describe("atomic selection movement", () => {
       "civil:c1"
     ]);
     expect(getAtomicMovementEntityIds(selection, ["machine:m1"], false)).toEqual(["machine:m1"]);
+  });
+
+  it("records one history and dirty transition for an accepted mixed nudge", () => {
+    const recordHistory = vi.fn();
+    const markDirty = vi.fn();
+    const mutate = vi.fn();
+    const result = executeAtomicSelectionMutation({
+      entityIds: ["machine:m1", "civil:c1"],
+      entities,
+      beforeMutation: () => {
+        recordHistory();
+        markDirty();
+      },
+      mutate
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(recordHistory).toHaveBeenCalledTimes(1);
+    expect(markDirty).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a locked civil edit child before nudge history or dirty state", () => {
+    const recordHistory = vi.fn();
+    const markDirty = vi.fn();
+    const mutate = vi.fn();
+    const parentId = "group:g1";
+    const result = executeAtomicSelectionMutation({
+      entityIds: ["civil:c1"],
+      entities: [
+        entity("civil:c1", "civil", { parentId, locked: true }),
+        entity(parentId, "group", { childrenIds: ["civil:c1"] })
+      ],
+      beforeMutation: () => {
+        recordHistory();
+        markDirty();
+      },
+      mutate
+    });
+
+    expect(result).toMatchObject({ allowed: false, reason: "locked", blockedEntityId: "civil:c1" });
+    expect(recordHistory).not.toHaveBeenCalled();
+    expect(markDirty).not.toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it("expands a group root and permits exactly one atomic assembly mutation", () => {
+    const beforeMutation = vi.fn();
+    const mutate = vi.fn();
+    const evaluation = executeAtomicSelectionMutation({
+      entityIds: ["group:g1"],
+      entities: groupedEntities,
+      beforeMutation,
+      mutate
+    });
+
+    expect(evaluation).toEqual({
+      allowed: true,
+      entityIds: ["group:g1", "machine:m1", "civil:c1"]
+    });
+    expect(beforeMutation).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects an empty group before history or dirty callbacks can run", () => {
+    const beforeMutation = vi.fn();
+    const mutate = vi.fn();
+    const evaluation = executeAtomicSelectionMutation({
+      entityIds: ["group:empty"],
+      entities: [entity("group:empty", "group")],
+      beforeMutation,
+      mutate
+    });
+
+    expect(evaluation).toMatchObject({
+      allowed: false,
+      blockedEntityId: "group:empty",
+      reason: "non-selectable"
+    });
+    expect(beforeMutation).not.toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["locked member", groupedEntities.map((item) => item.id === "civil:c1" ? { ...item, locked: true } : item), "locked"],
+    ["hidden member", groupedEntities.map((item) => item.id === "machine:m1" ? { ...item, visible: false } : item), "hidden"],
+    ["non-selectable member", groupedEntities.map((item) => item.id === "civil:c1" ? { ...item, selectable: false } : item), "non-selectable"],
+    ["locked group layer", groupedEntities.map((item) => item.id === "group:g1" ? { ...item, locked: true } : item), "locked"]
+  ] as const)("rejects a complete assembly for one %s", (_label, availableEntities, reason) => {
+    expect(evaluateAtomicMovement(["group:g1"], availableEntities)).toMatchObject({
+      allowed: false,
+      reason
+    });
+  });
+
+  it("rejects an unresolved persisted group member", () => {
+    const unresolved = groupedEntities.map((item) => item.id === "group:g1"
+      ? { ...item, childrenIds: [...item.childrenIds, "civil:missing"] }
+      : item);
+
+    expect(evaluateAtomicMovement(["group:g1"], unresolved)).toMatchObject({
+      allowed: false,
+      blockedEntityId: "civil:missing",
+      reason: "unresolved"
+    });
+    expect(projectRuntimeSelection(
+      replaceRuntimeSelection(["group:g1"], "scene"),
+      unresolved
+    ).selectedAlignableEntityIds).toEqual(["machine:m1", "civil:c1"]);
+  });
+
+  it("validates a directly edited child and its parent without expanding siblings", () => {
+    const withLockedSibling = groupedEntities.map((item) => item.id === "civil:c1"
+      ? { ...item, locked: true }
+      : item);
+
+    expect(evaluateAtomicMovement(["machine:m1"], withLockedSibling)).toEqual({
+      allowed: true,
+      entityIds: ["group:g1", "machine:m1"]
+    });
   });
 });

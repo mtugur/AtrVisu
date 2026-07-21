@@ -1,0 +1,88 @@
+import type { CommandContext, CommandDefinition, CommandEnableState } from "../contracts";
+import { createCommandRegistry } from "../registries";
+
+export const ASSEMBLY_COMMAND_IDS = {
+  enterEdit: "assembly.enterEdit",
+  exitEdit: "assembly.exitEdit",
+  ungroup: "assembly.ungroup"
+} as const;
+
+export type AssemblyCommandId = typeof ASSEMBLY_COMMAND_IDS[keyof typeof ASSEMBLY_COMMAND_IDS];
+
+export type AssemblyRuntimeCommandBinding = {
+  getEnableState: (context: CommandContext) => CommandEnableState;
+  execute: (context: CommandContext) => void;
+};
+
+export type AssemblyRuntimeCommandBindings = Readonly<
+  Partial<Record<AssemblyCommandId, AssemblyRuntimeCommandBinding>>
+>;
+
+const definitions: Readonly<Record<AssemblyCommandId, Omit<CommandDefinition, "enableRule" | "execute">>> = {
+  [ASSEMBLY_COMMAND_IDS.enterEdit]: {
+    id: ASSEMBLY_COMMAND_IDS.enterEdit,
+    group: "edit",
+    label: "Edit Group",
+    tooltip: "Edit members of the selected assembly independently.",
+    mutatesData: false,
+    requiresUndoTransaction: false
+  },
+  [ASSEMBLY_COMMAND_IDS.exitEdit]: {
+    id: ASSEMBLY_COMMAND_IDS.exitEdit,
+    group: "edit",
+    label: "Exit Group Edit",
+    tooltip: "Return the active assembly to rigid selection mode.",
+    mutatesData: false,
+    requiresUndoTransaction: false
+  },
+  [ASSEMBLY_COMMAND_IDS.ungroup]: {
+    id: ASSEMBLY_COMMAND_IDS.ungroup,
+    group: "edit",
+    label: "Ungroup",
+    tooltip: "Remove the assembly while preserving all member objects and transforms.",
+    mutatesData: true,
+    requiresUndoTransaction: true
+  }
+};
+
+const disabled = (reason: string): CommandEnableState => ({ enabled: false, reason });
+
+export const createAssemblyRuntimeCommandBridge = (
+  getBindings: () => AssemblyRuntimeCommandBindings
+) => {
+  const registry = createCommandRegistry();
+
+  Object.values(ASSEMBLY_COMMAND_IDS).forEach((commandId) => {
+    const definition = definitions[commandId];
+    registry.register({
+      ...definition,
+      enableRule: (context) => getBindings()[commandId]?.getEnableState(context)
+        ?? disabled(`Runtime command "${commandId}" is not bound.`),
+      execute: (context) => {
+        const binding = getBindings()[commandId];
+        if (!binding) {
+          throw new Error(`Runtime command "${commandId}" is not bound.`);
+        }
+        if (binding.getEnableState(context).enabled) {
+          binding.execute(context);
+        }
+      }
+    });
+  });
+
+  return {
+    registry,
+    executeCommand(commandId: AssemblyCommandId, context: CommandContext) {
+      const binding = getBindings()[commandId];
+      if (!binding) {
+        return false;
+      }
+      const enableState = binding.getEnableState(context);
+      if (!enableState.enabled) {
+        return false;
+      }
+      binding.execute(context);
+      return true;
+    }
+  };
+};

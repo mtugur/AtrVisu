@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationObject } from "../types/annotations";
+import type { CivilReferenceItem } from "../types/civil";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import type { LayoutViewpoint } from "../types/viewpoints";
 import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./layoutHistory";
@@ -34,6 +35,19 @@ const machine = (instanceId: string, xMm: number): PlacedMachine => ({
   rotationY: 0,
   rotationDeg: 0,
   flowDirection: "forward"
+});
+
+const civil = (id: string, xMm: number, yMm: number): CivilReferenceItem => ({
+  id,
+  type: "column",
+  name: id,
+  positionMm: { xMm, yMm, zMm: 0 },
+  referencePoint: "front-left-bottom",
+  coordinateReferenceVersion: "front-left-bottom-v1",
+  sizeMm: { widthMm: 500, depthMm: 500, heightMm: 3000 },
+  rotationDeg: 0,
+  createdAt: "now",
+  updatedAt: "now"
 });
 
 const annotation = (text: string): AnnotationObject => ({
@@ -94,6 +108,24 @@ describe("layout history", () => {
       ["b", 2000],
       ["c", 3000]
     ]);
+  });
+
+  it("restores a complete mixed machine and civil nudge through undo and redo", () => {
+    const initialMachines = [machine("a", 100)];
+    const initialCivil = [civil("c1", 500, -200)];
+    const movedMachines = [machine("a", 350)];
+    const movedCivil = [civil("c1", 750, -100)];
+    const history = pushHistorySnapshot(createLayoutHistory(), initialMachines, [], initialCivil);
+
+    const undone = undoHistory(history, movedMachines, [], movedCivil);
+    expect(undone?.machines[0].positionMm).toEqual({ xMm: 100, yMm: 0 });
+    expect(undone?.civilReferences[0].positionMm).toMatchObject({ xMm: 500, yMm: -200 });
+
+    const redone = undone
+      ? redoHistory(undone.history, undone.machines, [], undone.civilReferences)
+      : null;
+    expect(redone?.machines[0].positionMm).toEqual({ xMm: 350, yMm: 0 });
+    expect(redone?.civilReferences[0].positionMm).toMatchObject({ xMm: 750, yMm: -100 });
   });
 
   it("preserves multi-machine alignment snapshots through undo and redo", () => {
