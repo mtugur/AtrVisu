@@ -58,7 +58,6 @@ import {
   equalizeGaps,
   equalizeEntityGaps,
   getAlignableEntityKey,
-  moveObjectsByDelta,
   selectionHasLockedAlignableEntities,
   snapPrimaryEntityAnchorToSecondaryAnchor,
   snapPrimaryAnchorToSecondaryAnchor
@@ -127,6 +126,7 @@ import {
 import {
   addObjectsToGroup,
   createObjectGroup,
+  getSelectedGroupMemberEntityIds,
   normalizeGroups,
   removeObjectsFromGroupWithResult,
   removeObjectsFromGroups,
@@ -432,6 +432,9 @@ export function App() {
     ...selectedEntityKeys
   ], [selectedEntityKeys]);
   const explicitSelectedAlignableEntityIds = explicitSelectionProjection.selectedAlignableEntityIds;
+  const removableActiveGroupEntityIds = useMemo(() => activeGroupEdit
+    ? getSelectedGroupMemberEntityIds(activeGroupEdit, explicitSelectedAlignableEntityIds)
+    : [], [activeGroupEdit, explicitSelectedAlignableEntityIds]);
   const selectedAlignableEntities = useMemo(() => {
     const byKey = new Map(alignableEntities.map((entity) => [getAlignableEntityKey(entity.kind, entity.id), entity]));
     return selectedAlignableEntityIds.flatMap((key) => {
@@ -1291,13 +1294,28 @@ export function App() {
   }, [explicitSelectedAlignableEntityIds, markLayoutChanged]);
 
   const removeSelectionFromGroup = useCallback((groupId: string) => {
-    if (activeGroupEditId !== groupId || explicitSelectedAlignableEntityIds.length === 0) {
+    if (activeGroupEditIdRef.current !== groupId) {
+      return;
+    }
+    const group = groupsRef.current.find((item) => item.id === groupId);
+    if (!group) {
+      return;
+    }
+    const explicitSelection = projectExplicitRuntimeSelection(
+      runtimeSelectionRef.current,
+      platformEntitiesRef.current
+    );
+    const removableEntityIds = getSelectedGroupMemberEntityIds(
+      group,
+      explicitSelection.selectedAlignableEntityIds
+    );
+    if (removableEntityIds.length === 0) {
       return;
     }
     const result = removeObjectsFromGroupWithResult(
       groupsRef.current,
       groupId,
-      explicitSelectedAlignableEntityIds
+      removableEntityIds
     );
     if (!result) {
       return;
@@ -1308,7 +1326,7 @@ export function App() {
       setActiveGroupEditId(null);
       setRuntimeSelection(createEmptyRuntimeSelection("command"));
     }
-  }, [activeGroupEditId, explicitSelectedAlignableEntityIds, markLayoutChanged]);
+  }, [markLayoutChanged]);
 
   const renameObjectGroup = useCallback((groupId: string, name: string) => {
     if (!name.trim()) {
@@ -1544,30 +1562,24 @@ export function App() {
   ) => {
     const currentSelection = runtimeSelectionRef.current;
     const currentEntities = platformEntitiesRef.current;
-    const hasSelectedAssembly = currentSelection.ids.some((entityId) => entityId.startsWith("group:"));
     const projection = projectRuntimeSelection(currentSelection, currentEntities);
+    const movement = moveAssemblyMembersByDelta({
+      machines: placedMachinesRef.current,
+      civilReferences: civilReferencesRef.current,
+      memberEntityIds: projection.selectedAlignableEntityIds,
+      deltaXMm,
+      deltaYMm
+    });
+    if (!movement) {
+      return false;
+    }
     const evaluation = executeAtomicSelectionMutation({
       entityIds: currentSelection.ids,
       entities: currentEntities,
       beforeMutation: () => markLayoutChanged(options),
       mutate: () => {
-        if (hasSelectedAssembly) {
-          const movement = moveAssemblyMembersByDelta({
-            machines: placedMachinesRef.current,
-            civilReferences: civilReferencesRef.current,
-            memberEntityIds: projection.selectedAlignableEntityIds,
-            deltaXMm,
-            deltaYMm
-          });
-          if (movement) {
-            setPlacedMachines(movement.machines);
-            setCivilReferences(movement.civilReferences);
-          }
-          return;
-        }
-        setPlacedMachines((current) =>
-          moveObjectsByDelta(current, projection.selectedMachineIds, deltaXMm, deltaYMm)
-        );
+        setPlacedMachines(movement.machines);
+        setCivilReferences(movement.civilReferences);
       }
     });
     return evaluation.allowed;
@@ -2450,6 +2462,7 @@ export function App() {
               selectedGroupId={selectedGroupId}
               activeGroupEditId={activeGroupEditId}
               explicitSelectedEntityCount={explicitSelectedAlignableEntityIds.length}
+              removableSelectedEntityCount={removableActiveGroupEntityIds.length}
               onCreateGroupFromSelection={createGroupFromSelection}
               onAddSelectionToGroup={addSelectionToGroup}
               onRemoveSelectionFromGroup={removeSelectionFromGroup}

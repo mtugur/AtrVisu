@@ -46,6 +46,15 @@ export const moveAssemblyMembersByDelta = ({
   deltaXMm: number;
   deltaYMm: number;
 }): AssemblyMovementResult | null => {
+  if (
+    memberEntityIds.length === 0
+    || !Number.isFinite(deltaXMm)
+    || !Number.isFinite(deltaYMm)
+    || (deltaXMm === 0 && deltaYMm === 0)
+  ) {
+    return null;
+  }
+
   const machineIds = new Set<string>();
   const civilIds = new Set<string>();
 

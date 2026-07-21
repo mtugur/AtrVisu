@@ -47,6 +47,14 @@ const groupedEntities = [
   entity("group:g1", "group", { childrenIds: ["machine:m1", "civil:c1"] })
 ];
 
+const editableMachineGroupEntities = [
+  entity("machine:m1", "machine", { parentId: "group:g1" }),
+  entity("machine:m2", "machine", { parentId: "group:g1" }),
+  entity("machine:other", "machine", { parentId: "group:g2" }),
+  entity("group:g1", "group", { childrenIds: ["machine:m1", "machine:m2"] }),
+  entity("group:g2", "group", { childrenIds: ["machine:other"] })
+];
+
 describe("runtime selection bridge", () => {
   it("creates an empty canonical selection", () => {
     expect(createEmptyRuntimeSelection("scene")).toEqual({ ids: [], source: "scene" });
@@ -253,6 +261,47 @@ describe("runtime selection bridge", () => {
     expect(activeMember.ids).toEqual(["machine:m1"]);
     expect(freeEntity.ids).toEqual(["machine:free"]);
   });
+
+  it("replaces the active group root on the first toggle-selected edit child", () => {
+    const rootSelection = replaceRuntimeSelection(["group:g1"], "command");
+    const firstChild = applyRuntimeSelectionRequest(rootSelection, {
+      targetId: "machine:m1",
+      mode: "toggle",
+      source: "scene"
+    }, editableMachineGroupEntities, { activeGroupEditId: "g1" });
+    const secondChild = applyRuntimeSelectionRequest(firstChild, {
+      targetId: "machine:m2",
+      mode: "toggle",
+      source: "scene"
+    }, editableMachineGroupEntities, { activeGroupEditId: "g1" });
+
+    expect(firstChild.ids).toEqual(["machine:m1"]);
+    expect(secondChild.ids).toEqual(["machine:m1", "machine:m2"]);
+    expect(secondChild.ids).not.toContain("group:g1");
+    expect(projectRuntimeSelection(secondChild, editableMachineGroupEntities)).toMatchObject({
+      selectedMachineIds: ["m1", "m2"],
+      selectedGroupId: null
+    });
+  });
+
+  it("returns to only the active group root when it is selected again", () => {
+    const children = replaceRuntimeSelection(["machine:m1", "machine:m2"], "scene");
+
+    expect(applyRuntimeSelectionRequest(children, {
+      targetId: "group:g1",
+      mode: "toggle",
+      source: "explorer"
+    }, editableMachineGroupEntities, { activeGroupEditId: "g1" }).ids).toEqual(["group:g1"]);
+  });
+
+  it("continues promoting another group's child while one group is being edited", () => {
+    expect(applyRuntimeSelectionRequest(
+      replaceRuntimeSelection(["machine:m1"], "scene"),
+      { targetId: "machine:other", mode: "toggle", source: "scene" },
+      editableMachineGroupEntities,
+      { activeGroupEditId: "g1" }
+    ).ids).toEqual(["machine:m1", "group:g2"]);
+  });
 });
 
 describe("atomic selection movement", () => {
@@ -403,6 +452,50 @@ describe("atomic selection movement", () => {
       "civil:c1"
     ]);
     expect(getAtomicMovementEntityIds(selection, ["machine:m1"], false)).toEqual(["machine:m1"]);
+  });
+
+  it("records one history and dirty transition for an accepted mixed nudge", () => {
+    const recordHistory = vi.fn();
+    const markDirty = vi.fn();
+    const mutate = vi.fn();
+    const result = executeAtomicSelectionMutation({
+      entityIds: ["machine:m1", "civil:c1"],
+      entities,
+      beforeMutation: () => {
+        recordHistory();
+        markDirty();
+      },
+      mutate
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(recordHistory).toHaveBeenCalledTimes(1);
+    expect(markDirty).toHaveBeenCalledTimes(1);
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a locked civil edit child before nudge history or dirty state", () => {
+    const recordHistory = vi.fn();
+    const markDirty = vi.fn();
+    const mutate = vi.fn();
+    const parentId = "group:g1";
+    const result = executeAtomicSelectionMutation({
+      entityIds: ["civil:c1"],
+      entities: [
+        entity("civil:c1", "civil", { parentId, locked: true }),
+        entity(parentId, "group", { childrenIds: ["civil:c1"] })
+      ],
+      beforeMutation: () => {
+        recordHistory();
+        markDirty();
+      },
+      mutate
+    });
+
+    expect(result).toMatchObject({ allowed: false, reason: "locked", blockedEntityId: "civil:c1" });
+    expect(recordHistory).not.toHaveBeenCalled();
+    expect(markDirty).not.toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
   });
 
   it("expands a group root and permits exactly one atomic assembly mutation", () => {

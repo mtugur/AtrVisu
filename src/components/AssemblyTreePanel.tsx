@@ -10,6 +10,7 @@ type AssemblyTreePanelProps = {
   selectedGroupId: string | null;
   activeGroupEditId: string | null;
   explicitSelectedEntityCount: number;
+  removableSelectedEntityCount: number;
   onCreateGroupFromSelection: (name: string) => void;
   onAddSelectionToGroup: (groupId: string) => void;
   onRemoveSelectionFromGroup: (groupId: string) => void;
@@ -28,6 +29,7 @@ export function AssemblyTreePanel({
   selectedGroupId,
   activeGroupEditId,
   explicitSelectedEntityCount,
+  removableSelectedEntityCount,
   onCreateGroupFromSelection,
   onAddSelectionToGroup,
   onRemoveSelectionFromGroup,
@@ -118,7 +120,7 @@ export function AssemblyTreePanel({
                 <button
                   type="button"
                   data-testid={`remove-selection-from-group-${group.id}`}
-                  disabled={!isEditing || selectedCount === 0}
+                  disabled={!isEditing || removableSelectedEntityCount === 0}
                   onClick={() => onRemoveSelectionFromGroup(group.id)}
                 >
                   Remove Selected

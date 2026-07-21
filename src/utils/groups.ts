@@ -245,6 +245,17 @@ export const getGroupEntityKeys = (group: ObjectGroup) =>
     return entityId ? [entityId] : [];
   });
 
+export const getSelectedGroupMemberEntityIds = (
+  group: ObjectGroup,
+  selectedEntityIds: readonly string[]
+) => {
+  const memberIds = new Set(getGroupEntityKeys(group));
+  return selectedEntityIds.flatMap((entityId) => {
+    const canonicalEntityId = getCanonicalGroupMemberEntityId(entityId);
+    return canonicalEntityId && memberIds.has(canonicalEntityId) ? [canonicalEntityId] : [];
+  });
+};
+
 export const getGroupByMemberEntityId = (
   groups: readonly ObjectGroup[],
   entityId: string

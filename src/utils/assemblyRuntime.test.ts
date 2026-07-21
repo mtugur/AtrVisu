@@ -82,6 +82,62 @@ describe("assembly runtime movement", () => {
     expect(sourceCivil[0].positionMm).toMatchObject({ xMm: 1500, yMm: -700 });
   });
 
+  it("moves an ungrouped civil selection in millimeters without changing source state", () => {
+    const sourceCivil = [civil("c1", -200, 450)];
+    const result = moveAssemblyMembersByDelta({
+      machines: [],
+      civilReferences: sourceCivil,
+      memberEntityIds: ["civil:c1"],
+      deltaXMm: 100,
+      deltaYMm: -250
+    });
+
+    expect(result?.civilReferences[0].positionMm).toMatchObject({ xMm: -100, yMm: 200, zMm: 0 });
+    expect(sourceCivil[0].positionMm).toMatchObject({ xMm: -200, yMm: 450, zMm: 0 });
+  });
+
+  it("moves only an explicitly selected civil edit child while siblings stay fixed", () => {
+    const sourceMachines = [machine("m1", 0, 0)];
+    const sourceCivil = [civil("selected", 500, 600), civil("sibling", 900, 1000)];
+    const result = moveAssemblyMembersByDelta({
+      machines: sourceMachines,
+      civilReferences: sourceCivil,
+      memberEntityIds: ["civil:selected"],
+      deltaXMm: -300,
+      deltaYMm: 150
+    });
+
+    expect(result?.machines[0].positionMm).toEqual({ xMm: 0, yMm: 0 });
+    expect(result?.civilReferences.find((item) => item.id === "selected")?.positionMm).toMatchObject({
+      xMm: 200,
+      yMm: 750
+    });
+    expect(result?.civilReferences.find((item) => item.id === "sibling")?.positionMm).toMatchObject({
+      xMm: 900,
+      yMm: 1000
+    });
+  });
+
+  it("rejects an empty or zero-delta movement without allocating replacement state", () => {
+    const machines = [machine("m1", 0, 0)];
+
+    expect(moveAssemblyMembersByDelta({
+      machines,
+      civilReferences: [],
+      memberEntityIds: [],
+      deltaXMm: 100,
+      deltaYMm: 0
+    })).toBeNull();
+    expect(moveAssemblyMembersByDelta({
+      machines,
+      civilReferences: [],
+      memberEntityIds: ["machine:m1"],
+      deltaXMm: 0,
+      deltaYMm: 0
+    })).toBeNull();
+    expect(machines[0].positionMm).toEqual({ xMm: 0, yMm: 0 });
+  });
+
   it("rejects unresolved or non-alignable members without partial source mutation", () => {
     const source = [machine("m1", 0, 0)];
 

@@ -19,6 +19,7 @@ const props = {
   selectedGroupId: "assembly-1",
   activeGroupEditId: null,
   explicitSelectedEntityCount: 2,
+  removableSelectedEntityCount: 0,
   onCreateGroupFromSelection: vi.fn(),
   onAddSelectionToGroup: vi.fn(),
   onRemoveSelectionFromGroup: vi.fn(),
@@ -67,9 +68,21 @@ describe("AssemblyTreePanel", () => {
     const markup = renderToStaticMarkup(createElement(AssemblyTreePanel, {
       ...props,
       explicitSelectedEntityCount: 1,
+      removableSelectedEntityCount: 1,
       activeGroupEditId: "assembly-1"
     }));
 
     expect(markup).not.toMatch(/data-testid="remove-selection-from-group-assembly-1" disabled=""/);
+  });
+
+  it("keeps removal disabled for explicit objects outside the active group", () => {
+    const markup = renderToStaticMarkup(createElement(AssemblyTreePanel, {
+      ...props,
+      explicitSelectedEntityCount: 1,
+      removableSelectedEntityCount: 0,
+      activeGroupEditId: "assembly-1"
+    }));
+
+    expect(markup).toMatch(/data-testid="remove-selection-from-group-assembly-1" disabled=""/);
   });
 });

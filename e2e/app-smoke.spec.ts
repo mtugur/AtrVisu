@@ -463,9 +463,21 @@ test("group edit mode moves one member and restores rigid scene selection on exi
   await expect(canvas).toHaveAttribute("data-active-group-edit-id", groupId ?? "");
   await expect(group).toContainText("Editing members");
   await expect(group.getByRole("button", { name: "Remove Selected" })).toBeDisabled();
+  await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.up("Control");
   await expect(group.getByRole("button", { name: "Remove Selected" })).toBeEnabled();
   await expect(canvas).not.toHaveAttribute("data-selected-assembly-id", /.+/);
+
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
+
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
 
   const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   await dragSceneMachine(page, machineIds[0], 85, 25);

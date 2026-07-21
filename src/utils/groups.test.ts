@@ -5,6 +5,7 @@ import { createDefaultLayer } from "./layers";
 import {
   addObjectsToGroup,
   createObjectGroup,
+  getSelectedGroupMemberEntityIds,
   getVisibleGroupObjectIds,
   normalizeGroups,
   removeObjectsFromGroup,
@@ -147,6 +148,11 @@ describe("object groups", () => {
       removedGroup: false
     });
     expect(firstRemoval?.groups[0].objectIds).toEqual(["machine:b"]);
+    expect(removeObjectsFromGroupWithResult(
+      firstRemoval?.groups ?? [],
+      group.id,
+      ["machine:a"]
+    )).toBeNull();
 
     const finalRemoval = removeObjectsFromGroupWithResult(
       firstRemoval?.groups ?? [],
@@ -158,6 +164,17 @@ describe("object groups", () => {
       removedObjectIds: ["machine:b"],
       removedGroup: true
     });
+  });
+
+  it("intersects explicit selection with only the active group's canonical members", () => {
+    const group = createObjectGroup("Line", ["machine:a", "civil:c1"]);
+
+    expect(getSelectedGroupMemberEntityIds(group, [
+      "group:source",
+      "machine:outside",
+      "civil:c1",
+      "machine:a"
+    ])).toEqual(["civil:c1", "machine:a"]);
   });
 
   it("keeps group membership unchanged for a group-root identity", () => {

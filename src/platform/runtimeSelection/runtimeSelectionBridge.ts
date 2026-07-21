@@ -147,17 +147,32 @@ export const applyRuntimeSelectionRequest = (
     return request.mode === "replace" ? createEmptyRuntimeSelection(request.source) : current;
   }
 
+  const activeGroupEntityId = options.activeGroupEditId
+    ? `group:${options.activeGroupEditId}`
+    : null;
+  const activeGroup = activeGroupEntityId
+    ? getRuntimeEntityMap(entities).get(activeGroupEntityId)
+    : undefined;
+  const activeGroupChildIds = new Set(activeGroup?.type === "group" ? activeGroup.childrenIds : []);
+  if (activeGroupEntityId && targetId === activeGroupEntityId) {
+    return createSelectionStateFromIds([activeGroupEntityId], request.source);
+  }
+
+  const currentIds = activeGroupEntityId && activeGroupChildIds.has(targetId)
+    ? current.ids.filter((id) => id !== activeGroupEntityId)
+    : current.ids;
+
   const targetFamily = parseRuntimeSelectionEntityId(targetId)?.family;
-  const currentContainsAnnotation = current.ids.some(
+  const currentContainsAnnotation = currentIds.some(
     (id) => parseRuntimeSelectionEntityId(id)?.family === "annotation"
   );
   if (request.mode === "replace" || targetFamily === "annotation" || currentContainsAnnotation) {
     return createSelectionStateFromIds([targetId], request.source);
   }
 
-  const nextIds = current.ids.includes(targetId)
-    ? current.ids.filter((id) => id !== targetId)
-    : [...current.ids, targetId];
+  const nextIds = currentIds.includes(targetId)
+    ? currentIds.filter((id) => id !== targetId)
+    : [...currentIds, targetId];
 
   return createSelectionStateFromIds(nextIds, request.source);
 };
