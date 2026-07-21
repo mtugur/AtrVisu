@@ -6,6 +6,7 @@ import { formatLength } from "../utils/units";
 
 type MultiSelectionPropertiesProps = {
   selectedMachines: PlacedMachine[];
+  assemblyName?: string;
   primarySelectedMachine?: PlacedMachine;
   selectionBounds: PlanBounds | null;
   onAlign: (action: AlignmentAction) => void;
@@ -15,12 +16,14 @@ type MultiSelectionPropertiesProps = {
   onDuplicateSelected: () => void;
   onClearSelection: () => void;
   onDeleteSelected: () => void;
+  canArrangeSelection?: boolean;
 };
 
 const formatMm = (value: number) => formatLength(value, "mm", 0);
 
 export function MultiSelectionProperties({
   selectedMachines,
+  assemblyName,
   primarySelectedMachine,
   selectionBounds,
   onAlign,
@@ -29,9 +32,10 @@ export function MultiSelectionProperties({
   canDuplicateSelected,
   onDuplicateSelected,
   onClearSelection,
-  onDeleteSelected
+  onDeleteSelected,
+  canArrangeSelection = true
 }: MultiSelectionPropertiesProps) {
-  const canDistribute = selectedMachines.length >= 3;
+  const canDistribute = canArrangeSelection && selectedMachines.length >= 3;
   const pairMeasurement = selectedMachines.length === 2
     ? calculateReferencePointMeasurementBetweenMachines(selectedMachines[0], selectedMachines[1])
     : null;
@@ -43,6 +47,12 @@ export function MultiSelectionProperties({
         <strong>{selectedMachines.length} objects</strong>
       </header>
       <div className="properties-body">
+        {assemblyName ? (
+          <div className="property-readout" data-testid="selected-assembly-name">
+            <span>Assembly</span>
+            <strong>{assemblyName}</strong>
+          </div>
+        ) : null}
         <div className="property-readout">
           <span>Primary</span>
           <strong>{primarySelectedMachine?.definition.name ?? primarySelectedMachine?.instanceId ?? "None"}</strong>
@@ -93,22 +103,22 @@ export function MultiSelectionProperties({
         <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-alignment-actions">
           <strong>Align Selection</strong>
           <div className="alignment-button-grid">
-            <button type="button" onClick={() => onAlign("left")}>
+            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("left")}>
               Align Left
             </button>
-            <button type="button" onClick={() => onAlign("centerX")}>
+            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerX")}>
               Align Center X
             </button>
-            <button type="button" onClick={() => onAlign("right")}>
+            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("right")}>
               Align Right
             </button>
-            <button type="button" onClick={() => onAlign("front")}>
+            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("front")}>
               Align Top
             </button>
-            <button type="button" onClick={() => onAlign("centerY")}>
+            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerY")}>
               Align Center Y
             </button>
-            <button type="button" onClick={() => onAlign("back")}>
+            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("back")}>
               Align Bottom
             </button>
           </div>

@@ -6,7 +6,7 @@ import type {
 } from "../contracts";
 import { createSelectionStateFromIds } from "../adapters/selectionAdapter";
 
-export type RuntimeSelectionFamily = "machine" | "civil" | "annotation";
+export type RuntimeSelectionFamily = "machine" | "civil" | "annotation" | "group";
 export type RuntimeSelectionMode = "replace" | "toggle" | "clear";
 
 export type RuntimeSelectionRequest = {
@@ -21,6 +21,8 @@ export type RuntimeSelectionProjection = {
   selectedCivilReferenceIds: string[];
   selectedCivilReferenceId: string | null;
   selectedAnnotationId: string | null;
+  selectedGroupIds: string[];
+  selectedGroupId: string | null;
   selectedAlignableEntityIds: string[];
 };
 
@@ -50,12 +52,14 @@ export type AtomicSelectionMutationOptions = {
 export type RuntimeSelectionMovementSnapshot = {
   selection: SelectionState;
   entities: readonly PlatformEntity[];
+  activeGroupEditId?: string | null;
 };
 
 const FAMILY_BY_ENTITY_TYPE: Readonly<Partial<Record<PlatformEntity["type"], RuntimeSelectionFamily>>> = {
   machine: "machine",
   civil: "civil",
-  annotation: "annotation"
+  annotation: "annotation",
+  group: "group"
 };
 
 export const parseRuntimeSelectionEntityId = (
@@ -68,7 +72,7 @@ export const parseRuntimeSelectionEntityId = (
 
   const family = entityId.slice(0, separatorIndex);
   const sourceId = entityId.slice(separatorIndex + 1);
-  if (family !== "machine" && family !== "civil" && family !== "annotation") {
+  if (family !== "machine" && family !== "civil" && family !== "annotation" && family !== "group") {
     return null;
   }
 
@@ -118,14 +122,20 @@ export const reconcileRuntimeSelection = (
 export const applyRuntimeSelectionRequest = (
   selection: SelectionState,
   request: RuntimeSelectionRequest,
-  entities: readonly PlatformEntity[]
+  entities: readonly PlatformEntity[],
+  options: { activeGroupEditId?: string | null } = {}
 ): SelectionState => {
   const current = reconcileRuntimeSelection(selection, entities, request.source);
   if (!request.targetId || request.mode === "clear") {
     return createEmptyRuntimeSelection(request.source);
   }
 
-  const activeTargetIds = getActiveSelectionIds([request.targetId], entities);
+  const resolvedTargetId = resolveRuntimeSelectionTargetId(
+    request.targetId,
+    entities,
+    options.activeGroupEditId
+  );
+  const activeTargetIds = getActiveSelectionIds([resolvedTargetId], entities);
   const targetId = activeTargetIds[0];
   if (!targetId) {
     return request.mode === "replace" ? createEmptyRuntimeSelection(request.source) : current;
@@ -147,14 +157,32 @@ export const applyRuntimeSelectionRequest = (
 };
 
 export const projectRuntimeSelection = (
-  selection: SelectionState
+  selection: SelectionState,
+  entities: readonly PlatformEntity[] = []
 ): RuntimeSelectionProjection => {
   const selectedMachineIds: string[] = [];
   const selectedCivilReferenceIds: string[] = [];
   const selectedAnnotationIds: string[] = [];
+  const selectedGroupIds: string[] = [];
   const selectedAlignableEntityIds: string[] = [];
+  const entityById = getRuntimeEntityMap(entities);
+  const projectedIds: string[] = [];
 
   selection.ids.forEach((entityId) => {
+    const entity = entityById.get(entityId);
+    if (entity?.type === "group") {
+      entity.childrenIds.forEach((childId) => {
+        const child = entityById.get(childId);
+        if (child && isCanonicalEntityMatch(child) && child.visible && child.selectable) {
+          projectedIds.push(childId);
+        }
+      });
+      return;
+    }
+    projectedIds.push(entityId);
+  });
+
+  createSelectionStateFromIds(projectedIds, selection.source).ids.forEach((entityId) => {
     const parsedId = parseRuntimeSelectionEntityId(entityId);
     if (!parsedId) {
       return;
@@ -170,22 +198,52 @@ export const projectRuntimeSelection = (
     }
   });
 
+  selection.ids.forEach((entityId) => {
+    const parsedId = parseRuntimeSelectionEntityId(entityId);
+    if (parsedId?.family === "group") {
+      selectedGroupIds.push(parsedId.sourceId);
+    }
+  });
+
   return {
     selectedMachineIds,
     primarySelectedMachineId: selectedMachineIds[0] ?? null,
     selectedCivilReferenceIds,
     selectedCivilReferenceId: selectedCivilReferenceIds[0] ?? null,
     selectedAnnotationId: selectedAnnotationIds[0] ?? null,
+    selectedGroupIds,
+    selectedGroupId: selectedGroupIds[0] ?? null,
     selectedAlignableEntityIds
   };
+};
+
+export const resolveRuntimeSelectionTargetId = (
+  targetId: EntityId,
+  entities: readonly PlatformEntity[],
+  activeGroupEditId?: string | null
+) => {
+  const target = getRuntimeEntityMap(entities).get(targetId);
+  const parentId = target?.parentId;
+  if (!parentId) {
+    return targetId;
+  }
+  const parsedParent = parseRuntimeSelectionEntityId(parentId);
+  return parsedParent?.family === "group" && parsedParent.sourceId !== activeGroupEditId
+    ? parentId
+    : targetId;
 };
 
 export const getAtomicMovementEntityIds = (
   selection: SelectionState,
   requestedEntityIds: readonly EntityId[],
-  includeCurrentSelection: boolean
+  includeCurrentSelection: boolean,
+  entities: readonly PlatformEntity[] = [],
+  activeGroupEditId?: string | null
 ) => {
-  const requested = createSelectionStateFromIds(requestedEntityIds, selection.source).ids;
+  const requested = createSelectionStateFromIds(
+    requestedEntityIds.map((entityId) => resolveRuntimeSelectionTargetId(entityId, entities, activeGroupEditId)),
+    selection.source
+  ).ids;
   if (
     includeCurrentSelection
     && requested.length > 0
@@ -196,11 +254,37 @@ export const getAtomicMovementEntityIds = (
   return [...requested];
 };
 
+const expandAtomicMovementEntityIds = (
+  entityIds: readonly EntityId[],
+  entities: readonly PlatformEntity[]
+) => {
+  const entityById = getRuntimeEntityMap(entities);
+  const expandedIds: EntityId[] = [];
+  const append = (entityId: EntityId) => {
+    if (!expandedIds.includes(entityId)) {
+      expandedIds.push(entityId);
+    }
+  };
+
+  createSelectionStateFromIds(entityIds, "command").ids.forEach((entityId) => {
+    const entity = entityById.get(entityId);
+    if (entity?.parentId) {
+      append(entity.parentId);
+    }
+    append(entityId);
+    if (entity?.type === "group") {
+      entity.childrenIds.forEach(append);
+    }
+  });
+
+  return expandedIds;
+};
+
 export const evaluateAtomicMovement = (
   entityIds: readonly EntityId[],
   entities: readonly PlatformEntity[]
 ): AtomicMovementEvaluation => {
-  const normalizedIds = createSelectionStateFromIds(entityIds, "command").ids;
+  const normalizedIds = expandAtomicMovementEntityIds(entityIds, entities);
   if (normalizedIds.length === 0) {
     return { allowed: false, entityIds: normalizedIds, reason: "empty-selection" };
   }
@@ -228,9 +312,9 @@ export const evaluateAtomicMovement = (
 export const createRuntimeSelectionMovementPreflight = (
   getSnapshot: () => RuntimeSelectionMovementSnapshot
 ) => (entityId: EntityId, includeCurrentSelection: boolean) => {
-  const { selection, entities } = getSnapshot();
+  const { selection, entities, activeGroupEditId } = getSnapshot();
   return evaluateAtomicMovement(
-    getAtomicMovementEntityIds(selection, [entityId], includeCurrentSelection),
+    getAtomicMovementEntityIds(selection, [entityId], includeCurrentSelection, entities, activeGroupEditId),
     entities
   ).allowed;
 };

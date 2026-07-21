@@ -159,6 +159,29 @@ describe("MultiSelectionProperties", () => {
     expect(markup).toContain("Delete Selected Objects");
   });
 
+  it("identifies a projected rigid assembly and disables member arrangement", () => {
+    const markup = renderToStaticMarkup(
+      createElement(MultiSelectionProperties, {
+        selectedMachines: [machine("a", "Packer"), machine("b", "Conveyor")],
+        assemblyName: "Packaging module",
+        primarySelectedMachine: undefined,
+        selectionBounds: null,
+        onAlign: () => undefined,
+        onDistribute: () => undefined,
+        onEqualGap: () => undefined,
+        canDuplicateSelected: false,
+        onDuplicateSelected: () => undefined,
+        onClearSelection: () => undefined,
+        onDeleteSelected: () => undefined,
+        canArrangeSelection: false
+      })
+    );
+
+    expect(markup).toContain('data-testid="selected-assembly-name"');
+    expect(markup).toContain("Packaging module");
+    expect(markup.match(/disabled=""/g)?.length).toBe(11);
+  });
+
   it("renders pair reference point measurement for exactly two selected machines", () => {
     const markup = renderPanel([
       machine("a", "Packer", { xMm: -1000, yMm: 2000 }),

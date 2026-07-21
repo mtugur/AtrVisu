@@ -12,6 +12,21 @@ const uniqueStrings = (values: unknown): string[] =>
     ? [...new Set(values.filter((value): value is string => typeof value === "string" && Boolean(value.trim())).map((value) => value.trim()))]
     : [];
 
+export const getCanonicalGroupMemberEntityId = (objectId: string) => {
+  const trimmed = objectId.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.startsWith("civil:")) {
+    return trimmed.length > "civil:".length ? trimmed : null;
+  }
+  if (trimmed.startsWith("group:") || trimmed.startsWith("annotation:")) {
+    return null;
+  }
+  const machineId = trimmed.replace(/^(object|machine):/, "");
+  return machineId ? getAlignableEntityKey("machine", machineId) : null;
+};
+
 const normalizeGroup = (value: unknown, index: number): ObjectGroup | null => {
   if (!value || typeof value !== "object") {
     return null;
@@ -40,12 +55,10 @@ export const createGroupId = () => `group-${Date.now()}-${Math.round(Math.random
 
 export const normalizeGroups = (
   groups: unknown,
-  machines: PlacedMachine[] = [],
+  _machines: PlacedMachine[] = [],
   layers: LayoutLayer[] = [],
-  civilReferences: CivilReferenceItem[] = []
+  _civilReferences: CivilReferenceItem[] = []
 ): ObjectGroup[] => {
-  const machineIds = new Set(machines.map((machine) => machine.instanceId));
-  const civilIds = new Set(civilReferences.map((item) => item.id));
   const claimedObjectIds = new Set<string>();
   const normalized = Array.isArray(groups)
     ? groups.flatMap((group, index) => {
@@ -59,15 +72,16 @@ export const normalizeGroups = (
     if (byId.has(group.id)) {
       return;
     }
-    const objectIds = group.objectIds.filter((objectId) => {
-      const machineKey = objectId.replace(/^(object|machine):/, "");
-      const isMachine = machineIds.has(objectId) || machineIds.has(machineKey);
-      const isCivil = objectId.startsWith("civil:") && civilIds.has(objectId.slice("civil:".length));
-      if (((machineIds.size > 0 || civilIds.size > 0) && !isMachine && !isCivil) || claimedObjectIds.has(objectId)) {
-        return false;
+    const objectIds = group.objectIds.flatMap((objectId) => {
+      const entityId = getCanonicalGroupMemberEntityId(objectId);
+      if (!entityId) {
+        return [];
       }
-      claimedObjectIds.add(objectId);
-      return true;
+      if (claimedObjectIds.has(entityId)) {
+        return [];
+      }
+      claimedObjectIds.add(entityId);
+      return [entityId];
     });
     byId.set(group.id, {
       ...group,
@@ -86,7 +100,10 @@ export const createObjectGroup = (name: string, objectIds: string[], timestamp =
   return {
     id: createGroupId(),
     name: trimmedName,
-    objectIds: [...new Set(objectIds)],
+    objectIds: [...new Set(objectIds.flatMap((objectId) => {
+      const entityId = getCanonicalGroupMemberEntityId(objectId);
+      return entityId ? [entityId] : [];
+    }))],
     annotationIds: [],
     collapsed: false,
     createdAt: timestamp,
@@ -95,28 +112,66 @@ export const createObjectGroup = (name: string, objectIds: string[], timestamp =
 };
 
 export const removeObjectsFromGroups = (groups: ObjectGroup[], objectIds: Iterable<string>) => {
-  const ids = new Set(objectIds);
+  const ids = new Set([...objectIds].flatMap((objectId) => {
+    const entityId = getCanonicalGroupMemberEntityId(objectId);
+    return entityId ? [entityId] : [];
+  }));
   return groups.map((group) => ({
     ...group,
-    objectIds: group.objectIds.filter((objectId) => !ids.has(objectId)),
-    updatedAt: group.objectIds.some((objectId) => ids.has(objectId)) ? nowIso() : group.updatedAt
+    objectIds: group.objectIds.filter((objectId) => {
+      const entityId = getCanonicalGroupMemberEntityId(objectId);
+      return !entityId || !ids.has(entityId);
+    }),
+    updatedAt: group.objectIds.some((objectId) => {
+      const entityId = getCanonicalGroupMemberEntityId(objectId);
+      return Boolean(entityId && ids.has(entityId));
+    }) ? nowIso() : group.updatedAt
   }));
 };
 
 export const addObjectsToGroup = (groups: ObjectGroup[], groupId: string, objectIds: string[]) => {
-  const ids = [...new Set(objectIds)];
+  const ids = [...new Set(objectIds.flatMap((objectId) => {
+    const entityId = getCanonicalGroupMemberEntityId(objectId);
+    return entityId ? [entityId] : [];
+  }))];
   return groups.map((group) =>
     group.id === groupId
-      ? { ...group, objectIds: [...new Set([...group.objectIds, ...ids])], updatedAt: nowIso() }
-      : { ...group, objectIds: group.objectIds.filter((objectId) => !ids.includes(objectId)) }
+      ? {
+          ...group,
+          objectIds: [...new Set([
+            ...group.objectIds.flatMap((objectId) => {
+              const entityId = getCanonicalGroupMemberEntityId(objectId);
+              return entityId ? [entityId] : [];
+            }),
+            ...ids
+          ])],
+          updatedAt: nowIso()
+        }
+      : {
+          ...group,
+          objectIds: group.objectIds.filter((objectId) => {
+            const entityId = getCanonicalGroupMemberEntityId(objectId);
+            return !entityId || !ids.includes(entityId);
+          })
+        }
   );
 };
 
 export const removeObjectsFromGroup = (groups: ObjectGroup[], groupId: string, objectIds: string[]) => {
-  const ids = new Set(objectIds);
+  const ids = new Set(objectIds.flatMap((objectId) => {
+    const entityId = getCanonicalGroupMemberEntityId(objectId);
+    return entityId ? [entityId] : [];
+  }));
   return groups.map((group) =>
     group.id === groupId
-      ? { ...group, objectIds: group.objectIds.filter((objectId) => !ids.has(objectId)), updatedAt: nowIso() }
+      ? {
+          ...group,
+          objectIds: group.objectIds.filter((objectId) => {
+            const entityId = getCanonicalGroupMemberEntityId(objectId);
+            return !entityId || !ids.has(entityId);
+          }),
+          updatedAt: nowIso()
+        }
       : group
   );
 };
@@ -141,10 +196,27 @@ export const getVisibleGroupObjectIds = (
 };
 
 export const getGroupEntityKeys = (group: ObjectGroup) =>
-  group.objectIds.map((objectId) => objectId.startsWith("civil:")
-    ? objectId
-    : objectId.startsWith("object:")
-      ? getAlignableEntityKey("machine", objectId.slice("object:".length))
-      : objectId.startsWith("machine:")
-        ? objectId
-        : getAlignableEntityKey("machine", objectId));
+  group.objectIds.flatMap((objectId) => {
+    const entityId = getCanonicalGroupMemberEntityId(objectId);
+    return entityId ? [entityId] : [];
+  });
+
+export const getGroupByMemberEntityId = (
+  groups: readonly ObjectGroup[],
+  entityId: string
+) => {
+  const canonicalEntityId = getCanonicalGroupMemberEntityId(entityId);
+  return canonicalEntityId
+    ? groups.find((group) => getGroupEntityKeys(group).includes(canonicalEntityId))
+    : undefined;
+};
+
+export const ungroupObjectGroup = (groups: readonly ObjectGroup[], groupId: string) => {
+  const group = groups.find((item) => item.id === groupId);
+  return group
+    ? {
+        groups: groups.filter((item) => item.id !== groupId),
+        memberEntityIds: getGroupEntityKeys(group)
+      }
+    : null;
+};

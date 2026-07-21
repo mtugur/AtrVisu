@@ -54,6 +54,7 @@ import {
   calculateMachineDragPositionUpdates,
   createCivilDragState,
   createMachineDragState,
+  getMachineStartPositionMm,
   type CivilDragState,
   type MachineDragState
 } from "./babylonScene/dragPlacement";
@@ -88,6 +89,9 @@ type BabylonSceneProps = {
   lockedMachineIds?: string[];
   lockedCivilReferenceIds?: string[];
   lockedAnnotationIds?: string[];
+  activeGroupEditMachineIds?: string[];
+  selectedAssemblyId?: string | null;
+  activeGroupEditId?: string | null;
   onSelectMachine: (instanceId: string | null, mode?: "replace" | "toggle" | "clear") => void;
   onSelectCivilReference: (id: string | null, mode?: "replace" | "toggle" | "clear") => void;
   onSelectAnnotation: (annotationId: string | null) => void;
@@ -943,6 +947,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   lockedMachineIds = [],
   lockedCivilReferenceIds = [],
   lockedAnnotationIds = [],
+  activeGroupEditMachineIds = [],
+  selectedAssemblyId = null,
+  activeGroupEditId = null,
   onSelectMachine,
   onSelectCivilReference,
   onSelectAnnotation,
@@ -975,6 +982,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const lockedMachineIdsRef = useRef<string[]>(lockedMachineIds);
   const lockedCivilReferenceIdsRef = useRef<string[]>(lockedCivilReferenceIds);
   const lockedAnnotationIdsRef = useRef<string[]>(lockedAnnotationIds);
+  const activeGroupEditMachineIdsRef = useRef<string[]>(activeGroupEditMachineIds);
   const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
@@ -1006,6 +1014,27 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     annotationsRef.current = annotations;
   }, [annotations]);
+
+  useEffect(() => {
+    activeGroupEditMachineIdsRef.current = activeGroupEditMachineIds;
+  }, [activeGroupEditMachineIds]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    if (selectedAssemblyId) {
+      canvas.dataset.selectedAssemblyId = selectedAssemblyId;
+    } else {
+      delete canvas.dataset.selectedAssemblyId;
+    }
+    if (activeGroupEditId) {
+      canvas.dataset.activeGroupEditId = activeGroupEditId;
+    } else {
+      delete canvas.dataset.activeGroupEditId;
+    }
+  }, [activeGroupEditId, selectedAssemblyId]);
 
   useEffect(() => {
     selectedMachineIdsRef.current = selectedMachineIds;
@@ -1444,20 +1473,29 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           dragHistoryRecordedRef.current = false;
           panStateRef.current = null;
           const machineEntityId = createLegacyPlatformEntityId("machine", instanceId);
-          if (
+          const dragPreflightAllowed = Boolean(
             machine
             && floorPoint
             && !lockedMachineIdsRef.current.includes(instanceId)
             && canBeginObjectDrag(machineEntityId, !isToggleSelection)
+          );
+          canvas.dataset.lastMachineDragPreflight = String(dragPreflightAllowed);
+          if (
+            dragPreflightAllowed
+            && machine
+            && floorPoint
           ) {
             const nextDragState = createMachineDragState({
               targetInstanceId: instanceId,
               floorPoint,
-              selectedInstanceIds: selectedMachineIdsRef.current,
+              selectedInstanceIds: activeGroupEditMachineIdsRef.current.includes(instanceId)
+                ? [instanceId]
+                : selectedMachineIdsRef.current,
               lockedInstanceIds: lockedMachineIdsRef.current,
               machines: placedMachinesRef.current,
               isToggleSelection
             });
+            canvas.dataset.lastMachineDragMemberCount = String(nextDragState?.instanceIds.length ?? 0);
             if (!nextDragState) {
               onSelectAnnotation(null);
               onSelectMachine(instanceId, isToggleSelection ? "toggle" : "replace");
@@ -1554,10 +1592,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
+        const machinePositionUpdates = calculateMachineDragPositionUpdates(dragState, floorPoint);
         const applied = onSetMachinePositions(
-          calculateMachineDragPositionUpdates(dragState, floorPoint),
+          machinePositionUpdates,
           { recordHistory: !dragHistoryRecordedRef.current }
         );
+        canvas.dataset.lastMachineDragApplied = String(applied);
         dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
         if (!applied) {
           dragStateRef.current = null;
@@ -1618,7 +1658,32 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           node.plane.scaling.setAll(readableScale);
           node.hitTarget.scaling.setAll(readableScale);
         });
+        const renderWidth = engine.getRenderWidth();
+        const renderHeight = engine.getRenderHeight();
+        const viewport = activeCamera.viewport.toGlobal(renderWidth, renderHeight);
+        const screenPoints = Object.fromEntries([...machineNodesRef.current.entries()].slice(0, 16).map(([instanceId, node]) => {
+          const point = Vector3.Project(
+            node.box.getAbsolutePosition(),
+            Matrix.Identity(),
+            scene.getTransformMatrix(),
+            viewport
+          );
+          return [instanceId, {
+            x: point.x * canvas.clientWidth / renderWidth,
+            y: point.y * canvas.clientHeight / renderHeight
+          }];
+        }));
+        canvas.dataset.machineScreenPoints = JSON.stringify(screenPoints);
       }
+      canvas.dataset.machinePlanPositions = JSON.stringify(Object.fromEntries(
+        placedMachinesRef.current.slice(0, 16).map((machine) => [machine.instanceId, getMachineStartPositionMm(machine)])
+      ));
+      canvas.dataset.civilPlanPositions = JSON.stringify(Object.fromEntries(
+        civilReferencesRef.current.slice(0, 16).map((item) => [item.id, {
+          xMm: item.positionMm.xMm,
+          yMm: item.positionMm.yMm
+        }])
+      ));
       scene.render();
       if (onPerformanceMetricsChangeRef.current) {
         onPerformanceMetricsChangeRef.current(collectScenePerformanceMetrics(scene, engine));

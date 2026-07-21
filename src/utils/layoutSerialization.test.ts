@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
+import { createLegacyEntitySnapshot } from "../platform/adapters";
+import { evaluateAtomicMovement } from "../platform/runtimeSelection";
 import { getMachineRenderCenterMm } from "./coordinateReference";
 import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
 
@@ -142,7 +144,7 @@ describe("layout serialization", () => {
       layerId: "default"
     });
     expect(layout.layers?.map((layer) => layer.id)).toEqual(["default", "process"]);
-    expect(layout.groups?.[0]).toMatchObject({ id: "group-1", name: "Packaging Line", objectIds: ["machine-1"] });
+    expect(layout.groups?.[0]).toMatchObject({ id: "group-1", name: "Packaging Line", objectIds: ["machine:machine-1"] });
     expect(layout.civilReferences?.[0]).toMatchObject({
       id: "civil-column-1",
       layerId: "process",
@@ -169,13 +171,29 @@ describe("layout serialization", () => {
         selectedObjectIds: ["machine-1"]
       }
     });
-    expect(groupsFromLayout(layout, placedMachinesFromLayout(layout), layersFromLayout(layout))[0]).toMatchObject({
+    const importedMachines = placedMachinesFromLayout(layout);
+    const importedLayers = layersFromLayout(layout);
+    const importedCivilReferences = civilReferencesFromLayout(layout, importedLayers);
+    const importedGroups = groupsFromLayout(layout, importedMachines, importedLayers);
+    expect(importedGroups[0]).toMatchObject({
       name: "Packaging Line",
-      objectIds: ["machine-1"]
+      objectIds: ["machine:machine-1"]
     });
-    expect(civilReferencesFromLayout(layout, layersFromLayout(layout))[0]).toMatchObject({
+    expect(importedCivilReferences[0]).toMatchObject({
       name: "Grid Column A1",
       sizeMm: { widthMm: 600, depthMm: 600, heightMm: 3200 }
+    });
+    const importedEntities = createLegacyEntitySnapshot({
+      machines: importedMachines,
+      civilReferences: importedCivilReferences,
+      annotations: annotationsFromLayout(layout),
+      groups: importedGroups,
+      layers: importedLayers
+    });
+    expect(importedEntities.find((entity) => entity.id === "machine:machine-1")?.parentId).toBe("group:group-1");
+    expect(evaluateAtomicMovement(["group:group-1"], importedEntities)).toMatchObject({
+      allowed: true,
+      entityIds: ["group:group-1", "machine:machine-1"]
     });
   });
 

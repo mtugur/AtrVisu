@@ -31,6 +31,91 @@ const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
 };
 
+type PlanPosition = { xMm: number; yMm: number };
+type ScreenPoint = { x: number; y: number };
+
+const readCanvasRecord = async <T>(page: Page, attribute: string) => {
+  const raw = await page.getByLabel("AtrVisu 3D workspace").getAttribute(attribute);
+  return JSON.parse(raw ?? "{}") as Record<string, T>;
+};
+
+const waitForMachineDiagnostics = async (page: Page, count: number) => {
+  await expect.poll(async () => Object.keys(
+    await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  ).length).toBeGreaterThanOrEqual(count);
+};
+
+const getMachineIds = async (page: Page) => Object.keys(
+  await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+);
+
+const getMachineScreenPoint = async (page: Page, machineId: string) => {
+  await expect.poll(async () => Boolean(
+    (await readCanvasRecord<ScreenPoint>(page, "data-machine-screen-points"))[machineId]
+  )).toBe(true);
+  return (await readCanvasRecord<ScreenPoint>(page, "data-machine-screen-points"))[machineId];
+};
+
+const clickSceneMachine = async (page: Page, machineId: string) => {
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const box = await canvas.boundingBox();
+  const point = await getMachineScreenPoint(page, machineId);
+  if (!box || !point) {
+    throw new Error(`Scene point is unavailable for machine "${machineId}".`);
+  }
+  await page.mouse.click(box.x + point.x, box.y + point.y);
+};
+
+const dragSceneMachine = async (page: Page, machineId: string, deltaX: number, deltaY: number) => {
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const box = await canvas.boundingBox();
+  const point = await getMachineScreenPoint(page, machineId);
+  if (!box || !point) {
+    throw new Error(`Scene point is unavailable for machine "${machineId}".`);
+  }
+  const startX = box.x + point.x;
+  const startY = box.y + point.y;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 8 });
+  await page.mouse.up();
+};
+
+const createTwoMachineAssembly = async (
+  page: Page,
+  name: string,
+  afterFirstMachineAdded?: () => Promise<void>
+) => {
+  const machineCard = page.locator(".machine-card").first();
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 1);
+  await afterFirstMachineAdded?.();
+
+  const assemblySection = page.getByRole("button", { name: /Assembly Tree/i });
+  if ((await assemblySection.getAttribute("aria-expanded")) !== "true") {
+    await assemblySection.click();
+  }
+  page.once("dialog", async (dialog) => dialog.accept(name));
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: name });
+  await expect(group).toContainText("1 item");
+
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 2);
+  await group.getByRole("button", { name: "Add Selected" }).click();
+  await expect(group).toContainText("2 items");
+  await group.locator(".assembly-group-button").click();
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", /.+/);
+
+  return {
+    canvas,
+    group,
+    groupId: await canvas.getAttribute("data-selected-assembly-id"),
+    machineIds: await getMachineIds(page)
+  };
+};
+
 test("app loads and core panels have no red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -92,7 +177,7 @@ test("selected object and numeric rotation smoke has no red console errors", asy
   expect(errors).toEqual([]);
 });
 
-test("multi-selection alignment panel actions render without red console errors", async ({ page }) => {
+test("rigid assembly projection renders without exposing member arrange actions", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
@@ -117,7 +202,7 @@ test("multi-selection alignment panel actions render without red console errors"
   await expect(group).toContainText("2 items");
   await group.locator(".assembly-group-button").click();
 
-  const multiSelectionSection = page.getByRole("button", { name: /Multi-Selection/i });
+  const multiSelectionSection = page.getByRole("button", { name: /Assembly Properties/i });
   await expect(multiSelectionSection).toBeVisible();
   if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
     await multiSelectionSection.click();
@@ -129,7 +214,7 @@ test("multi-selection alignment panel actions render without red console errors"
   await expect(page.getByTestId("pair-measurement-readout")).toContainText("Reference Point Distance");
 
   for (const label of ["Align Left", "Align Center X", "Align Right", "Align Top", "Align Center Y", "Align Bottom"]) {
-    await expect(multiSelectionPanel.getByRole("button", { name: label })).toBeVisible();
+    await expect(multiSelectionPanel.getByRole("button", { name: label })).toBeDisabled();
   }
 
   const distributeHorizontal = multiSelectionPanel.getByRole("button", { name: "Distribute Horizontal Center" });
@@ -147,24 +232,10 @@ test("multi-selection alignment panel actions render without red console errors"
 
   const duplicateSelected = multiSelectionPanel.getByRole("button", { name: "Duplicate Selected" });
   await expect(duplicateSelected).toBeVisible();
-  await expect(duplicateSelected).toBeEnabled();
-  await page.keyboard.press("Control+d");
+  await expect(duplicateSelected).toBeDisabled();
   await expect(multiSelectionPanel).toContainText("2 objects");
   await expect(page.getByTestId("pair-measurement-readout")).toBeVisible();
-
-  await firstMachineCard.click();
-  await group.getByRole("button", { name: "Add Selected" }).click();
-  await expect(group).toContainText("3 items");
-  await group.locator(".assembly-group-button").click();
-  if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
-    await multiSelectionSection.click();
-  }
-  await expect(multiSelectionPanel).toContainText("3 objects");
-  await expect(page.getByTestId("pair-measurement-readout")).toHaveCount(0);
-  await expect(distributeHorizontal).toBeEnabled();
-  await expect(distributeVertical).toBeEnabled();
-  await expect(equalGapX).toBeEnabled();
-  await expect(equalGapY).toBeEnabled();
+  await expect(page.getByTestId("selected-assembly-name")).toContainText("Alignment Smoke Group");
 
   expect(errors).toEqual([]);
 });
@@ -266,6 +337,121 @@ test("scene lifecycle stays stable through selection and accepted pointer drag",
     "data-scene-lifecycle-generation",
     initialLifecycleGeneration ?? ""
   );
+  expect(errors).toEqual([]);
+});
+
+test("scene member click selects and rigidly moves the complete assembly", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const { canvas, group, groupId, machineIds } = await createTwoMachineAssembly(page, "Rigid Move Assembly");
+  expect(groupId).not.toBeNull();
+  expect(machineIds).toHaveLength(2);
+
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  await page.keyboard.press("Escape");
+  await clickSceneMachine(page, machineIds[0]);
+
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+  await expect(group).toHaveClass(/is-selected/);
+  const propertiesSection = page.getByRole("button", { name: /Assembly Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  await expect(page.getByTestId("selected-assembly-name")).toContainText("Rigid Move Assembly");
+  await expect(page.getByTestId("multi-selection-panel")).toContainText("2 objects");
+
+  await dragSceneMachine(page, machineIds[0], 90, 35);
+  await expect(canvas).toHaveAttribute("data-last-machine-drag-preflight", "true");
+  await expect(canvas).toHaveAttribute("data-last-machine-drag-member-count", "2");
+  await expect(canvas).toHaveAttribute("data-last-machine-drag-applied", "true");
+  await expect.poll(async () => {
+    const current = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+    return current[machineIds[0]]?.xMm !== before[machineIds[0]]?.xMm
+      || current[machineIds[0]]?.yMm !== before[machineIds[0]]?.yMm;
+  }).toBe(true);
+  const moved = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const firstDelta = {
+    xMm: moved[machineIds[0]].xMm - before[machineIds[0]].xMm,
+    yMm: moved[machineIds[0]].yMm - before[machineIds[0]].yMm
+  };
+  const secondDelta = {
+    xMm: moved[machineIds[1]].xMm - before[machineIds[1]].xMm,
+    yMm: moved[machineIds[1]].yMm - before[machineIds[1]].yMm
+  };
+  expect(secondDelta).toEqual(firstDelta);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
+  await page.keyboard.press("Control+y");
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(moved);
+  expect(errors).toEqual([]);
+});
+
+test("locked assembly member blocks pointer drag and keyboard nudge atomically", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const layersSection = page.getByRole("button", { name: /Layers/i });
+  if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
+    await layersSection.click();
+  }
+  page.once("dialog", async (dialog) => dialog.accept("Rigid Lock Layer"));
+  await page.getByTestId("add-layer").click();
+  const lockedLayer = page.locator(".layer-row").filter({ hasText: "Rigid Lock Layer" });
+  const { canvas, groupId, machineIds } = await createTwoMachineAssembly(
+    page,
+    "Locked Rigid Assembly",
+    async () => {
+      const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+      if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+        await propertiesSection.click();
+      }
+      const machineProperties = page.getByLabel("Selected machine properties");
+      await expect(machineProperties).toBeVisible();
+      await machineProperties.getByLabel("Layer").selectOption({ label: "Rigid Lock Layer" });
+    }
+  );
+  expect(groupId).not.toBeNull();
+  await lockedLayer.getByRole("button", { name: "Lock", exact: true }).click();
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+
+  const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  await clickSceneMachine(page, machineIds[1]);
+  await dragSceneMachine(page, machineIds[1], 80, 30);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("group edit mode moves one member and restores rigid scene selection on exit", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const { canvas, group, groupId, machineIds } = await createTwoMachineAssembly(page, "Editable Rigid Assembly");
+  expect(groupId).not.toBeNull();
+
+  await group.getByRole("button", { name: /Edit Group Editable Rigid Assembly/i }).click();
+  await expect(canvas).toHaveAttribute("data-active-group-edit-id", groupId ?? "");
+  await expect(group).toContainText("Editing members");
+  await clickSceneMachine(page, machineIds[0]);
+  await expect(canvas).not.toHaveAttribute("data-selected-assembly-id", /.+/);
+
+  const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  await dragSceneMachine(page, machineIds[0], 85, 25);
+  await expect.poll(async () => {
+    const current = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+    return current[machineIds[0]]?.xMm !== before[machineIds[0]]?.xMm;
+  }).toBe(true);
+  const moved = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  expect(moved[machineIds[1]]).toEqual(before[machineIds[1]]);
+
+  await group.getByRole("button", { name: /Exit Group Edit Editable Rigid Assembly/i }).click();
+  await expect(canvas).not.toHaveAttribute("data-active-group-edit-id", /.+/);
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+  await clickSceneMachine(page, machineIds[1]);
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+  await expect(group).toHaveClass(/is-selected/);
   expect(errors).toEqual([]);
 });
 

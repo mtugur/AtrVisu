@@ -8,12 +8,15 @@ type AssemblyTreePanelProps = {
   placedMachines: PlacedMachine[];
   civilReferences: CivilReferenceItem[];
   selectedGroupId: string | null;
+  activeGroupEditId: string | null;
   selectedEntityCount: number;
   onCreateGroupFromSelection: (name: string) => void;
   onAddSelectionToGroup: (groupId: string) => void;
   onRemoveSelectionFromGroup: (groupId: string) => void;
   onRenameGroup: (groupId: string, name: string) => void;
-  onDeleteGroup: (groupId: string) => void;
+  onEnterGroupEdit: (groupId: string) => void;
+  onExitGroupEdit: (groupId: string) => void;
+  onUngroup: (groupId: string) => void;
   onSelectGroup: (groupId: string) => void;
   onToggleGroupCollapsed: (groupId: string) => void;
 };
@@ -23,12 +26,15 @@ export function AssemblyTreePanel({
   placedMachines,
   civilReferences,
   selectedGroupId,
+  activeGroupEditId,
   selectedEntityCount,
   onCreateGroupFromSelection,
   onAddSelectionToGroup,
   onRemoveSelectionFromGroup,
   onRenameGroup,
-  onDeleteGroup,
+  onEnterGroupEdit,
+  onExitGroupEdit,
+  onUngroup,
   onSelectGroup,
   onToggleGroupCollapsed
 }: AssemblyTreePanelProps) {
@@ -53,10 +59,11 @@ export function AssemblyTreePanel({
         Create Group from Selection
       </button>
       <p className="collision-note">
-        Groups organize objects. Layers still control visibility and locking.
+        Groups are rigid assemblies. Use Edit Group to adjust an individual member.
       </p>
       <div className="assembly-list" aria-label="Object groups">
         {groups.length > 0 ? groups.map((group) => {
+          const isEditing = activeGroupEditId === group.id;
           const members = group.objectIds.flatMap((objectId) => {
             if (objectId.startsWith("civil:")) {
               const civil = civilById.get(objectId.slice("civil:".length));
@@ -68,8 +75,9 @@ export function AssemblyTreePanel({
           });
           return (
             <article
-              className={`assembly-group-row${selectedGroupId === group.id ? " is-selected" : ""}`}
+              className={`assembly-group-row${selectedGroupId === group.id ? " is-selected" : ""}${isEditing ? " is-editing" : ""}`}
               key={group.id}
+              data-testid={`assembly-group-row-${group.id}`}
             >
               <div className="assembly-group-header">
                 <button
@@ -88,6 +96,7 @@ export function AssemblyTreePanel({
                 >
                   <strong>{group.name}</strong>
                   <small>{members.length} item{members.length === 1 ? "" : "s"}</small>
+                  {isEditing ? <small data-testid={`assembly-group-editing-${group.id}`}>Editing members</small> : null}
                 </button>
               </div>
               {!group.collapsed ? (
@@ -101,9 +110,18 @@ export function AssemblyTreePanel({
                 <button type="button" disabled={selectedCount === 0} onClick={() => onAddSelectionToGroup(group.id)}>
                   Add Selected
                 </button>
-                <button type="button" disabled={selectedCount === 0} onClick={() => onRemoveSelectionFromGroup(group.id)}>
+                <button type="button" disabled={!isEditing || selectedCount === 0} onClick={() => onRemoveSelectionFromGroup(group.id)}>
                   Remove Selected
                 </button>
+                {isEditing ? (
+                  <button type="button" aria-label={`Exit Group Edit ${group.name}`} onClick={() => onExitGroupEdit(group.id)}>
+                    Exit Group Edit
+                  </button>
+                ) : (
+                  <button type="button" aria-label={`Edit Group ${group.name}`} onClick={() => onEnterGroupEdit(group.id)}>
+                    Edit Group
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -115,8 +133,8 @@ export function AssemblyTreePanel({
                 >
                   Rename
                 </button>
-                <button className="danger-action" type="button" onClick={() => onDeleteGroup(group.id)}>
-                  Delete
+                <button className="danger-action" type="button" aria-label={`Ungroup ${group.name}`} onClick={() => onUngroup(group.id)}>
+                  Ungroup
                 </button>
               </div>
             </article>

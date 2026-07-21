@@ -99,6 +99,12 @@ import {
   type CoreEditorCommandId,
   type CoreEditorRuntimeCommandBindings
 } from "./platform/runtimeCommands/coreEditorRuntimeCommands";
+import {
+  ASSEMBLY_COMMAND_IDS,
+  createAssemblyRuntimeCommandBridge,
+  type AssemblyCommandId,
+  type AssemblyRuntimeCommandBindings
+} from "./platform/runtimeCommands/assemblyRuntimeCommands";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
 import {
   applyRuntimeSelectionRequest,
@@ -108,6 +114,7 @@ import {
   evaluateAtomicMovement,
   executeAtomicSelectionMutation,
   getAtomicMovementEntityIds,
+  parseRuntimeSelectionEntityId,
   projectRuntimeSelection,
   reconcileRuntimeSelection,
   replaceRuntimeSelection
@@ -115,12 +122,16 @@ import {
 import {
   addObjectsToGroup,
   createObjectGroup,
-  getGroupEntityKeys,
-  getVisibleGroupObjectIds,
   normalizeGroups,
   removeObjectsFromGroup,
-  removeObjectsFromGroups
+  removeObjectsFromGroups,
+  ungroupObjectGroup
 } from "./utils/groups";
+import {
+  getCivilPositionUpdateDelta,
+  getMachinePositionUpdateDelta,
+  moveAssemblyMembersByDelta
+} from "./utils/assemblyRuntime";
 import {
   createDefaultLayer,
   createLayer,
@@ -173,7 +184,7 @@ export function App() {
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
   const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
   const [groups, setGroups] = useState<ObjectGroup[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [activeGroupEditId, setActiveGroupEditId] = useState<string | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState("default");
   const [viewpoints, setViewpoints] = useState<LayoutViewpoint[]>([]);
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
@@ -233,6 +244,7 @@ export function App() {
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const layersRef = useRef<LayoutLayer[]>(layers);
   const groupsRef = useRef<ObjectGroup[]>(groups);
+  const activeGroupEditIdRef = useRef<string | null>(activeGroupEditId);
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
@@ -241,17 +253,23 @@ export function App() {
     () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
     []
   );
+  const assemblyCommandBindingsRef = useRef<AssemblyRuntimeCommandBindings>({});
+  const assemblyCommandBridge = useMemo(
+    () => createAssemblyRuntimeCommandBridge(() => assemblyCommandBindingsRef.current),
+    []
+  );
 
   const platformEntities = useMemo(() => createLegacyEntitySnapshot({
     machines: placedMachines,
     civilReferences,
     annotations,
-    layers
-  }), [annotations, civilReferences, layers, placedMachines]);
+    layers,
+    groups
+  }), [annotations, civilReferences, groups, layers, placedMachines]);
   const platformEntitiesRef = useRef(platformEntities);
   const selectionProjection = useMemo(
-    () => projectRuntimeSelection(runtimeSelection),
-    [runtimeSelection]
+    () => projectRuntimeSelection(runtimeSelection, platformEntities),
+    [platformEntities, runtimeSelection]
   );
   const {
     selectedMachineIds,
@@ -259,6 +277,7 @@ export function App() {
     selectedCivilReferenceIds,
     selectedCivilReferenceId,
     selectedAnnotationId,
+    selectedGroupId,
     selectedAlignableEntityIds: selectedEntityKeys
   } = selectionProjection;
   const editingAnnotationId = selectedAnnotationId;
@@ -268,10 +287,17 @@ export function App() {
   const selectedCivilReference = selectedCivilReferenceId
     && selectedMachineIds.length === 0
     && selectedCivilReferenceIds.length <= 1
+    && !selectedGroupId
     ? civilReferences.find((item) => item.id === selectedCivilReferenceId)
     : undefined;
   const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) : null;
-  const singleSelectedMachine = selectedMachineIds.length === 1 ? selectedMachine : undefined;
+  const activeGroupEdit = activeGroupEditId ? groups.find((group) => group.id === activeGroupEditId) : null;
+  const activeGroupEditMachineIds = useMemo(() => activeGroupEdit
+    ? activeGroupEdit.objectIds.flatMap((entityId) => entityId.startsWith("machine:")
+      ? [entityId.slice("machine:".length)]
+      : [])
+    : [], [activeGroupEdit]);
+  const singleSelectedMachine = selectedMachineIds.length === 1 && !selectedGroup ? selectedMachine : undefined;
   const visiblePlacedMachines = useMemo(
     () => placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)),
     [layers, placedMachines]
@@ -329,6 +355,9 @@ export function App() {
   );
   const selectedAnnotationForDeleteId = editingAnnotationId || selectedAnnotationId;
   const canDeleteSelectedEntities = useMemo(() => {
+    if (selectedGroupId) {
+      return false;
+    }
     const selectedCivil = selectedCivilReferenceId
       ? civilReferences.find((item) => item.id === selectedCivilReferenceId)
       : undefined;
@@ -360,6 +389,7 @@ export function App() {
     layers,
     selectedAnnotationForDeleteId,
     selectedCivilReferenceId,
+    selectedGroupId,
     selectedMachines
   ]);
   const selectedCivilReferences = useMemo(
@@ -518,6 +548,10 @@ export function App() {
     groupsRef.current = groups;
   }, [groups]);
 
+  useLayoutEffect(() => {
+    activeGroupEditIdRef.current = activeGroupEditId;
+  }, [activeGroupEditId]);
+
   useEffect(() => {
     const normalized = normalizeGroups(groups, placedMachines, layers, civilReferences);
     if (
@@ -526,10 +560,10 @@ export function App() {
     ) {
       setGroups(normalized);
     }
-    if (selectedGroupId && !normalized.some((group) => group.id === selectedGroupId)) {
-      setSelectedGroupId(null);
+    if (activeGroupEditId && !normalized.some((group) => group.id === activeGroupEditId)) {
+      setActiveGroupEditId(null);
     }
-  }, [civilReferences, groups, layers, placedMachines, selectedGroupId]);
+  }, [activeGroupEditId, civilReferences, groups, layers, placedMachines]);
 
   useEffect(() => {
     const normalized = normalizeCivilReferences(civilReferences, layers);
@@ -766,7 +800,7 @@ export function App() {
       targetId: instanceId ? createLegacyPlatformEntityId("machine", instanceId) : null,
       mode: !instanceId ? "clear" : mode,
       source: "scene"
-    }, platformEntitiesRef.current));
+    }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
   }, []);
 
   const selectAnnotationForEditing = useCallback((annotationId: string | null) => {
@@ -792,7 +826,7 @@ export function App() {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
-    }, platformEntitiesRef.current));
+    }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
   }, []);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
@@ -886,7 +920,7 @@ export function App() {
 
     markLayoutChanged();
     setPlacedMachines((current) => [...current, ...duplicates]);
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     replaceSelection(duplicateIds, duplicatePrimaryId);
   }, [markLayoutChanged, platformEntities, primarySelectedMachineId, replaceSelection, runtimeSelection.ids, selectedMachineIds, selectedMachines]);
 
@@ -970,7 +1004,7 @@ export function App() {
     markLayoutChanged();
     setLayers(importedLayers);
     setGroups(importedGroups);
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
@@ -1191,10 +1225,9 @@ export function App() {
     if (!group) {
       return;
     }
-    const visibleObjectIds = getVisibleGroupObjectIds(group, placedMachinesRef.current, layersRef.current, civilReferencesRef.current);
-    const visibleEntityKeys = getGroupEntityKeys({ ...group, objectIds: visibleObjectIds });
-    setSelectedGroupId(groupId);
-    setRuntimeSelection(replaceRuntimeSelection(visibleEntityKeys, "explorer"));
+    setRuntimeSelection(replaceRuntimeSelection([
+      createLegacyPlatformEntityId("group", groupId)
+    ], "explorer"));
   }, []);
 
   const createGroupFromSelection = useCallback((name: string) => {
@@ -1214,7 +1247,10 @@ export function App() {
       const group = createObjectGroup(name, objectIds);
       markLayoutChanged();
       setGroups((current) => addObjectsToGroup([...current, { ...group, objectIds: [] }], group.id, objectIds));
-      setSelectedGroupId(group.id);
+      setActiveGroupEditId(null);
+      setRuntimeSelection(replaceRuntimeSelection([
+        createLegacyPlatformEntityId("group", group.id)
+      ], "command"));
     } catch (caught) {
       window.alert(caught instanceof Error ? caught.message : "Group could not be created.");
     }
@@ -1226,16 +1262,18 @@ export function App() {
     }
     markLayoutChanged();
     setGroups((current) => addObjectsToGroup(current, groupId, selectedAlignableEntityIds));
-    setSelectedGroupId(groupId);
+    setRuntimeSelection(replaceRuntimeSelection([
+      createLegacyPlatformEntityId("group", groupId)
+    ], "command"));
   }, [markLayoutChanged, selectedAlignableEntityIds]);
 
   const removeSelectionFromGroup = useCallback((groupId: string) => {
-    if (selectedAlignableEntityIds.length === 0) {
+    if (activeGroupEditId !== groupId || selectedAlignableEntityIds.length === 0) {
       return;
     }
     markLayoutChanged();
     setGroups((current) => removeObjectsFromGroup(current, groupId, selectedAlignableEntityIds));
-  }, [markLayoutChanged, selectedAlignableEntityIds]);
+  }, [activeGroupEditId, markLayoutChanged, selectedAlignableEntityIds]);
 
   const renameObjectGroup = useCallback((groupId: string, name: string) => {
     if (!name.trim()) {
@@ -1248,19 +1286,6 @@ export function App() {
       )
     );
   }, [markLayoutChanged]);
-
-  const deleteObjectGroup = useCallback((groupId: string) => {
-    const group = groups.find((item) => item.id === groupId);
-    if (!group) {
-      return;
-    }
-    if (!window.confirm(`Delete group "${group.name}"? Objects will remain in the layout.`)) {
-      return;
-    }
-    markLayoutChanged();
-    setGroups((current) => current.filter((item) => item.id !== groupId));
-    setSelectedGroupId((current) => current === groupId ? null : current);
-  }, [groups, markLayoutChanged]);
 
   const toggleGroupCollapsed = useCallback((groupId: string) => {
     markLayoutChanged();
@@ -1278,7 +1303,7 @@ export function App() {
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
     setGroups([]);
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     setSelectedLayerId("default");
     setViewpoints([]);
     setSelectedViewpointId(null);
@@ -1298,7 +1323,7 @@ export function App() {
     setAnnotations(importedAnnotations);
     setLayers(importedLayers);
     setGroups(importedGroups);
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
@@ -1314,7 +1339,7 @@ export function App() {
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
     setGroups([]);
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     setSelectedLayerId("default");
     setViewpoints([]);
     setSelectedViewpointId(null);
@@ -1340,7 +1365,7 @@ export function App() {
     setAnnotations(importedAnnotations);
     setLayers(importedLayers);
     setGroups(importedGroups);
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
@@ -1355,7 +1380,8 @@ export function App() {
 
   const canBeginObjectDrag = useMemo(() => createRuntimeSelectionMovementPreflight(() => ({
     selection: runtimeSelectionRef.current,
-    entities: platformEntitiesRef.current
+    entities: platformEntitiesRef.current,
+    activeGroupEditId: activeGroupEditIdRef.current
   })), []);
 
   const setMachinePositions = useCallback((
@@ -1367,7 +1393,9 @@ export function App() {
     const affectedEntityIds = getAtomicMovementEntityIds(
       currentSelection,
       updates.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
-      true
+      true,
+      currentEntities,
+      activeGroupEditIdRef.current
     );
     const evaluation = evaluateAtomicMovement(affectedEntityIds, currentEntities);
     if (!evaluation.allowed) {
@@ -1381,6 +1409,52 @@ export function App() {
     });
     if (!hasRealPositionChange) {
       return false;
+    }
+
+    const activeEditGroup = activeGroupEditIdRef.current
+      ? groupsRef.current.find((group) => group.id === activeGroupEditIdRef.current)
+      : undefined;
+    const updatesActiveEditMember = Boolean(activeEditGroup && updates.some((update) =>
+      activeEditGroup.objectIds.includes(createLegacyPlatformEntityId("machine", update.instanceId))
+    ));
+    const hasSelectedAssembly = !updatesActiveEditMember
+      && currentSelection.ids.some((entityId) => entityId.startsWith("group:"));
+    if (hasSelectedAssembly) {
+      const firstUpdate = updates.find((update) =>
+        placedMachinesRef.current.some((machine) => machine.instanceId === update.instanceId)
+      );
+      const firstMachine = firstUpdate
+        ? placedMachinesRef.current.find((machine) => machine.instanceId === firstUpdate.instanceId)
+        : undefined;
+      if (!firstUpdate || !firstMachine) {
+        return false;
+      }
+      const targetPosition = applyPositionSnap(
+        { xMm: firstUpdate.xMm, yMm: firstUpdate.yMm },
+        placementSettingsRef.current
+      );
+      const delta = getMachinePositionUpdateDelta(firstMachine, targetPosition);
+      const projection = projectRuntimeSelection(currentSelection, currentEntities);
+      const movement = moveAssemblyMembersByDelta({
+        machines: placedMachinesRef.current,
+        civilReferences: civilReferencesRef.current,
+        memberEntityIds: projection.selectedAlignableEntityIds,
+        ...delta
+      });
+      if (!movement) {
+        return false;
+      }
+
+      executeAtomicSelectionMutation({
+        entityIds: affectedEntityIds,
+        entities: currentEntities,
+        beforeMutation: () => markLayoutChanged(options),
+        mutate: () => {
+          setPlacedMachines(movement.machines);
+          setCivilReferences(movement.civilReferences);
+        }
+      });
+      return true;
     }
 
     executeAtomicSelectionMutation({
@@ -1433,16 +1507,79 @@ export function App() {
     deltaYMm: number,
     options: { recordHistory?: boolean } = {}
   ) => {
+    const currentSelection = runtimeSelectionRef.current;
+    const currentEntities = platformEntitiesRef.current;
+    const hasSelectedAssembly = currentSelection.ids.some((entityId) => entityId.startsWith("group:"));
+    const projection = projectRuntimeSelection(currentSelection, currentEntities);
     const evaluation = executeAtomicSelectionMutation({
-      entityIds: runtimeSelection.ids,
-      entities: platformEntities,
+      entityIds: currentSelection.ids,
+      entities: currentEntities,
       beforeMutation: () => markLayoutChanged(options),
-      mutate: () => setPlacedMachines((current) =>
-        moveObjectsByDelta(current, selectedMachineIds, deltaXMm, deltaYMm)
-      )
+      mutate: () => {
+        if (hasSelectedAssembly) {
+          const movement = moveAssemblyMembersByDelta({
+            machines: placedMachinesRef.current,
+            civilReferences: civilReferencesRef.current,
+            memberEntityIds: projection.selectedAlignableEntityIds,
+            deltaXMm,
+            deltaYMm
+          });
+          if (movement) {
+            setPlacedMachines(movement.machines);
+            setCivilReferences(movement.civilReferences);
+          }
+          return;
+        }
+        setPlacedMachines((current) =>
+          moveObjectsByDelta(current, projection.selectedMachineIds, deltaXMm, deltaYMm)
+        );
+      }
     });
     return evaluation.allowed;
-  }, [markLayoutChanged, platformEntities, runtimeSelection.ids, selectedMachineIds]);
+  }, [markLayoutChanged]);
+
+  const getAssemblyCommandGroupId = useCallback((primarySelectionId?: string) => {
+    const parsed = primarySelectionId ? parseRuntimeSelectionEntityId(primarySelectionId) : null;
+    return parsed?.family === "group" ? parsed.sourceId : activeGroupEditIdRef.current;
+  }, []);
+
+  const enterGroupEditMode = useCallback((primarySelectionId?: string) => {
+    const groupId = getAssemblyCommandGroupId(primarySelectionId);
+    if (!groupId || !groupsRef.current.some((group) => group.id === groupId)) {
+      return;
+    }
+    setActiveGroupEditId(groupId);
+    setRuntimeSelection(replaceRuntimeSelection([
+      createLegacyPlatformEntityId("group", groupId)
+    ], "command"));
+  }, [getAssemblyCommandGroupId]);
+
+  const exitGroupEditMode = useCallback(() => {
+    const groupId = activeGroupEditIdRef.current;
+    setActiveGroupEditId(null);
+    if (groupId && groupsRef.current.some((group) => group.id === groupId)) {
+      setRuntimeSelection(replaceRuntimeSelection([
+        createLegacyPlatformEntityId("group", groupId)
+      ], "command"));
+    }
+  }, []);
+
+  const ungroupAssembly = useCallback((primarySelectionId?: string) => {
+    const groupId = getAssemblyCommandGroupId(primarySelectionId);
+    const group = groupId ? groupsRef.current.find((item) => item.id === groupId) : undefined;
+    if (!group || !window.confirm(`Ungroup "${group.name}"? Member objects will remain in the layout.`)) {
+      return;
+    }
+
+    const result = ungroupObjectGroup(groupsRef.current, group.id);
+    if (!result) {
+      return;
+    }
+    markLayoutChanged();
+    setGroups(result.groups);
+    setActiveGroupEditId(null);
+    setRuntimeSelection(replaceRuntimeSelection(result.memberEntityIds, "command"));
+  }, [getAssemblyCommandGroupId, markLayoutChanged]);
 
   const applyAlignablePositionUpdates = useCallback((updates: Array<{ kind: "machine" | "civil"; id: string; xMm: number; yMm: number }>) => {
     const machineUpdates = updates
@@ -1464,6 +1601,10 @@ export function App() {
   }, []);
 
   const canApplyAlignableAction = useCallback(() => {
+    if (runtimeSelection.ids.some((entityId) => entityId.startsWith("group:"))) {
+      window.alert("Arrange the assembly as one rigid entity. Member alignment is available only in Edit Group mode.");
+      return false;
+    }
     if (selectedGroupHasLockedVisibleMembers) {
       window.alert("Alignment is blocked because the selected group contains locked visible objects.");
       return false;
@@ -1476,7 +1617,7 @@ export function App() {
       return false;
     }
     return true;
-  }, [alignableEntities, selectedAlignableEntityIds, selectedGroupHasLockedVisibleMembers]);
+  }, [alignableEntities, runtimeSelection.ids, selectedAlignableEntityIds, selectedGroupHasLockedVisibleMembers]);
 
   const applyAlignmentAction = useCallback((action: AlignmentAction) => {
     if (!canApplyAlignableAction()) {
@@ -1602,9 +1743,47 @@ export function App() {
 
     const entityId = createLegacyPlatformEntityId("civil", id);
     const currentSelection = runtimeSelectionRef.current;
+    const currentEntities = platformEntitiesRef.current;
+    const affectedEntityIds = getAtomicMovementEntityIds(
+      currentSelection,
+      [entityId],
+      true,
+      currentEntities,
+      activeGroupEditIdRef.current
+    );
+    const activeEditGroup = activeGroupEditIdRef.current
+      ? groupsRef.current.find((group) => group.id === activeGroupEditIdRef.current)
+      : undefined;
+    const updatesActiveEditMember = Boolean(activeEditGroup?.objectIds.includes(entityId));
+    const hasSelectedAssembly = !updatesActiveEditMember
+      && currentSelection.ids.some((selectedId) => selectedId.startsWith("group:"));
+    if (hasSelectedAssembly) {
+      const delta = getCivilPositionUpdateDelta(item, positionMm);
+      const projection = projectRuntimeSelection(currentSelection, currentEntities);
+      const movement = moveAssemblyMembersByDelta({
+        machines: placedMachinesRef.current,
+        civilReferences: civilReferencesRef.current,
+        memberEntityIds: projection.selectedAlignableEntityIds,
+        ...delta
+      });
+      if (!movement) {
+        return false;
+      }
+      const evaluation = executeAtomicSelectionMutation({
+        entityIds: affectedEntityIds,
+        entities: currentEntities,
+        beforeMutation: () => markLayoutChanged(options),
+        mutate: () => {
+          setPlacedMachines(movement.machines);
+          setCivilReferences(movement.civilReferences);
+        }
+      });
+      return evaluation.allowed;
+    }
+
     const evaluation = executeAtomicSelectionMutation({
-      entityIds: getAtomicMovementEntityIds(currentSelection, [entityId], true),
-      entities: platformEntitiesRef.current,
+      entityIds: affectedEntityIds,
+      entities: currentEntities,
       beforeMutation: () => markLayoutChanged(options),
       mutate: () => setCivilReferences((current) => updateCivilReference(current, id, { positionMm }))
     });
@@ -1748,7 +1927,7 @@ export function App() {
     setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
     setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
     setGroups((current) => removeObjectsFromGroups(current, groupIdsToRemove));
-    setSelectedGroupId(null);
+    setActiveGroupEditId(null);
     clearSelection();
   }, [clearSelection, markLayoutChanged, selectedMachines]);
 
@@ -1809,6 +1988,53 @@ export function App() {
   useLayoutEffect(() => {
     runtimeCommandBindingsRef.current = runtimeCommandBindings;
   }, [runtimeCommandBindings]);
+
+  const assemblyCommandBindings = useMemo<AssemblyRuntimeCommandBindings>(() => ({
+    [ASSEMBLY_COMMAND_IDS.enterEdit]: {
+      getEnableState: (context) => {
+        const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
+        return groupId && groupId !== activeGroupEditId && groups.some((group) => group.id === groupId)
+          ? { enabled: true }
+          : { enabled: false, reason: "Select an assembly that is not already in edit mode." };
+      },
+      execute: (context) => enterGroupEditMode(context.primarySelectionId)
+    },
+    [ASSEMBLY_COMMAND_IDS.exitEdit]: {
+      getEnableState: () => activeGroupEditId
+        ? { enabled: true }
+        : { enabled: false, reason: "No assembly is in edit mode." },
+      execute: exitGroupEditMode
+    },
+    [ASSEMBLY_COMMAND_IDS.ungroup]: {
+      getEnableState: (context) => {
+        const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
+        return groupId && groups.some((group) => group.id === groupId)
+          ? { enabled: true }
+          : { enabled: false, reason: "Select an assembly to ungroup." };
+      },
+      execute: (context) => ungroupAssembly(context.primarySelectionId)
+    }
+  }), [
+    activeGroupEditId,
+    enterGroupEditMode,
+    exitGroupEditMode,
+    getAssemblyCommandGroupId,
+    groups,
+    ungroupAssembly
+  ]);
+
+  useLayoutEffect(() => {
+    assemblyCommandBindingsRef.current = assemblyCommandBindings;
+  }, [assemblyCommandBindings]);
+
+  const executeAssemblyCommand = useCallback((commandId: AssemblyCommandId, groupId?: string) => {
+    const groupEntityId = groupId ? createLegacyPlatformEntityId("group", groupId) : undefined;
+    return assemblyCommandBridge.executeCommand(commandId, {
+      selectionIds: groupEntityId ? [groupEntityId] : runtimeSelectionRef.current.ids,
+      primarySelectionId: groupEntityId ?? runtimeSelectionRef.current.primaryId,
+      hasUnsavedChanges: hasUnsavedProjectChanges
+    });
+  }, [assemblyCommandBridge, hasUnsavedProjectChanges]);
 
   const coreEditorCommandContext = useMemo(() => ({
     selectionIds: runtimeSelection.ids,
@@ -1980,9 +2206,7 @@ export function App() {
 
       const canNudgeSelection =
         runtimeSelectionMovementEvaluation.allowed
-        && selectedMachineIds.length > 0
-        && selectedMachines.length === selectedMachineIds.length
-        && selectedMachines.every((machine) => !isLayerLocked(machine.layerId, layersRef.current));
+        && selectedAlignableEntities.length > 0;
       if (!canNudgeSelection) {
         return;
       }
@@ -2017,8 +2241,7 @@ export function App() {
     nudgeSettings,
     runtimeSelection.ids.length,
     runtimeSelectionMovementEvaluation.allowed,
-    selectedMachineIds.length,
-    selectedMachines
+    selectedAlignableEntities.length
   ]);
 
   return (
@@ -2037,6 +2260,9 @@ export function App() {
           lockedMachineIds={lockedMachineIds}
           lockedCivilReferenceIds={lockedCivilReferenceIds}
           lockedAnnotationIds={lockedAnnotationIds}
+          activeGroupEditMachineIds={activeGroupEditMachineIds}
+          selectedAssemblyId={selectedGroupId}
+          activeGroupEditId={activeGroupEditId}
           onSelectMachine={selectMachine}
           onSelectCivilReference={selectCivilReferenceForEditing}
           onSelectAnnotation={selectAnnotationForEditing}
@@ -2177,12 +2403,15 @@ export function App() {
               placedMachines={placedMachines}
               civilReferences={civilReferences}
               selectedGroupId={selectedGroupId}
+              activeGroupEditId={activeGroupEditId}
               selectedEntityCount={selectedAlignableEntities.length}
               onCreateGroupFromSelection={createGroupFromSelection}
               onAddSelectionToGroup={addSelectionToGroup}
               onRemoveSelectionFromGroup={removeSelectionFromGroup}
               onRenameGroup={renameObjectGroup}
-              onDeleteGroup={deleteObjectGroup}
+              onEnterGroupEdit={(groupId) => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.enterEdit, groupId)}
+              onExitGroupEdit={() => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.exitEdit)}
+              onUngroup={(groupId) => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.ungroup, groupId)}
               onSelectGroup={selectObjectGroup}
               onToggleGroupCollapsed={toggleGroupCollapsed}
             />
@@ -2352,12 +2581,41 @@ export function App() {
           </PanelSection>
           {!editingAnnotationId ? (
             <PanelSection
-              title={selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
+              title={selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
               storageKey="atrvisu.panelSection.properties.v1"
-              defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference)}
-              badge={selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+              defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference) || Boolean(selectedGroup)}
+              badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
             >
-              {selectedCivilReference ? (
+              {selectedGroup && (selectedCivilReferenceIds.length > 0 || selectedMachineIds.length <= 1) ? (
+                <div className="property-grid" data-testid="assembly-properties-panel">
+                  <div className="property-readout">
+                    <span>Assembly</span>
+                    <strong>{selectedGroup.name}</strong>
+                  </div>
+                  <div className="property-readout">
+                    <span>Members</span>
+                    <strong>{selectedAlignableEntities.length}</strong>
+                  </div>
+                  <div className="property-readout">
+                    <span>Mode</span>
+                    <strong>{activeGroupEditId === selectedGroup.id ? "Editing members" : "Rigid assembly"}</strong>
+                  </div>
+                  <div className="selection-actions">
+                    {activeGroupEditId === selectedGroup.id ? (
+                      <button type="button" onClick={() => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.exitEdit)}>
+                        Exit Group Edit
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.enterEdit, selectedGroup.id)}>
+                        Edit Group
+                      </button>
+                    )}
+                    <button className="danger-action" type="button" onClick={() => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.ungroup, selectedGroup.id)}>
+                      Ungroup
+                    </button>
+                  </div>
+                </div>
+              ) : selectedCivilReference ? (
                 <CivilReferenceProperties
                   selectedCivilReference={selectedCivilReference}
                   layers={layers}
@@ -2369,6 +2627,7 @@ export function App() {
               ) : selectedMachineIds.length > 1 && selectedCivilReferenceIds.length === 0 ? (
                 <MultiSelectionProperties
                   selectedMachines={selectedMachines}
+                  assemblyName={selectedGroup?.name}
                   primarySelectedMachine={selectedMachine}
                   selectionBounds={selectionBounds}
                   onAlign={applyAlignmentAction}
@@ -2378,12 +2637,13 @@ export function App() {
                   onDuplicateSelected={executeDuplicateSelectedCommand}
                   onClearSelection={clearSelection}
                   onDeleteSelected={executeDeleteSelectedCommand}
+                  canArrangeSelection={!selectedGroup}
                 />
               ) : selectedAlignableEntities.length > 1 ? (
                 <div className="property-grid">
                   <div className="property-readout">
-                    <span>Selected entities</span>
-                    <strong>{selectedAlignableEntities.length}</strong>
+                    <span>{selectedGroup ? "Assembly" : "Selected entities"}</span>
+                    <strong>{selectedGroup?.name ?? selectedAlignableEntities.length}</strong>
                   </div>
                   <p className="collision-note">Use Alignment Tools to align the selected machines and civil references.</p>
                   <button type="button" onClick={clearSelection}>
