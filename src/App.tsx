@@ -14,6 +14,7 @@ import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
 import { LayersPanel } from "./components/LayersPanel";
 import { MachineLibrary } from "./components/MachineLibrary";
+import type { LibraryManagerRuntimeController } from "./components/LibraryManager";
 import { MachineProperties } from "./components/MachineProperties";
 import { MultiSelectionProperties } from "./components/MultiSelectionProperties";
 import { PanelSection } from "./components/PanelSection";
@@ -71,7 +72,9 @@ import { normalizeMachineVisualModel } from "./utils/visualModel";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
 import {
   applyConnectionPointSnap,
+  evaluateConnectionPointSnapContext,
   executeGuardedConnectionPointSnap,
+  getConnectionPointSnapContextMessage,
   type ConnectionPointSnapSelection
 } from "./utils/connectionPointSnap";
 import {
@@ -149,6 +152,15 @@ import {
   normalizeLayers,
   showAllLayers
 } from "./utils/layers";
+import {
+  RUNTIME_PANEL_IDS,
+  closeMachineLibraryManagerModals,
+  createRuntimePanelRegistryBridge,
+  openMachineLibraryManagerExclusively,
+  type RuntimePanelBinding,
+  type RuntimePanelBindings,
+  type RuntimePanelState
+} from "./platform/runtimePanels";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -167,6 +179,42 @@ const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   smallNudgeStepMm: 10
 };
 const DUPLICATE_MACHINE_OFFSET_MM = 250;
+
+const PANEL_SECTION_CONFIGS = [
+  { id: RUNTIME_PANEL_IDS.machineLibrary, storageKey: "atrvisu.panelSection.machineLibrary.v1", defaultExpanded: true },
+  { id: RUNTIME_PANEL_IDS.layoutControls, storageKey: "atrvisu.panelSection.layoutControls.v1", defaultExpanded: true },
+  { id: RUNTIME_PANEL_IDS.viewpoints, storageKey: "atrvisu.panelSection.viewpoints.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.layers, storageKey: "atrvisu.panelSection.layers.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.civilReferences, storageKey: "atrvisu.panelSection.civilReferences.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.groups, storageKey: "atrvisu.panelSection.assemblyTree.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.projectStatus, storageKey: "atrvisu.panelSection.projectManager.v1", defaultExpanded: true },
+  { id: RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, storageKey: "atrvisu.panelSection.performanceBenchmark.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.simulationControls, storageKey: "atrvisu.panelSection.simulationControls.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.annotations, storageKey: "atrvisu.panelSection.annotations.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.precisionPlacement, storageKey: "atrvisu.panelSection.precisionPlacement.v1", defaultExpanded: true },
+  { id: RUNTIME_PANEL_IDS.alignmentTools, storageKey: "atrvisu.panelSection.alignmentTools.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.connectionPointSnap, storageKey: "atrvisu.panelSection.connectionPointSnap.v1", defaultExpanded: true },
+  { id: RUNTIME_PANEL_IDS.displayOverlayControls, storageKey: "atrvisu.panelSection.overlayControls.v1", defaultExpanded: false },
+  { id: RUNTIME_PANEL_IDS.collisionCheck, storageKey: "atrvisu.panelSection.collisionCheck.v1", defaultExpanded: true },
+  { id: RUNTIME_PANEL_IDS.inspector, storageKey: "atrvisu.panelSection.properties.v1", defaultExpanded: false }
+] as const;
+
+type PanelSectionId = typeof PANEL_SECTION_CONFIGS[number]["id"];
+type PanelSectionExpansionState = Record<PanelSectionId, boolean>;
+
+const loadPanelSectionExpansionState = (): PanelSectionExpansionState => PANEL_SECTION_CONFIGS.reduce(
+  (state, config) => {
+    let expanded = config.defaultExpanded;
+    try {
+      const savedValue = window.localStorage.getItem(config.storageKey);
+      expanded = savedValue === null ? config.defaultExpanded : savedValue === "expanded";
+    } catch {
+      // Panel preferences are best-effort only.
+    }
+    return { ...state, [config.id]: expanded };
+  },
+  {} as PanelSectionExpansionState
+);
 
 const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined): NudgeSettings => ({
   nudgeStepMm:
@@ -218,6 +266,9 @@ export function App() {
   const [projectStorageError, setProjectStorageError] = useState("");
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
   const [isPerformanceBenchmarkOpen, setIsPerformanceBenchmarkOpen] = useState(false);
+  const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
+  const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
+  const [panelSectionExpansion, setPanelSectionExpansion] = useState(loadPanelSectionExpansionState);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
   const [latestPerformanceMetrics, setLatestPerformanceMetrics] = useState<ScenePerformanceMetrics | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -256,6 +307,7 @@ export function App() {
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
+  const libraryManagerRuntimeControllerRef = useRef<LibraryManagerRuntimeController | null>(null);
   const runtimeCommandBindingsRef = useRef<CoreEditorRuntimeCommandBindings>({});
   const runtimeCommandBridge = useMemo(
     () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
@@ -266,6 +318,24 @@ export function App() {
     () => createAssemblyRuntimeCommandBridge(() => assemblyCommandBindingsRef.current),
     []
   );
+  const runtimePanelBindingsRef = useRef<RuntimePanelBindings>({});
+  const runtimePanelBridge = useMemo(
+    () => createRuntimePanelRegistryBridge(() => runtimePanelBindingsRef.current),
+    []
+  );
+  const runtimePanelStateRef = useRef({
+    panelSectionExpansion,
+    isPanelCollapsed,
+    panelWidth,
+    isProjectManagerOpen,
+    isPerformanceBenchmarkOpen,
+    isLibraryManagerOpen,
+    isTaxonomyManagerOpen,
+    connectionPointSnapAvailable: false,
+    connectionPointSnapReason: "Select exactly two explicit machines.",
+    propertiesVisible: true,
+    propertiesContext: "none"
+  });
 
   const platformEntities = useMemo(() => createLegacyEntitySnapshot({
     machines: placedMachines,
@@ -283,6 +353,11 @@ export function App() {
     () => projectExplicitRuntimeSelection(runtimeSelection, platformEntities),
     [platformEntities, runtimeSelection]
   );
+  const connectionPointSnapContext = useMemo(() => evaluateConnectionPointSnapContext({
+    selection: runtimeSelection,
+    entities: platformEntities,
+    activeGroupEditId
+  }), [activeGroupEditId, platformEntities, runtimeSelection]);
   const {
     selectedMachineIds,
     primarySelectedMachineId,
@@ -717,6 +792,278 @@ export function App() {
     setProjects(nextProjects);
     return nextProjects;
   }, []);
+
+  const setPanelSectionExpanded = useCallback((panelId: PanelSectionId, expanded: boolean) => {
+    setPanelSectionExpansion((current) => current[panelId] === expanded
+      ? current
+      : { ...current, [panelId]: expanded });
+  }, []);
+
+  const setLibraryManagerRuntimeController = useCallback(
+    (controller: LibraryManagerRuntimeController | null) => {
+      libraryManagerRuntimeControllerRef.current = controller;
+    },
+    []
+  );
+
+  const requestLibraryManagerClose = useCallback(() => {
+    if (!runtimePanelStateRef.current.isLibraryManagerOpen) {
+      return true;
+    }
+    const controller = libraryManagerRuntimeControllerRef.current;
+    if (controller) {
+      return controller.requestClose();
+    }
+    setIsLibraryManagerOpen(false);
+    return true;
+  }, []);
+
+  const closeMachineLibraryManagers = useCallback(() => closeMachineLibraryManagerModals({
+    libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
+    taxonomyManagerOpen: runtimePanelStateRef.current.isTaxonomyManagerOpen
+  }, {
+    requestLibraryManagerClose,
+    closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false)
+  }), [requestLibraryManagerClose]);
+
+  const openLibraryManager = useCallback(() => openMachineLibraryManagerExclusively("library", {
+    libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
+    taxonomyManagerOpen: runtimePanelStateRef.current.isTaxonomyManagerOpen
+  }, {
+    requestLibraryManagerClose,
+    closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
+    openLibraryManager: () => {
+      setIsPanelCollapsed(false);
+      setPanelSectionExpanded(RUNTIME_PANEL_IDS.machineLibrary, true);
+      setIsLibraryManagerOpen(true);
+    },
+    openTaxonomyManager: () => setIsTaxonomyManagerOpen(true)
+  }), [requestLibraryManagerClose, setPanelSectionExpanded]);
+
+  const openTaxonomyManager = useCallback(() => openMachineLibraryManagerExclusively("taxonomy", {
+    libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
+    taxonomyManagerOpen: runtimePanelStateRef.current.isTaxonomyManagerOpen
+  }, {
+    requestLibraryManagerClose,
+    closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
+    openLibraryManager: () => setIsLibraryManagerOpen(true),
+    openTaxonomyManager: () => {
+      setIsPanelCollapsed(false);
+      setPanelSectionExpanded(RUNTIME_PANEL_IDS.machineLibrary, true);
+      setIsTaxonomyManagerOpen(true);
+    }
+  }), [requestLibraryManagerClose, setPanelSectionExpanded]);
+
+  const runtimePanelBindings = useMemo<RuntimePanelBindings>(() => {
+    const sectionBinding = (
+      panelId: PanelSectionId,
+      getAvailability: () => { available: boolean; reason?: string; context?: string } = () => ({ available: true }),
+      beforeClose?: () => boolean
+    ): RuntimePanelBinding => ({
+      getState: () => {
+        const state = runtimePanelStateRef.current;
+        const availability = getAvailability();
+        const expanded = state.panelSectionExpansion[panelId];
+        return {
+          isVisible: !state.isPanelCollapsed && availability.available,
+          isOpen: !state.isPanelCollapsed && expanded && availability.available,
+          available: availability.available,
+          isExpanded: expanded,
+          ...(availability.context ? { context: availability.context } : {}),
+          ...(availability.reason ? { reason: availability.reason } : {})
+        };
+      },
+      open: () => {
+        setIsPanelCollapsed(false);
+        setPanelSectionExpanded(panelId, true);
+      },
+      close: () => {
+        if (beforeClose && !beforeClose()) {
+          return false;
+        }
+        setPanelSectionExpanded(panelId, false);
+        return true;
+      },
+      toggle: () => {
+        const state = runtimePanelStateRef.current;
+        if (state.panelSectionExpansion[panelId] && beforeClose && !beforeClose()) {
+          return false;
+        }
+        setIsPanelCollapsed(false);
+        setPanelSectionExpanded(panelId, !state.panelSectionExpansion[panelId]);
+        return true;
+      }
+    });
+
+    const modalState = (
+      open: boolean,
+      reason?: string
+    ): RuntimePanelState => ({
+      isVisible: open,
+      isOpen: open,
+      available: true,
+      ...(reason ? { reason } : {})
+    });
+
+    return {
+      [RUNTIME_PANEL_IDS.rightPanelShell]: {
+        getState: () => ({
+          isVisible: true,
+          isOpen: !runtimePanelStateRef.current.isPanelCollapsed,
+          available: true,
+          context: `${runtimePanelStateRef.current.panelWidth}px`
+        }),
+        open: () => setIsPanelCollapsed(false),
+        close: () => {
+          if (!closeMachineLibraryManagers()) {
+            return false;
+          }
+          setIsPanelCollapsed(true);
+          return true;
+        },
+        toggle: () => {
+          if (!runtimePanelStateRef.current.isPanelCollapsed && !closeMachineLibraryManagers()) {
+            return false;
+          }
+          setIsPanelCollapsed((current) => !current);
+          return true;
+        }
+      },
+      [RUNTIME_PANEL_IDS.machineLibrary]: sectionBinding(
+        RUNTIME_PANEL_IDS.machineLibrary,
+        undefined,
+        closeMachineLibraryManagers
+      ),
+      [RUNTIME_PANEL_IDS.layoutControls]: sectionBinding(RUNTIME_PANEL_IDS.layoutControls),
+      [RUNTIME_PANEL_IDS.viewpoints]: sectionBinding(RUNTIME_PANEL_IDS.viewpoints),
+      [RUNTIME_PANEL_IDS.layers]: sectionBinding(RUNTIME_PANEL_IDS.layers),
+      [RUNTIME_PANEL_IDS.civilReferences]: sectionBinding(RUNTIME_PANEL_IDS.civilReferences),
+      [RUNTIME_PANEL_IDS.groups]: sectionBinding(RUNTIME_PANEL_IDS.groups),
+      [RUNTIME_PANEL_IDS.projectStatus]: sectionBinding(RUNTIME_PANEL_IDS.projectStatus),
+      [RUNTIME_PANEL_IDS.performanceBenchmarkLauncher]: sectionBinding(
+        RUNTIME_PANEL_IDS.performanceBenchmarkLauncher
+      ),
+      [RUNTIME_PANEL_IDS.simulationControls]: sectionBinding(RUNTIME_PANEL_IDS.simulationControls),
+      [RUNTIME_PANEL_IDS.annotations]: sectionBinding(RUNTIME_PANEL_IDS.annotations),
+      [RUNTIME_PANEL_IDS.precisionPlacement]: sectionBinding(RUNTIME_PANEL_IDS.precisionPlacement),
+      [RUNTIME_PANEL_IDS.alignmentTools]: sectionBinding(RUNTIME_PANEL_IDS.alignmentTools),
+      [RUNTIME_PANEL_IDS.connectionPointSnap]: sectionBinding(
+        RUNTIME_PANEL_IDS.connectionPointSnap,
+        () => runtimePanelStateRef.current.connectionPointSnapAvailable
+          ? { available: true, context: "two-explicit-machines" }
+          : {
+              available: false,
+              reason: runtimePanelStateRef.current.connectionPointSnapReason,
+              context: "unavailable"
+            }
+      ),
+      [RUNTIME_PANEL_IDS.displayOverlayControls]: sectionBinding(RUNTIME_PANEL_IDS.displayOverlayControls),
+      [RUNTIME_PANEL_IDS.collisionCheck]: sectionBinding(RUNTIME_PANEL_IDS.collisionCheck),
+      [RUNTIME_PANEL_IDS.inspector]: sectionBinding(
+        RUNTIME_PANEL_IDS.inspector,
+        () => runtimePanelStateRef.current.propertiesVisible
+          ? { available: true, context: runtimePanelStateRef.current.propertiesContext }
+          : {
+              available: false,
+              reason: "Annotation properties are shown in the Annotations panel.",
+              context: "annotation"
+            }
+      ),
+      [RUNTIME_PANEL_IDS.projectManager]: {
+        getState: () => modalState(runtimePanelStateRef.current.isProjectManagerOpen),
+        open: () => {
+          void refreshProjects();
+          setIsProjectManagerOpen(true);
+        },
+        close: () => setIsProjectManagerOpen(false)
+      },
+      [RUNTIME_PANEL_IDS.performanceBenchmark]: {
+        getState: () => modalState(runtimePanelStateRef.current.isPerformanceBenchmarkOpen),
+        open: () => setIsPerformanceBenchmarkOpen(true),
+        close: () => setIsPerformanceBenchmarkOpen(false)
+      },
+      [RUNTIME_PANEL_IDS.libraryManager]: {
+        getState: () => modalState(runtimePanelStateRef.current.isLibraryManagerOpen),
+        open: openLibraryManager,
+        close: () => {
+          return requestLibraryManagerClose();
+        }
+      },
+      [RUNTIME_PANEL_IDS.taxonomyManager]: {
+        getState: () => modalState(runtimePanelStateRef.current.isTaxonomyManagerOpen),
+        open: openTaxonomyManager,
+        close: () => setIsTaxonomyManagerOpen(false)
+      }
+    };
+  }, [
+    closeMachineLibraryManagers,
+    openLibraryManager,
+    openTaxonomyManager,
+    refreshProjects,
+    requestLibraryManagerClose,
+    setPanelSectionExpanded
+  ]);
+
+  const propertiesPanelContext = selectedGroup
+    ? "assembly"
+    : selectedCivilReference
+      ? "civil"
+      : selectedAlignableEntities.length > 1
+        ? "multi-selection"
+        : selectedMachine
+          ? "machine"
+          : "none";
+  const connectionPointSnapAvailable = connectionPointSnapContext.available;
+  const connectionPointSnapReason = connectionPointSnapContext.available
+    ? ""
+    : getConnectionPointSnapContextMessage(connectionPointSnapContext.reason);
+
+  useLayoutEffect(() => {
+    runtimePanelStateRef.current = {
+      panelSectionExpansion,
+      isPanelCollapsed,
+      panelWidth,
+      isProjectManagerOpen,
+      isPerformanceBenchmarkOpen,
+      isLibraryManagerOpen,
+      isTaxonomyManagerOpen,
+      connectionPointSnapAvailable,
+      connectionPointSnapReason,
+      propertiesVisible: !editingAnnotationId,
+      propertiesContext: propertiesPanelContext
+    };
+  }, [
+    connectionPointSnapAvailable,
+    connectionPointSnapReason,
+    editingAnnotationId,
+    isLibraryManagerOpen,
+    isPanelCollapsed,
+    isPerformanceBenchmarkOpen,
+    isProjectManagerOpen,
+    isTaxonomyManagerOpen,
+    panelSectionExpansion,
+    panelWidth,
+    propertiesPanelContext
+  ]);
+
+  useLayoutEffect(() => {
+    runtimePanelBindingsRef.current = runtimePanelBindings;
+  }, [runtimePanelBindings]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+    window.__atrvisuRuntimePanels = {
+      open: runtimePanelBridge.openPanel,
+      close: runtimePanelBridge.closePanel,
+      toggle: runtimePanelBridge.togglePanel,
+      get: runtimePanelBridge.getRuntimePanel
+    };
+    return () => {
+      delete window.__atrvisuRuntimePanels;
+    };
+  }, [enableE2EDiagnostics, runtimePanelBridge]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2300,6 +2647,21 @@ export function App() {
     selectedAlignableEntities.length
   ]);
 
+  const getPanelSectionRuntimeProps = (panelId: PanelSectionId) => ({
+    expanded: panelSectionExpansion[panelId],
+    onExpandedChange: (expanded: boolean) => {
+      if (panelId === RUNTIME_PANEL_IDS.machineLibrary) {
+        if (expanded) {
+          runtimePanelBridge.openPanel(panelId);
+        } else {
+          runtimePanelBridge.closePanel(panelId);
+        }
+        return;
+      }
+      setPanelSectionExpanded(panelId, expanded);
+    }
+  });
+
   return (
     <AppShell
       viewport={(
@@ -2342,7 +2704,7 @@ export function App() {
           type="button"
           aria-label="Open right panel"
           data-app-shell-zone="machine-properties"
-          onClick={() => setIsPanelCollapsed(false)}
+          onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.rightPanelShell)}
         >
           Panel
         </button>
@@ -2370,7 +2732,10 @@ export function App() {
                 Redo
               </button>
             </div>
-            <button type="button" onClick={() => setIsPanelCollapsed(true)}>
+            <button
+              type="button"
+              onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
+            >
               Collapse
             </button>
           </div>
@@ -2391,13 +2756,24 @@ export function App() {
             title="Machine Library"
             storageKey="atrvisu.panelSection.machineLibrary.v1"
             defaultExpanded
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.machineLibrary)}
           >
-            <MachineLibrary onAddMachine={addMachine} />
+            <MachineLibrary
+              onAddMachine={addMachine}
+              isLibraryManagerOpen={isLibraryManagerOpen}
+              isTaxonomyManagerOpen={isTaxonomyManagerOpen}
+              onOpenLibraryManager={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.libraryManager)}
+              onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
+              onOpenTaxonomyManager={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.taxonomyManager)}
+              onCloseTaxonomyManager={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.taxonomyManager)}
+              onLibraryManagerRuntimeControllerChange={setLibraryManagerRuntimeController}
+            />
           </PanelSection>
           <PanelSection
             title="Layout Controls"
             storageKey="atrvisu.panelSection.layoutControls.v1"
             defaultExpanded
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.layoutControls)}
           >
             <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
           </PanelSection>
@@ -2406,6 +2782,7 @@ export function App() {
             storageKey="atrvisu.panelSection.viewpoints.v1"
             defaultExpanded={false}
             badge={viewpoints.length > 0 ? `${viewpoints.length}` : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.viewpoints)}
           >
             <ViewpointsPanel
               viewpoints={viewpoints}
@@ -2424,6 +2801,7 @@ export function App() {
             storageKey="atrvisu.panelSection.layers.v1"
             defaultExpanded={false}
             badge={layers.length > 1 ? `${layers.length}` : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.layers)}
           >
             <LayersPanel
               layers={layers}
@@ -2446,6 +2824,7 @@ export function App() {
             storageKey="atrvisu.panelSection.civilReferences.v1"
             defaultExpanded={false}
             badge={civilReferences.length > 0 ? `${civilReferences.length}` : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.civilReferences)}
           >
             <CivilReferencePanel onAddCivilReference={addCivilReference} />
           </PanelSection>
@@ -2454,6 +2833,7 @@ export function App() {
             storageKey="atrvisu.panelSection.assemblyTree.v1"
             defaultExpanded={false}
             badge={groups.length > 0 ? `${groups.length}` : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.groups)}
           >
             <AssemblyTreePanel
               groups={groups}
@@ -2479,6 +2859,7 @@ export function App() {
             storageKey="atrvisu.panelSection.projectManager.v1"
             defaultExpanded
             badge={hasUnsavedProjectChanges ? "Unsaved" : currentRevision?.revisionCode ?? "None"}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.projectStatus)}
           >
             <section className="project-status-panel" aria-label="Current project status">
               <div className="property-readout">
@@ -2508,10 +2889,7 @@ export function App() {
                 data-testid="open-project-manager"
                 type="button"
                 disabled={isProjectStorageLoading}
-                onClick={() => {
-                  void refreshProjects();
-                  setIsProjectManagerOpen(true);
-                }}
+                onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)}
               >
                 Project Manager
               </button>
@@ -2522,6 +2900,7 @@ export function App() {
             storageKey="atrvisu.panelSection.performanceBenchmark.v1"
             defaultExpanded={false}
             badge={isBenchmarkMode ? "Benchmark" : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher)}
           >
             <section className="project-status-panel" aria-label="Performance benchmark entry">
               <p className="collision-note">
@@ -2531,7 +2910,7 @@ export function App() {
                 className="manager-open-button"
                 data-testid="open-performance-benchmark"
                 type="button"
-                onClick={() => setIsPerformanceBenchmarkOpen(true)}
+                onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.performanceBenchmark)}
               >
                 Performance Benchmark
               </button>
@@ -2542,6 +2921,7 @@ export function App() {
             storageKey="atrvisu.panelSection.simulationControls.v1"
             defaultExpanded={false}
             badge={isSimulationRunning ? "Running" : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.simulationControls)}
           >
             <SimulationControls
               isRunning={isSimulationRunning}
@@ -2556,6 +2936,7 @@ export function App() {
             defaultExpanded={false}
             badge={annotations.length > 0 ? `${annotations.length}` : undefined}
             expandSignal={editingAnnotationId ? annotationSelectionSignal : null}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.annotations)}
           >
             <AnnotationsPanel
               annotations={annotations}
@@ -2576,6 +2957,7 @@ export function App() {
             storageKey="atrvisu.panelSection.precisionPlacement.v1"
             defaultExpanded
             badge={placementSettings.gridSnapEnabled ? `${placementSettings.gridSnapStepMm} mm` : "Free"}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.precisionPlacement)}
           >
             <PrecisionPlacementPanel
               settings={placementSettings}
@@ -2590,6 +2972,7 @@ export function App() {
             storageKey="atrvisu.panelSection.alignmentTools.v1"
             defaultExpanded={false}
             badge={selectedAlignableEntities.length >= 2 ? `${selectedAlignableEntities.length}` : undefined}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)}
           >
             <AlignmentToolsPanel
               selectedEntityCount={selectedAlignableEntities.length}
@@ -2603,12 +2986,13 @@ export function App() {
               onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
-          {selectedMachineIds.length === 2 && !selectedGroupId ? (
+          {connectionPointSnapAvailable ? (
             <PanelSection
               title="Connection Point Snap"
               storageKey="atrvisu.panelSection.connectionPointSnap.v1"
               defaultExpanded
               badge="2"
+              {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.connectionPointSnap)}
             >
               <ConnectionPointSnapPanel
                 selectedMachines={selectedMachines}
@@ -2622,6 +3006,7 @@ export function App() {
             title="Display / Overlay Controls"
             storageKey="atrvisu.panelSection.overlayControls.v1"
             defaultExpanded={false}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.displayOverlayControls)}
           >
             <DisplayOverlayControls settings={overlaySettings} onChange={setOverlaySettings} />
           </PanelSection>
@@ -2630,6 +3015,7 @@ export function App() {
             storageKey="atrvisu.panelSection.collisionCheck.v1"
             defaultExpanded
             badge={collisionSettings.enabled ? `${collisionResult.pairs.length}` : "Off"}
+            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.collisionCheck)}
           >
             <CollisionCheckPanel
               settings={collisionSettings}
@@ -2643,6 +3029,7 @@ export function App() {
               storageKey="atrvisu.panelSection.properties.v1"
               defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference) || Boolean(selectedGroup)}
               badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+              {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
             >
               {selectedGroup && (selectedCivilReferenceIds.length > 0 || selectedMachineIds.length <= 1) ? (
                 <div className="property-grid" data-testid="assembly-properties-panel">
@@ -2737,7 +3124,7 @@ export function App() {
               currentSnapshot={createLayoutSnapshot()}
               hasSceneObjects={placedMachines.length > 0 || civilReferences.length > 0}
               isDirty={hasUnsavedProjectChanges}
-              onClose={() => setIsProjectManagerOpen(false)}
+              onClose={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.projectManager)}
               onProjectsChanged={setProjects}
               onCurrentSelectionChange={(projectId, layoutId, revisionId) => {
                 setCurrentProjectId(projectId);
@@ -2761,7 +3148,7 @@ export function App() {
               onApplyBenchmarkScene={applyBenchmarkMachines}
               onRestoreScene={restoreBenchmarkSnapshot}
               onClearBenchmarkScene={clearBenchmarkScene}
-              onClose={() => setIsPerformanceBenchmarkOpen(false)}
+              onClose={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.performanceBenchmark)}
             />
           ) : null}
         </>
