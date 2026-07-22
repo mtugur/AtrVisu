@@ -1,0 +1,303 @@
+import type { PanelDefinition, PanelId } from "../contracts";
+import { createPanelRegistry } from "../registries";
+import { platformPanelSeedDefinitions } from "../registrySeeds";
+
+export const RUNTIME_PANEL_IDS = {
+  machineLibrary: "panel.machineLibrary",
+  layoutExplorer: "panel.layoutExplorer",
+  inspector: "panel.inspector",
+  statusBar: "panel.statusBar",
+  annotations: "panel.annotations",
+  layers: "panel.layers",
+  groups: "panel.groups",
+  collisionCheck: "panel.collisionCheck",
+  performanceBenchmark: "panel.performanceBenchmark",
+  diagnostics: "panel.diagnostics",
+  projectManager: "panel.projectManager",
+  libraryManager: "panel.libraryManager",
+  taxonomyManager: "panel.taxonomyManager",
+  rightPanelShell: "panel.rightPanelShell",
+  layoutControls: "panel.layoutControls",
+  viewpoints: "panel.viewpoints",
+  civilReferences: "panel.civilReferences",
+  projectStatus: "panel.projectStatus",
+  performanceBenchmarkLauncher: "panel.performanceBenchmarkLauncher",
+  simulationControls: "panel.simulationControls",
+  precisionPlacement: "panel.precisionPlacement",
+  alignmentTools: "panel.alignmentTools",
+  connectionPointSnap: "panel.connectionPointSnap",
+  displayOverlayControls: "panel.displayOverlayControls"
+} as const;
+
+export type RuntimePanelId = typeof RUNTIME_PANEL_IDS[keyof typeof RUNTIME_PANEL_IDS];
+export type RuntimePanelCapability = "open" | "close" | "toggle";
+export type RuntimePanelClassification = "required-runtime" | "declared-planned" | "modal/tool-surface";
+export type RuntimePanelSurfaceKind = "section" | "shell" | "modal" | "contextual" | "unbound";
+export type RuntimePanelLocation = "right-panel-shell" | "modal-layer" | "unbound";
+
+export type RuntimePanelState = {
+  isVisible: boolean;
+  isOpen: boolean;
+  available: boolean;
+  isExpanded?: boolean;
+  context?: string;
+  reason?: string;
+};
+
+export type RuntimePanelBinding = {
+  getState: () => RuntimePanelState;
+  open?: () => void;
+  close?: () => void;
+  toggle?: () => void;
+};
+
+export type RuntimePanelBindings = Readonly<Partial<Record<RuntimePanelId, RuntimePanelBinding>>>;
+
+export type RuntimePanelDescriptor = {
+  definition: PanelDefinition;
+  classification: RuntimePanelClassification;
+  surfaceKind: RuntimePanelSurfaceKind;
+  runtimeLocation: RuntimePanelLocation;
+};
+
+export type RuntimePanelReachability = {
+  panelId: PanelId;
+  title: string;
+  classification: RuntimePanelClassification;
+  surfaceKind: RuntimePanelSurfaceKind;
+  runtimeLocation: RuntimePanelLocation;
+  registered: boolean;
+  bound: boolean;
+  visible: boolean;
+  open: boolean;
+  available: boolean;
+  expanded?: boolean;
+  context?: string;
+  capabilities: readonly RuntimePanelCapability[];
+  canOpen: boolean;
+  canClose: boolean;
+  canToggle: boolean;
+  reason?: string;
+};
+
+export type RuntimePanelOperationResult = {
+  handled: boolean;
+  status: "executed" | "unknown" | "unbound" | "unavailable" | "unsupported";
+  reason?: string;
+};
+
+const panel = (
+  id: RuntimePanelId,
+  title: string,
+  surfaceKind: RuntimePanelSurfaceKind,
+  classification: RuntimePanelClassification = "required-runtime"
+): RuntimePanelDescriptor => ({
+  definition: {
+    id,
+    title,
+    dock: surfaceKind === "modal" ? "modal" : "floating",
+    role: surfaceKind === "modal" ? "manager" : "tool",
+    defaultVisible: surfaceKind !== "modal",
+    canClose: true,
+    canResize: false
+  },
+  classification,
+  surfaceKind,
+  runtimeLocation: surfaceKind === "modal" ? "modal-layer" : "right-panel-shell"
+});
+
+const seedClassifications: Readonly<Record<string, RuntimePanelClassification>> = {
+  [RUNTIME_PANEL_IDS.machineLibrary]: "required-runtime",
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "required-runtime",
+  [RUNTIME_PANEL_IDS.inspector]: "required-runtime",
+  [RUNTIME_PANEL_IDS.statusBar]: "required-runtime",
+  [RUNTIME_PANEL_IDS.annotations]: "required-runtime",
+  [RUNTIME_PANEL_IDS.layers]: "required-runtime",
+  [RUNTIME_PANEL_IDS.groups]: "required-runtime"
+};
+
+const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {
+  [RUNTIME_PANEL_IDS.machineLibrary]: "section",
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "unbound",
+  [RUNTIME_PANEL_IDS.inspector]: "contextual",
+  [RUNTIME_PANEL_IDS.statusBar]: "unbound",
+  [RUNTIME_PANEL_IDS.annotations]: "section",
+  [RUNTIME_PANEL_IDS.layers]: "section",
+  [RUNTIME_PANEL_IDS.groups]: "section",
+  [RUNTIME_PANEL_IDS.collisionCheck]: "section",
+  [RUNTIME_PANEL_IDS.performanceBenchmark]: "modal",
+  [RUNTIME_PANEL_IDS.diagnostics]: "unbound",
+  [RUNTIME_PANEL_IDS.projectManager]: "modal",
+  [RUNTIME_PANEL_IDS.libraryManager]: "modal",
+  [RUNTIME_PANEL_IDS.taxonomyManager]: "modal"
+};
+
+const seedRuntimeLocations: Readonly<Record<string, RuntimePanelLocation>> = {
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "unbound",
+  [RUNTIME_PANEL_IDS.statusBar]: "unbound",
+  [RUNTIME_PANEL_IDS.diagnostics]: "unbound",
+  [RUNTIME_PANEL_IDS.performanceBenchmark]: "modal-layer",
+  [RUNTIME_PANEL_IDS.projectManager]: "modal-layer",
+  [RUNTIME_PANEL_IDS.libraryManager]: "modal-layer",
+  [RUNTIME_PANEL_IDS.taxonomyManager]: "modal-layer"
+};
+
+const seededDescriptors: readonly RuntimePanelDescriptor[] = platformPanelSeedDefinitions.map((definition) => ({
+  definition,
+  classification: seedClassifications[definition.id] ?? "modal/tool-surface",
+  surfaceKind: seedSurfaceKinds[definition.id] ?? "unbound",
+  runtimeLocation: seedRuntimeLocations[definition.id]
+    ?? (seedSurfaceKinds[definition.id] === "unbound" ? "unbound" : "right-panel-shell")
+}));
+
+const runtimeOnlyDescriptors: readonly RuntimePanelDescriptor[] = [
+  panel(RUNTIME_PANEL_IDS.rightPanelShell, "Right Panel Shell", "shell"),
+  panel(RUNTIME_PANEL_IDS.layoutControls, "Layout Controls", "section"),
+  panel(RUNTIME_PANEL_IDS.viewpoints, "Viewpoints", "section"),
+  panel(RUNTIME_PANEL_IDS.civilReferences, "Building / Civil", "section"),
+  panel(RUNTIME_PANEL_IDS.projectStatus, "Project Status", "section"),
+  panel(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, "Performance Benchmark Launcher", "section"),
+  panel(RUNTIME_PANEL_IDS.simulationControls, "Simulation Controls", "section"),
+  panel(RUNTIME_PANEL_IDS.precisionPlacement, "Precision Placement", "section"),
+  panel(RUNTIME_PANEL_IDS.alignmentTools, "Alignment Tools", "section"),
+  panel(RUNTIME_PANEL_IDS.connectionPointSnap, "Connection Point Snap", "contextual"),
+  panel(RUNTIME_PANEL_IDS.displayOverlayControls, "Display / Overlay Controls", "section")
+];
+
+export const runtimePanelDescriptors = [
+  ...seededDescriptors,
+  ...runtimeOnlyDescriptors
+] as const satisfies readonly RuntimePanelDescriptor[];
+
+export const requiredRuntimePanelIds = runtimePanelDescriptors
+  .filter((descriptor) => descriptor.classification === "required-runtime")
+  .map((descriptor) => descriptor.definition.id);
+
+const getCapabilities = (binding: RuntimePanelBinding | undefined): RuntimePanelCapability[] => [
+  ...(binding?.open ? ["open" as const] : []),
+  ...(binding?.close ? ["close" as const] : []),
+  ...(binding?.toggle ? ["toggle" as const] : [])
+];
+
+const unboundState = (panelId: PanelId): RuntimePanelState => ({
+  isVisible: false,
+  isOpen: false,
+  available: false,
+  reason: `Runtime panel "${panelId}" is not bound.`
+});
+
+export const createRuntimePanelRegistryBridge = (
+  getBindings: () => RuntimePanelBindings,
+  descriptors: readonly RuntimePanelDescriptor[] = runtimePanelDescriptors
+) => {
+  const registry = createPanelRegistry();
+  const descriptorById = new Map<PanelId, RuntimePanelDescriptor>();
+
+  descriptors.forEach((descriptor) => {
+    registry.register(descriptor.definition);
+    descriptorById.set(descriptor.definition.id, descriptor);
+  });
+
+  const getRuntimePanel = (panelId: PanelId): RuntimePanelReachability | undefined => {
+    const definition = registry.get(panelId);
+    const descriptor = descriptorById.get(panelId);
+    if (!definition || !descriptor) {
+      return undefined;
+    }
+    const binding = getBindings()[panelId as RuntimePanelId];
+    const state = binding?.getState() ?? unboundState(panelId);
+    const capabilities = getCapabilities(binding);
+    return {
+      panelId,
+      title: definition.title,
+      classification: descriptor.classification,
+      surfaceKind: descriptor.surfaceKind,
+      runtimeLocation: descriptor.runtimeLocation,
+      registered: true,
+      bound: Boolean(binding),
+      visible: state.isVisible,
+      open: state.isOpen,
+      available: state.available,
+      ...(state.isExpanded !== undefined ? { expanded: state.isExpanded } : {}),
+      ...(state.context ? { context: state.context } : {}),
+      capabilities,
+      canOpen: capabilities.includes("open"),
+      canClose: capabilities.includes("close"),
+      canToggle: capabilities.includes("toggle"),
+      ...(state.reason ? { reason: state.reason } : {})
+    };
+  };
+
+  const listRuntimePanels = () => registry.list().flatMap((definition) => {
+    const panelState = getRuntimePanel(definition.id);
+    return panelState ? [panelState] : [];
+  });
+
+  const executeOperation = (
+    panelId: PanelId,
+    operation: RuntimePanelCapability
+  ): RuntimePanelOperationResult => {
+    if (!registry.get(panelId)) {
+      return { handled: false, status: "unknown", reason: `Runtime panel "${panelId}" is unknown.` };
+    }
+    const binding = getBindings()[panelId as RuntimePanelId];
+    if (!binding) {
+      return { handled: false, status: "unbound", reason: `Runtime panel "${panelId}" is not bound.` };
+    }
+    const state = binding.getState();
+    if (!state.available) {
+      return {
+        handled: false,
+        status: "unavailable",
+        reason: state.reason ?? `Runtime panel "${panelId}" is unavailable.`
+      };
+    }
+    const operationHandler = binding[operation];
+    if (!operationHandler) {
+      return {
+        handled: false,
+        status: "unsupported",
+        reason: `Runtime panel "${panelId}" does not support ${operation}.`
+      };
+    }
+    operationHandler();
+    return { handled: true, status: "executed" };
+  };
+
+  const getReachabilityReport = () => {
+    const panels = listRuntimePanels();
+    const missingRequiredBindings = panels
+      .filter((item) => item.classification === "required-runtime" && !item.bound)
+      .map((item) => item.panelId);
+    return {
+      ready: missingRequiredBindings.length === 0,
+      panels,
+      missingRequiredBindings
+    };
+  };
+
+  return {
+    registry,
+    getRuntimePanel,
+    listRuntimePanels,
+    openPanel: (panelId: PanelId) => executeOperation(panelId, "open"),
+    closePanel: (panelId: PanelId) => executeOperation(panelId, "close"),
+    togglePanel: (panelId: PanelId) => executeOperation(panelId, "toggle"),
+    getReachabilityReport
+  };
+};
+
+export type RuntimePanelRegistryBridge = ReturnType<typeof createRuntimePanelRegistryBridge>;
+
+export type RuntimePanelE2EBridge = {
+  open: (panelId: PanelId) => RuntimePanelOperationResult;
+  close: (panelId: PanelId) => RuntimePanelOperationResult;
+  toggle: (panelId: PanelId) => RuntimePanelOperationResult;
+  get: (panelId: PanelId) => RuntimePanelReachability | undefined;
+};
+
+declare global {
+  interface Window {
+    __atrvisuRuntimePanels?: RuntimePanelE2EBridge;
+  }
+}

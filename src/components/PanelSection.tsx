@@ -8,6 +8,8 @@ type PanelSectionProps = {
   children: ReactNode;
   badge?: string;
   expandSignal?: string | number | null;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 };
 
 export function PanelSection({
@@ -16,10 +18,12 @@ export function PanelSection({
   defaultExpanded,
   children,
   badge,
-  expandSignal
+  expandSignal,
+  expanded,
+  onExpandedChange
 }: PanelSectionProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
-  const [isExpanded, setIsExpanded] = useState(() => {
+  const [internalExpanded, setInternalExpanded] = useState(() => {
     try {
       const savedValue = window.localStorage.getItem(storageKey);
       return savedValue === null ? defaultExpanded : savedValue === "expanded";
@@ -27,6 +31,13 @@ export function PanelSection({
       return defaultExpanded;
     }
   });
+  const isExpanded = expanded ?? internalExpanded;
+  const setExpanded = (nextExpanded: boolean) => {
+    if (expanded === undefined) {
+      setInternalExpanded(nextExpanded);
+    }
+    onExpandedChange?.(nextExpanded);
+  };
 
   useEffect(() => {
     try {
@@ -38,11 +49,13 @@ export function PanelSection({
 
   useEffect(() => {
     if (expandSignal) {
-      setIsExpanded(true);
+      setExpanded(true);
       window.requestAnimationFrame(() => {
         sectionRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       });
     }
+    // The signal is the event boundary; controlled state changes must not retrigger scrolling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandSignal]);
 
   return (
@@ -51,7 +64,7 @@ export function PanelSection({
         className="panel-section-header"
         type="button"
         aria-expanded={isExpanded}
-        onClick={() => setIsExpanded((current) => !current)}
+        onClick={() => setExpanded(!isExpanded)}
       >
         <span aria-hidden="true">{isExpanded ? "-" : "+"}</span>
         <strong>{title}</strong>

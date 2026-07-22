@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { LibraryManager } from "./LibraryManager";
+import { LibraryManager, type LibraryManagerRuntimeController } from "./LibraryManager";
 import { TaxonomyManager } from "./TaxonomyManager";
 import type {
   LibraryGroup,
@@ -21,6 +21,13 @@ type LibrarySelection = {
 
 type MachineLibraryProps = {
   onAddMachine: (selection: LibrarySelection) => void;
+  isLibraryManagerOpen: boolean;
+  isTaxonomyManagerOpen: boolean;
+  onOpenLibraryManager: () => void;
+  onCloseLibraryManager: () => void;
+  onOpenTaxonomyManager: () => void;
+  onCloseTaxonomyManager: () => void;
+  onLibraryManagerRuntimeControllerChange?: (controller: LibraryManagerRuntimeController | null) => void;
 };
 
 export const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
@@ -129,13 +136,20 @@ function GroupNode({
   );
 }
 
-export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
+export function MachineLibrary({
+  onAddMachine,
+  isLibraryManagerOpen,
+  isTaxonomyManagerOpen,
+  onOpenLibraryManager,
+  onCloseLibraryManager,
+  onOpenTaxonomyManager,
+  onCloseTaxonomyManager,
+  onLibraryManagerRuntimeControllerChange
+}: MachineLibraryProps) {
   const [libraries, setLibraries] = useState<LoadedMachineLibrary[]>([]);
   const [openLibraries, setOpenLibraries] = useState<Set<string>>(new Set());
   const [warnings, setWarnings] = useState<LibraryValidationWarning[]>([]);
   const [loadError, setLoadError] = useState<string>("");
-  const [isManagerOpen, setIsManagerOpen] = useState(false);
-  const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [taxonomyReloadToken, setTaxonomyReloadToken] = useState(0);
 
@@ -226,25 +240,26 @@ export function MachineLibrary({ onAddMachine }: MachineLibraryProps) {
           <span>Library Tools</span>
           <strong>Manager</strong>
         </div>
-        <button className="manager-open-button" data-testid="open-library-manager" type="button" onClick={() => setIsManagerOpen(true)}>
+        <button className="manager-open-button" data-testid="open-library-manager" type="button" onClick={onOpenLibraryManager}>
           Open Library Manager
         </button>
-        <button className="manager-open-button" data-testid="open-taxonomy-manager" type="button" onClick={() => setIsTaxonomyManagerOpen(true)}>
+        <button className="manager-open-button" data-testid="open-taxonomy-manager" type="button" onClick={onOpenTaxonomyManager}>
           Open Taxonomy Manager
         </button>
       </section>
 
-      {isManagerOpen ? (
+      {isLibraryManagerOpen ? (
         <LibraryManager
           libraries={libraries}
           taxonomyReloadToken={taxonomyReloadToken}
-          onClose={() => setIsManagerOpen(false)}
+          onClose={onCloseLibraryManager}
           onLibrariesChanged={() => setReloadToken((current) => current + 1)}
+          onRuntimeControllerChange={onLibraryManagerRuntimeControllerChange}
         />
       ) : null}
       {isTaxonomyManagerOpen ? (
         <TaxonomyManager
-          onClose={() => setIsTaxonomyManagerOpen(false)}
+          onClose={onCloseTaxonomyManager}
           onChanged={() => setTaxonomyReloadToken((current) => current + 1)}
         />
       ) : null}

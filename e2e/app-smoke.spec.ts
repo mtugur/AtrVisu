@@ -31,6 +31,28 @@ const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
 };
 
+type RuntimePanelOperation = "open" | "close" | "toggle";
+
+const invokeRuntimePanel = async (
+  page: Page,
+  operation: RuntimePanelOperation,
+  panelId: string
+) => page.evaluate(({ operationName, id }) => {
+  const bridge = window.__atrvisuRuntimePanels;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime panel E2E bridge is unavailable.");
+  }
+  return bridge[operationName](id);
+}, { operationName: operation, id: panelId });
+
+const getRuntimePanel = async (page: Page, panelId: string) => page.evaluate((id) => {
+  const bridge = window.__atrvisuRuntimePanels;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime panel E2E bridge is unavailable.");
+  }
+  return bridge.get(id);
+}, panelId);
+
 type PlanPosition = { xMm: number; yMm: number };
 type ScreenPoint = { x: number; y: number };
 
@@ -130,18 +152,30 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).not.toHaveAttribute("data-machine-screen-points");
   await expect(canvas).not.toHaveAttribute("data-machine-plan-positions");
   await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
+  expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
   await expect(canvas).toHaveAttribute("data-machine-screen-points", "{}");
   await expect(canvas).toHaveAttribute("data-machine-plan-positions", "{}");
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
+  expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
   expect(errors).toEqual([]);
 });
 
 test("app loads and core panels have no red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
+  expect(await getRuntimePanel(page, "panel.inspector")).toMatchObject({
+    bound: true,
+    available: true,
+    context: "none"
+  });
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
+    bound: true,
+    available: false,
+    reason: "Select exactly two explicit machines outside a rigid group root."
+  });
 
   await expect(page.getByRole("button", { name: /Atara Standard Library/i }).first()).toBeVisible();
 
@@ -173,6 +207,78 @@ test("app shell zone anchors are rendered without red console errors", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("runtime panel registry opens and closes the actual Machine Library section", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const machineLibraryHeader = page.getByRole("button", { name: /Machine Library/i }).first();
+
+  await machineLibraryHeader.click();
+  await expect(page.getByTestId("machine-library-panel")).toHaveCount(0);
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.machineLibrary"))?.open).toBe(false);
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("atrvisu.panelSection.machineLibrary.v1")
+  )).toBe("collapsed");
+
+  expect(await invokeRuntimePanel(page, "open", "panel.machineLibrary")).toMatchObject({
+    handled: true,
+    status: "executed"
+  });
+  await expect(page.getByTestId("machine-library-panel")).toBeVisible();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.machineLibrary"))?.open).toBe(true);
+  await expect.poll(() => page.evaluate(() =>
+    window.localStorage.getItem("atrvisu.panelSection.machineLibrary.v1")
+  )).toBe("expanded");
+
+  expect(await invokeRuntimePanel(page, "close", "panel.machineLibrary")).toMatchObject({
+    handled: true,
+    status: "executed"
+  });
+  await expect(page.getByTestId("machine-library-panel")).toHaveCount(0);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("runtime right-panel shell preserves width and section state", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const rightPanel = page.getByTestId("right-panel");
+  const widthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
+
+  expect(await invokeRuntimePanel(page, "open", "panel.layers")).toMatchObject({ handled: true });
+  await expect(page.getByTestId("layers-panel")).toBeVisible();
+
+  expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({ handled: true });
+  await expect(rightPanel).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open right panel" })).toBeVisible();
+
+  expect(await invokeRuntimePanel(page, "open", "panel.rightPanelShell")).toMatchObject({ handled: true });
+  await expect(rightPanel).toBeVisible();
+  await expect(page.getByTestId("layers-panel")).toBeVisible();
+  await expect.poll(async () => rightPanel.evaluate((element) => element.getBoundingClientRect().width)).toBe(widthBefore);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("runtime panel registry opens and closes only the requested manager modal", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  expect(await invokeRuntimePanel(page, "open", "panel.libraryManager")).toMatchObject({ handled: true });
+  await expect(page.getByTestId("library-manager-modal")).toBeVisible();
+  await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
+
+  expect(await invokeRuntimePanel(page, "close", "panel.libraryManager")).toMatchObject({ handled: true });
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+  await expectNoModalBackdrop(page);
+  expect(errors).toEqual([]);
+});
+
 test("selected object and numeric rotation smoke has no red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -185,6 +291,7 @@ test("selected object and numeric rotation smoke has no red console errors", asy
   await page.getByLabel("Rotation Snap Step").fill("45");
 
   await page.locator(".machine-card").first().click();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("machine");
   const propertiesSectionButton = page.getByRole("button", { name: /Selected Object Properties/i });
   if ((await propertiesSectionButton.getAttribute("aria-expanded")) !== "true") {
     await propertiesSectionButton.click();
@@ -224,11 +331,13 @@ test("rigid assembly projection renders without exposing member arrange actions"
   await group.getByRole("button", { name: "Add Selected" }).click();
   await expect(group).toContainText("2 items");
   await group.locator(".assembly-group-button").click();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("assembly");
 
   await expect(page.getByTestId("create-group-from-selection")).toBeDisabled();
   await expect(group.getByRole("button", { name: "Add Selected" })).toBeDisabled();
   await expect(group.getByRole("button", { name: "Remove Selected" })).toBeDisabled();
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ available: false });
 
   const multiSelectionSection = page.getByRole("button", { name: /Assembly Properties/i });
   await expect(multiSelectionSection).toBeVisible();
@@ -473,11 +582,13 @@ test("group edit mode moves one member and restores rigid scene selection on exi
   await clickSceneMachine(page, machineIds[1]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(true);
 
   await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[1]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(false);
 
   const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   await dragSceneMachine(page, machineIds[0], 85, 25);
@@ -627,6 +738,7 @@ test("building civil references can be added and edited without red console erro
   }
   await expect(page.getByTestId("civil-reference-panel")).toBeVisible();
   await page.getByTestId("add-civil-column").click();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("civil");
 
   const propertiesSection = page.getByRole("button", { name: /Civil Reference Properties/i });
   await expect(propertiesSection).toBeVisible();

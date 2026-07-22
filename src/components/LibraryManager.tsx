@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties } from "react";
 import type {
@@ -38,6 +38,11 @@ type LibraryManagerProps = {
   taxonomyReloadToken: number;
   onClose: () => void;
   onLibrariesChanged: () => void;
+  onRuntimeControllerChange?: (controller: LibraryManagerRuntimeController | null) => void;
+};
+
+export type LibraryManagerRuntimeController = {
+  requestClose: () => void;
 };
 
 type SelectedNode =
@@ -1232,7 +1237,13 @@ function ManagerTreeNode({
   );
 }
 
-export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibrariesChanged }: LibraryManagerProps) {
+export function LibraryManager({
+  libraries,
+  taxonomyReloadToken,
+  onClose,
+  onLibrariesChanged,
+  onRuntimeControllerChange
+}: LibraryManagerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedLibraryId, setSelectedLibraryId] = useState(PROJECT_CUSTOM_LIBRARY_ID);
   const [selectedNode, setSelectedNode] = useState<SelectedNode | null>(null);
@@ -1302,7 +1313,7 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
     onLibrariesChanged();
   };
 
-  const requestClose = () => {
+  const requestClose = useCallback(() => {
     if (getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline) {
       const confirmed = window.confirm("Close Library Manager and discard the current item editor changes?");
       if (!confirmed) {
@@ -1310,7 +1321,12 @@ export function LibraryManager({ libraries, taxonomyReloadToken, onClose, onLibr
       }
     }
     onClose();
-  };
+  }, [itemEditor, itemEditorBaseline, onClose]);
+
+  useEffect(() => {
+    onRuntimeControllerChange?.({ requestClose });
+    return () => onRuntimeControllerChange?.(null);
+  }, [onRuntimeControllerChange, requestClose]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
