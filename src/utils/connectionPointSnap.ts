@@ -47,8 +47,44 @@ export type ConnectionPointSnapRuntimeAccessEvaluation =
   | { allowed: true }
   | {
       allowed: false;
-      reason: "unresolved" | "moving-unavailable" | "assembly-edit-required" | "explicit-selection-required" | "locked";
+      reason: ConnectionPointSnapContextFailureReason;
     };
+
+export type ConnectionPointSnapContextFailureReason =
+  | "unresolved"
+  | "machine-unavailable"
+  | "assembly-edit-required"
+  | "explicit-selection-required"
+  | "locked";
+
+export type ConnectionPointSnapContextEvaluation =
+  | {
+      available: true;
+      machineEntityIds: readonly [string, string];
+      machineIds: readonly [string, string];
+    }
+  | {
+      available: false;
+      reason: ConnectionPointSnapContextFailureReason;
+    };
+
+export type ConnectionPointSnapContextInput = {
+  selection: SelectionState;
+  entities: readonly PlatformEntity[];
+  activeGroupEditId?: string | null;
+};
+
+const connectionPointSnapContextMessages: Readonly<Record<ConnectionPointSnapContextFailureReason, string>> = {
+  unresolved: "Selected machines could not be resolved.",
+  "machine-unavailable": "Both selected machines must be visible and selectable.",
+  "assembly-edit-required": "Grouped machines require their matching active Edit Group.",
+  "explicit-selection-required": "Select exactly two explicit machines.",
+  locked: "Connection Point Snap is blocked because the selection contains a locked entity."
+};
+
+export const getConnectionPointSnapContextMessage = (
+  reason: ConnectionPointSnapContextFailureReason
+) => connectionPointSnapContextMessages[reason];
 
 export type ConnectionPointSnapRuntimeAccessInput = {
   selection: SelectionState;
@@ -191,6 +227,64 @@ export const applyConnectionPointSnap = (
   );
 };
 
+export const evaluateConnectionPointSnapContext = ({
+  selection,
+  entities,
+  activeGroupEditId = null
+}: ConnectionPointSnapContextInput): ConnectionPointSnapContextEvaluation => {
+  if (
+    selection.ids.length !== 2
+    || selection.ids.some((entityId) => !entityId.startsWith("machine:"))
+  ) {
+    return { available: false, reason: "explicit-selection-required" };
+  }
+
+  const machineEntityIds: readonly [string, string] = [selection.ids[0], selection.ids[1]];
+  const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+  const firstMachine = entityById.get(machineEntityIds[0]);
+  const secondMachine = entityById.get(machineEntityIds[1]);
+  if (firstMachine?.type !== "machine" || secondMachine?.type !== "machine") {
+    return { available: false, reason: "unresolved" };
+  }
+  const resolvedMachines: readonly [PlatformEntity, PlatformEntity] = [firstMachine, secondMachine];
+  if (resolvedMachines.some((entity) => !entity.visible || !entity.selectable)) {
+    return { available: false, reason: "machine-unavailable" };
+  }
+
+  if (!activeGroupEditId) {
+    if (resolvedMachines.some((entity) => Boolean(entity.parentId))) {
+      return { available: false, reason: "assembly-edit-required" };
+    }
+  } else {
+    const activeGroupEntityId = `group:${activeGroupEditId}`;
+    const activeGroup = entityById.get(activeGroupEntityId);
+    if (
+      activeGroup?.type !== "group"
+      || resolvedMachines.some((entity) => entity.parentId !== activeGroupEntityId)
+      || machineEntityIds.some((entityId) => !activeGroup.childrenIds.includes(entityId))
+    ) {
+      return { available: false, reason: "assembly-edit-required" };
+    }
+  }
+
+  const movement = evaluateAtomicMovement(machineEntityIds, entities);
+  if (!movement.allowed) {
+    return {
+      available: false,
+      reason: movement.reason === "locked" ? "locked" : "machine-unavailable"
+    };
+  }
+
+  return {
+    available: true,
+    machineEntityIds,
+    machineIds: [
+      machineEntityIds[0].slice("machine:".length),
+      machineEntityIds[1].slice("machine:".length)
+    ]
+  };
+};
+
 export const evaluateConnectionPointSnapRuntimeAccess = ({
   selection,
   entities,
@@ -198,40 +292,20 @@ export const evaluateConnectionPointSnapRuntimeAccess = ({
   movingMachineId,
   fixedMachineId
 }: ConnectionPointSnapRuntimeAccessInput): ConnectionPointSnapRuntimeAccessEvaluation => {
-  const entityById = new Map(entities.map((entity) => [entity.id, entity]));
   const movingEntityId = `machine:${movingMachineId}`;
   const fixedEntityId = `machine:${fixedMachineId}`;
-  const movingEntity = entityById.get(movingEntityId);
-  const fixedEntity = entityById.get(fixedEntityId);
-
-  if (movingEntity?.type !== "machine" || fixedEntity?.type !== "machine") {
-    return { allowed: false, reason: "unresolved" };
+  const context = evaluateConnectionPointSnapContext({ selection, entities, activeGroupEditId });
+  if (!context.available) {
+    return { allowed: false, reason: context.reason };
   }
-  if (!movingEntity.visible || !movingEntity.selectable || movingEntity.locked) {
-    return { allowed: false, reason: movingEntity.locked ? "locked" : "moving-unavailable" };
-  }
-
-  const hasAssemblyMember = Boolean(movingEntity.parentId || fixedEntity.parentId);
-  if (!hasAssemblyMember) {
-    return { allowed: true };
-  }
-
-  const activeGroupEntityId = activeGroupEditId ? `group:${activeGroupEditId}` : null;
   if (
-    !activeGroupEntityId
-    || movingEntity.parentId !== activeGroupEntityId
-    || fixedEntity.parentId !== activeGroupEntityId
+    !context.machineEntityIds.includes(movingEntityId)
+    || !context.machineEntityIds.includes(fixedEntityId)
+    || movingEntityId === fixedEntityId
   ) {
-    return { allowed: false, reason: "assembly-edit-required" };
-  }
-  if (!selection.ids.includes(movingEntityId) || !selection.ids.includes(fixedEntityId)) {
     return { allowed: false, reason: "explicit-selection-required" };
   }
-
-  const movement = evaluateAtomicMovement([movingEntityId, fixedEntityId], entities);
-  return movement.allowed
-    ? { allowed: true }
-    : { allowed: false, reason: movement.reason === "locked" ? "locked" : "moving-unavailable" };
+  return { allowed: true };
 };
 
 export const executeGuardedConnectionPointSnap = (

@@ -46,9 +46,9 @@ export type RuntimePanelState = {
 
 export type RuntimePanelBinding = {
   getState: () => RuntimePanelState;
-  open?: () => void;
-  close?: () => void;
-  toggle?: () => void;
+  open?: RuntimePanelOperationHandler;
+  close?: RuntimePanelOperationHandler;
+  toggle?: RuntimePanelOperationHandler;
 };
 
 export type RuntimePanelBindings = Readonly<Partial<Record<RuntimePanelId, RuntimePanelBinding>>>;
@@ -82,9 +82,11 @@ export type RuntimePanelReachability = {
 
 export type RuntimePanelOperationResult = {
   handled: boolean;
-  status: "executed" | "unknown" | "unbound" | "unavailable" | "unsupported";
+  status: "executed" | "cancelled" | "unknown" | "unbound" | "unavailable" | "unsupported";
   reason?: string;
 };
+
+export type RuntimePanelOperationHandler = () => boolean | void;
 
 const panel = (
   id: RuntimePanelId,
@@ -260,7 +262,13 @@ export const createRuntimePanelRegistryBridge = (
         reason: `Runtime panel "${panelId}" does not support ${operation}.`
       };
     }
-    operationHandler();
+    if (operationHandler() === false) {
+      return {
+        handled: false,
+        status: "cancelled",
+        reason: `Runtime panel "${panelId}" operation was cancelled.`
+      };
+    }
     return { handled: true, status: "executed" };
   };
 

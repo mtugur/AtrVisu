@@ -8,7 +8,10 @@ This implementation binds the existing platform Panel Registry to current AtrVis
 - React state remains the only writable source for right-panel, section expansion, contextual availability, and modal state.
 - Runtime bindings are replaced through a commit-safe ref; the registry is not rebuilt after panel, selection, modal, or viewport changes.
 - `PanelSection` controlled mode uses the same expansion state for user clicks and registry actions while preserving the existing localStorage keys and `expandSignal` behavior.
-- Library Manager runtime close delegates to its existing dirty-state-aware close handler.
+- Library Manager runtime close delegates to its existing dirty-state-aware close handler and returns an accepted/cancelled result.
+- Machine Library section and right-panel shell close/toggle paths run the same manager preflight before changing parent state.
+- A cancelled dirty close leaves the manager mounted, keeps its parent open, preserves editor state, and is reported as a non-executed cancelled operation.
+- Library Manager and Taxonomy Manager use one exclusive-open coordinator, so switching managers cannot create overlapping backdrops.
 - Registry entries contain metadata and operations only; they do not own React components or Babylon resources.
 - Reachability reports the current runtime location separately from seed `dock` metadata, making legacy shell mismatches explicit instead of relabeling or duplicating canonical IDs.
 
@@ -38,7 +41,20 @@ The following canonical IDs have current runtime bindings:
 - `panel.libraryManager`
 - `panel.taxonomyManager`
 
-`panel.connectionPointSnap` remains registered while unavailable and explains that exactly two explicit machines outside a rigid group root are required. `panel.inspector` reports its current no-selection, machine, civil, multi-selection, or assembly context and does not manufacture selection.
+`panel.connectionPointSnap` uses one canonical context predicate for JSX rendering, reachability, open capability, and defensive execution. A valid context contains exactly two authoritative explicit `machine:*` entities. Both must resolve, be visible, selectable, and pass atomic lock evaluation. Normal mode requires both machines to be ungrouped; Edit Group requires both to be explicit children of the matching active group. Any civil reference, annotation, group root, third machine, or unresolved extra selection makes the panel unavailable before mutation, history, or dirty-state callbacks.
+
+`panel.inspector` reports its current no-selection, machine, civil, multi-selection, or assembly context and does not manufacture selection.
+
+## Runtime consistency validation
+
+- Clean manager close permits parent collapse.
+- Dirty Library Manager cancellation blocks Machine Library and shell collapse.
+- Accepted discard closes the manager before parent collapse.
+- Taxonomy Manager closes deterministically before a parent unmount.
+- Registry cancellation is reported as `handled: false` with status `cancelled`.
+- Browser coverage verifies modal DOM state, parent state, and registry state remain aligned.
+- Browser coverage verifies Connection Point Snap disappears for two machines plus civil or a third machine, and reappears for exactly two valid machines.
+- Final local validation: 83 unit-test files / 753 tests and 23 E2E tests.
 
 ## Known unbound metadata
 

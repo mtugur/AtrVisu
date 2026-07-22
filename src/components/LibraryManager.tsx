@@ -42,7 +42,7 @@ type LibraryManagerProps = {
 };
 
 export type LibraryManagerRuntimeController = {
-  requestClose: () => void;
+  requestClose: () => boolean;
 };
 
 type SelectedNode =
@@ -1317,10 +1317,11 @@ export function LibraryManager({
     if (getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline) {
       const confirmed = window.confirm("Close Library Manager and discard the current item editor changes?");
       if (!confirmed) {
-        return;
+        return false;
       }
     }
     onClose();
+    return true;
   }, [itemEditor, itemEditorBaseline, onClose]);
 
   useEffect(() => {

@@ -53,6 +53,26 @@ const getRuntimePanel = async (page: Page, panelId: string) => page.evaluate((id
   return bridge.get(id);
 }, panelId);
 
+const selectExistingCustomLibraryItem = async (page: Page) => {
+  const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
+  if (!(await customLibraryItem.isVisible().catch(() => false))) {
+    const customLibraryButton = page.getByTestId("library-manager-custom-library-button");
+    await expect(customLibraryButton).toBeVisible();
+    await expect(customLibraryButton).toBeEnabled();
+    await customLibraryButton.click();
+    await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
+  }
+  if (!(await customLibraryItem.isVisible().catch(() => false))) {
+    await page.getByTestId("library-manager-group-toggle-safety").click();
+  }
+  if (!(await customLibraryItem.isVisible().catch(() => false))) {
+    await page.getByTestId("library-manager-group-toggle-fencing").click();
+  }
+  await expect(customLibraryItem).toBeVisible();
+  await customLibraryItem.click();
+  await expect(page.getByTestId("library-manager-selected-item-editor")).toBeVisible();
+};
+
 type PlanPosition = { xMm: number; yMm: number };
 type ScreenPoint = { x: number; y: number };
 
@@ -174,7 +194,7 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
     bound: true,
     available: false,
-    reason: "Select exactly two explicit machines outside a rigid group root."
+    reason: "Select exactly two explicit machines."
   });
 
   await expect(page.getByRole("button", { name: /Atara Standard Library/i }).first()).toBeVisible();
@@ -276,6 +296,95 @@ test("runtime panel registry opens and closes only the requested manager modal",
   expect(await invokeRuntimePanel(page, "close", "panel.libraryManager")).toMatchObject({ handled: true });
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expectNoModalBackdrop(page);
+  expect(errors).toEqual([]);
+});
+
+test("dirty Library Manager blocks parent panel collapse until discard is accepted", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  expect(await invokeRuntimePanel(page, "open", "panel.libraryManager")).toMatchObject({ handled: true });
+  await expect(page.getByTestId("library-manager-ready")).toBeVisible();
+  await selectExistingCustomLibraryItem(page);
+
+  const editor = page.getByTestId("library-manager-selected-item-editor");
+  const nameInput = editor.getByRole("textbox", { name: "Name", exact: true });
+  const dirtyValue = (await nameInput.inputValue()) + " - unsaved";
+  await nameInput.fill(dirtyValue);
+
+  page.once("dialog", async (dialog) => dialog.dismiss());
+  expect(await invokeRuntimePanel(page, "close", "panel.machineLibrary")).toMatchObject({
+    handled: false,
+    status: "cancelled"
+  });
+  await expect(page.getByTestId("library-manager-modal")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Machine Library/i }).first()).toHaveAttribute("aria-expanded", "true");
+  await expect(nameInput).toHaveValue(dirtyValue);
+  expect(await getRuntimePanel(page, "panel.libraryManager")).toMatchObject({ open: true, visible: true });
+
+  page.once("dialog", async (dialog) => dialog.dismiss());
+  expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({
+    handled: false,
+    status: "cancelled"
+  });
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  await expect(page.getByTestId("library-manager-modal")).toBeVisible();
+  await expect(nameInput).toHaveValue(dirtyValue);
+
+  page.once("dialog", async (dialog) => dialog.accept());
+  expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({
+    handled: true,
+    status: "executed"
+  });
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.libraryManager"))?.open).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("Connection Point Snap uses the authoritative exact-two-machine context", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const machineCard = page.locator(".machine-card").first();
+  await machineCard.click();
+  await machineCard.click();
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 3);
+  const machineIds = await getMachineIds(page);
+
+  const civilSection = page.getByRole("button", { name: /Building \/ Civil/i });
+  if ((await civilSection.getAttribute("aria-expanded")) !== "true") {
+    await civilSection.click();
+  }
+  await page.getByTestId("add-civil-column").click();
+
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[0]);
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
+    available: false,
+    visible: false
+  });
+
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(true);
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ visible: true });
+
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
+    available: false,
+    visible: false
+  });
   expect(errors).toEqual([]);
 });
 
@@ -790,23 +899,7 @@ test("Library Manager opens and closes with stable header control", async ({ pag
   await expect(page.getByTestId("library-manager-ready")).toBeVisible();
   await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
 
-  const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
-  if (!(await customLibraryItem.isVisible().catch(() => false))) {
-    const customLibraryButton = page.getByTestId("library-manager-custom-library-button");
-    await expect(customLibraryButton).toBeVisible();
-    await expect(customLibraryButton).toBeEnabled();
-    await customLibraryButton.click();
-    await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
-  }
-  if (!(await customLibraryItem.isVisible().catch(() => false))) {
-    await page.getByTestId("library-manager-group-toggle-safety").click();
-  }
-  if (!(await customLibraryItem.isVisible().catch(() => false))) {
-    await page.getByTestId("library-manager-group-toggle-fencing").click();
-  }
-  await expect(customLibraryItem).toBeVisible();
-  await customLibraryItem.click();
-  await expect(page.getByTestId("library-manager-selected-item-editor")).toBeVisible();
+  await selectExistingCustomLibraryItem(page);
   await expect(page.getByTestId("atara-machine-data-section")).toBeVisible();
   await expect(page.getByTestId("visual-model-calibration-section")).toBeVisible();
   await expect(page.getByTestId("collision-envelope-editor-section")).toBeVisible();

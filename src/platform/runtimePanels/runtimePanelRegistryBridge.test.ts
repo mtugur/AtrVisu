@@ -115,6 +115,20 @@ describe("runtime panel registry bridge", () => {
     expect(() => bridge.openPanel(RUNTIME_PANEL_IDS.groups)).toThrow(error);
   });
 
+  it("reports a cancelled runtime operation as not executed", () => {
+    const close = vi.fn(() => false);
+    const bridge = createRuntimePanelRegistryBridge(() => ({
+      [RUNTIME_PANEL_IDS.machineLibrary]: { getState: availableState, close }
+    }));
+
+    expect(bridge.closePanel(RUNTIME_PANEL_IDS.machineLibrary)).toEqual({
+      handled: false,
+      status: "cancelled",
+      reason: `Runtime panel "${RUNTIME_PANEL_IDS.machineLibrary}" operation was cancelled.`
+    });
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("reports contextual unavailability without invoking operations", () => {
     const open = vi.fn();
     const bridge = createRuntimePanelRegistryBridge(() => ({

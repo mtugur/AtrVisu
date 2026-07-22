@@ -5,11 +5,13 @@ import type { MachineConnectionPoint } from "../types/ataraMachineData";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import {
   applyConnectionPointSnap,
+  evaluateConnectionPointSnapContext,
   evaluateConnectionPointSnapRuntimeAccess,
   evaluateConnectionPointSnapCandidate,
   executeGuardedConnectionPointSnap,
   formatConnectionPointSelectorLabel,
   getConnectionPointCompatibility,
+  getConnectionPointSnapContextMessage,
   getConnectionPointSnapDelta
 } from "./connectionPointSnap";
 
@@ -105,12 +107,28 @@ const platformGroup = (id: string, childrenIds: string[]): PlatformEntity => ({
   selectable: true
 });
 
+const platformCivil = (id: string): PlatformEntity => ({
+  id: `civil:${id}`,
+  type: "civil",
+  name: id,
+  transform: { planX: 0, planY: 0, elevation: 0, rotationDeg: 0 },
+  properties: [],
+  connectors: [],
+  childrenIds: [],
+  layerId: "default",
+  visible: true,
+  locked: false,
+  selectable: true
+});
+
 describe("connection point snap helpers", () => {
   const movingOut = point("CP-OUT", "product-out", 1000, 0, "x+", "Product Out");
   const fixedIn = point("CP-IN", "product-in", -1000, 0, "x-", "Product In");
 
   it("formats useful selector labels", () => {
     expect(formatConnectionPointSelectorLabel(movingOut)).toBe("Product Out - CP-OUT - Product Out");
+    expect(getConnectionPointSnapContextMessage("explicit-selection-required"))
+      .toBe("Select exactly two explicit machines.");
   });
 
   it("reports product-out to product-in compatibility", () => {
@@ -228,12 +246,66 @@ describe("connection point snap helpers", () => {
   });
 
   it("preserves snap access for two explicitly selected ungrouped machines", () => {
+    const selection = replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene");
+    const entities = [platformMachine("moving"), platformMachine("fixed")];
+
+    expect(evaluateConnectionPointSnapContext({ selection, entities })).toMatchObject({
+      available: true,
+      machineIds: ["moving", "fixed"]
+    });
     expect(evaluateConnectionPointSnapRuntimeAccess({
-      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene"),
-      entities: [platformMachine("moving"), platformMachine("fixed")],
+      selection,
+      entities,
       movingMachineId: "moving",
       fixedMachineId: "fixed"
     })).toEqual({ allowed: true });
+  });
+
+  it("rejects two machines with any additional authoritative entity", () => {
+    const entities = [
+      platformMachine("moving"),
+      platformMachine("fixed"),
+      platformMachine("extra"),
+      platformCivil("column")
+    ];
+
+    expect(evaluateConnectionPointSnapContext({
+      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed", "civil:column"], "scene"),
+      entities
+    })).toEqual({ available: false, reason: "explicit-selection-required" });
+    expect(evaluateConnectionPointSnapContext({
+      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed", "machine:extra"], "scene"),
+      entities
+    })).toEqual({ available: false, reason: "explicit-selection-required" });
+  });
+
+  it("rejects a group root projection instead of treating projected machines as explicit selection", () => {
+    const parentId = "group:assembly";
+    const entities = [
+      platformMachine("moving", { parentId }),
+      platformMachine("fixed", { parentId }),
+      platformGroup("assembly", ["machine:moving", "machine:fixed"])
+    ];
+
+    expect(evaluateConnectionPointSnapContext({
+      selection: replaceRuntimeSelection([parentId], "scene"),
+      entities
+    })).toEqual({ available: false, reason: "explicit-selection-required" });
+  });
+
+  it.each([
+    ["moving hidden", { visible: false }, {}],
+    ["moving non-selectable", { selectable: false }, {}],
+    ["fixed hidden", {}, { visible: false }],
+    ["fixed non-selectable", {}, { selectable: false }]
+  ] as const)("rejects %s machine context", (_label, movingOverrides, fixedOverrides) => {
+    expect(evaluateConnectionPointSnapContext({
+      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene"),
+      entities: [
+        platformMachine("moving", movingOverrides),
+        platformMachine("fixed", fixedOverrides)
+      ]
+    })).toEqual({ available: false, reason: "machine-unavailable" });
   });
 
   it("rejects grouped-member snap outside group edit without movement, history, or dirty state", () => {
@@ -266,7 +338,7 @@ describe("connection point snap helpers", () => {
       );
     });
 
-    expect(evaluation).toEqual({ allowed: false, reason: "assembly-edit-required" });
+    expect(evaluation).toEqual({ allowed: false, reason: "explicit-selection-required" });
     expect(machines.map((item) => item.positionMm)).toEqual(originalPositions);
     expect(recordHistory).not.toHaveBeenCalled();
     expect(markDirty).not.toHaveBeenCalled();
@@ -296,6 +368,20 @@ describe("connection point snap helpers", () => {
       movingMachineId: "moving",
       fixedMachineId: "fixed"
     })).toEqual({ allowed: true });
+    expect(evaluateConnectionPointSnapContext({
+      selection: explicitChildren,
+      entities,
+      activeGroupEditId: "assembly"
+    })).toMatchObject({ available: true });
+    expect(evaluateConnectionPointSnapContext({
+      selection: replaceRuntimeSelection([
+        "machine:moving",
+        "machine:fixed",
+        "civil:extra"
+      ], "scene"),
+      entities: [...entities, platformCivil("extra")],
+      activeGroupEditId: "assembly"
+    })).toEqual({ available: false, reason: "explicit-selection-required" });
   });
 
   it("keeps active group edit snap subject to atomic lock rules", () => {
@@ -313,6 +399,30 @@ describe("connection point snap helpers", () => {
       movingMachineId: "moving",
       fixedMachineId: "fixed"
     })).toEqual({ allowed: false, reason: "locked" });
+  });
+
+  it("applies the existing atomic lock contract to ungrouped machines", () => {
+    expect(evaluateConnectionPointSnapContext({
+      selection: replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene"),
+      entities: [platformMachine("moving"), platformMachine("fixed", { locked: true })]
+    })).toEqual({ available: false, reason: "locked" });
+  });
+
+  it("rejects invalid explicit context before mutation, history, or dirty state", () => {
+    const mutate = vi.fn();
+    const evaluation = executeGuardedConnectionPointSnap({
+      selection: replaceRuntimeSelection([
+        "machine:moving",
+        "machine:fixed",
+        "civil:column"
+      ], "scene"),
+      entities: [platformMachine("moving"), platformMachine("fixed"), platformCivil("column")],
+      movingMachineId: "moving",
+      fixedMachineId: "fixed"
+    }, mutate);
+
+    expect(evaluation).toEqual({ allowed: false, reason: "explicit-selection-required" });
+    expect(mutate).not.toHaveBeenCalled();
   });
 });
 

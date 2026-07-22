@@ -72,7 +72,9 @@ import { normalizeMachineVisualModel } from "./utils/visualModel";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
 import {
   applyConnectionPointSnap,
+  evaluateConnectionPointSnapContext,
   executeGuardedConnectionPointSnap,
+  getConnectionPointSnapContextMessage,
   type ConnectionPointSnapSelection
 } from "./utils/connectionPointSnap";
 import {
@@ -152,7 +154,9 @@ import {
 } from "./utils/layers";
 import {
   RUNTIME_PANEL_IDS,
+  closeMachineLibraryManagerModals,
   createRuntimePanelRegistryBridge,
+  openMachineLibraryManagerExclusively,
   type RuntimePanelBinding,
   type RuntimePanelBindings,
   type RuntimePanelState
@@ -328,6 +332,7 @@ export function App() {
     isLibraryManagerOpen,
     isTaxonomyManagerOpen,
     connectionPointSnapAvailable: false,
+    connectionPointSnapReason: "Select exactly two explicit machines.",
     propertiesVisible: true,
     propertiesContext: "none"
   });
@@ -348,6 +353,11 @@ export function App() {
     () => projectExplicitRuntimeSelection(runtimeSelection, platformEntities),
     [platformEntities, runtimeSelection]
   );
+  const connectionPointSnapContext = useMemo(() => evaluateConnectionPointSnapContext({
+    selection: runtimeSelection,
+    entities: platformEntities,
+    activeGroupEditId
+  }), [activeGroupEditId, platformEntities, runtimeSelection]);
   const {
     selectedMachineIds,
     primarySelectedMachineId,
@@ -789,18 +799,6 @@ export function App() {
       : { ...current, [panelId]: expanded });
   }, []);
 
-  const openLibraryManager = useCallback(() => {
-    setIsPanelCollapsed(false);
-    setPanelSectionExpanded(RUNTIME_PANEL_IDS.machineLibrary, true);
-    setIsLibraryManagerOpen(true);
-  }, [setPanelSectionExpanded]);
-
-  const openTaxonomyManager = useCallback(() => {
-    setIsPanelCollapsed(false);
-    setPanelSectionExpanded(RUNTIME_PANEL_IDS.machineLibrary, true);
-    setIsTaxonomyManagerOpen(true);
-  }, [setPanelSectionExpanded]);
-
   const setLibraryManagerRuntimeController = useCallback(
     (controller: LibraryManagerRuntimeController | null) => {
       libraryManagerRuntimeControllerRef.current = controller;
@@ -808,10 +806,59 @@ export function App() {
     []
   );
 
+  const requestLibraryManagerClose = useCallback(() => {
+    if (!runtimePanelStateRef.current.isLibraryManagerOpen) {
+      return true;
+    }
+    const controller = libraryManagerRuntimeControllerRef.current;
+    if (controller) {
+      return controller.requestClose();
+    }
+    setIsLibraryManagerOpen(false);
+    return true;
+  }, []);
+
+  const closeMachineLibraryManagers = useCallback(() => closeMachineLibraryManagerModals({
+    libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
+    taxonomyManagerOpen: runtimePanelStateRef.current.isTaxonomyManagerOpen
+  }, {
+    requestLibraryManagerClose,
+    closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false)
+  }), [requestLibraryManagerClose]);
+
+  const openLibraryManager = useCallback(() => openMachineLibraryManagerExclusively("library", {
+    libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
+    taxonomyManagerOpen: runtimePanelStateRef.current.isTaxonomyManagerOpen
+  }, {
+    requestLibraryManagerClose,
+    closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
+    openLibraryManager: () => {
+      setIsPanelCollapsed(false);
+      setPanelSectionExpanded(RUNTIME_PANEL_IDS.machineLibrary, true);
+      setIsLibraryManagerOpen(true);
+    },
+    openTaxonomyManager: () => setIsTaxonomyManagerOpen(true)
+  }), [requestLibraryManagerClose, setPanelSectionExpanded]);
+
+  const openTaxonomyManager = useCallback(() => openMachineLibraryManagerExclusively("taxonomy", {
+    libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
+    taxonomyManagerOpen: runtimePanelStateRef.current.isTaxonomyManagerOpen
+  }, {
+    requestLibraryManagerClose,
+    closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
+    openLibraryManager: () => setIsLibraryManagerOpen(true),
+    openTaxonomyManager: () => {
+      setIsPanelCollapsed(false);
+      setPanelSectionExpanded(RUNTIME_PANEL_IDS.machineLibrary, true);
+      setIsTaxonomyManagerOpen(true);
+    }
+  }), [requestLibraryManagerClose, setPanelSectionExpanded]);
+
   const runtimePanelBindings = useMemo<RuntimePanelBindings>(() => {
     const sectionBinding = (
       panelId: PanelSectionId,
-      getAvailability: () => { available: boolean; reason?: string; context?: string } = () => ({ available: true })
+      getAvailability: () => { available: boolean; reason?: string; context?: string } = () => ({ available: true }),
+      beforeClose?: () => boolean
     ): RuntimePanelBinding => ({
       getState: () => {
         const state = runtimePanelStateRef.current;
@@ -830,11 +877,21 @@ export function App() {
         setIsPanelCollapsed(false);
         setPanelSectionExpanded(panelId, true);
       },
-      close: () => setPanelSectionExpanded(panelId, false),
+      close: () => {
+        if (beforeClose && !beforeClose()) {
+          return false;
+        }
+        setPanelSectionExpanded(panelId, false);
+        return true;
+      },
       toggle: () => {
         const state = runtimePanelStateRef.current;
+        if (state.panelSectionExpansion[panelId] && beforeClose && !beforeClose()) {
+          return false;
+        }
         setIsPanelCollapsed(false);
         setPanelSectionExpanded(panelId, !state.panelSectionExpansion[panelId]);
+        return true;
       }
     });
 
@@ -857,10 +914,26 @@ export function App() {
           context: `${runtimePanelStateRef.current.panelWidth}px`
         }),
         open: () => setIsPanelCollapsed(false),
-        close: () => setIsPanelCollapsed(true),
-        toggle: () => setIsPanelCollapsed((current) => !current)
+        close: () => {
+          if (!closeMachineLibraryManagers()) {
+            return false;
+          }
+          setIsPanelCollapsed(true);
+          return true;
+        },
+        toggle: () => {
+          if (!runtimePanelStateRef.current.isPanelCollapsed && !closeMachineLibraryManagers()) {
+            return false;
+          }
+          setIsPanelCollapsed((current) => !current);
+          return true;
+        }
       },
-      [RUNTIME_PANEL_IDS.machineLibrary]: sectionBinding(RUNTIME_PANEL_IDS.machineLibrary),
+      [RUNTIME_PANEL_IDS.machineLibrary]: sectionBinding(
+        RUNTIME_PANEL_IDS.machineLibrary,
+        undefined,
+        closeMachineLibraryManagers
+      ),
       [RUNTIME_PANEL_IDS.layoutControls]: sectionBinding(RUNTIME_PANEL_IDS.layoutControls),
       [RUNTIME_PANEL_IDS.viewpoints]: sectionBinding(RUNTIME_PANEL_IDS.viewpoints),
       [RUNTIME_PANEL_IDS.layers]: sectionBinding(RUNTIME_PANEL_IDS.layers),
@@ -880,7 +953,7 @@ export function App() {
           ? { available: true, context: "two-explicit-machines" }
           : {
               available: false,
-              reason: "Select exactly two explicit machines outside a rigid group root.",
+              reason: runtimePanelStateRef.current.connectionPointSnapReason,
               context: "unavailable"
             }
       ),
@@ -913,12 +986,7 @@ export function App() {
         getState: () => modalState(runtimePanelStateRef.current.isLibraryManagerOpen),
         open: openLibraryManager,
         close: () => {
-          const controller = libraryManagerRuntimeControllerRef.current;
-          if (controller) {
-            controller.requestClose();
-          } else {
-            setIsLibraryManagerOpen(false);
-          }
+          return requestLibraryManagerClose();
         }
       },
       [RUNTIME_PANEL_IDS.taxonomyManager]: {
@@ -927,7 +995,14 @@ export function App() {
         close: () => setIsTaxonomyManagerOpen(false)
       }
     };
-  }, [openLibraryManager, openTaxonomyManager, refreshProjects, setPanelSectionExpanded]);
+  }, [
+    closeMachineLibraryManagers,
+    openLibraryManager,
+    openTaxonomyManager,
+    refreshProjects,
+    requestLibraryManagerClose,
+    setPanelSectionExpanded
+  ]);
 
   const propertiesPanelContext = selectedGroup
     ? "assembly"
@@ -938,9 +1013,10 @@ export function App() {
         : selectedMachine
           ? "machine"
           : "none";
-  const connectionPointSnapAvailable = explicitSelectionProjection.selectedMachineIds.length === 2
-    && explicitSelectionProjection.selectedAlignableEntityIds.length === 2
-    && !selectedGroupId;
+  const connectionPointSnapAvailable = connectionPointSnapContext.available;
+  const connectionPointSnapReason = connectionPointSnapContext.available
+    ? ""
+    : getConnectionPointSnapContextMessage(connectionPointSnapContext.reason);
 
   useLayoutEffect(() => {
     runtimePanelStateRef.current = {
@@ -952,11 +1028,13 @@ export function App() {
       isLibraryManagerOpen,
       isTaxonomyManagerOpen,
       connectionPointSnapAvailable,
+      connectionPointSnapReason,
       propertiesVisible: !editingAnnotationId,
       propertiesContext: propertiesPanelContext
     };
   }, [
     connectionPointSnapAvailable,
+    connectionPointSnapReason,
     editingAnnotationId,
     isLibraryManagerOpen,
     isPanelCollapsed,
@@ -2571,7 +2649,17 @@ export function App() {
 
   const getPanelSectionRuntimeProps = (panelId: PanelSectionId) => ({
     expanded: panelSectionExpansion[panelId],
-    onExpandedChange: (expanded: boolean) => setPanelSectionExpanded(panelId, expanded)
+    onExpandedChange: (expanded: boolean) => {
+      if (panelId === RUNTIME_PANEL_IDS.machineLibrary) {
+        if (expanded) {
+          runtimePanelBridge.openPanel(panelId);
+        } else {
+          runtimePanelBridge.closePanel(panelId);
+        }
+        return;
+      }
+      setPanelSectionExpanded(panelId, expanded);
+    }
   });
 
   return (
@@ -2898,7 +2986,7 @@ export function App() {
               onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
-          {selectedMachineIds.length === 2 && !selectedGroupId ? (
+          {connectionPointSnapAvailable ? (
             <PanelSection
               title="Connection Point Snap"
               storageKey="atrvisu.panelSection.connectionPointSnap.v1"
