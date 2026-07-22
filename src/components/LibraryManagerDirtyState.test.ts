@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { getItemEditorDirtyKey } from "./LibraryManager";
+import { describe, expect, it, vi } from "vitest";
+import { getItemEditorDirtyKey, requestGuardedLibrarySelection } from "./LibraryManager";
 
 const createEditor = (overrides: Record<string, unknown> = {}) => ({
   mode: "edit",
@@ -136,5 +136,129 @@ describe("Library Manager item editor dirty state", () => {
     const equivalent = getItemEditorDirtyKey(createEditor({ ataraConnectionPointsJson: JSON.stringify(connectionPoints) }) as never);
 
     expect(equivalent).toBe(baseline);
+  });
+});
+
+describe("Library Manager guarded library selection", () => {
+  it("switches a clean editor without requesting confirmation", () => {
+    const confirmDiscard = vi.fn(() => true);
+    const applySelection = vi.fn();
+
+    const status = requestGuardedLibrarySelection({
+      currentLibraryId: "project-custom",
+      requestedLibraryId: "atara-standard",
+      hasUnsavedItemChanges: false,
+      confirmDiscard,
+      applySelection
+    });
+
+    expect(status).toBe("accepted");
+    expect(confirmDiscard).not.toHaveBeenCalled();
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(applySelection).toHaveBeenCalledWith("atara-standard");
+  });
+
+  it("treats the already selected library as a state-preserving no-op", () => {
+    const confirmDiscard = vi.fn(() => true);
+    const applySelection = vi.fn();
+
+    const status = requestGuardedLibrarySelection({
+      currentLibraryId: "project-custom",
+      requestedLibraryId: "project-custom",
+      hasUnsavedItemChanges: true,
+      confirmDiscard,
+      applySelection
+    });
+
+    expect(status).toBe("unchanged");
+    expect(confirmDiscard).not.toHaveBeenCalled();
+    expect(applySelection).not.toHaveBeenCalled();
+  });
+
+  it("preserves the complete dirty editor state when library navigation is cancelled", () => {
+    const editor = createEditor({
+      name: "Unsaved Machine",
+      tags: "unsaved,custom",
+      ataraAtrId: "ATR-UNSAVED",
+      ataraConnectionPointsJson: JSON.stringify([
+        {
+          id: "unsaved-point",
+          name: "Unsaved Point",
+          type: "product-in",
+          positionMm: { xMm: -125, yMm: 250, zMm: 500 },
+          direction: "x+"
+        }
+      ])
+    });
+    const baseline = getItemEditorDirtyKey(createEditor() as never);
+    const state = {
+      selectedLibraryId: "project-custom",
+      selectedNode: { type: "item", groupId: "root", itemId: "item-1" },
+      itemEditor: editor,
+      itemEditorBaseline: baseline,
+      validationError: "Existing validation state"
+    };
+    const stateBefore = structuredClone(state);
+    const confirmDiscard = vi.fn(() => false);
+    const applySelection = vi.fn();
+
+    const status = requestGuardedLibrarySelection({
+      currentLibraryId: state.selectedLibraryId,
+      requestedLibraryId: "atara-standard",
+      hasUnsavedItemChanges: getItemEditorDirtyKey(editor as never) !== baseline,
+      confirmDiscard,
+      applySelection
+    });
+
+    expect(status).toBe("cancelled");
+    expect(confirmDiscard).toHaveBeenCalledOnce();
+    expect(applySelection).not.toHaveBeenCalled();
+    expect(state).toEqual(stateBefore);
+    expect(getItemEditorDirtyKey(state.itemEditor as never)).not.toBe(state.itemEditorBaseline);
+  });
+
+  it("applies accepted dirty navigation exactly once so the abandoned editor can be cleared", () => {
+    const confirmDiscard = vi.fn(() => true);
+    const state: {
+      selectedLibraryId: string;
+      selectedNode: Record<string, string> | null;
+      itemEditor: ReturnType<typeof createEditor> | null;
+      itemEditorBaseline: string;
+      validationError: string;
+    } = {
+      selectedLibraryId: "project-custom",
+      selectedNode: { type: "item", groupId: "root", itemId: "item-1" },
+      itemEditor: createEditor({ name: "Unsaved Machine" }),
+      itemEditorBaseline: getItemEditorDirtyKey(createEditor() as never),
+      validationError: "Existing validation state"
+    };
+    const persistLibrary = vi.fn();
+    const applySelection = vi.fn((libraryId: string) => {
+      state.selectedLibraryId = libraryId;
+      state.selectedNode = null;
+      state.itemEditor = null;
+      state.itemEditorBaseline = "";
+      state.validationError = "";
+    });
+
+    const status = requestGuardedLibrarySelection({
+      currentLibraryId: state.selectedLibraryId,
+      requestedLibraryId: "atara-standard",
+      hasUnsavedItemChanges: true,
+      confirmDiscard,
+      applySelection
+    });
+
+    expect(status).toBe("accepted");
+    expect(confirmDiscard).toHaveBeenCalledOnce();
+    expect(applySelection).toHaveBeenCalledOnce();
+    expect(state).toEqual({
+      selectedLibraryId: "atara-standard",
+      selectedNode: null,
+      itemEditor: null,
+      itemEditorBaseline: "",
+      validationError: ""
+    });
+    expect(persistLibrary).not.toHaveBeenCalled();
   });
 });

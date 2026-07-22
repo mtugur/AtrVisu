@@ -12,6 +12,7 @@ This implementation binds the existing platform Panel Registry to current AtrVis
 - Machine Library section and right-panel shell close/toggle paths run the same manager preflight before changing parent state.
 - A cancelled dirty close leaves the manager mounted, keeps its parent open, preserves editor state, and is reported as a non-executed cancelled operation.
 - Library Manager and Taxonomy Manager use one exclusive-open coordinator, so switching managers cannot create overlapping backdrops.
+- Library Manager library selection uses the same dirty-editor discard decision as other editor-abandoning navigation. Cancellation preserves the selected library, selected node, editor values, validation, and baseline; acceptance clears only the abandoned editor without persisting it.
 - Registry entries contain metadata and operations only; they do not own React components or Babylon resources.
 - Reachability reports the current runtime location separately from seed `dock` metadata, making legacy shell mismatches explicit instead of relabeling or duplicating canonical IDs.
 
@@ -53,8 +54,9 @@ The following canonical IDs have current runtime bindings:
 - Taxonomy Manager closes deterministically before a parent unmount.
 - Registry cancellation is reported as `handled: false` with status `cancelled`.
 - Browser coverage verifies modal DOM state, parent state, and registry state remain aligned.
+- Browser coverage verifies dirty library navigation is cancelled without state loss and accepted discard returns to the persisted custom-library item without a second close warning.
 - Browser coverage verifies Connection Point Snap disappears for two machines plus civil or a third machine, and reappears for exactly two valid machines.
-- Final local validation: 83 unit-test files / 753 tests and 23 E2E tests.
+- Final local validation: 83 unit-test files / 757 tests and 24 E2E tests.
 
 ## Known unbound metadata
 

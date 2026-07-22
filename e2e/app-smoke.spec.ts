@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Dialog, type Page, test } from "@playwright/test";
 
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
@@ -339,6 +339,66 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
   await expect.poll(async () => (await getRuntimePanel(page, "panel.libraryManager"))?.open).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("dirty Library Manager guards library navigation and discards only after acceptance", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  expect(await invokeRuntimePanel(page, "open", "panel.libraryManager")).toMatchObject({ handled: true });
+  await expect(page.getByTestId("library-manager-ready")).toBeVisible();
+  await selectExistingCustomLibraryItem(page);
+
+  const modal = page.getByTestId("library-manager-modal");
+  const customLibraryButton = page.getByTestId("library-manager-custom-library-button");
+  const standardLibraryButton = page.getByTestId("library-manager-atara-standard-library-button");
+  const editor = page.getByTestId("library-manager-selected-item-editor");
+  const nameInput = editor.getByRole("textbox", { name: "Name", exact: true });
+  const persistedName = await nameInput.inputValue();
+  const dirtyName = `${persistedName} - discarded navigation draft`;
+  await nameInput.fill(dirtyName);
+
+  page.once("dialog", async (dialog) => dialog.dismiss());
+  await standardLibraryButton.click();
+  await expect(customLibraryButton).toHaveClass(/is-selected/);
+  await expect(standardLibraryButton).not.toHaveClass(/is-selected/);
+  await expect(editor).toBeVisible();
+  await expect(nameInput).toHaveValue(dirtyName);
+  await expect(modal).toBeVisible();
+
+  page.once("dialog", async (dialog) => dialog.accept());
+  await standardLibraryButton.click();
+  await expect(standardLibraryButton).toHaveClass(/is-selected/);
+  await expect(customLibraryButton).not.toHaveClass(/is-selected/);
+  await expect(modal.getByText("This library is read-only.").first()).toBeVisible();
+  await expect(editor).toHaveCount(0);
+  expect(await modal.locator("input").evaluateAll(
+    (inputs, abandonedValue) => inputs.some((input) => (input as HTMLInputElement).value === abandonedValue),
+    dirtyName
+  )).toBe(false);
+
+  let closeRequestedAnotherDiscard = false;
+  const handleUnexpectedCloseDialog = async (dialog: Dialog) => {
+    closeRequestedAnotherDiscard = true;
+    await dialog.dismiss();
+  };
+  page.on("dialog", handleUnexpectedCloseDialog);
+  await page.getByTestId("close-library-manager-header").click();
+  await expect(modal).toHaveCount(0);
+  page.off("dialog", handleUnexpectedCloseDialog);
+  expect(closeRequestedAnotherDiscard).toBe(false);
+
+  expect(await invokeRuntimePanel(page, "open", "panel.libraryManager")).toMatchObject({ handled: true });
+  await expect(customLibraryButton).toHaveClass(/is-selected/);
+  await selectExistingCustomLibraryItem(page);
+  const reopenedNameInput = page
+    .getByTestId("library-manager-selected-item-editor")
+    .getByRole("textbox", { name: "Name", exact: true });
+  await expect(reopenedNameInput).toHaveValue(persistedName);
+  await expect(reopenedNameInput).not.toHaveValue(dirtyName);
+  await page.getByTestId("close-library-manager-header").click();
+  await expect(modal).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

@@ -45,6 +45,33 @@ export type LibraryManagerRuntimeController = {
   requestClose: () => boolean;
 };
 
+export type GuardedLibrarySelectionStatus = "unchanged" | "cancelled" | "accepted";
+
+export const requestGuardedLibrarySelection = ({
+  currentLibraryId,
+  requestedLibraryId,
+  hasUnsavedItemChanges,
+  confirmDiscard,
+  applySelection
+}: {
+  currentLibraryId: string;
+  requestedLibraryId: string;
+  hasUnsavedItemChanges: boolean;
+  confirmDiscard: () => boolean;
+  applySelection: (libraryId: string) => void;
+}): GuardedLibrarySelectionStatus => {
+  if (requestedLibraryId === currentLibraryId) {
+    return "unchanged";
+  }
+
+  if (hasUnsavedItemChanges && !confirmDiscard()) {
+    return "cancelled";
+  }
+
+  applySelection(requestedLibraryId);
+  return "accepted";
+};
+
 type SelectedNode =
   | { type: "group"; groupId: string }
   | { type: "item"; groupId: string; itemId: string };
@@ -1324,6 +1351,21 @@ export function LibraryManager({
     return true;
   }, [itemEditor, itemEditorBaseline, onClose]);
 
+  const selectLibrary = (libraryId: string) => {
+    requestGuardedLibrarySelection({
+      currentLibraryId: selectedLibraryId,
+      requestedLibraryId: libraryId,
+      hasUnsavedItemChanges: getItemEditorDirtyKey(itemEditor) !== itemEditorBaseline,
+      confirmDiscard: () => window.confirm("Discard the current item editor changes?"),
+      applySelection: (nextLibraryId) => {
+        setSelectedLibraryId(nextLibraryId);
+        setSelectedNode(null);
+        clearItemEditor();
+        setValidationError("");
+      }
+    });
+  };
+
   useEffect(() => {
     onRuntimeControllerChange?.({ requestClose });
     return () => onRuntimeControllerChange?.(null);
@@ -1758,7 +1800,7 @@ export function LibraryManager({
                 }
                 key={library.libraryId}
                 type="button"
-                onClick={() => setSelectedLibraryId(library.libraryId)}
+                onClick={() => selectLibrary(library.libraryId)}
               >
                 <strong>{library.libraryName}</strong>
                 <span>{library.readonly ? "Read-only" : "Editable"}</span>
