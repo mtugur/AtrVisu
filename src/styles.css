@@ -101,6 +101,13 @@ select:disabled {
   background: #0a0d10;
 }
 
+.scene-viewport-host {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .scene-canvas {
   display: block;
   width: 100%;

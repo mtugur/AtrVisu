@@ -24,6 +24,14 @@ Status count across the 12 audited acceptance domains:
 | NOT PROVEN | 0 |
 | OUT OF PHASE 0 | 0 |
 
+### Post-audit viewport evidence update
+
+On 2026-07-23, `feat/viewport-isolation-resize-invariance-v01` connected the existing preserve-only viewport contract to the real AppShell and Babylon runtime through canonical ID `viewport.main`. The runtime now observes the committed scene viewport host, coalesces container/window/DPR reconciliation, and reports live CSS size, backing size, camera availability, resize generation, and scene lifecycle generation.
+
+Unit and browser coverage now proves that right-panel collapse/reopen, real panel-width dragging, unchanged section expansion, cancelled dirty-modal collapse, and browser/container resize do not recreate the Babylon scene or mutate camera intent, Runtime Selection, entity transforms, group/layer state, history, project dirty state, or simulation state. This evidence supersedes blocker B3 and the viewport-specific **FAIL** assessment in row E for the current branch.
+
+The table and totals above remain the historical baseline of the 2026-07-15 audit and are not silently recalculated by this scoped package. Phase 0 remains **NOT READY TO CLOSE** until the remaining runtime packages, especially Runtime Feature Access closure, are audited together. See `docs/audits/runtime-viewport-isolation-v01.md`.
+
 ## 2. Baseline
 
 ### Repository state

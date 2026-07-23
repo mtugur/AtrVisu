@@ -27,6 +27,12 @@ import type { ScenePerformanceMetrics } from "../types/performance";
 import type { AnnotationObject } from "../types/annotations";
 import type { ViewpointCameraState } from "../types/viewpoints";
 import { createLegacyPlatformEntityId } from "../platform/adapters/legacyEntityAdapter";
+import type { ViewportResizeRequest } from "../platform/contracts";
+import type {
+  RuntimeViewportCameraSnapshot,
+  RuntimeViewportResizeResult,
+  RuntimeViewportState
+} from "../platform/runtimeViewport";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getCivilReferenceRenderCenterMm, getMachineRenderCenterMm } from "../utils/coordinateReference";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
@@ -71,6 +77,10 @@ import {
 } from "./babylonScene/selectionPicking";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import { createSceneVisualContext } from "./babylonScene/visualContext";
+import {
+  createViewportResizeController,
+  type ViewportResizeController
+} from "./babylonScene/viewportResize";
 import type { ArcRotateCamera } from "@babylonjs/core";
 
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
@@ -126,6 +136,9 @@ type BabylonSceneProps = {
 export type BabylonSceneHandle = {
   getCameraState: () => ViewpointCameraState | null;
   applyCameraState: (camera: ViewpointCameraState) => void;
+  getRuntimeViewportState: () => RuntimeViewportState | null;
+  getRuntimeViewportCameraSnapshot: () => RuntimeViewportCameraSnapshot | null;
+  requestRuntimeViewportResize: (request: ViewportResizeRequest) => RuntimeViewportResizeResult;
 };
 
 type PlacedMachineNode = {
@@ -972,6 +985,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const cameraRef = useRef<ArcRotateCamera | null>(null);
   const floorRef = useRef<Mesh | null>(null);
   const sceneLifecycleGenerationRef = useRef(0);
+  const viewportResizeControllerRef = useRef<ViewportResizeController | null>(null);
+  const runtimeViewportStateRef = useRef<RuntimeViewportState | null>(null);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
   const civilReferenceNodesRef = useRef<Map<string, CivilReferenceNode>>(new Map());
   const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
@@ -1288,7 +1303,36 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       camera.beta = cameraState.beta;
       camera.radius = cameraState.radius;
       camera.target = new Vector3(cameraState.targetX, cameraState.targetY, cameraState.targetZ);
-    }
+    },
+    getRuntimeViewportState: () => runtimeViewportStateRef.current,
+    getRuntimeViewportCameraSnapshot: () => {
+      const camera = cameraRef.current;
+      if (!camera) {
+        return null;
+      }
+      return {
+        mode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA ? "orthographic" : "perspective",
+        alpha: camera.alpha,
+        beta: camera.beta,
+        radius: camera.radius,
+        targetX: camera.target.x,
+        targetY: camera.target.y,
+        targetZ: camera.target.z,
+        positionX: camera.position.x,
+        positionY: camera.position.y,
+        positionZ: camera.position.z,
+        fov: camera.fov,
+        ...(camera.orthoLeft !== null ? { orthoLeft: camera.orthoLeft } : {}),
+        ...(camera.orthoRight !== null ? { orthoRight: camera.orthoRight } : {}),
+        ...(camera.orthoTop !== null ? { orthoTop: camera.orthoTop } : {}),
+        ...(camera.orthoBottom !== null ? { orthoBottom: camera.orthoBottom } : {})
+      };
+    },
+    requestRuntimeViewportResize: (request) =>
+      viewportResizeControllerRef.current?.requestResize(request) ?? {
+        status: "deferred",
+        reason: "Babylon viewport resize controller is unavailable."
+      }
   }), []);
 
   useEffect(() => {
@@ -1307,12 +1351,46 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     sceneLifecycleGenerationRef.current += 1;
     canvas.dataset.sceneLifecycleGeneration = String(sceneLifecycleGenerationRef.current);
-    const lifecycle = createBabylonSceneLifecycle(canvas, window);
+    const lifecycle = createBabylonSceneLifecycle(canvas);
     const { engine, scene } = lifecycle;
     sceneRef.current = scene;
 
     const camera = createBabylonCameraViewport(scene, canvas);
     cameraRef.current = camera;
+
+    const viewportHost = canvas.parentElement ?? canvas;
+    const viewportResizeController = createViewportResizeController({
+      engine,
+      host: viewportHost,
+      windowTarget: window,
+      createObserver: (callback) => new ResizeObserver(callback),
+      onResize: (resizeState) => {
+        const currentCamera = cameraRef.current;
+        const nextState: RuntimeViewportState = {
+          visible: true,
+          available: true,
+          cssWidth: resizeState.cssWidth,
+          cssHeight: resizeState.cssHeight,
+          canvasWidth: resizeState.canvasWidth,
+          canvasHeight: resizeState.canvasHeight,
+          devicePixelRatio: resizeState.devicePixelRatio,
+          sceneLifecycleGeneration: sceneLifecycleGenerationRef.current,
+          resizeGeneration: resizeState.resizeGeneration,
+          lastResizeReason: resizeState.reason,
+          cameraMode: currentCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA
+            ? "orthographic"
+            : "perspective",
+          cameraResolvable: Boolean(currentCamera)
+        };
+        runtimeViewportStateRef.current = nextState;
+        canvas.dataset.viewportCssWidth = String(nextState.cssWidth);
+        canvas.dataset.viewportCssHeight = String(nextState.cssHeight);
+        canvas.dataset.viewportCanvasWidth = String(nextState.canvasWidth);
+        canvas.dataset.viewportCanvasHeight = String(nextState.canvasHeight);
+        canvas.dataset.viewportResizeGeneration = String(nextState.resizeGeneration);
+      }
+    });
+    viewportResizeControllerRef.current = viewportResizeController;
 
     const { floor } = createSceneVisualContext(scene);
     floorRef.current = floor;
@@ -1710,6 +1788,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     });
 
     return () => {
+      viewportResizeController.dispose();
+      viewportResizeControllerRef.current = null;
+      runtimeViewportStateRef.current = null;
       lifecycle.dispose(() => {
         canvas.removeEventListener("contextmenu", handleContextMenu);
         canvas.removeEventListener("wheel", handleWheel);

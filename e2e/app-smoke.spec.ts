@@ -53,6 +53,34 @@ const getRuntimePanel = async (page: Page, panelId: string) => page.evaluate((id
   return bridge.get(id);
 }, panelId);
 
+const getRuntimeViewportSnapshot = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuRuntimeViewport;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime viewport E2E bridge is unavailable.");
+  }
+  return {
+    viewport: bridge.get("viewport.main"),
+    camera: bridge.getCameraSnapshot("viewport.main"),
+    invariants: bridge.getInvariants()
+  };
+});
+
+const waitForRuntimeViewport = async (page: Page) => {
+  await expect.poll(async () => {
+    const snapshot = await getRuntimeViewportSnapshot(page);
+    return Boolean(
+      snapshot.viewport?.bound
+      && snapshot.viewport.available
+      && snapshot.viewport.cssWidth > 0
+      && snapshot.viewport.cssHeight > 0
+      && snapshot.viewport.canvasWidth > 0
+      && snapshot.viewport.canvasHeight > 0
+      && snapshot.camera
+    );
+  }).toBe(true);
+  return getRuntimeViewportSnapshot(page);
+};
+
 const selectExistingCustomLibraryItem = async (page: Page) => {
   const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
   if (!(await customLibraryItem.isVisible().catch(() => false))) {
@@ -173,6 +201,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).not.toHaveAttribute("data-machine-plan-positions");
   await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
   expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
+  expect(await page.evaluate(() => window.__atrvisuRuntimeViewport === undefined)).toBe(true);
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
@@ -180,6 +209,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).toHaveAttribute("data-machine-plan-positions", "{}");
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
+  expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeViewport))).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -232,6 +262,7 @@ test("runtime panel registry opens and closes the actual Machine Library section
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const resizeGeneration = (await waitForRuntimeViewport(page)).viewport?.resizeGeneration;
   const machineLibraryHeader = page.getByRole("button", { name: /Machine Library/i }).first();
 
   await machineLibraryHeader.click();
@@ -257,14 +288,19 @@ test("runtime panel registry opens and closes the actual Machine Library section
   });
   await expect(page.getByTestId("machine-library-panel")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.resizeGeneration
+  ).toBe(resizeGeneration);
   expect(errors).toEqual([]);
 });
 
-test("runtime right-panel shell preserves width and section state", async ({ page }) => {
+test("runtime right-panel collapse and reopen preserve viewport invariants", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
   const widthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
 
@@ -274,18 +310,103 @@ test("runtime right-panel shell preserves width and section state", async ({ pag
   expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({ handled: true });
   await expect(rightPanel).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open right panel" })).toBeVisible();
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? 0
+  ).toBeGreaterThan(before.viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER);
+  const collapsed = await getRuntimeViewportSnapshot(page);
+  expect(collapsed.viewport?.resizeGeneration).toBe((before.viewport?.resizeGeneration ?? 0) + 1);
+  expect(collapsed.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(collapsed.camera).toEqual(before.camera);
+  expect(collapsed.invariants).toEqual(before.invariants);
 
   expect(await invokeRuntimePanel(page, "open", "panel.rightPanelShell")).toMatchObject({ handled: true });
   await expect(rightPanel).toBeVisible();
   await expect(page.getByTestId("layers-panel")).toBeVisible();
   await expect.poll(async () => rightPanel.evaluate((element) => element.getBoundingClientRect().width)).toBe(widthBefore);
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth
+  ).toBe(before.viewport?.cssWidth);
+  const reopened = await getRuntimeViewportSnapshot(page);
+  expect(reopened.viewport?.resizeGeneration).toBe((collapsed.viewport?.resizeGeneration ?? 0) + 1);
+  expect(reopened.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(reopened.camera).toEqual(before.camera);
+  expect(reopened.invariants).toEqual(before.invariants);
+  await expect(canvas).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    String(before.viewport?.sceneLifecycleGeneration)
+  );
+  expect(errors).toEqual([]);
+});
+
+test("runtime panel width drag resizes only the viewport", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+
+  const before = await waitForRuntimeViewport(page);
+  const rightPanel = page.getByTestId("right-panel");
+  const panelWidthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
+  const resizeHandle = page.getByRole("button", { name: "Resize right panel" });
+  const handleBounds = await resizeHandle.boundingBox();
+  if (!handleBounds) {
+    throw new Error("Right-panel resize handle bounds are unavailable.");
+  }
+
+  await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleBounds.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(handleBounds.x - 64, handleBounds.y + 40, { steps: 6 });
+  await page.mouse.up();
+
+  await expect.poll(async () =>
+    rightPanel.evaluate((element) => element.getBoundingClientRect().width)
+  ).toBeGreaterThan(panelWidthBefore);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER
+  ).toBeLessThan(before.viewport?.cssWidth ?? 0);
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.viewport?.resizeGeneration).toBeGreaterThan(before.viewport?.resizeGeneration ?? 0);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(errors).toEqual([]);
+});
+
+test("browser resize reconciles viewport backing size without scene reconstruction", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const before = await waitForRuntimeViewport(page);
+
+  await page.setViewportSize({ width: 1180, height: 760 });
+
+  await expect.poll(async () => {
+    const viewport = (await getRuntimeViewportSnapshot(page)).viewport;
+    return viewport?.cssHeight;
+  }).toBe(760);
+  await expect.poll(async () => {
+    const viewport = (await getRuntimeViewportSnapshot(page)).viewport;
+    return Boolean(
+      viewport
+      && viewport.canvasWidth > 0
+      && viewport.canvasHeight > 0
+      && viewport.resizeGeneration > (before.viewport?.resizeGeneration ?? 0)
+    );
+  }).toBe(true);
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.viewport?.canvasWidth).not.toBe(before.viewport?.canvasWidth);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.invariants).toEqual(before.invariants);
   expect(errors).toEqual([]);
 });
 
 test("runtime panel registry opens and closes only the requested manager modal", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
 
   expect(await invokeRuntimePanel(page, "open", "panel.libraryManager")).toMatchObject({ handled: true });
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
@@ -296,6 +417,7 @@ test("runtime panel registry opens and closes only the requested manager modal",
   expect(await invokeRuntimePanel(page, "close", "panel.libraryManager")).toMatchObject({ handled: true });
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expectNoModalBackdrop(page);
+  expect(await getRuntimeViewportSnapshot(page)).toEqual(before);
   expect(errors).toEqual([]);
 });
 
@@ -311,6 +433,7 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   const nameInput = editor.getByRole("textbox", { name: "Name", exact: true });
   const dirtyValue = (await nameInput.inputValue()) + " - unsaved";
   await nameInput.fill(dirtyValue);
+  const beforeCancelledCollapse = await waitForRuntimeViewport(page);
 
   page.once("dialog", async (dialog) => dialog.dismiss());
   expect(await invokeRuntimePanel(page, "close", "panel.machineLibrary")).toMatchObject({
@@ -330,6 +453,7 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   await expect(page.getByTestId("right-panel")).toBeVisible();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await expect(nameInput).toHaveValue(dirtyValue);
+  expect(await getRuntimeViewportSnapshot(page)).toEqual(beforeCancelledCollapse);
 
   page.once("dialog", async (dialog) => dialog.accept());
   expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({
@@ -339,6 +463,16 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
   await expect.poll(async () => (await getRuntimePanel(page, "panel.libraryManager"))?.open).toBe(false);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.resizeGeneration ?? 0
+  ).toBeGreaterThan(beforeCancelledCollapse.viewport?.resizeGeneration ?? 0);
+  const afterAcceptedCollapse = await getRuntimeViewportSnapshot(page);
+  expect(afterAcceptedCollapse.viewport?.resizeGeneration)
+    .toBe((beforeCancelledCollapse.viewport?.resizeGeneration ?? 0) + 1);
+  expect(afterAcceptedCollapse.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeCancelledCollapse.viewport?.sceneLifecycleGeneration);
+  expect(afterAcceptedCollapse.camera).toEqual(beforeCancelledCollapse.camera);
+  expect(afterAcceptedCollapse.invariants).toEqual(beforeCancelledCollapse.invariants);
   expect(errors).toEqual([]);
 });
 

@@ -7,13 +7,6 @@ export const BABYLON_SCENE_ENGINE_OPTIONS = {
   stencil: true
 } as const;
 
-export type SceneLifecycleResizeTarget = {
-  addEventListener: Window["addEventListener"];
-  removeEventListener: Window["removeEventListener"];
-};
-
-export type SceneLifecycleResizableEngine = Pick<Engine, "resize">;
-
 export type BabylonSceneLifecycle = {
   engine: Engine;
   scene: Scene;
@@ -21,28 +14,11 @@ export type BabylonSceneLifecycle = {
   dispose: (beforeDispose?: () => void) => void;
 };
 
-export const createSceneLifecycleResizeController = (
-  engine: SceneLifecycleResizableEngine,
-  resizeTarget: SceneLifecycleResizeTarget
-) => {
-  const handleResize = () => {
-    engine.resize();
-  };
-
-  resizeTarget.addEventListener("resize", handleResize);
-
-  return () => {
-    resizeTarget.removeEventListener("resize", handleResize);
-  };
-};
-
 export const createBabylonSceneLifecycle = (
-  canvas: HTMLCanvasElement,
-  resizeTarget: SceneLifecycleResizeTarget
+  canvas: HTMLCanvasElement
 ): BabylonSceneLifecycle => {
   const engine = new Engine(canvas, true, BABYLON_SCENE_ENGINE_OPTIONS);
   const scene = new Scene(engine);
-  const disposeResizeController = createSceneLifecycleResizeController(engine, resizeTarget);
 
   return {
     engine,
@@ -51,7 +27,6 @@ export const createBabylonSceneLifecycle = (
       engine.runRenderLoop(renderFrame);
     },
     dispose: (beforeDispose) => {
-      disposeResizeController();
       beforeDispose?.();
       scene.dispose();
       engine.dispose();
