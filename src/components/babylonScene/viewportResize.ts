@@ -93,19 +93,37 @@ type CreateViewportResizeControllerOptions = {
   host: Element & ViewportResizeHost;
   windowTarget: ViewportResizeWindow;
   createObserver: (callback: ResizeObserverCallback) => ViewportResizeObserver;
+  prepareResize?: (next: AcceptedViewportResize) => (() => void) | void;
   onResize: (state: ViewportResizeRuntimeState) => void;
 };
+
+const resizeReasonPriority: Readonly<Record<ViewportResizeReason, number>> = {
+  manual: 0,
+  splitter: 1,
+  window: 2,
+  "dock-resize": 3,
+  "dock-collapse": 4
+};
+
+export const coalesceViewportResizeReason = (
+  current: ViewportResizeReason | null,
+  incoming: ViewportResizeReason
+): ViewportResizeReason =>
+  current === null || resizeReasonPriority[incoming] > resizeReasonPriority[current]
+    ? incoming
+    : current;
 
 export const createViewportResizeController = ({
   engine,
   host,
   windowTarget,
   createObserver,
+  prepareResize,
   onResize
 }: CreateViewportResizeControllerOptions) => {
   let current: AcceptedViewportResize | null = null;
   let pendingFrame: number | null = null;
-  let pendingReason: ViewportResizeReason = "manual";
+  let pendingReason: ViewportResizeReason | null = null;
   let disposed = false;
 
   const readObservation = (): ViewportResizeObservation => {
@@ -119,14 +137,18 @@ export const createViewportResizeController = ({
 
   const reconcile = () => {
     pendingFrame = null;
+    const reason = pendingReason ?? "manual";
+    pendingReason = null;
     if (disposed) {
       return;
     }
-    const evaluation = evaluateViewportResize(current, readObservation(), pendingReason);
+    const evaluation = evaluateViewportResize(current, readObservation(), reason);
     if (evaluation.status !== "accepted") {
       return;
     }
+    const completeResize = prepareResize?.(evaluation.next);
     engine.resize();
+    completeResize?.();
     current = evaluation.next;
     onResize({
       ...evaluation.next,
@@ -139,12 +161,27 @@ export const createViewportResizeController = ({
     if (disposed) {
       return { status: "deferred" as const, reason: "Viewport resize controller is disposed." };
     }
-    pendingReason = reason;
-    const evaluation = evaluateViewportResize(current, readObservation(), reason);
+    const isInitialObserverNotification =
+      current === null
+      && pendingFrame !== null
+      && pendingReason === "manual"
+      && reason === "splitter";
+    if (!isInitialObserverNotification) {
+      pendingReason = coalesceViewportResizeReason(pendingReason, reason);
+    }
+    const evaluation = evaluateViewportResize(
+      current,
+      readObservation(),
+      pendingReason ?? reason
+    );
     if (evaluation.status === "deferred") {
+      if (pendingFrame === null) {
+        pendingReason = null;
+      }
       return evaluation;
     }
     if (evaluation.status === "unchanged" && pendingFrame === null) {
+      pendingReason = null;
       return { status: "unchanged" as const };
     }
     if (pendingFrame === null) {
@@ -191,6 +228,7 @@ export const createViewportResizeController = ({
         windowTarget.cancelAnimationFrame(pendingFrame);
         pendingFrame = null;
       }
+      pendingReason = null;
       observer.disconnect();
       windowTarget.removeEventListener("resize", handleWindowResize);
     }

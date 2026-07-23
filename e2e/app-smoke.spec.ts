@@ -81,6 +81,55 @@ const waitForRuntimeViewport = async (page: Page) => {
   return getRuntimeViewportSnapshot(page);
 };
 
+const applyRuntimeViewportCameraState = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuRuntimeViewport;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime viewport E2E bridge is unavailable.");
+  }
+  return bridge.applyCameraState({
+    mode: "orthographic",
+    alpha: 0.7,
+    beta: 1.05,
+    radius: 34,
+    targetX: 1,
+    targetY: 0,
+    targetZ: -2
+  });
+});
+
+type RuntimeViewportSnapshot = Awaited<ReturnType<typeof getRuntimeViewportSnapshot>>;
+
+const expectOrthographicFramingEquivalent = (
+  before: RuntimeViewportSnapshot,
+  after: RuntimeViewportSnapshot
+) => {
+  expect(before.camera?.mode).toBe("orthographic");
+  expect(after.camera?.mode).toBe("orthographic");
+  expect(after.camera?.alpha).toBeCloseTo(before.camera?.alpha ?? Number.NaN);
+  expect(after.camera?.beta).toBeCloseTo(before.camera?.beta ?? Number.NaN);
+  expect(after.camera?.radius).toBeCloseTo(before.camera?.radius ?? Number.NaN);
+  expect(after.camera?.targetX).toBeCloseTo(before.camera?.targetX ?? Number.NaN);
+  expect(after.camera?.targetY).toBeCloseTo(before.camera?.targetY ?? Number.NaN);
+  expect(after.camera?.targetZ).toBeCloseTo(before.camera?.targetZ ?? Number.NaN);
+
+  const beforeIntent = before.camera?.orthographicIntent;
+  const afterIntent = after.camera?.orthographicIntent;
+  expect(beforeIntent).toBeDefined();
+  expect(afterIntent).toBeDefined();
+  expect(afterIntent?.centerX).toBeCloseTo(beforeIntent?.centerX ?? Number.NaN);
+  expect(afterIntent?.centerY).toBeCloseTo(beforeIntent?.centerY ?? Number.NaN);
+  expect(afterIntent?.verticalWorldSpan)
+    .toBeCloseTo(beforeIntent?.verticalWorldSpan ?? Number.NaN);
+  expect(afterIntent?.viewportAspectRatio)
+    .toBeCloseTo((after.viewport?.cssWidth ?? 0) / (after.viewport?.cssHeight ?? 1));
+  expect(afterIntent?.horizontalWorldSpan)
+    .toBeCloseTo(
+      (afterIntent?.verticalWorldSpan ?? 0) * (afterIntent?.viewportAspectRatio ?? 0)
+    );
+  expect(afterIntent?.horizontalWorldUnitsPerPixel)
+    .toBeCloseTo(afterIntent?.verticalWorldUnitsPerPixel ?? Number.NaN);
+};
+
 const selectExistingCustomLibraryItem = async (page: Page) => {
   const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
   if (!(await customLibraryItem.isVisible().catch(() => false))) {
@@ -210,6 +259,25 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeViewport))).toBe(true);
+  const diagnostics = await waitForRuntimeViewport(page);
+  expect(diagnostics.viewport?.lastResizeReason).toBe("manual");
+  expect(diagnostics.invariants).toMatchObject({
+    selectionIds: [],
+    primarySelectionId: null,
+    activeGroupEditId: null,
+    machineTransforms: [],
+    civilTransforms: [],
+    annotationTransforms: [],
+    groupMembership: [],
+    undoDepth: 0,
+    redoDepth: 0,
+    undoStack: [],
+    redoStack: [],
+    projectDirty: false,
+    simulationRunning: false,
+    simulationSpeed: 1
+  });
+  expect(Array.isArray(diagnostics.invariants.layerState)).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -294,12 +362,16 @@ test("runtime panel registry opens and closes the actual Machine Library section
   expect(errors).toEqual([]);
 });
 
-test("runtime right-panel collapse and reopen preserve viewport invariants", async ({ page }) => {
+test("orthographic framing survives panel and browser aspect-ratio changes", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   await page.locator(".machine-card").first().click();
   await waitForMachineDiagnostics(page, 1);
+  expect(await applyRuntimeViewportCameraState(page)).toBe(true);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.mode
+  ).toBe("orthographic");
   const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
   const widthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
@@ -315,8 +387,11 @@ test("runtime right-panel collapse and reopen preserve viewport invariants", asy
   ).toBeGreaterThan(before.viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER);
   const collapsed = await getRuntimeViewportSnapshot(page);
   expect(collapsed.viewport?.resizeGeneration).toBe((before.viewport?.resizeGeneration ?? 0) + 1);
+  expect(collapsed.viewport?.lastResizeReason).toBe("dock-collapse");
   expect(collapsed.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
-  expect(collapsed.camera).toEqual(before.camera);
+  expect(collapsed.camera?.orthographicIntent?.viewportAspectRatio)
+    .not.toBeCloseTo(before.camera?.orthographicIntent?.viewportAspectRatio ?? Number.NaN);
+  expectOrthographicFramingEquivalent(before, collapsed);
   expect(collapsed.invariants).toEqual(before.invariants);
 
   expect(await invokeRuntimePanel(page, "open", "panel.rightPanelShell")).toMatchObject({ handled: true });
@@ -328,9 +403,25 @@ test("runtime right-panel collapse and reopen preserve viewport invariants", asy
   ).toBe(before.viewport?.cssWidth);
   const reopened = await getRuntimeViewportSnapshot(page);
   expect(reopened.viewport?.resizeGeneration).toBe((collapsed.viewport?.resizeGeneration ?? 0) + 1);
+  expect(reopened.viewport?.lastResizeReason).toBe("dock-collapse");
   expect(reopened.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
-  expect(reopened.camera).toEqual(before.camera);
+  expectOrthographicFramingEquivalent(before, reopened);
   expect(reopened.invariants).toEqual(before.invariants);
+
+  await page.setViewportSize({ width: 1100, height: 850 });
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssHeight
+  ).toBe(850);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.lastResizeReason
+  ).toBe("window");
+  const browserResized = await getRuntimeViewportSnapshot(page);
+  expect(browserResized.viewport?.sceneLifecycleGeneration)
+    .toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(browserResized.camera?.orthographicIntent?.viewportAspectRatio)
+    .not.toBeCloseTo(reopened.camera?.orthographicIntent?.viewportAspectRatio ?? Number.NaN);
+  expectOrthographicFramingEquivalent(before, browserResized);
+  expect(browserResized.invariants).toEqual(before.invariants);
   await expect(canvas).toHaveAttribute(
     "data-scene-lifecycle-generation",
     String(before.viewport?.sceneLifecycleGeneration)
@@ -366,6 +457,7 @@ test("runtime panel width drag resizes only the viewport", async ({ page }) => {
   ).toBeLessThan(before.viewport?.cssWidth ?? 0);
   const after = await getRuntimeViewportSnapshot(page);
   expect(after.viewport?.resizeGeneration).toBeGreaterThan(before.viewport?.resizeGeneration ?? 0);
+  expect(after.viewport?.lastResizeReason).toBe("dock-resize");
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   expect(after.camera).toEqual(before.camera);
   expect(after.invariants).toEqual(before.invariants);
@@ -397,6 +489,7 @@ test("browser resize reconciles viewport backing size without scene reconstructi
 
   const after = await getRuntimeViewportSnapshot(page);
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.viewport?.lastResizeReason).toBe("window");
   expect(after.viewport?.canvasWidth).not.toBe(before.viewport?.canvasWidth);
   expect(after.camera).toEqual(before.camera);
   expect(after.invariants).toEqual(before.invariants);
@@ -469,6 +562,7 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   const afterAcceptedCollapse = await getRuntimeViewportSnapshot(page);
   expect(afterAcceptedCollapse.viewport?.resizeGeneration)
     .toBe((beforeCancelledCollapse.viewport?.resizeGeneration ?? 0) + 1);
+  expect(afterAcceptedCollapse.viewport?.lastResizeReason).toBe("dock-collapse");
   expect(afterAcceptedCollapse.viewport?.sceneLifecycleGeneration)
     .toBe(beforeCancelledCollapse.viewport?.sceneLifecycleGeneration);
   expect(afterAcceptedCollapse.camera).toEqual(beforeCancelledCollapse.camera);

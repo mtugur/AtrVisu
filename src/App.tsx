@@ -164,8 +164,10 @@ import {
 import { createViewportResizeRequest } from "./platform/contracts";
 import {
   RUNTIME_VIEWPORT_IDS,
+  createRuntimeViewportInvariantSnapshot,
   createRuntimeViewportBridge,
   getRuntimeViewportShellResizeReason,
+  refreshRuntimeViewportInvariantSnapshot,
   type RuntimeViewportBindings,
   type RuntimeViewportInvariantSnapshot,
   type RuntimeViewportState
@@ -700,52 +702,66 @@ export function App() {
   }, [activeGroupEditId]);
 
   useLayoutEffect(() => {
-    runtimeViewportInvariantStateRef.current = {
-      selectionIds: [...runtimeSelection.ids],
-      primarySelectionId: runtimeSelection.primaryId ?? null,
-      activeGroupEditId,
-      machineTransforms: placedMachines
-        .map((machine) => {
+    refreshRuntimeViewportInvariantSnapshot(
+      enableE2EDiagnostics,
+      () => createRuntimeViewportInvariantSnapshot({
+        selectionIds: runtimeSelection.ids,
+        primarySelectionId: runtimeSelection.primaryId ?? null,
+        activeGroupEditId,
+        machines: placedMachines.map((machine) => {
           const position = getMachinePlanPositionMm(machine);
-          return `${machine.instanceId}:${position.xMm}:${position.yMm}:${machine.rotationDeg}:${machine.layerId ?? "default"}`;
-        })
-        .sort(),
-      civilTransforms: civilReferences
-        .map((item) =>
-          `${item.id}:${item.positionMm.xMm}:${item.positionMm.yMm}:${item.positionMm.zMm ?? 0}:${item.rotationDeg}:${item.layerId ?? "default"}`
-        )
-        .sort(),
-      annotationTransforms: annotations
-        .map((annotation) =>
-          `${annotation.id}:${annotation.positionMm.xMm}:${annotation.positionMm.yMm}:${annotation.positionMm.zMm ?? 0}:${annotation.rotationDeg ?? 0}:${annotation.layerId ?? "default"}`
-        )
-        .sort(),
-      groupMembership: groups
-        .map((group) =>
-          `${group.id}:${[...group.objectIds].sort().join(",")}:${[...(group.annotationIds ?? [])].sort().join(",")}:${group.layerId ?? ""}`
-        )
-        .sort(),
-      layerState: layers
-        .map((layer) => `${layer.id}:${layer.visible}:${layer.locked}`)
-        .sort(),
-      undoDepth: layoutHistory.undoStack.length,
-      redoDepth: layoutHistory.redoStack.length,
-      undoStack: layoutHistory.undoStack.map((snapshot) => JSON.stringify(snapshot)),
-      redoStack: layoutHistory.redoStack.map((snapshot) => JSON.stringify(snapshot)),
-      projectDirty: hasUnsavedProjectChanges,
-      simulationRunning: isSimulationRunning,
-      simulationSpeed
-    };
+          return {
+            id: machine.instanceId,
+            xMm: position.xMm,
+            yMm: position.yMm,
+            rotationDeg: machine.rotationDeg ?? 0,
+            layerId: machine.layerId ?? "default"
+          };
+        }),
+        civilReferences: civilReferences.map((item) => ({
+          id: item.id,
+          xMm: item.positionMm.xMm,
+          yMm: item.positionMm.yMm,
+          zMm: item.positionMm.zMm ?? 0,
+          rotationDeg: item.rotationDeg,
+          layerId: item.layerId ?? "default"
+        })),
+        annotations: annotations.map((annotation) => ({
+          id: annotation.id,
+          xMm: annotation.positionMm.xMm,
+          yMm: annotation.positionMm.yMm,
+          zMm: annotation.positionMm.zMm ?? 0,
+          rotationDeg: annotation.rotationDeg ?? 0,
+          layerId: annotation.layerId ?? "default"
+        })),
+        groups: groups.map((group) => ({
+          id: group.id,
+          objectIds: group.objectIds,
+          annotationIds: group.annotationIds ?? [],
+          layerId: group.layerId ?? ""
+        })),
+        layers,
+        undoStack: layoutHistory.undoStack,
+        redoStack: layoutHistory.redoStack,
+        projectDirty: hasUnsavedProjectChanges,
+        simulationRunning: isSimulationRunning,
+        simulationSpeed
+      }),
+      (snapshot) => {
+        runtimeViewportInvariantStateRef.current = snapshot;
+      }
+    );
   }, [
     activeGroupEditId,
     annotations,
     civilReferences,
+    enableE2EDiagnostics,
     groups,
     hasUnsavedProjectChanges,
     isSimulationRunning,
     layers,
-    layoutHistory.redoStack.length,
-    layoutHistory.undoStack.length,
+    layoutHistory.redoStack,
+    layoutHistory.undoStack,
     placedMachines,
     runtimeSelection.ids,
     runtimeSelection.primaryId,
@@ -1209,6 +1225,14 @@ export function App() {
       list: runtimeViewportBridge.listRuntimeViewports,
       requestResize: runtimeViewportBridge.requestResize,
       getCameraSnapshot: runtimeViewportBridge.getCameraSnapshot,
+      applyCameraState: (cameraState) => {
+        const scene = sceneRef.current;
+        if (!scene) {
+          return false;
+        }
+        scene.applyCameraState(cameraState);
+        return true;
+      },
       getInvariants: () => runtimeViewportInvariantStateRef.current
     };
     return () => {

@@ -66,6 +66,12 @@ import {
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
 import {
+  applyOrthographicFramingPolicy,
+  createOrthographicFramingIntent,
+  reconcileOrthographicFraming,
+  resolveEffectiveOrthographicFraming
+} from "./babylonScene/orthographicFraming";
+import {
   applyPlanRotationY,
   getRotationVectorRadians
 } from "./babylonScene/rotationGizmo";
@@ -86,6 +92,33 @@ import type { ArcRotateCamera } from "@babylonjs/core";
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
 const ANNOTATION_LABEL_OFFSET_METERS = new Vector3(0.78, 0.42, 0);
+
+const getOrthographicBounds = (camera: ArcRotateCamera) => ({
+  left: camera.orthoLeft,
+  right: camera.orthoRight,
+  top: camera.orthoTop,
+  bottom: camera.orthoBottom
+});
+
+const applyOrthographicBounds = (
+  camera: ArcRotateCamera,
+  bounds: { left: number; right: number; top: number; bottom: number }
+) => {
+  camera.orthoLeft = bounds.left;
+  camera.orthoRight = bounds.right;
+  camera.orthoTop = bounds.top;
+  camera.orthoBottom = bounds.bottom;
+};
+
+const reconcileCameraOrthographicFraming = (
+  camera: ArcRotateCamera,
+  fallbackRenderSize: { width: number; height: number },
+  viewportSize: { width: number; height: number }
+) => applyOrthographicFramingPolicy({
+  mode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA ? "orthographic" : "perspective",
+  bounds: getOrthographicBounds(camera),
+  setBounds: (bounds) => applyOrthographicBounds(camera, bounds)
+}, fallbackRenderSize, viewportSize);
 
 type BabylonSceneProps = {
   placedMachines: PlacedMachine[];
@@ -1303,6 +1336,19 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       camera.beta = cameraState.beta;
       camera.radius = cameraState.radius;
       camera.target = new Vector3(cameraState.targetX, cameraState.targetY, cameraState.targetZ);
+      const engine = camera.getEngine();
+      const viewportState = runtimeViewportStateRef.current;
+      reconcileCameraOrthographicFraming(
+        camera,
+        {
+          width: engine.getRenderWidth(),
+          height: engine.getRenderHeight()
+        },
+        {
+          width: viewportState?.cssWidth ?? engine.getRenderWidth(),
+          height: viewportState?.cssHeight ?? engine.getRenderHeight()
+        }
+      );
     },
     getRuntimeViewportState: () => runtimeViewportStateRef.current,
     getRuntimeViewportCameraSnapshot: () => {
@@ -1310,6 +1356,21 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       if (!camera) {
         return null;
       }
+      const viewportState = runtimeViewportStateRef.current;
+      const engine = camera.getEngine();
+      const orthographicIntent = camera.mode === Camera.ORTHOGRAPHIC_CAMERA
+        ? createOrthographicFramingIntent(
+            getOrthographicBounds(camera),
+            {
+              width: engine.getRenderWidth(),
+              height: engine.getRenderHeight()
+            },
+            {
+              width: viewportState?.cssWidth ?? engine.getRenderWidth(),
+              height: viewportState?.cssHeight ?? engine.getRenderHeight()
+            }
+          )
+        : undefined;
       return {
         mode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA ? "orthographic" : "perspective",
         alpha: camera.alpha,
@@ -1325,7 +1386,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         ...(camera.orthoLeft !== null ? { orthoLeft: camera.orthoLeft } : {}),
         ...(camera.orthoRight !== null ? { orthoRight: camera.orthoRight } : {}),
         ...(camera.orthoTop !== null ? { orthoTop: camera.orthoTop } : {}),
-        ...(camera.orthoBottom !== null ? { orthoBottom: camera.orthoBottom } : {})
+        ...(camera.orthoBottom !== null ? { orthoBottom: camera.orthoBottom } : {}),
+        ...(orthographicIntent ? { orthographicIntent } : {})
       };
     },
     requestRuntimeViewportResize: (request) =>
@@ -1364,6 +1426,28 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       host: viewportHost,
       windowTarget: window,
       createObserver: (callback) => new ResizeObserver(callback),
+      prepareResize: (next) => {
+        const currentCamera = cameraRef.current;
+        if (!currentCamera || currentCamera.mode !== Camera.ORTHOGRAPHIC_CAMERA) {
+          return;
+        }
+        const framing = resolveEffectiveOrthographicFraming(
+          getOrthographicBounds(currentCamera),
+          {
+            width: engine.getRenderWidth(),
+            height: engine.getRenderHeight()
+          }
+        );
+        return () => {
+          applyOrthographicBounds(
+            currentCamera,
+            reconcileOrthographicFraming(framing, {
+              width: next.cssWidth,
+              height: next.cssHeight
+            }).bounds
+          );
+        };
+      },
       onResize: (resizeState) => {
         const currentCamera = cameraRef.current;
         const nextState: RuntimeViewportState = {

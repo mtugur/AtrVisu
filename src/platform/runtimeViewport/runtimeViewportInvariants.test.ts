@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   areRuntimeViewportCameraSnapshotsEquivalent,
   areRuntimeViewportInvariantSnapshotsEqual,
+  isRuntimeViewportOrthographicIntentUniform,
   type RuntimeViewportCameraSnapshot,
   type RuntimeViewportInvariantSnapshot
 } from "./runtimeViewportBridge";
@@ -55,12 +56,69 @@ describe("runtime viewport invariants", () => {
       orthoLeft: -10,
       orthoRight: 10,
       orthoTop: 8,
-      orthoBottom: -8
+      orthoBottom: -8,
+      orthographicIntent: {
+        centerX: 0,
+        centerY: 0,
+        horizontalWorldSpan: 20,
+        verticalWorldSpan: 16,
+        viewportAspectRatio: 1.25,
+        horizontalWorldUnitsPerPixel: 0.02,
+        verticalWorldUnitsPerPixel: 0.02
+      }
+    };
+    const after: RuntimeViewportCameraSnapshot = {
+      ...before,
+      orthoLeft: -16,
+      orthoRight: 16,
+      orthographicIntent: {
+        centerX: 0,
+        centerY: 0,
+        horizontalWorldSpan: 32,
+        verticalWorldSpan: 16,
+        viewportAspectRatio: 2,
+        horizontalWorldUnitsPerPixel: 0.02,
+        verticalWorldUnitsPerPixel: 0.02
+      }
     };
 
-    expect(areRuntimeViewportCameraSnapshotsEquivalent(before, { ...before })).toBe(true);
-    expect(areRuntimeViewportCameraSnapshotsEquivalent(before, { ...before, orthoRight: 12 }))
+    expect(areRuntimeViewportCameraSnapshotsEquivalent(before, after)).toBe(true);
+    expect(areRuntimeViewportCameraSnapshotsEquivalent(before, {
+      ...after,
+      orthographicIntent: {
+        ...after.orthographicIntent!,
+        centerX: 1
+      }
+    })).toBe(false);
+    expect(areRuntimeViewportCameraSnapshotsEquivalent(before, {
+      ...after,
+      orthographicIntent: {
+        ...after.orthographicIntent!,
+        horizontalWorldUnitsPerPixel: 0.03
+      }
+    }))
       .toBe(false);
+  });
+
+  it("detects non-uniform orthographic world-to-pixel scaling", () => {
+    expect(isRuntimeViewportOrthographicIntentUniform({
+      centerX: 0,
+      centerY: 0,
+      horizontalWorldSpan: 20,
+      verticalWorldSpan: 10,
+      viewportAspectRatio: 2,
+      horizontalWorldUnitsPerPixel: 0.02,
+      verticalWorldUnitsPerPixel: 0.02
+    })).toBe(true);
+    expect(isRuntimeViewportOrthographicIntentUniform({
+      centerX: 0,
+      centerY: 0,
+      horizontalWorldSpan: 20,
+      verticalWorldSpan: 10,
+      viewportAspectRatio: 2,
+      horizontalWorldUnitsPerPixel: 0.02,
+      verticalWorldUnitsPerPixel: 0.01
+    })).toBe(false);
   });
 
   it("detects changes across selection, transforms, groups, layers, history, dirty, and simulation state", () => {

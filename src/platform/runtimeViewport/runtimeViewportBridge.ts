@@ -7,6 +7,16 @@ export const RUNTIME_VIEWPORT_IDS = {
 export type RuntimeViewportId = typeof RUNTIME_VIEWPORT_IDS[keyof typeof RUNTIME_VIEWPORT_IDS];
 export type RuntimeViewportCameraMode = "perspective" | "orthographic";
 
+export type RuntimeViewportOrthographicIntent = {
+  centerX: number;
+  centerY: number;
+  horizontalWorldSpan: number;
+  verticalWorldSpan: number;
+  viewportAspectRatio: number;
+  horizontalWorldUnitsPerPixel: number;
+  verticalWorldUnitsPerPixel: number;
+};
+
 export type RuntimeViewportCameraSnapshot = {
   mode: RuntimeViewportCameraMode;
   alpha: number;
@@ -23,6 +33,17 @@ export type RuntimeViewportCameraSnapshot = {
   orthoRight?: number;
   orthoTop?: number;
   orthoBottom?: number;
+  orthographicIntent?: RuntimeViewportOrthographicIntent;
+};
+
+export type RuntimeViewportCameraApplyState = {
+  mode: RuntimeViewportCameraMode;
+  alpha: number;
+  beta: number;
+  radius: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
 };
 
 export type RuntimeViewportState = {
@@ -241,7 +262,7 @@ export type RuntimeViewportInvariantSnapshot = {
   simulationSpeed: number;
 };
 
-const cameraSnapshotKeys = [
+const sharedCameraSnapshotKeys = [
   "alpha",
   "beta",
   "radius",
@@ -250,28 +271,63 @@ const cameraSnapshotKeys = [
   "targetZ",
   "positionX",
   "positionY",
-  "positionZ",
-  "fov",
-  "orthoLeft",
-  "orthoRight",
-  "orthoTop",
-  "orthoBottom"
+  "positionZ"
 ] as const satisfies readonly (keyof RuntimeViewportCameraSnapshot)[];
+
+const areNumericValuesEquivalent = (
+  left: number | undefined,
+  right: number | undefined,
+  tolerance: number
+) => {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return Math.abs(left - right) <= tolerance;
+};
+
+export const isRuntimeViewportOrthographicIntentUniform = (
+  intent: RuntimeViewportOrthographicIntent,
+  tolerance = 1e-6
+) =>
+  intent.verticalWorldSpan > 0
+  && intent.horizontalWorldSpan > 0
+  && intent.viewportAspectRatio > 0
+  && Math.abs(
+    intent.horizontalWorldSpan / intent.verticalWorldSpan - intent.viewportAspectRatio
+  ) <= tolerance
+  && Math.abs(
+    intent.horizontalWorldUnitsPerPixel - intent.verticalWorldUnitsPerPixel
+  ) <= tolerance;
 
 export const areRuntimeViewportCameraSnapshotsEquivalent = (
   left: RuntimeViewportCameraSnapshot,
   right: RuntimeViewportCameraSnapshot,
   tolerance = 1e-6
-) =>
-  left.mode === right.mode
-  && cameraSnapshotKeys.every((key) => {
-    const leftValue = left[key];
-    const rightValue = right[key];
-    if (leftValue === undefined || rightValue === undefined) {
-      return leftValue === rightValue;
-    }
-    return Math.abs(leftValue - rightValue) <= tolerance;
-  });
+) => {
+  if (
+    left.mode !== right.mode
+    || !sharedCameraSnapshotKeys.every((key) =>
+      areNumericValuesEquivalent(left[key], right[key], tolerance)
+    )
+  ) {
+    return false;
+  }
+  if (left.mode === "perspective") {
+    return areNumericValuesEquivalent(left.fov, right.fov, tolerance);
+  }
+
+  const leftIntent = left.orthographicIntent;
+  const rightIntent = right.orthographicIntent;
+  return Boolean(
+    leftIntent
+    && rightIntent
+    && isRuntimeViewportOrthographicIntentUniform(leftIntent, tolerance)
+    && isRuntimeViewportOrthographicIntentUniform(rightIntent, tolerance)
+    && Math.abs(leftIntent.centerX - rightIntent.centerX) <= tolerance
+    && Math.abs(leftIntent.centerY - rightIntent.centerY) <= tolerance
+    && Math.abs(leftIntent.verticalWorldSpan - rightIntent.verticalWorldSpan) <= tolerance
+  );
+};
 
 export const areRuntimeViewportInvariantSnapshotsEqual = (
   left: RuntimeViewportInvariantSnapshot,
@@ -289,6 +345,7 @@ export type RuntimeViewportE2EBridge = {
   getCameraSnapshot: (
     viewportId: RuntimeViewportId
   ) => RuntimeViewportCameraSnapshot | null | undefined;
+  applyCameraState: (cameraState: RuntimeViewportCameraApplyState) => boolean;
   getInvariants: () => RuntimeViewportInvariantSnapshot;
 };
 

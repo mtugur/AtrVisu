@@ -28,6 +28,16 @@ The same controller also receives:
 
 Notifications are coalesced through one animation-frame queue. Reconciliation reads the latest committed host bounds, defers non-positive dimensions, and calls `engine.resize()` only when CSS width, CSS height, or device pixel ratio changed. Repeated identical observations do not create a resize loop.
 
+Coalesced resize reasons use deterministic precedence:
+
+1. `dock-collapse`
+2. `dock-resize`
+3. `window`
+4. `splitter`
+5. `manual`
+
+A generic observer notification cannot replace an already pending explicit dock or window reason. A later explicit reason can upgrade a pending generic reason. The initial reconciliation remains `manual`, pending intent is cleared after reconciliation or cancellation, and unchanged dimensions do not advance resize generation merely to change the reported reason.
+
 The general Babylon scene lifecycle no longer owns a separate window-only resize listener. Viewport resizing does not dispose or recreate the Engine, Scene, Camera, meshes, pointer handlers, or render loop.
 
 ## Camera and application invariance
@@ -38,22 +48,25 @@ The diagnostics-only bridge returns a serializable camera snapshot containing:
 - alpha, beta, and radius;
 - target and position coordinates;
 - FOV;
-- orthographic bounds when present.
+- orthographic bounds when present;
+- resolved orthographic center, horizontal and vertical world spans, viewport aspect ratio, and horizontal/vertical world-units-per-pixel.
 
-Pure resize never calls camera home/reset and does not write camera parameters. Perspective intent remains unchanged while Babylon updates projection internals. Orthographic bounds remain unchanged because v0.1 does not introduce aspect-driven framing mutation.
+Pure resize never calls camera home/reset. Perspective intent remains unchanged while Babylon updates projection internals.
 
-The opt-in `?e2eDiagnostics=1` bridge also provides a read-only invariant snapshot for:
+Babylon 7.54.x uses half of the current render width and height as the effective orthographic bounds when the camera fields are `null`. Before an accepted orthographic resize, the runtime therefore resolves both explicit and default/null bounds. After `engine.resize()`, it preserves the orthographic center and vertical world span and recomputes the horizontal span from the committed CSS aspect ratio. This keeps horizontal and vertical world-units-per-pixel equal without changing target, alpha, beta, radius, camera mode, or scene lifecycle.
+
+The opt-in `?e2eDiagnostics=1` bridge provides a read-only invariant snapshot for:
 
 - Runtime Selection IDs and primary selection;
 - active group edit ID;
 - machine, civil, and annotation transforms;
 - group membership;
 - layer visibility and lock state;
-- undo and redo depths;
+- complete serialized undo and redo stacks plus their depths;
 - project dirty state;
-- simulation running state.
+- simulation running state and speed.
 
-The production runtime exposes no global viewport debug API.
+The invariant snapshot builder itself is gated by the diagnostics flag. Without `?e2eDiagnostics=1`, AtrVisu does not build diagnostics-only entity fingerprints, serialize history snapshots for viewport diagnostics, or expose a global viewport debug API. Diagnostics dependencies use the actual undo/redo array references so same-length history replacement cannot leave an enabled snapshot stale.
 
 ## Reachability
 
@@ -79,7 +92,13 @@ Deterministic unit coverage verifies:
 - changed width, height, and DPR reconciliation;
 - zero-size deferral and later acceptance;
 - repeated-observation suppression and latest-size coalescing;
-- perspective and orthographic camera snapshot equivalence;
+- deterministic resize-reason precedence and pending-reason reset;
+- explicit and Babylon default/null orthographic bound resolution;
+- center and vertical-span preservation across aspect-ratio changes;
+- equal horizontal and vertical world-units-per-pixel after orthographic resize;
+- perspective no-write behavior and orthographic camera intent equivalence;
+- diagnostics-disabled lazy snapshot suppression and diagnostics-enabled complete snapshots;
+- same-length history replacement and machine movement diagnostics updates;
 - selection, transforms, groups, layers, history, dirty, and simulation snapshot comparison;
 - AppShell viewport inset rendering.
 
@@ -87,6 +106,8 @@ Browser coverage verifies:
 
 - right-panel collapse and reopen change viewport width while preserving panel width;
 - real pointer-driven panel-width changes resize the viewport inversely;
+- panel collapse/reopen reports `dock-collapse`, panel-width dragging reports `dock-resize`, and browser resizing reports `window`;
+- deterministic orthographic mode survives panel collapse/reopen and a materially different browser aspect ratio without visual-scale distortion;
 - cancelled dirty Library Manager collapse causes no viewport resize;
 - accepted collapse causes a committed resize;
 - browser/container resize reconciles CSS and backing dimensions;
@@ -98,13 +119,12 @@ Final local validation:
 
 - `npm.cmd audit`: 0 vulnerabilities
 - `npm.cmd run build`: passed
-- `npm.cmd run test -- --run`: 87 files / 774 tests passed
+- `npm.cmd run test -- --run`: 89 files / 795 tests passed
 - `npm.cmd run test:e2e`: 26 tests passed
 - `git diff --check`: passed
 
 ## Remaining limitations
 
 - DPR-only changes are reconciled when the browser emits a resize notification; there is no separate cross-browser DPR media-query subscription.
-- Orthographic bounds are preserved, not automatically recomputed for a new aspect ratio.
 - The Runtime Feature Access closure gate still needs to consume live command, panel, selection, entity, and viewport reachability.
 - This package does not mark Phase 0 complete.
