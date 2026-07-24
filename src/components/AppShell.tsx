@@ -2,6 +2,7 @@ import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
 
 type AppShellProps = {
   viewport?: ReactNode;
+  viewportRightInset?: number;
   rightPanel?: ReactNode;
   modalLayer?: ReactNode;
   diagnostics?: ReactNode;
@@ -18,6 +19,7 @@ const withZoneAnchor = (node: ReactNode, zone: string): ReactNode => {
 
 export function AppShell({
   viewport,
+  viewportRightInset = 0,
   rightPanel,
   modalLayer,
   diagnostics,
@@ -26,7 +28,13 @@ export function AppShell({
   return (
     <>
       <main className="app-shell" data-testid="app-root" data-app-shell-zone="app-root">
-        {withZoneAnchor(viewport, "scene-viewport")}
+        <div
+          className="scene-viewport-host"
+          data-app-shell-zone="scene-viewport"
+          style={{ right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))` }}
+        >
+          {viewport}
+        </div>
         {withZoneAnchor(rightPanel, "machine-properties")}
         {children}
       </main>

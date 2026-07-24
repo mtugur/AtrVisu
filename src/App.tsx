@@ -161,6 +161,17 @@ import {
   type RuntimePanelBindings,
   type RuntimePanelState
 } from "./platform/runtimePanels";
+import { createViewportResizeRequest } from "./platform/contracts";
+import {
+  RUNTIME_VIEWPORT_IDS,
+  createRuntimeViewportInvariantSnapshot,
+  createRuntimeViewportBridge,
+  getRuntimeViewportShellResizeReason,
+  refreshRuntimeViewportInvariantSnapshot,
+  type RuntimeViewportBindings,
+  type RuntimeViewportInvariantSnapshot,
+  type RuntimeViewportState
+} from "./platform/runtimeViewport";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -323,6 +334,29 @@ export function App() {
     () => createRuntimePanelRegistryBridge(() => runtimePanelBindingsRef.current),
     []
   );
+  const runtimeViewportBindingsRef = useRef<RuntimeViewportBindings>({});
+  const runtimeViewportBridge = useMemo(
+    () => createRuntimeViewportBridge(() => runtimeViewportBindingsRef.current),
+    []
+  );
+  const runtimeViewportInvariantStateRef = useRef<RuntimeViewportInvariantSnapshot>({
+    selectionIds: [],
+    primarySelectionId: null,
+    activeGroupEditId: null,
+    machineTransforms: [],
+    civilTransforms: [],
+    annotationTransforms: [],
+    groupMembership: [],
+    layerState: [],
+    undoDepth: 0,
+    redoDepth: 0,
+    undoStack: [],
+    redoStack: [],
+    projectDirty: false,
+    simulationRunning: false,
+    simulationSpeed: 1
+  });
+  const previousViewportShellStateRef = useRef({ isPanelCollapsed, panelWidth });
   const runtimePanelStateRef = useRef({
     panelSectionExpansion,
     isPanelCollapsed,
@@ -336,6 +370,30 @@ export function App() {
     propertiesVisible: true,
     propertiesContext: "none"
   });
+
+  const runtimeViewportBindings = useMemo<RuntimeViewportBindings>(() => ({
+    [RUNTIME_VIEWPORT_IDS.main]: {
+      getState: (): RuntimeViewportState => sceneRef.current?.getRuntimeViewportState() ?? {
+        visible: true,
+        available: false,
+        cssWidth: 0,
+        cssHeight: 0,
+        canvasWidth: 0,
+        canvasHeight: 0,
+        devicePixelRatio: window.devicePixelRatio || 1,
+        sceneLifecycleGeneration: 0,
+        resizeGeneration: 0,
+        cameraResolvable: false,
+        reason: "Babylon viewport runtime is not ready."
+      },
+      getCameraSnapshot: () => sceneRef.current?.getRuntimeViewportCameraSnapshot() ?? null,
+      requestResize: (request) =>
+        sceneRef.current?.requestRuntimeViewportResize(request) ?? {
+          status: "deferred",
+          reason: "Babylon viewport runtime is not ready."
+        }
+    }
+  }), []);
 
   const platformEntities = useMemo(() => createLegacyEntitySnapshot({
     machines: placedMachines,
@@ -642,6 +700,73 @@ export function App() {
   useLayoutEffect(() => {
     activeGroupEditIdRef.current = activeGroupEditId;
   }, [activeGroupEditId]);
+
+  useLayoutEffect(() => {
+    refreshRuntimeViewportInvariantSnapshot(
+      enableE2EDiagnostics,
+      () => createRuntimeViewportInvariantSnapshot({
+        selectionIds: runtimeSelection.ids,
+        primarySelectionId: runtimeSelection.primaryId ?? null,
+        activeGroupEditId,
+        machines: placedMachines.map((machine) => {
+          const position = getMachinePlanPositionMm(machine);
+          return {
+            id: machine.instanceId,
+            xMm: position.xMm,
+            yMm: position.yMm,
+            rotationDeg: machine.rotationDeg ?? 0,
+            layerId: machine.layerId ?? "default"
+          };
+        }),
+        civilReferences: civilReferences.map((item) => ({
+          id: item.id,
+          xMm: item.positionMm.xMm,
+          yMm: item.positionMm.yMm,
+          zMm: item.positionMm.zMm ?? 0,
+          rotationDeg: item.rotationDeg,
+          layerId: item.layerId ?? "default"
+        })),
+        annotations: annotations.map((annotation) => ({
+          id: annotation.id,
+          xMm: annotation.positionMm.xMm,
+          yMm: annotation.positionMm.yMm,
+          zMm: annotation.positionMm.zMm ?? 0,
+          rotationDeg: annotation.rotationDeg ?? 0,
+          layerId: annotation.layerId ?? "default"
+        })),
+        groups: groups.map((group) => ({
+          id: group.id,
+          objectIds: group.objectIds,
+          annotationIds: group.annotationIds ?? [],
+          layerId: group.layerId ?? ""
+        })),
+        layers,
+        undoStack: layoutHistory.undoStack,
+        redoStack: layoutHistory.redoStack,
+        projectDirty: hasUnsavedProjectChanges,
+        simulationRunning: isSimulationRunning,
+        simulationSpeed
+      }),
+      (snapshot) => {
+        runtimeViewportInvariantStateRef.current = snapshot;
+      }
+    );
+  }, [
+    activeGroupEditId,
+    annotations,
+    civilReferences,
+    enableE2EDiagnostics,
+    groups,
+    hasUnsavedProjectChanges,
+    isSimulationRunning,
+    layers,
+    layoutHistory.redoStack,
+    layoutHistory.undoStack,
+    placedMachines,
+    runtimeSelection.ids,
+    runtimeSelection.primaryId,
+    simulationSpeed
+  ]);
 
   useEffect(() => {
     const normalized = normalizeGroups(groups, placedMachines, layers, civilReferences);
@@ -1050,6 +1175,32 @@ export function App() {
     runtimePanelBindingsRef.current = runtimePanelBindings;
   }, [runtimePanelBindings]);
 
+  useLayoutEffect(() => {
+    runtimeViewportBindingsRef.current = runtimeViewportBindings;
+  }, [runtimeViewportBindings]);
+
+  useLayoutEffect(() => {
+    const previous = previousViewportShellStateRef.current;
+    const next = { isPanelCollapsed, panelWidth };
+    previousViewportShellStateRef.current = next;
+    const reason = getRuntimeViewportShellResizeReason(previous, next);
+    if (!reason) {
+      return;
+    }
+
+    const viewport = runtimeViewportBridge.getRuntimeViewport(RUNTIME_VIEWPORT_IDS.main);
+    if (!viewport?.available || viewport.cssWidth <= 0 || viewport.cssHeight <= 0) {
+      return;
+    }
+    runtimeViewportBridge.requestResize(
+      RUNTIME_VIEWPORT_IDS.main,
+      createViewportResizeRequest(
+        reason,
+        { width: viewport.cssWidth, height: viewport.cssHeight }
+      )
+    );
+  }, [isPanelCollapsed, panelWidth, runtimeViewportBridge]);
+
   useEffect(() => {
     if (!enableE2EDiagnostics) {
       return;
@@ -1064,6 +1215,29 @@ export function App() {
       delete window.__atrvisuRuntimePanels;
     };
   }, [enableE2EDiagnostics, runtimePanelBridge]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+    window.__atrvisuRuntimeViewport = {
+      get: runtimeViewportBridge.getRuntimeViewport,
+      list: runtimeViewportBridge.listRuntimeViewports,
+      requestResize: runtimeViewportBridge.requestResize,
+      getCameraSnapshot: runtimeViewportBridge.getCameraSnapshot,
+      applyCameraState: (cameraState) => {
+        const scene = sceneRef.current;
+        if (!scene) {
+          return false;
+        }
+        return scene.applyCameraState(cameraState);
+      },
+      getInvariants: () => runtimeViewportInvariantStateRef.current
+    };
+    return () => {
+      delete window.__atrvisuRuntimeViewport;
+    };
+  }, [enableE2EDiagnostics, runtimeViewportBridge]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2664,6 +2838,7 @@ export function App() {
 
   return (
     <AppShell
+      viewportRightInset={isPanelCollapsed ? 0 : panelWidth}
       viewport={(
         <BabylonScene
           ref={sceneRef}

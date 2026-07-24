@@ -53,6 +53,103 @@ const getRuntimePanel = async (page: Page, panelId: string) => page.evaluate((id
   return bridge.get(id);
 }, panelId);
 
+const getRuntimeViewportSnapshot = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuRuntimeViewport;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime viewport E2E bridge is unavailable.");
+  }
+  return {
+    viewport: bridge.get("viewport.main"),
+    camera: bridge.getCameraSnapshot("viewport.main"),
+    invariants: bridge.getInvariants()
+  };
+});
+
+const waitForRuntimeViewport = async (page: Page) => {
+  await expect.poll(async () => {
+    const snapshot = await getRuntimeViewportSnapshot(page);
+    return Boolean(
+      snapshot.viewport?.bound
+      && snapshot.viewport.available
+      && snapshot.viewport.cssWidth > 0
+      && snapshot.viewport.cssHeight > 0
+      && snapshot.viewport.canvasWidth > 0
+      && snapshot.viewport.canvasHeight > 0
+      && snapshot.camera
+    );
+  }).toBe(true);
+  return getRuntimeViewportSnapshot(page);
+};
+
+type RuntimeCameraApplyState = {
+  mode: "perspective" | "orthographic";
+  alpha: number;
+  beta: number;
+  radius: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  orthographic?: {
+    centerX: number;
+    centerY: number;
+    verticalWorldSpan: number;
+  };
+};
+
+const DEFAULT_ORTHOGRAPHIC_CAMERA_STATE: RuntimeCameraApplyState = {
+  mode: "orthographic",
+  alpha: 0.7,
+  beta: 1.05,
+  radius: 34,
+  targetX: 1,
+  targetY: 0,
+  targetZ: -2
+};
+
+const applyRuntimeViewportCameraState = async (
+  page: Page,
+  cameraState: RuntimeCameraApplyState = DEFAULT_ORTHOGRAPHIC_CAMERA_STATE
+) => page.evaluate((state) => {
+  const bridge = window.__atrvisuRuntimeViewport;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime viewport E2E bridge is unavailable.");
+  }
+  return bridge.applyCameraState(state);
+}, cameraState);
+
+type RuntimeViewportSnapshot = Awaited<ReturnType<typeof getRuntimeViewportSnapshot>>;
+
+const expectOrthographicFramingEquivalent = (
+  before: RuntimeViewportSnapshot,
+  after: RuntimeViewportSnapshot
+) => {
+  expect(before.camera?.mode).toBe("orthographic");
+  expect(after.camera?.mode).toBe("orthographic");
+  expect(after.camera?.alpha).toBeCloseTo(before.camera?.alpha ?? Number.NaN);
+  expect(after.camera?.beta).toBeCloseTo(before.camera?.beta ?? Number.NaN);
+  expect(after.camera?.radius).toBeCloseTo(before.camera?.radius ?? Number.NaN);
+  expect(after.camera?.targetX).toBeCloseTo(before.camera?.targetX ?? Number.NaN);
+  expect(after.camera?.targetY).toBeCloseTo(before.camera?.targetY ?? Number.NaN);
+  expect(after.camera?.targetZ).toBeCloseTo(before.camera?.targetZ ?? Number.NaN);
+
+  const beforeIntent = before.camera?.orthographicIntent;
+  const afterIntent = after.camera?.orthographicIntent;
+  expect(beforeIntent).toBeDefined();
+  expect(afterIntent).toBeDefined();
+  expect(afterIntent?.centerX).toBeCloseTo(beforeIntent?.centerX ?? Number.NaN);
+  expect(afterIntent?.centerY).toBeCloseTo(beforeIntent?.centerY ?? Number.NaN);
+  expect(afterIntent?.verticalWorldSpan)
+    .toBeCloseTo(beforeIntent?.verticalWorldSpan ?? Number.NaN);
+  expect(afterIntent?.viewportAspectRatio)
+    .toBeCloseTo((after.viewport?.cssWidth ?? 0) / (after.viewport?.cssHeight ?? 1));
+  expect(afterIntent?.horizontalWorldSpan)
+    .toBeCloseTo(
+      (afterIntent?.verticalWorldSpan ?? 0) * (afterIntent?.viewportAspectRatio ?? 0)
+    );
+  expect(afterIntent?.horizontalWorldUnitsPerPixel)
+    .toBeCloseTo(afterIntent?.verticalWorldUnitsPerPixel ?? Number.NaN);
+};
+
 const selectExistingCustomLibraryItem = async (page: Page) => {
   const customLibraryItem = page.getByTestId("library-manager-item-project-safety-fence-01");
   if (!(await customLibraryItem.isVisible().catch(() => false))) {
@@ -75,6 +172,7 @@ const selectExistingCustomLibraryItem = async (page: Page) => {
 
 type PlanPosition = { xMm: number; yMm: number };
 type ScreenPoint = { x: number; y: number };
+type ScreenBounds = { left: number; top: number; width: number; height: number };
 
 const readCanvasRecord = async <T>(page: Page, attribute: string) => {
   const raw = await page.getByLabel("AtrVisu 3D workspace").getAttribute(attribute);
@@ -96,6 +194,20 @@ const getMachineScreenPoint = async (page: Page, machineId: string) => {
     (await readCanvasRecord<ScreenPoint>(page, "data-machine-screen-points"))[machineId]
   )).toBe(true);
   return (await readCanvasRecord<ScreenPoint>(page, "data-machine-screen-points"))[machineId];
+};
+
+const getMachineScreenBounds = async (page: Page, machineId: string) => {
+  await expect.poll(async () => {
+    const bounds = (await readCanvasRecord<ScreenBounds>(
+      page,
+      "data-machine-screen-bounds"
+    ))[machineId];
+    return Boolean(bounds && bounds.width > 0 && bounds.height > 0);
+  }).toBe(true);
+  return (await readCanvasRecord<ScreenBounds>(
+    page,
+    "data-machine-screen-bounds"
+  ))[machineId];
 };
 
 const clickSceneMachine = async (page: Page, machineId: string) => {
@@ -170,16 +282,39 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
   await expect(canvas).not.toHaveAttribute("data-machine-screen-points");
+  await expect(canvas).not.toHaveAttribute("data-machine-screen-bounds");
   await expect(canvas).not.toHaveAttribute("data-machine-plan-positions");
   await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
   expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
+  expect(await page.evaluate(() => window.__atrvisuRuntimeViewport === undefined)).toBe(true);
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
   await expect(canvas).toHaveAttribute("data-machine-screen-points", "{}");
+  await expect(canvas).toHaveAttribute("data-machine-screen-bounds", "{}");
   await expect(canvas).toHaveAttribute("data-machine-plan-positions", "{}");
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
+  expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeViewport))).toBe(true);
+  const diagnostics = await waitForRuntimeViewport(page);
+  expect(diagnostics.viewport?.lastResizeReason).toBe("manual");
+  expect(diagnostics.invariants).toMatchObject({
+    selectionIds: [],
+    primarySelectionId: null,
+    activeGroupEditId: null,
+    machineTransforms: [],
+    civilTransforms: [],
+    annotationTransforms: [],
+    groupMembership: [],
+    undoDepth: 0,
+    redoDepth: 0,
+    undoStack: [],
+    redoStack: [],
+    projectDirty: false,
+    simulationRunning: false,
+    simulationSpeed: 1
+  });
+  expect(Array.isArray(diagnostics.invariants.layerState)).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -232,6 +367,7 @@ test("runtime panel registry opens and closes the actual Machine Library section
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const resizeGeneration = (await waitForRuntimeViewport(page)).viewport?.resizeGeneration;
   const machineLibraryHeader = page.getByRole("button", { name: /Machine Library/i }).first();
 
   await machineLibraryHeader.click();
@@ -257,14 +393,127 @@ test("runtime panel registry opens and closes the actual Machine Library section
   });
   await expect(page.getByTestId("machine-library-panel")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.resizeGeneration
+  ).toBe(resizeGeneration);
   expect(errors).toEqual([]);
 });
 
-test("runtime right-panel shell preserves width and section state", async ({ page }) => {
+test("orthographic activation and wheel zoom preserve runtime invariants", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const [machineId] = await getMachineIds(page);
+  const perspective = await waitForRuntimeViewport(page);
+  const perspectiveBounds = await getMachineScreenBounds(page, machineId);
+
+  expect(await applyRuntimeViewportCameraState(page)).toBe(true);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.mode
+  ).toBe("orthographic");
+  const activated = await waitForRuntimeViewport(page);
+  const activatedBounds = await getMachineScreenBounds(page, machineId);
+  const activatedIntent = activated.camera?.orthographicIntent;
+
+  expect(activatedIntent).toBeDefined();
+  expect(activatedIntent?.verticalWorldSpan).toBeGreaterThan(1);
+  expect(activatedIntent?.verticalWorldSpan)
+    .toBeLessThan((activated.viewport?.cssHeight ?? 0) / 10);
+  expect(activatedIntent?.horizontalWorldUnitsPerPixel)
+    .toBeCloseTo(activatedIntent?.verticalWorldUnitsPerPixel ?? Number.NaN);
+  expect(activatedBounds.width).toBeGreaterThan(perspectiveBounds.width * 0.35);
+  expect(activatedBounds.width).toBeLessThan(perspectiveBounds.width * 3);
+  expect(activated.viewport?.sceneLifecycleGeneration)
+    .toBe(perspective.viewport?.sceneLifecycleGeneration);
+  expect(activated.invariants).toEqual(perspective.invariants);
+
+  const point = await getMachineScreenPoint(page, machineId);
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox || !point) {
+    throw new Error("Machine wheel target is unavailable.");
+  }
+  await page.mouse.move(canvasBox.x + point.x, canvasBox.y + point.y);
+  await page.mouse.wheel(0, -240);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan ?? Infinity
+  ).toBeLessThan(activatedIntent?.verticalWorldSpan ?? 0);
+  await expect.poll(async () =>
+    (await readCanvasRecord<ScreenBounds>(
+      page,
+      "data-machine-screen-bounds"
+    ))[machineId]?.width ?? 0
+  ).toBeGreaterThan(activatedBounds.width);
+  const zoomedIn = await getRuntimeViewportSnapshot(page);
+  const zoomedInBounds = await getMachineScreenBounds(page, machineId);
+  expect(zoomedInBounds.width).toBeGreaterThan(activatedBounds.width);
+  expect(zoomedIn.camera?.radius).toBeCloseTo(activated.camera?.radius ?? Number.NaN);
+  expect(zoomedIn.camera?.targetX).toBeCloseTo(activated.camera?.targetX ?? Number.NaN);
+  expect(zoomedIn.camera?.targetY).toBeCloseTo(activated.camera?.targetY ?? Number.NaN);
+  expect(zoomedIn.camera?.targetZ).toBeCloseTo(activated.camera?.targetZ ?? Number.NaN);
+  expect(zoomedIn.invariants).toEqual(activated.invariants);
+
+  await page.mouse.wheel(0, 240);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan ?? 0
+  ).toBeGreaterThan(zoomedIn.camera?.orthographicIntent?.verticalWorldSpan ?? Infinity);
+  await expect.poll(async () =>
+    (await readCanvasRecord<ScreenBounds>(
+      page,
+      "data-machine-screen-bounds"
+    ))[machineId]?.width ?? Infinity
+  ).toBeLessThan(zoomedInBounds.width);
+  const zoomedOut = await getRuntimeViewportSnapshot(page);
+  const zoomedOutBounds = await getMachineScreenBounds(page, machineId);
+  expect(zoomedOutBounds.width).toBeLessThan(zoomedInBounds.width);
+  expect(zoomedOut.camera?.orthographicIntent?.horizontalWorldUnitsPerPixel)
+    .toBeCloseTo(
+      zoomedOut.camera?.orthographicIntent?.verticalWorldUnitsPerPixel ?? Number.NaN
+    );
+  expect(zoomedOut.viewport?.sceneLifecycleGeneration)
+    .toBe(activated.viewport?.sceneLifecycleGeneration);
+  expect(zoomedOut.invariants).toEqual(activated.invariants);
+
+  expect(await page.evaluate(() => window.__atrvisuRuntimeViewport?.applyCameraState({
+    mode: "orthographic",
+    alpha: 0.7,
+    beta: 1.05,
+    radius: 34,
+    targetX: 1,
+    targetY: 0,
+    targetZ: -2,
+    orthographic: {
+      centerX: 0,
+      centerY: 0,
+      verticalWorldSpan: Number.NaN
+    }
+  }) ?? true)).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("orthographic framing survives panel and browser aspect-ratio changes after zoom", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const [machineId] = await getMachineIds(page);
+  expect(await applyRuntimeViewportCameraState(page)).toBe(true);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.mode
+  ).toBe("orthographic");
+  const point = await getMachineScreenPoint(page, machineId);
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox || !point) {
+    throw new Error("Machine wheel target is unavailable.");
+  }
+  await page.mouse.move(canvasBox.x + point.x, canvasBox.y + point.y);
+  await page.mouse.wheel(0, -180);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan ?? Infinity
+  ).toBeLessThan(25);
+  const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
   const widthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
 
@@ -274,18 +523,124 @@ test("runtime right-panel shell preserves width and section state", async ({ pag
   expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({ handled: true });
   await expect(rightPanel).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Open right panel" })).toBeVisible();
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? 0
+  ).toBeGreaterThan(before.viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER);
+  const collapsed = await getRuntimeViewportSnapshot(page);
+  expect(collapsed.viewport?.resizeGeneration).toBe((before.viewport?.resizeGeneration ?? 0) + 1);
+  expect(collapsed.viewport?.lastResizeReason).toBe("dock-collapse");
+  expect(collapsed.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(collapsed.camera?.orthographicIntent?.viewportAspectRatio)
+    .not.toBeCloseTo(before.camera?.orthographicIntent?.viewportAspectRatio ?? Number.NaN);
+  expectOrthographicFramingEquivalent(before, collapsed);
+  expect(collapsed.invariants).toEqual(before.invariants);
 
   expect(await invokeRuntimePanel(page, "open", "panel.rightPanelShell")).toMatchObject({ handled: true });
   await expect(rightPanel).toBeVisible();
   await expect(page.getByTestId("layers-panel")).toBeVisible();
   await expect.poll(async () => rightPanel.evaluate((element) => element.getBoundingClientRect().width)).toBe(widthBefore);
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth
+  ).toBe(before.viewport?.cssWidth);
+  const reopened = await getRuntimeViewportSnapshot(page);
+  expect(reopened.viewport?.resizeGeneration).toBe((collapsed.viewport?.resizeGeneration ?? 0) + 1);
+  expect(reopened.viewport?.lastResizeReason).toBe("dock-collapse");
+  expect(reopened.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expectOrthographicFramingEquivalent(before, reopened);
+  expect(reopened.invariants).toEqual(before.invariants);
+
+  await page.setViewportSize({ width: 1100, height: 850 });
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssHeight
+  ).toBe(850);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.lastResizeReason
+  ).toBe("window");
+  const browserResized = await getRuntimeViewportSnapshot(page);
+  expect(browserResized.viewport?.sceneLifecycleGeneration)
+    .toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(browserResized.camera?.orthographicIntent?.viewportAspectRatio)
+    .not.toBeCloseTo(reopened.camera?.orthographicIntent?.viewportAspectRatio ?? Number.NaN);
+  expectOrthographicFramingEquivalent(before, browserResized);
+  expect(browserResized.invariants).toEqual(before.invariants);
+  await expect(canvas).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    String(before.viewport?.sceneLifecycleGeneration)
+  );
+  expect(errors).toEqual([]);
+});
+
+test("runtime panel width drag resizes only the viewport", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+
+  const before = await waitForRuntimeViewport(page);
+  const rightPanel = page.getByTestId("right-panel");
+  const panelWidthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
+  const resizeHandle = page.getByRole("button", { name: "Resize right panel" });
+  const handleBounds = await resizeHandle.boundingBox();
+  if (!handleBounds) {
+    throw new Error("Right-panel resize handle bounds are unavailable.");
+  }
+
+  await page.mouse.move(handleBounds.x + handleBounds.width / 2, handleBounds.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(handleBounds.x - 64, handleBounds.y + 40, { steps: 6 });
+  await page.mouse.up();
+
+  await expect.poll(async () =>
+    rightPanel.evaluate((element) => element.getBoundingClientRect().width)
+  ).toBeGreaterThan(panelWidthBefore);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER
+  ).toBeLessThan(before.viewport?.cssWidth ?? 0);
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.viewport?.resizeGeneration).toBeGreaterThan(before.viewport?.resizeGeneration ?? 0);
+  expect(after.viewport?.lastResizeReason).toBe("dock-resize");
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(errors).toEqual([]);
+});
+
+test("browser resize reconciles viewport backing size without scene reconstruction", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const before = await waitForRuntimeViewport(page);
+
+  await page.setViewportSize({ width: 1180, height: 760 });
+
+  await expect.poll(async () => {
+    const viewport = (await getRuntimeViewportSnapshot(page)).viewport;
+    return viewport?.cssHeight;
+  }).toBe(760);
+  await expect.poll(async () => {
+    const viewport = (await getRuntimeViewportSnapshot(page)).viewport;
+    return Boolean(
+      viewport
+      && viewport.canvasWidth > 0
+      && viewport.canvasHeight > 0
+      && viewport.resizeGeneration > (before.viewport?.resizeGeneration ?? 0)
+    );
+  }).toBe(true);
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.viewport?.lastResizeReason).toBe("window");
+  expect(after.viewport?.canvasWidth).not.toBe(before.viewport?.canvasWidth);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.invariants).toEqual(before.invariants);
   expect(errors).toEqual([]);
 });
 
 test("runtime panel registry opens and closes only the requested manager modal", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
 
   expect(await invokeRuntimePanel(page, "open", "panel.libraryManager")).toMatchObject({ handled: true });
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
@@ -296,6 +651,7 @@ test("runtime panel registry opens and closes only the requested manager modal",
   expect(await invokeRuntimePanel(page, "close", "panel.libraryManager")).toMatchObject({ handled: true });
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expectNoModalBackdrop(page);
+  expect(await getRuntimeViewportSnapshot(page)).toEqual(before);
   expect(errors).toEqual([]);
 });
 
@@ -311,6 +667,7 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   const nameInput = editor.getByRole("textbox", { name: "Name", exact: true });
   const dirtyValue = (await nameInput.inputValue()) + " - unsaved";
   await nameInput.fill(dirtyValue);
+  const beforeCancelledCollapse = await waitForRuntimeViewport(page);
 
   page.once("dialog", async (dialog) => dialog.dismiss());
   expect(await invokeRuntimePanel(page, "close", "panel.machineLibrary")).toMatchObject({
@@ -330,6 +687,7 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   await expect(page.getByTestId("right-panel")).toBeVisible();
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await expect(nameInput).toHaveValue(dirtyValue);
+  expect(await getRuntimeViewportSnapshot(page)).toEqual(beforeCancelledCollapse);
 
   page.once("dialog", async (dialog) => dialog.accept());
   expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell")).toMatchObject({
@@ -339,6 +697,17 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
   await expect.poll(async () => (await getRuntimePanel(page, "panel.libraryManager"))?.open).toBe(false);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.resizeGeneration ?? 0
+  ).toBeGreaterThan(beforeCancelledCollapse.viewport?.resizeGeneration ?? 0);
+  const afterAcceptedCollapse = await getRuntimeViewportSnapshot(page);
+  expect(afterAcceptedCollapse.viewport?.resizeGeneration)
+    .toBe((beforeCancelledCollapse.viewport?.resizeGeneration ?? 0) + 1);
+  expect(afterAcceptedCollapse.viewport?.lastResizeReason).toBe("dock-collapse");
+  expect(afterAcceptedCollapse.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeCancelledCollapse.viewport?.sceneLifecycleGeneration);
+  expect(afterAcceptedCollapse.camera).toEqual(beforeCancelledCollapse.camera);
+  expect(afterAcceptedCollapse.invariants).toEqual(beforeCancelledCollapse.invariants);
   expect(errors).toEqual([]);
 });
 
@@ -826,21 +1195,77 @@ test("annotation create and negative coordinate smoke has no red console errors"
   expect(errors).toEqual([]);
 });
 
-test("viewpoints can be captured and applied without red console errors", async ({ page }) => {
+test("orthographic viewpoint framing can be captured, updated, and applied", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: 3,
+      centerY: -2,
+      verticalWorldSpan: 14
+    }
+  })).toBe(true);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan
+  ).toBe(14);
 
   const viewpointsSection = page.getByRole("button", { name: /Viewpoints/i });
   if ((await viewpointsSection.getAttribute("aria-expanded")) !== "true") {
     await viewpointsSection.click();
   }
   await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
-  await page.getByTestId("viewpoint-name-input").fill("Genel Gorunum");
+  await page.getByTestId("viewpoint-name-input").fill("Orthographic Review");
   await page.getByTestId("capture-viewpoint").click();
-  await expect(page.getByRole("button", { name: /Genel Gorunum/i })).toBeVisible();
-  await page.getByRole("button", { name: /Genel Gorunum/i }).click();
+  const viewpointItem = page.getByRole("button", { name: /Orthographic Review/i });
+  await expect(viewpointItem).toBeVisible();
+  await viewpointItem.click();
   await expect(page.getByTestId("apply-viewpoint")).toBeEnabled();
+  const captured = await getRuntimeViewportSnapshot(page);
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: -4,
+      centerY: 5,
+      verticalWorldSpan: 30
+    }
+  })).toBe(true);
   await page.getByTestId("apply-viewpoint").click();
+  await expect.poll(async () => {
+    const intent = (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent;
+    return [intent?.centerX, intent?.centerY, intent?.verticalWorldSpan];
+  }).toEqual([3, -2, 14]);
+  const restored = await getRuntimeViewportSnapshot(page);
+  expect(restored.camera?.alpha).toBeCloseTo(captured.camera?.alpha ?? Number.NaN);
+  expect(restored.camera?.beta).toBeCloseTo(captured.camera?.beta ?? Number.NaN);
+  expect(restored.camera?.radius).toBeCloseTo(captured.camera?.radius ?? Number.NaN);
+  expect(restored.invariants).toEqual(captured.invariants);
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: 6,
+      centerY: 1,
+      verticalWorldSpan: 10
+    }
+  })).toBe(true);
+  await page.getByRole("button", { name: "Update From Current View" }).click();
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: 0,
+      centerY: 0,
+      verticalWorldSpan: 24
+    }
+  })).toBe(true);
+  await page.getByTestId("apply-viewpoint").click();
+  await expect.poll(async () => {
+    const intent = (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent;
+    return [intent?.centerX, intent?.centerY, intent?.verticalWorldSpan];
+  }).toEqual([6, 1, 10]);
 
   expect(errors).toEqual([]);
 });

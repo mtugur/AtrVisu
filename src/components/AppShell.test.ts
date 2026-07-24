@@ -68,4 +68,16 @@ describe("AppShell render contract", () => {
     expect(markup).toContain('data-app-shell-zone="machine-properties"');
     expect(markup).toContain('data-app-shell-zone="modal-layer"');
   });
+
+  it("applies the committed right-panel inset to the viewport host", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AppShell, {
+        viewport: createSlot("viewport-slot", "viewport-slot"),
+        viewportRightInset: 420
+      })
+    );
+
+    expect(markup).toContain('class="scene-viewport-host"');
+    expect(markup).toContain('style="right:min(420px, calc(100vw - 28px))"');
+  });
 });
