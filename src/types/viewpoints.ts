@@ -11,6 +11,11 @@ export type ViewpointCameraState = {
   positionY?: number;
   positionZ?: number;
   mode?: "perspective" | "orthographic";
+  orthographic?: {
+    centerX: number;
+    centerY: number;
+    verticalWorldSpan: number;
+  };
 };
 
 export type ViewpointDisplayState = Partial<Pick<

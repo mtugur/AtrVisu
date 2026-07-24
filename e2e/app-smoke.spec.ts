@@ -81,21 +81,41 @@ const waitForRuntimeViewport = async (page: Page) => {
   return getRuntimeViewportSnapshot(page);
 };
 
-const applyRuntimeViewportCameraState = async (page: Page) => page.evaluate(() => {
+type RuntimeCameraApplyState = {
+  mode: "perspective" | "orthographic";
+  alpha: number;
+  beta: number;
+  radius: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  orthographic?: {
+    centerX: number;
+    centerY: number;
+    verticalWorldSpan: number;
+  };
+};
+
+const DEFAULT_ORTHOGRAPHIC_CAMERA_STATE: RuntimeCameraApplyState = {
+  mode: "orthographic",
+  alpha: 0.7,
+  beta: 1.05,
+  radius: 34,
+  targetX: 1,
+  targetY: 0,
+  targetZ: -2
+};
+
+const applyRuntimeViewportCameraState = async (
+  page: Page,
+  cameraState: RuntimeCameraApplyState = DEFAULT_ORTHOGRAPHIC_CAMERA_STATE
+) => page.evaluate((state) => {
   const bridge = window.__atrvisuRuntimeViewport;
   if (!bridge) {
     throw new Error("AtrVisu runtime viewport E2E bridge is unavailable.");
   }
-  return bridge.applyCameraState({
-    mode: "orthographic",
-    alpha: 0.7,
-    beta: 1.05,
-    radius: 34,
-    targetX: 1,
-    targetY: 0,
-    targetZ: -2
-  });
-});
+  return bridge.applyCameraState(state);
+}, cameraState);
 
 type RuntimeViewportSnapshot = Awaited<ReturnType<typeof getRuntimeViewportSnapshot>>;
 
@@ -152,6 +172,7 @@ const selectExistingCustomLibraryItem = async (page: Page) => {
 
 type PlanPosition = { xMm: number; yMm: number };
 type ScreenPoint = { x: number; y: number };
+type ScreenBounds = { left: number; top: number; width: number; height: number };
 
 const readCanvasRecord = async <T>(page: Page, attribute: string) => {
   const raw = await page.getByLabel("AtrVisu 3D workspace").getAttribute(attribute);
@@ -173,6 +194,20 @@ const getMachineScreenPoint = async (page: Page, machineId: string) => {
     (await readCanvasRecord<ScreenPoint>(page, "data-machine-screen-points"))[machineId]
   )).toBe(true);
   return (await readCanvasRecord<ScreenPoint>(page, "data-machine-screen-points"))[machineId];
+};
+
+const getMachineScreenBounds = async (page: Page, machineId: string) => {
+  await expect.poll(async () => {
+    const bounds = (await readCanvasRecord<ScreenBounds>(
+      page,
+      "data-machine-screen-bounds"
+    ))[machineId];
+    return Boolean(bounds && bounds.width > 0 && bounds.height > 0);
+  }).toBe(true);
+  return (await readCanvasRecord<ScreenBounds>(
+    page,
+    "data-machine-screen-bounds"
+  ))[machineId];
 };
 
 const clickSceneMachine = async (page: Page, machineId: string) => {
@@ -247,6 +282,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
   await expect(canvas).not.toHaveAttribute("data-machine-screen-points");
+  await expect(canvas).not.toHaveAttribute("data-machine-screen-bounds");
   await expect(canvas).not.toHaveAttribute("data-machine-plan-positions");
   await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
   expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
@@ -255,6 +291,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
   await expect(canvas).toHaveAttribute("data-machine-screen-points", "{}");
+  await expect(canvas).toHaveAttribute("data-machine-screen-bounds", "{}");
   await expect(canvas).toHaveAttribute("data-machine-plan-positions", "{}");
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
@@ -362,16 +399,120 @@ test("runtime panel registry opens and closes the actual Machine Library section
   expect(errors).toEqual([]);
 });
 
-test("orthographic framing survives panel and browser aspect-ratio changes", async ({ page }) => {
+test("orthographic activation and wheel zoom preserve runtime invariants", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   await page.locator(".machine-card").first().click();
   await waitForMachineDiagnostics(page, 1);
+  const [machineId] = await getMachineIds(page);
+  const perspective = await waitForRuntimeViewport(page);
+  const perspectiveBounds = await getMachineScreenBounds(page, machineId);
+
   expect(await applyRuntimeViewportCameraState(page)).toBe(true);
   await expect.poll(async () =>
     (await getRuntimeViewportSnapshot(page)).camera?.mode
   ).toBe("orthographic");
+  const activated = await waitForRuntimeViewport(page);
+  const activatedBounds = await getMachineScreenBounds(page, machineId);
+  const activatedIntent = activated.camera?.orthographicIntent;
+
+  expect(activatedIntent).toBeDefined();
+  expect(activatedIntent?.verticalWorldSpan).toBeGreaterThan(1);
+  expect(activatedIntent?.verticalWorldSpan)
+    .toBeLessThan((activated.viewport?.cssHeight ?? 0) / 10);
+  expect(activatedIntent?.horizontalWorldUnitsPerPixel)
+    .toBeCloseTo(activatedIntent?.verticalWorldUnitsPerPixel ?? Number.NaN);
+  expect(activatedBounds.width).toBeGreaterThan(perspectiveBounds.width * 0.35);
+  expect(activatedBounds.width).toBeLessThan(perspectiveBounds.width * 3);
+  expect(activated.viewport?.sceneLifecycleGeneration)
+    .toBe(perspective.viewport?.sceneLifecycleGeneration);
+  expect(activated.invariants).toEqual(perspective.invariants);
+
+  const point = await getMachineScreenPoint(page, machineId);
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox || !point) {
+    throw new Error("Machine wheel target is unavailable.");
+  }
+  await page.mouse.move(canvasBox.x + point.x, canvasBox.y + point.y);
+  await page.mouse.wheel(0, -240);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan ?? Infinity
+  ).toBeLessThan(activatedIntent?.verticalWorldSpan ?? 0);
+  await expect.poll(async () =>
+    (await readCanvasRecord<ScreenBounds>(
+      page,
+      "data-machine-screen-bounds"
+    ))[machineId]?.width ?? 0
+  ).toBeGreaterThan(activatedBounds.width);
+  const zoomedIn = await getRuntimeViewportSnapshot(page);
+  const zoomedInBounds = await getMachineScreenBounds(page, machineId);
+  expect(zoomedInBounds.width).toBeGreaterThan(activatedBounds.width);
+  expect(zoomedIn.camera?.radius).toBeCloseTo(activated.camera?.radius ?? Number.NaN);
+  expect(zoomedIn.camera?.targetX).toBeCloseTo(activated.camera?.targetX ?? Number.NaN);
+  expect(zoomedIn.camera?.targetY).toBeCloseTo(activated.camera?.targetY ?? Number.NaN);
+  expect(zoomedIn.camera?.targetZ).toBeCloseTo(activated.camera?.targetZ ?? Number.NaN);
+  expect(zoomedIn.invariants).toEqual(activated.invariants);
+
+  await page.mouse.wheel(0, 240);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan ?? 0
+  ).toBeGreaterThan(zoomedIn.camera?.orthographicIntent?.verticalWorldSpan ?? Infinity);
+  await expect.poll(async () =>
+    (await readCanvasRecord<ScreenBounds>(
+      page,
+      "data-machine-screen-bounds"
+    ))[machineId]?.width ?? Infinity
+  ).toBeLessThan(zoomedInBounds.width);
+  const zoomedOut = await getRuntimeViewportSnapshot(page);
+  const zoomedOutBounds = await getMachineScreenBounds(page, machineId);
+  expect(zoomedOutBounds.width).toBeLessThan(zoomedInBounds.width);
+  expect(zoomedOut.camera?.orthographicIntent?.horizontalWorldUnitsPerPixel)
+    .toBeCloseTo(
+      zoomedOut.camera?.orthographicIntent?.verticalWorldUnitsPerPixel ?? Number.NaN
+    );
+  expect(zoomedOut.viewport?.sceneLifecycleGeneration)
+    .toBe(activated.viewport?.sceneLifecycleGeneration);
+  expect(zoomedOut.invariants).toEqual(activated.invariants);
+
+  expect(await page.evaluate(() => window.__atrvisuRuntimeViewport?.applyCameraState({
+    mode: "orthographic",
+    alpha: 0.7,
+    beta: 1.05,
+    radius: 34,
+    targetX: 1,
+    targetY: 0,
+    targetZ: -2,
+    orthographic: {
+      centerX: 0,
+      centerY: 0,
+      verticalWorldSpan: Number.NaN
+    }
+  }) ?? true)).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("orthographic framing survives panel and browser aspect-ratio changes after zoom", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const [machineId] = await getMachineIds(page);
+  expect(await applyRuntimeViewportCameraState(page)).toBe(true);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.mode
+  ).toBe("orthographic");
+  const point = await getMachineScreenPoint(page, machineId);
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox || !point) {
+    throw new Error("Machine wheel target is unavailable.");
+  }
+  await page.mouse.move(canvasBox.x + point.x, canvasBox.y + point.y);
+  await page.mouse.wheel(0, -180);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan ?? Infinity
+  ).toBeLessThan(25);
   const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
   const widthBefore = await rightPanel.evaluate((element) => element.getBoundingClientRect().width);
@@ -1054,21 +1195,77 @@ test("annotation create and negative coordinate smoke has no red console errors"
   expect(errors).toEqual([]);
 });
 
-test("viewpoints can be captured and applied without red console errors", async ({ page }) => {
+test("orthographic viewpoint framing can be captured, updated, and applied", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: 3,
+      centerY: -2,
+      verticalWorldSpan: 14
+    }
+  })).toBe(true);
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan
+  ).toBe(14);
 
   const viewpointsSection = page.getByRole("button", { name: /Viewpoints/i });
   if ((await viewpointsSection.getAttribute("aria-expanded")) !== "true") {
     await viewpointsSection.click();
   }
   await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
-  await page.getByTestId("viewpoint-name-input").fill("Genel Gorunum");
+  await page.getByTestId("viewpoint-name-input").fill("Orthographic Review");
   await page.getByTestId("capture-viewpoint").click();
-  await expect(page.getByRole("button", { name: /Genel Gorunum/i })).toBeVisible();
-  await page.getByRole("button", { name: /Genel Gorunum/i }).click();
+  const viewpointItem = page.getByRole("button", { name: /Orthographic Review/i });
+  await expect(viewpointItem).toBeVisible();
+  await viewpointItem.click();
   await expect(page.getByTestId("apply-viewpoint")).toBeEnabled();
+  const captured = await getRuntimeViewportSnapshot(page);
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: -4,
+      centerY: 5,
+      verticalWorldSpan: 30
+    }
+  })).toBe(true);
   await page.getByTestId("apply-viewpoint").click();
+  await expect.poll(async () => {
+    const intent = (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent;
+    return [intent?.centerX, intent?.centerY, intent?.verticalWorldSpan];
+  }).toEqual([3, -2, 14]);
+  const restored = await getRuntimeViewportSnapshot(page);
+  expect(restored.camera?.alpha).toBeCloseTo(captured.camera?.alpha ?? Number.NaN);
+  expect(restored.camera?.beta).toBeCloseTo(captured.camera?.beta ?? Number.NaN);
+  expect(restored.camera?.radius).toBeCloseTo(captured.camera?.radius ?? Number.NaN);
+  expect(restored.invariants).toEqual(captured.invariants);
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: 6,
+      centerY: 1,
+      verticalWorldSpan: 10
+    }
+  })).toBe(true);
+  await page.getByRole("button", { name: "Update From Current View" }).click();
+  expect(await applyRuntimeViewportCameraState(page, {
+    ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    orthographic: {
+      centerX: 0,
+      centerY: 0,
+      verticalWorldSpan: 24
+    }
+  })).toBe(true);
+  await page.getByTestId("apply-viewpoint").click();
+  await expect.poll(async () => {
+    const intent = (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent;
+    return [intent?.centerX, intent?.centerY, intent?.verticalWorldSpan];
+  }).toEqual([6, 1, 10]);
 
   expect(errors).toEqual([]);
 });

@@ -1,4 +1,5 @@
 import type { ViewportResizeRequest, ViewportResizeReason } from "../contracts";
+import type { ViewpointCameraState } from "../../types/viewpoints";
 
 export const RUNTIME_VIEWPORT_IDS = {
   main: "viewport.main"
@@ -36,14 +37,8 @@ export type RuntimeViewportCameraSnapshot = {
   orthographicIntent?: RuntimeViewportOrthographicIntent;
 };
 
-export type RuntimeViewportCameraApplyState = {
+export type RuntimeViewportCameraApplyState = ViewpointCameraState & {
   mode: RuntimeViewportCameraMode;
-  alpha: number;
-  beta: number;
-  radius: number;
-  targetX: number;
-  targetY: number;
-  targetZ: number;
 };
 
 export type RuntimeViewportState = {

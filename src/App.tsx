@@ -1230,8 +1230,7 @@ export function App() {
         if (!scene) {
           return false;
         }
-        scene.applyCameraState(cameraState);
-        return true;
+        return scene.applyCameraState(cameraState);
       },
       getInvariants: () => runtimeViewportInvariantStateRef.current
     };

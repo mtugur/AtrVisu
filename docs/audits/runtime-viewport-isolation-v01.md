@@ -4,7 +4,7 @@ Audit date: 2026-07-23
 
 Branch: `feat/viewport-isolation-resize-invariance-v01`
 
-Status: runtime viewport package ready; Phase 0 remains open
+Status: automated runtime viewport evidence ready; focused orthographic manual acceptance pending; Phase 0 remains open
 
 ## Canonical identity and ownership
 
@@ -53,7 +53,13 @@ The diagnostics-only bridge returns a serializable camera snapshot containing:
 
 Pure resize never calls camera home/reset. Perspective intent remains unchanged while Babylon updates projection internals.
 
-Babylon 7.54.x uses half of the current render width and height as the effective orthographic bounds when the camera fields are `null`. Before an accepted orthographic resize, the runtime therefore resolves both explicit and default/null bounds. After `engine.resize()`, it preserves the orthographic center and vertical world span and recomputes the horizontal span from the committed CSS aspect ratio. This keeps horizontal and vertical world-units-per-pixel equal without changing target, alpha, beta, radius, camera mode, or scene lifecycle.
+Perspective-to-orthographic activation no longer interprets render pixels as world units. When no explicit framing is supplied, AtrVisu uses the requested ArcRotate `radius` as the effective target distance and derives the vertical world span with `2 * radius * tan(fov / 2)`. The initial center is deterministic at `(0, 0)`, and the horizontal span comes from the committed CSS viewport aspect ratio. A legacy orthographic viewpoint without framing uses this same world-space fallback. If the camera is already orthographic, applying a legacy state preserves its current valid center and vertical span.
+
+`ViewpointCameraState` now carries optional serializable orthographic framing with `centerX`, `centerY`, and `verticalWorldSpan`. Orthographic capture and update persist those scalar values; apply restores explicit framing after finite/positive validation and clamps vertical span to `0.5` through `500` world units. Perspective viewpoints omit the optional field. Existing projects and legacy viewpoints remain valid, and the normal layout export/import normalization path preserves the optional data without a persistence migration.
+
+Orthographic wheel input is handled in a narrow non-passive capture listener so Babylon's perspective radius-only wheel path cannot compete with explicit orthographic bounds. Pixel wheel delta uses an exponential base of `1.0015`; zoom-in reduces and zoom-out increases vertical span within the same `0.5` to `500` limits. Where a stable floor intersection is available, the orthographic center is adjusted in camera view space to preserve the point under the pointer; otherwise zoom remains centered deterministically. Perspective wheel handling continues through the existing Babylon input path.
+
+After `engine.resize()`, AtrVisu preserves the current orthographic center and user-selected vertical span and recomputes only the horizontal span from the committed CSS aspect ratio. This keeps horizontal and vertical world-units-per-pixel equal without changing target, alpha, beta, radius, camera mode, or scene lifecycle. Panel collapse/reopen, panel-width dragging, and browser aspect-ratio changes therefore retain the orthographic zoom selected before resize.
 
 The opt-in `?e2eDiagnostics=1` bridge provides a read-only invariant snapshot for:
 
@@ -94,6 +100,11 @@ Deterministic unit coverage verifies:
 - repeated-observation suppression and latest-size coalescing;
 - deterministic resize-reason precedence and pending-reason reset;
 - explicit and Babylon default/null orthographic bound resolution;
+- perspective radius/FOV world-span derivation without render-pixel fallback;
+- explicit framing validation, clamping, bounds conversion, capture, and tolerance comparison;
+- legacy orthographic framing preservation and deterministic fallback;
+- orthographic wheel delta normalization, zoom direction, finite repetition, and minimum/maximum clamping;
+- deterministic zoom-to-pointer center translation;
 - center and vertical-span preservation across aspect-ratio changes;
 - equal horizontal and vertical world-units-per-pixel after orthographic resize;
 - perspective no-write behavior and orthographic camera intent equivalence;
@@ -107,7 +118,10 @@ Browser coverage verifies:
 - right-panel collapse and reopen change viewport width while preserving panel width;
 - real pointer-driven panel-width changes resize the viewport inversely;
 - panel collapse/reopen reports `dock-collapse`, panel-width dragging reports `dock-resize`, and browser resizing reports `window`;
-- deterministic orthographic mode survives panel collapse/reopen and a materially different browser aspect ratio without visual-scale distortion;
+- perspective-to-orthographic activation preserves a practical projected object scale and does not use viewport pixel height as world span;
+- real orthographic wheel input changes vertical span and projected machine size without changing target, radius, selection, transforms, history, dirty state, or scene lifecycle;
+- orthographic viewpoint capture, update, and apply restore center, vertical span, target, and orbit state through the real Viewpoints UI;
+- orthographic zoom survives panel collapse/reopen and a materially different browser aspect ratio without visual-scale distortion;
 - cancelled dirty Library Manager collapse causes no viewport resize;
 - accepted collapse causes a committed resize;
 - browser/container resize reconciles CSS and backing dimensions;
@@ -119,12 +133,13 @@ Final local validation:
 
 - `npm.cmd audit`: 0 vulnerabilities
 - `npm.cmd run build`: passed
-- `npm.cmd run test -- --run`: 89 files / 795 tests passed
-- `npm.cmd run test:e2e`: 26 tests passed
+- `npm.cmd run test -- --run`: 89 files / 813 tests passed
+- `npm.cmd run test:e2e`: 27 tests passed
 - `git diff --check`: passed
 
 ## Remaining limitations
 
 - DPR-only changes are reconciled when the browser emits a resize notification; there is no separate cross-browser DPR media-query subscription.
+- Focused manual acceptance of orthographic activation and wheel zoom remains required before the usability blocker is declared closed.
 - The Runtime Feature Access closure gate still needs to consume live command, panel, selection, entity, and viewport reachability.
 - This package does not mark Phase 0 complete.

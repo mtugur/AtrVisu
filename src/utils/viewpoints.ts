@@ -21,6 +21,23 @@ export const normalizeViewpointCamera = (camera: unknown): ViewpointCameraState 
     return null;
   }
 
+  const mode = value.mode === "orthographic" ? "orthographic" : "perspective";
+  const orthographic = mode === "orthographic"
+    && value.orthographic
+    && isFiniteNumber(value.orthographic.centerX)
+    && isFiniteNumber(value.orthographic.centerY)
+    && isFiniteNumber(value.orthographic.verticalWorldSpan)
+    && value.orthographic.verticalWorldSpan > 0
+      ? {
+          centerX: value.orthographic.centerX,
+          centerY: value.orthographic.centerY,
+          verticalWorldSpan: value.orthographic.verticalWorldSpan
+        }
+      : null;
+  if (mode === "orthographic" && value.orthographic !== undefined && !orthographic) {
+    return null;
+  }
+
   return {
     alpha: value.alpha,
     beta: value.beta,
@@ -31,7 +48,8 @@ export const normalizeViewpointCamera = (camera: unknown): ViewpointCameraState 
     ...(isFiniteNumber(value.positionX) ? { positionX: value.positionX } : {}),
     ...(isFiniteNumber(value.positionY) ? { positionY: value.positionY } : {}),
     ...(isFiniteNumber(value.positionZ) ? { positionZ: value.positionZ } : {}),
-    mode: value.mode === "orthographic" ? "orthographic" : "perspective"
+    mode,
+    ...(orthographic ? { orthographic } : {})
   };
 };
 

@@ -269,4 +269,38 @@ describe("layout serialization", () => {
     });
     expect(annotationsFromLayout(layout)[0].layerId).toBe("default");
   });
+
+  it("preserves optional orthographic viewpoint framing through layout export and import", () => {
+    const layout = createLayoutSnapshotFromMachines(
+      [],
+      "2026-07-24T00:00:00.000Z",
+      [],
+      [{
+        id: "orthographic-view",
+        name: "Plan review",
+        camera: {
+          alpha: 0.7,
+          beta: 1.05,
+          radius: 34,
+          targetX: 1,
+          targetY: 0,
+          targetZ: -2,
+          mode: "orthographic",
+          orthographic: {
+            centerX: 2,
+            centerY: -1,
+            verticalWorldSpan: 16
+          }
+        },
+        createdAt: "2026-07-24T00:00:00.000Z",
+        updatedAt: "2026-07-24T00:00:00.000Z"
+      }]
+    );
+
+    expect(viewpointsFromLayout(layout)[0]?.camera.orthographic).toEqual({
+      centerX: 2,
+      centerY: -1,
+      verticalWorldSpan: 16
+    });
+  });
 });
