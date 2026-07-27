@@ -30,6 +30,12 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("edit.redo", "edit", "Redo", "Redo the next layout transaction.", false, "Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z"),
   createCommandSeed("edit.deleteSelected", "edit", "Delete Selected", "Delete the selected layout entities.", true, "Delete"),
   createCommandSeed("edit.duplicateSelected", "edit", "Duplicate Selected", "Duplicate the selected layout entities.", true, "Ctrl/Cmd+D"),
+  createCommandSeed("assembly.createGroup", "edit", "Create Group", "Create an assembly from the selected layout entities.", true),
+  createCommandSeed("assembly.addSelected", "edit", "Add Selected", "Add the selected layout entities to an assembly.", true),
+  createCommandSeed("assembly.removeSelected", "edit", "Remove Selected", "Remove the selected layout entities from an assembly.", true),
+  createCommandSeed("assembly.enterEdit", "edit", "Edit Group", "Edit members of the selected assembly independently."),
+  createCommandSeed("assembly.exitEdit", "edit", "Exit Group Edit", "Return the active assembly to rigid selection mode."),
+  createCommandSeed("assembly.ungroup", "edit", "Ungroup", "Remove the assembly while preserving its members.", true),
 
   createCommandSeed("view.fitView", "view", "Fit View", "Fit the viewport to the current layout."),
   createCommandSeed("view.toggleLabels", "view", "Toggle Labels", "Show or hide layout labels."),
@@ -44,6 +50,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("civil.addColumn", "insert", "Add Column", "Add a civil column reference.", true),
   createCommandSeed("civil.addWalkway", "insert", "Add Walkway", "Add a civil walkway reference.", true),
   createCommandSeed("civil.addRestrictedZone", "insert", "Add Restricted Zone", "Add a civil restricted zone.", true),
+  createCommandSeed("civil.addReferenceZone", "insert", "Add Reference Zone", "Add a civil reference zone.", true),
 
   createCommandSeed("alignment.alignSelection", "arrange", "Align Selection", "Align the selected layout entities.", true),
   createCommandSeed("snap.rotation", "arrange", "Rotation Snap", "Toggle or configure rotation snapping."),
@@ -52,7 +59,6 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("library.manager", "tools", "Library Manager", "Open the Library Manager."),
   createCommandSeed("library.taxonomyManager", "tools", "Taxonomy Manager", "Open the Taxonomy Manager."),
   createCommandSeed("collision.check", "tools", "Collision Check", "Run or review collision checks."),
-  createCommandSeed("performance.benchmark", "tools", "Performance Benchmark", "Open the performance benchmark tool."),
-  createCommandSeed("diagnostics.noRedConsole", "tools", "No Red Console Diagnostics", "Check that normal use has no red console errors.")
+  createCommandSeed("performance.benchmark", "tools", "Performance Benchmark", "Open the performance benchmark tool.")
 ] as const satisfies readonly CommandDefinition[];
 

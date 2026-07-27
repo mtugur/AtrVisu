@@ -11,6 +11,7 @@ export type CommandContext = {
   selectionIds: readonly string[];
   primarySelectionId?: string;
   hasUnsavedChanges: boolean;
+  payload?: unknown;
 };
 
 export type CommandDefinition = {

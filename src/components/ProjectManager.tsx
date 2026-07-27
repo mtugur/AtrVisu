@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AtrVisuLayout } from "../types/machine";
 import type { AtrVisuProject } from "../types/project";
@@ -20,6 +20,14 @@ import {
   updateProjectMetadata
 } from "../utils/projectStorage";
 
+export type ProjectManagerRuntimeController = {
+  saveCurrentRevision: () => void;
+  exportSelectedProject: () => void;
+  importProjectFile: (file: File) => void;
+  canSaveCurrentRevision: boolean;
+  canExportSelectedProject: boolean;
+};
+
 type ProjectManagerProps = {
   projects: AtrVisuProject[];
   currentProjectId: string | null;
@@ -33,6 +41,8 @@ type ProjectManagerProps = {
   onCurrentSelectionChange: (projectId: string | null, layoutId: string | null, revisionId: string | null) => void;
   onLoadRevision: (projectId: string, layoutId: string, revisionId: string, snapshot: AtrVisuLayout) => void;
   onSavedRevision: (projectId: string, layoutId: string, revisionId: string) => void;
+  onRuntimeControllerChange?: (controller: ProjectManagerRuntimeController | null) => void;
+  onExecuteRuntimeCommand?: (commandId: "project.save" | "project.exportJson" | "project.importJson", payload?: unknown) => void;
 };
 
 const formatDate = (value: string) => {
@@ -55,7 +65,9 @@ export function ProjectManager({
   onProjectsChanged,
   onCurrentSelectionChange,
   onLoadRevision,
-  onSavedRevision
+  onSavedRevision,
+  onRuntimeControllerChange,
+  onExecuteRuntimeCommand
 }: ProjectManagerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId ?? projects[0]?.projectId ?? "");
@@ -227,6 +239,24 @@ export function ProjectManager({
     }
   };
 
+  useLayoutEffect(() => {
+    if (!onRuntimeControllerChange) {
+      return;
+    }
+    onRuntimeControllerChange({
+      saveCurrentRevision,
+      exportSelectedProject,
+      importProjectFile: (file) => {
+        void importProjectFile(file);
+      },
+      canSaveCurrentRevision: Boolean(selectedProject && selectedLayout),
+      canExportSelectedProject: Boolean(selectedProject)
+    });
+    return () => {
+      onRuntimeControllerChange(null);
+    };
+  });
+
   const modal = (
     <div className="manager-backdrop" role="presentation">
       <section className="manager-dialog project-dialog" data-testid="project-manager-modal" role="dialog" aria-modal="true" aria-label="Project Manager">
@@ -312,7 +342,17 @@ export function ProjectManager({
                 data-testid="import-project-file"
                 type="file"
                 accept="application/json,.json"
-                onChange={(event) => void importProjectFile(event.target.files?.[0])}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) {
+                    return;
+                  }
+                  if (onExecuteRuntimeCommand) {
+                    onExecuteRuntimeCommand("project.importJson", file);
+                    return;
+                  }
+                  void importProjectFile(file);
+                }}
               />
             </div>
             {selectedProject ? (
@@ -368,7 +408,16 @@ export function ProjectManager({
                 }, "Layout created.")}>
                   New Layout
                 </button>
-                <button type="button" onClick={exportSelectedProject}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onExecuteRuntimeCommand) {
+                      onExecuteRuntimeCommand("project.exportJson");
+                    } else {
+                      exportSelectedProject();
+                    }
+                  }}
+                >
                   Export Project JSON
                 </button>
               </div>
@@ -404,7 +453,18 @@ export function ProjectManager({
             </div>
             {selectedLayout ? (
               <div className="project-action-grid">
-                <button className="primary-action" data-testid="save-scene-revision" type="button" onClick={saveCurrentRevision}>
+                <button
+                  className="primary-action"
+                  data-testid="save-scene-revision"
+                  type="button"
+                  onClick={() => {
+                    if (onExecuteRuntimeCommand) {
+                      onExecuteRuntimeCommand("project.save");
+                    } else {
+                      saveCurrentRevision();
+                    }
+                  }}
+                >
                   Save Current Scene as New Revision
                 </button>
                 <button type="button" onClick={loadSelectedRevision} disabled={!selectedRevision}>

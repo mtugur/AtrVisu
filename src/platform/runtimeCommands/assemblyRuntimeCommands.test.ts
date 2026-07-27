@@ -12,10 +12,13 @@ const context = {
 };
 
 describe("assembly runtime commands", () => {
-  it("registers the explicit group edit and ungroup actions", () => {
+  it("registers every current assembly action", () => {
     const bridge = createAssemblyRuntimeCommandBridge(() => ({}));
 
     expect(bridge.registry.list().map((command) => command.id)).toEqual([
+      ASSEMBLY_COMMAND_IDS.createGroup,
+      ASSEMBLY_COMMAND_IDS.addSelected,
+      ASSEMBLY_COMMAND_IDS.removeSelected,
       ASSEMBLY_COMMAND_IDS.enterEdit,
       ASSEMBLY_COMMAND_IDS.exitEdit,
       ASSEMBLY_COMMAND_IDS.ungroup

@@ -105,19 +105,31 @@ export const createFeatureSurfaceCoverage = (
 
 export const getUncoveredCommandSeedIds = (
   commandSeeds: readonly { readonly id: string }[] = platformCommandSeedDefinitions,
-  inventory: readonly PlatformSurfaceInventoryItem[] = currentPlatformSurfaceInventory
-): readonly string[] =>
-  createCommandSurfaceCoverage(commandSeeds, inventory)
+  inventory: readonly PlatformSurfaceInventoryItem[] = currentPlatformSurfaceInventory,
+  featureEntries: readonly FeatureAccessEntry[] = platformFeatureAccessMatrix
+): readonly string[] => {
+  const plannedCommandIds = new Set(featureEntries
+    .filter((feature) => feature.classification === "declared-planned")
+    .flatMap((feature) => feature.commandIds ?? (feature.commandId ? [feature.commandId] : [])));
+  return createCommandSurfaceCoverage(commandSeeds, inventory)
     .filter((coverage) => !coverage.isCovered)
+    .filter((coverage) => !plannedCommandIds.has(coverage.commandId))
     .map((coverage) => coverage.commandId);
+};
 
 export const getUncoveredPanelSeedIds = (
   panelSeeds: readonly { readonly id: string }[] = platformPanelSeedDefinitions,
-  inventory: readonly PlatformSurfaceInventoryItem[] = currentPlatformSurfaceInventory
-): readonly string[] =>
-  createPanelSurfaceCoverage(panelSeeds, inventory)
+  inventory: readonly PlatformSurfaceInventoryItem[] = currentPlatformSurfaceInventory,
+  featureEntries: readonly FeatureAccessEntry[] = platformFeatureAccessMatrix
+): readonly string[] => {
+  const plannedPanelIds = new Set(featureEntries
+    .filter((feature) => feature.classification === "declared-planned")
+    .flatMap((feature) => feature.panelIds ?? (feature.panelId ? [feature.panelId] : [])));
+  return createPanelSurfaceCoverage(panelSeeds, inventory)
     .filter((coverage) => !coverage.isCovered)
+    .filter((coverage) => !plannedPanelIds.has(coverage.panelId))
     .map((coverage) => coverage.panelId);
+};
 
 export const getUncoveredRequiredFeatureIds = (
   featureEntries: readonly FeatureAccessEntry[] = platformFeatureAccessMatrix,
@@ -134,6 +146,12 @@ export const getUncoveredRequiredFeatureIds = (
 export const createSurfaceCoverageAuditReportFromSources = (
   sources: SurfaceCoverageAuditSources
 ): SurfaceCoverageAuditReport => {
+  const plannedCommandIds = new Set(sources.featureAccessEntries
+    .filter((feature) => feature.classification === "declared-planned")
+    .flatMap((feature) => feature.commandIds ?? (feature.commandId ? [feature.commandId] : [])));
+  const plannedPanelIds = new Set(sources.featureAccessEntries
+    .filter((feature) => feature.classification === "declared-planned")
+    .flatMap((feature) => feature.panelIds ?? (feature.panelId ? [feature.panelId] : [])));
   const commandCoverage = createCommandSurfaceCoverage(
     sources.commandSeedDefinitions,
     sources.surfaceInventory
@@ -149,9 +167,11 @@ export const createSurfaceCoverageAuditReportFromSources = (
   );
   const uncoveredCommandIds = commandCoverage
     .filter((coverage) => !coverage.isCovered)
+    .filter((coverage) => !plannedCommandIds.has(coverage.commandId))
     .map((coverage) => coverage.commandId);
   const uncoveredPanelIds = panelCoverage
     .filter((coverage) => !coverage.isCovered)
+    .filter((coverage) => !plannedPanelIds.has(coverage.panelId))
     .map((coverage) => coverage.panelId);
   const uncoveredRequiredFeatureIds = featureCoverage
     .filter((coverage) => coverage.requiredForRegression && !coverage.isCovered)

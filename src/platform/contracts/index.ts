@@ -6,7 +6,14 @@ export type {
   CommandId
 } from "./command";
 export type { EntityConnector, EntityId, EntityProperty, EntityPropertyValue, EntityType, PlanTransform, PlatformEntity, UnitCode } from "./entity";
-export type { FeatureAccessEntry, FeatureAccessSurface, FeatureId } from "./featureAccess";
+export type {
+  FeatureAccessClassification,
+  FeatureAccessEntry,
+  FeatureAccessSurface,
+  FeatureId,
+  FeatureQualitySignalId,
+  FeatureRuntimeRequirement
+} from "./featureAccess";
 export type { PanelDefinition, PanelDock, PanelId, PanelRole, PanelVisibilityState } from "./panel";
 export type { SelectionChange, SelectionSource, SelectionState } from "./selection";
 export {

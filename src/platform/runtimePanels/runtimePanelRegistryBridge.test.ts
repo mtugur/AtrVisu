@@ -189,10 +189,9 @@ describe("runtime panel registry bridge", () => {
     expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.layers)).toMatchObject({ open: false });
   });
 
-  it("lists every required id and fails closure for missing live bindings", () => {
+  it("lists every required id and fails closure for a missing required live binding", () => {
     const intentionallyUnbound = new Set<string>([
-      RUNTIME_PANEL_IDS.layoutExplorer,
-      RUNTIME_PANEL_IDS.statusBar
+      RUNTIME_PANEL_IDS.machineLibrary
     ]);
     const bindings = Object.fromEntries(
       requiredRuntimePanelIds
@@ -208,8 +207,7 @@ describe("runtime panel registry bridge", () => {
     });
     expect(report.ready).toBe(false);
     expect(report.missingRequiredBindings).toEqual([
-      RUNTIME_PANEL_IDS.layoutExplorer,
-      RUNTIME_PANEL_IDS.statusBar
+      RUNTIME_PANEL_IDS.machineLibrary
     ]);
     report.panels
       .filter((panel) => panel.classification === "required-runtime" && !intentionallyUnbound.has(panel.panelId))

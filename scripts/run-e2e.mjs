@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 
 const host = "127.0.0.1";
-const port = 5173;
-const baseUrl = `http://${host}:${port}`;
 const startupTimeoutMs = 120_000;
+const preferredPort = 5173;
+const fallbackPorts = [5174, 5175, 5176, 5177];
 
 const run = (command, args, options = {}) =>
   new Promise((resolve) => {
@@ -19,17 +20,49 @@ const run = (command, args, options = {}) =>
     });
   });
 
-const waitForServer = async () => {
+const isAtrVisuServer = async (baseUrl) => {
+  try {
+    const response = await fetch(baseUrl);
+    return response.ok && (await response.text()).includes("<title>AtrVisu</title>");
+  } catch {
+    return false;
+  }
+};
+
+const isPortAvailable = (port) => new Promise((resolve) => {
+  const server = createServer();
+  server.once("error", () => resolve(false));
+  server.listen(port, host, () => {
+    server.close(() => resolve(true));
+  });
+});
+
+const chooseServer = async () => {
+  const preferredBaseUrl = `http://${host}:${preferredPort}`;
+  if (await isAtrVisuServer(preferredBaseUrl)) {
+    return { baseUrl: preferredBaseUrl, port: preferredPort, reuseExisting: true };
+  }
+  if (await isPortAvailable(preferredPort)) {
+    return { baseUrl: preferredBaseUrl, port: preferredPort, reuseExisting: false };
+  }
+  for (const port of fallbackPorts) {
+    if (await isPortAvailable(port)) {
+      return {
+        baseUrl: `http://${host}:${port}`,
+        port,
+        reuseExisting: false
+      };
+    }
+  }
+  throw new Error("No available AtrVisu E2E port was found.");
+};
+
+const waitForServer = async (baseUrl) => {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < startupTimeoutMs) {
-    try {
-      const response = await fetch(baseUrl);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // Vite is still starting.
+    if (await isAtrVisuServer(baseUrl)) {
+      return;
     }
 
     await delay(250);
@@ -39,7 +72,7 @@ const waitForServer = async () => {
 };
 
 const stopProcess = async (child) => {
-  if (child.exitCode !== null || child.killed) {
+  if (!child || child.exitCode !== null || child.killed) {
     return;
   }
 
@@ -51,14 +84,7 @@ const stopProcess = async (child) => {
   }
 };
 
-const vite = spawn(
-  process.execPath,
-  ["./node_modules/vite/bin/vite.js", "--host", host, "--port", String(port), "--strictPort"],
-  {
-    stdio: "inherit",
-    shell: false
-  }
-);
+let vite = null;
 
 const teardown = async () => {
   await stopProcess(vite);
@@ -72,11 +98,30 @@ process.on("SIGTERM", () => {
 });
 
 try {
-  await waitForServer();
+  const server = await chooseServer();
+  if (!server.reuseExisting) {
+    vite = spawn(
+      process.execPath,
+      [
+        "./node_modules/vite/bin/vite.js",
+        "--host",
+        host,
+        "--port",
+        String(server.port),
+        "--strictPort"
+      ],
+      {
+        stdio: "inherit",
+        shell: false
+      }
+    );
+  }
+  await waitForServer(server.baseUrl);
   const result = await run(process.execPath, ["./node_modules/@playwright/test/cli.js", "test"], {
     env: {
       ...process.env,
-      ATRVISU_E2E_EXTERNAL_SERVER: "1"
+      ATRVISU_E2E_EXTERNAL_SERVER: "1",
+      ATRVISU_E2E_BASE_URL: server.baseUrl
     }
   });
   await teardown();

@@ -65,6 +65,32 @@ const getRuntimeViewportSnapshot = async (page: Page) => page.evaluate(() => {
   };
 });
 
+const getRuntimeFeatureAccessReport = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuRuntimeFeatureAccess;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+  }
+  return bridge.getReport();
+});
+
+const getRuntimeFeatureAccessGate = async (page: Page, noRedConsole: boolean) =>
+  page.evaluate((passed) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.getGate({ "no-red-console": passed });
+  }, noRedConsole);
+
+const getRuntimeFeature = async (page: Page, featureId: string) =>
+  page.evaluate((id) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.getFeature(id);
+  }, featureId);
+
 const waitForRuntimeViewport = async (page: Page) => {
   await expect.poll(async () => {
     const snapshot = await getRuntimeViewportSnapshot(page);
@@ -287,6 +313,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
   expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
   expect(await page.evaluate(() => window.__atrvisuRuntimeViewport === undefined)).toBe(true);
+  expect(await page.evaluate(() => window.__atrvisuRuntimeFeatureAccess === undefined)).toBe(true);
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
@@ -296,6 +323,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeViewport))).toBe(true);
+  expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeFeatureAccess))).toBe(true);
   const diagnostics = await waitForRuntimeViewport(page);
   expect(diagnostics.viewport?.lastResizeReason).toBe("manual");
   expect(diagnostics.invariants).toMatchObject({
@@ -315,6 +343,113 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
     simulationSpeed: 1
   });
   expect(Array.isArray(diagnostics.invariants.layerState)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("runtime feature access baseline closes only with explicit quality evidence", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+
+  const report = await getRuntimeFeatureAccessReport(page);
+  expect(report.requiredRuntimeFeatures.every((feature) =>
+    feature.status === "ready" || feature.status === "contextually-unavailable"
+  )).toBe(true);
+  expect(report.metadataOnlyRequiredFeatureIds).toEqual([]);
+  expect(report.unknownCommandIds).toEqual([]);
+  expect(report.unknownPanelIds).toEqual([]);
+  expect(report.staleSurfaceFeatureIds).toEqual([]);
+  expect(report.unmappedRuntimeSurfaceIds).toEqual([]);
+  expect(report.plannedFeatures.map((feature) => feature.featureId)).toEqual([
+    "view.fitView",
+    "panel.layoutExplorer",
+    "panel.statusBar",
+    "panel.diagnostics"
+  ]);
+  expect(report.plannedFeatures.every((feature) => feature.status === "planned-unbound")).toBe(true);
+  expect(report.qualitySignals).toEqual([
+    expect.objectContaining({
+      featureId: "diagnostics.noRedConsole",
+      status: "external-evidence-required"
+    })
+  ]);
+
+  const missingEvidenceGate = await page.evaluate(() =>
+    window.__atrvisuRuntimeFeatureAccess?.getGate({})
+  );
+  expect(missingEvidenceGate?.passed).toBe(false);
+  expect(missingEvidenceGate?.blockedFeatureIds).toContain("diagnostics.noRedConsole");
+
+  const completeGate = await getRuntimeFeatureAccessGate(page, true);
+  expect(completeGate.passed).toBe(true);
+  expect(completeGate.blockedFeatureIds).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("required runtime command bindings are live without executing during report construction", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+
+  const report = await getRuntimeFeatureAccessReport(page);
+  const requiredCommandEvidence = report.requiredRuntimeFeatures.flatMap(
+    (feature) => feature.commandEvidence
+  );
+  expect(requiredCommandEvidence.length).toBeGreaterThan(0);
+  expect(requiredCommandEvidence.every((command) =>
+    command.registered && command.bound && command.reachable
+  )).toBe(true);
+  expect(report.features.find((feature) => feature.featureId === "view.fitView")).toMatchObject({
+    classification: "declared-planned",
+    status: "planned-unbound",
+    bound: false,
+    reachable: false
+  });
+
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("runtime feature evidence covers panels, selection, entities, viewport, and surfaces", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+
+  const report = await getRuntimeFeatureAccessReport(page);
+  const selectionFeature = report.features.find(
+    (feature) => feature.featureId === "selection.singleSelect"
+  );
+  const viewportFeature = report.features.find(
+    (feature) => feature.featureId === "viewport.main"
+  );
+  expect(selectionFeature?.selectionEvidence).toMatchObject({
+    authorityBound: true,
+    replaceSupported: true,
+    toggleSupported: true,
+    clearSupported: true,
+    reconciliationSupported: true
+  });
+  expect(selectionFeature?.entityEvidence).toMatchObject({
+    authorityBound: true,
+    canonicalIdentity: true,
+    duplicateIdentityRejected: true
+  });
+  expect(viewportFeature?.viewportEvidence).toMatchObject({
+    viewportId: "viewport.main",
+    registered: true,
+    bound: true,
+    available: true,
+    cameraResolvable: true,
+    resizeSupported: true
+  });
+  expect(report.requiredRuntimeFeatures.every(
+    (feature) => feature.inventoriedRuntimeSurfaceIds.length > 0
+  )).toBe(true);
+  expect(report.requiredRuntimeFeatures.flatMap(
+    (feature) => feature.panelEvidence
+  ).every((panel) => panel.registered && panel.bound)).toBe(true);
   expect(errors).toEqual([]);
 });
 
@@ -793,6 +928,11 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   await clickSceneMachine(page, machineIds[1]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  expect(await getRuntimeFeature(page, "snap.connectionPoint")).toMatchObject({
+    bound: true,
+    reachable: true,
+    status: "contextually-unavailable"
+  });
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
     available: false,
     visible: false
@@ -804,12 +944,18 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
   await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(true);
+  await expect.poll(async () => (await getRuntimeFeature(page, "snap.connectionPoint"))?.status).toBe("ready");
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ visible: true });
 
   await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[2]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  expect(await getRuntimeFeature(page, "snap.connectionPoint")).toMatchObject({
+    bound: true,
+    reachable: true,
+    status: "contextually-unavailable"
+  });
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
     available: false,
     visible: false

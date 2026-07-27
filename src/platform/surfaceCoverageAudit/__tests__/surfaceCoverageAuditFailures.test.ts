@@ -43,6 +43,7 @@ describe("surface coverage audit failures", () => {
       featureAccessEntries: [{
         featureId: "feature.required",
         label: "Required feature",
+        classification: "required-runtime",
         surfaces: ["api"],
         requiredForRegression: true
       }],
@@ -62,6 +63,7 @@ describe("surface coverage audit failures", () => {
       featureAccessEntries: [{
         featureId: "feature.required",
         label: "Required feature",
+        classification: "required-runtime",
         surfaces: ["panel"],
         requiredForRegression: true
       }],
@@ -88,6 +90,7 @@ describe("surface coverage audit failures", () => {
       featureAccessEntries: [{
         featureId: "feature.optional",
         label: "Optional feature",
+        classification: "declared-planned",
         surfaces: ["api"],
         requiredForRegression: false
       }]

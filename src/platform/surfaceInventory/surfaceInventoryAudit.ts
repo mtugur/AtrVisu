@@ -1,5 +1,6 @@
 import { platformFeatureAccessMatrix } from "../featureAccess";
 import { platformCommandSeedDefinitions, platformPanelSeedDefinitions } from "../registrySeeds";
+import { runtimePanelDescriptors } from "../runtimePanels";
 import { currentPlatformSurfaceInventory } from "./currentSurfaceInventory";
 import type {
   PlatformSurfaceInventoryAuditIssue,
@@ -43,7 +44,10 @@ export const validateSurfaceInventory = (
   const errors: PlatformSurfaceInventoryAuditIssue[] = [];
   const warnings: PlatformSurfaceInventoryAuditIssue[] = [];
   const commandIds: Set<string> = new Set(platformCommandSeedDefinitions.map((command) => command.id));
-  const panelIds: Set<string> = new Set(platformPanelSeedDefinitions.map((panel) => panel.id));
+  const panelIds: Set<string> = new Set([
+    ...platformPanelSeedDefinitions.map((panel) => panel.id),
+    ...runtimePanelDescriptors.map((panel) => panel.definition.id)
+  ]);
   const featureIds: Set<string> = new Set(platformFeatureAccessMatrix.map((feature) => feature.featureId));
   const seenSurfaceIds = new Set<string>();
 
