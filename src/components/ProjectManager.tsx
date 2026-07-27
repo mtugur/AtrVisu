@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AtrVisuLayout } from "../types/machine";
 import type { AtrVisuProject } from "../types/project";
+import type { RuntimeFeatureCommandOperationResult } from "../platform/runtimeCommands/runtimeFeatureCommands";
 import {
   createLayout,
   createProject,
@@ -21,9 +22,9 @@ import {
 } from "../utils/projectStorage";
 
 export type ProjectManagerRuntimeController = {
-  saveCurrentRevision: () => void;
-  exportSelectedProject: () => void;
-  importProjectFile: (file: File) => void;
+  saveCurrentRevision: () => Promise<RuntimeFeatureCommandOperationResult>;
+  exportSelectedProject: () => Promise<RuntimeFeatureCommandOperationResult>;
+  importProjectFile: (file: File) => Promise<RuntimeFeatureCommandOperationResult>;
   canSaveCurrentRevision: boolean;
   canExportSelectedProject: boolean;
 };
@@ -42,7 +43,10 @@ type ProjectManagerProps = {
   onLoadRevision: (projectId: string, layoutId: string, revisionId: string, snapshot: AtrVisuLayout) => void;
   onSavedRevision: (projectId: string, layoutId: string, revisionId: string) => void;
   onRuntimeControllerChange?: (controller: ProjectManagerRuntimeController | null) => void;
-  onExecuteRuntimeCommand?: (commandId: "project.save" | "project.exportJson" | "project.importJson", payload?: unknown) => void;
+  onExecuteRuntimeCommand?: (
+    commandId: "project.save" | "project.exportJson" | "project.importJson",
+    payload?: unknown
+  ) => Promise<RuntimeFeatureCommandOperationResult>;
 };
 
 const formatDate = (value: string) => {
@@ -50,6 +54,21 @@ const formatDate = (value: string) => {
     return new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
   } catch {
     return value;
+  }
+};
+
+export const executeProjectManagerRuntimeOperation = async (
+  action: () => void | Promise<void>
+): Promise<RuntimeFeatureCommandOperationResult> => {
+  try {
+    await action();
+    return { handled: true, status: "executed" };
+  } catch (caught) {
+    return {
+      handled: false,
+      status: "failed",
+      reason: caught instanceof Error ? caught.message : "Project action failed."
+    };
   }
 };
 
@@ -113,16 +132,24 @@ export function ProjectManager({
     setSelectedRevisionId(revision?.revisionId ?? "");
   };
 
-  const runAction = async (action: () => void | Promise<void>, message?: string) => {
-    try {
-      await action();
+  const runRuntimeAction = async (
+    action: () => void | Promise<void>,
+    message?: string
+  ): Promise<RuntimeFeatureCommandOperationResult> => {
+    const result = await executeProjectManagerRuntimeOperation(action);
+    if (result.handled) {
       if (message) {
         setStatus(message);
       }
       setError("");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Project action failed.");
+    } else {
+      setError(result.reason ?? "Project action failed.");
     }
+    return result;
+  };
+
+  const runAction = async (action: () => void | Promise<void>, message?: string) => {
+    await runRuntimeAction(action, message);
   };
 
   const createNewProject = () => {
@@ -147,16 +174,17 @@ export function ProjectManager({
     }, "Project created.");
   };
 
-  const saveCurrentRevision = () => {
+  const saveCurrentRevision = async (): Promise<RuntimeFeatureCommandOperationResult> => {
     if (!selectedProject || !selectedLayout) {
-      setError("Select a project and layout first.");
-      return;
+      const reason = "Select a project and layout first.";
+      setError(reason);
+      return { handled: false, status: "unavailable", reason };
     }
 
     const revisionCode = window.prompt("Revision code", nextCode)?.trim() || nextCode;
     const notes = window.prompt("Revision notes", "") ?? "";
 
-    void runAction(async () => {
+    return runRuntimeAction(async () => {
       const updated = await createRevision(selectedProject.projectId, selectedLayout.layoutId, currentSnapshot, revisionCode, notes);
       const layout = updated.layouts.find((item) => item.layoutId === selectedLayout.layoutId);
       const revision = layout?.revisions[0];
@@ -201,11 +229,13 @@ export function ProjectManager({
     }, "Revision loaded.");
   };
 
-  const exportSelectedProject = () => {
+  const exportSelectedProject = async (): Promise<RuntimeFeatureCommandOperationResult> => {
     if (!selectedProject) {
-      return;
+      const reason = "Select a project first.";
+      setError(reason);
+      return { handled: false, status: "unavailable", reason };
     }
-    void runAction(async () => {
+    return runRuntimeAction(async () => {
       const project = await exportProject(selectedProject.projectId);
       const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -219,9 +249,13 @@ export function ProjectManager({
     }, "Project exported.");
   };
 
-  const importProjectFile = async (file?: File) => {
+  const importProjectFile = async (
+    file?: File
+  ): Promise<RuntimeFeatureCommandOperationResult> => {
     if (!file) {
-      return;
+      const reason = "Choose a project JSON file.";
+      setError(reason);
+      return { handled: false, status: "unavailable", reason };
     }
     try {
       const parsed = JSON.parse(await file.text()) as unknown;
@@ -230,8 +264,11 @@ export function ProjectManager({
       selectProject(nextProjects.find((project) => project.projectId === imported.projectId) ?? imported);
       setStatus("Project imported.");
       setError("");
+      return { handled: true, status: "executed" };
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not import project JSON.");
+      const reason = caught instanceof Error ? caught.message : "Could not import project JSON.";
+      setError(reason);
+      return { handled: false, status: "failed", reason };
     } finally {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -247,7 +284,7 @@ export function ProjectManager({
       saveCurrentRevision,
       exportSelectedProject,
       importProjectFile: (file) => {
-        void importProjectFile(file);
+        return importProjectFile(file);
       },
       canSaveCurrentRevision: Boolean(selectedProject && selectedLayout),
       canExportSelectedProject: Boolean(selectedProject)
@@ -348,7 +385,7 @@ export function ProjectManager({
                     return;
                   }
                   if (onExecuteRuntimeCommand) {
-                    onExecuteRuntimeCommand("project.importJson", file);
+                    void onExecuteRuntimeCommand("project.importJson", file);
                     return;
                   }
                   void importProjectFile(file);
@@ -411,10 +448,10 @@ export function ProjectManager({
                 <button
                   type="button"
                   onClick={() => {
-                    if (onExecuteRuntimeCommand) {
-                      onExecuteRuntimeCommand("project.exportJson");
-                    } else {
-                      exportSelectedProject();
+                  if (onExecuteRuntimeCommand) {
+                      void onExecuteRuntimeCommand("project.exportJson");
+                  } else {
+                      void exportSelectedProject();
                     }
                   }}
                 >
@@ -459,9 +496,9 @@ export function ProjectManager({
                   type="button"
                   onClick={() => {
                     if (onExecuteRuntimeCommand) {
-                      onExecuteRuntimeCommand("project.save");
+                      void onExecuteRuntimeCommand("project.save");
                     } else {
-                      saveCurrentRevision();
+                      void saveCurrentRevision();
                     }
                   }}
                 >

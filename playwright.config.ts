@@ -18,7 +18,7 @@ export default defineConfig({
     : {
         command: "node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --strictPort",
         url: "http://127.0.0.1:5173",
-        reuseExistingServer: true,
+        reuseExistingServer: false,
         timeout: 120_000
       },
   projects: [

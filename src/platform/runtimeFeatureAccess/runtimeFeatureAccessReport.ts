@@ -1,5 +1,6 @@
 import type { FeatureAccessEntry, PlatformEntity } from "../contracts";
 import { parseRuntimeSelectionEntityId } from "../runtimeSelection";
+import type { LegacyEntityFamily } from "../adapters";
 import type {
   RuntimeEntityAccessEvidence,
   RuntimeEntityEvidenceInput,
@@ -37,14 +38,49 @@ const getFeaturePanelIds = (feature: FeatureAccessEntry) =>
     ...(feature.panelId ? [feature.panelId] : [])
   ]);
 
+const familyByEntityType: Readonly<
+  Partial<Record<PlatformEntity["type"], LegacyEntityFamily>>
+> = {
+  machine: "machine",
+  civil: "civil",
+  annotation: "annotation",
+  group: "group"
+};
+
+const isCanonicalEntityIdentity = (entity: PlatformEntity) => {
+  const parsed = parseRuntimeSelectionEntityId(entity.id);
+  return parsed !== null && familyByEntityType[entity.type] === parsed.family;
+};
+
 const hasEntityShape = (entity: PlatformEntity) =>
-  typeof entity.id === "string"
-  && entity.id.includes(":")
+  isCanonicalEntityIdentity(entity)
   && typeof entity.visible === "boolean"
   && typeof entity.locked === "boolean"
   && typeof entity.selectable === "boolean";
 
 const requiredAdapterFamilies = ["annotation", "civil", "group", "machine"] as const;
+
+export const requiredRuntimeSurfaceExecutionCommandIds = [
+  "alignment.alignSelection",
+  "annotations.create",
+  "assembly.createGroup",
+  "assembly.enterEdit",
+  "assembly.exitEdit",
+  "assembly.ungroup",
+  "civil.addColumn",
+  "edit.deleteSelected",
+  "edit.duplicateSelected",
+  "edit.redo",
+  "edit.undo",
+  "library.addMachine",
+  "library.manager",
+  "library.taxonomyManager",
+  "performance.benchmark",
+  "snap.connectionPoint",
+  "view.showMeasurements",
+  "view.toggleConnectionPoints",
+  "view.toggleLabels"
+] as const;
 
 const hasLiveSelectionCapabilities = (
   evidence: RuntimeSelectionAccessEvidence | undefined
@@ -58,6 +94,14 @@ const hasLiveSelectionCapabilities = (
   && evidence.groupRootSemanticsSupported
   && evidence.editChildSemanticsSupported
   && evidence.staleUnselectableRemovalSupported
+  && evidence.selectedEntitiesResolved
+  && evidence.selectedEntitiesVisible
+  && evidence.selectedEntitiesSelectable
+  && evidence.primarySelectionValid
+  && evidence.annotationExclusivityValid
+  && evidence.activeGroupEditValid
+  && evidence.activeGroupSelectionExclusive
+  && evidence.groupChildPromotionValid
 );
 
 const hasLiveEntityCapabilities = (
@@ -72,49 +116,189 @@ const hasLiveEntityCapabilities = (
   && evidence.selectabilityRepresented
   && evidence.lockContextRepresented
   && evidence.layerAssociationRepresented
+  && evidence.groupEntitiesValid
 );
 
 export const createRuntimeSelectionAccessEvidence = ({
   selection,
-  entities
+  entities,
+  activeGroupEditId,
+  capabilities
 }: RuntimeSelectionEvidenceInput): RuntimeSelectionAccessEvidence => {
-  const entityIds = new Set(entities.map((entity) => entity.id));
-  const canonicalIdSupport = selection.ids.every((id) =>
-    Boolean(parseRuntimeSelectionEntityId(id)) && entityIds.has(id)
+  const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+  const selectedEntities = selection.ids.flatMap((id) => {
+    const entity = entityById.get(id);
+    return entity ? [entity] : [];
+  });
+  const canonicalIdSupport = selection.ids.every((id) => {
+    const entity = entityById.get(id);
+    return Boolean(entity && isCanonicalEntityIdentity(entity));
+  });
+  const selectedEntitiesResolved = selectedEntities.length === selection.ids.length;
+  const selectedEntitiesVisible = selectedEntities.every((entity) => entity.visible);
+  const selectedEntitiesSelectable = selectedEntities.every((entity) => entity.selectable);
+  const primarySelectionValid = selection.ids.length === 0
+    ? selection.primaryId == null
+    : Boolean(selection.primaryId && selection.ids.includes(selection.primaryId));
+  const annotationIds = selectedEntities
+    .filter((entity) => entity.type === "annotation")
+    .map((entity) => entity.id);
+  const annotationExclusivityValid = annotationIds.length === 0
+    || (annotationIds.length === 1 && selection.ids.length === 1);
+  const activeGroupEntityId = activeGroupEditId ? `group:${activeGroupEditId}` : null;
+  const activeGroup = activeGroupEntityId
+    ? entityById.get(activeGroupEntityId)
+    : undefined;
+  const activeGroupEditValid = activeGroupEditId === null
+    || Boolean(activeGroup?.type === "group" && activeGroup.childrenIds.length > 0);
+  const activeGroupChildIds = new Set(
+    activeGroup?.type === "group" ? activeGroup.childrenIds : []
   );
+  const activeGroupSelectionExclusive = !activeGroupEntityId
+    || !selection.ids.includes(activeGroupEntityId)
+    || !selection.ids.some((id) => activeGroupChildIds.has(id));
+  const groupChildPromotionValid = selectedEntities.every((entity) => {
+    if (!entity.parentId) {
+      return true;
+    }
+    return entity.parentId === activeGroupEntityId;
+  });
+  const reasons = uniqueSorted([
+    ...(!capabilities.authorityBound ? ["Runtime Selection authority is not bound."] : []),
+    ...(!capabilities.replaceSupported ? ["Runtime Selection replace capability is missing."] : []),
+    ...(!capabilities.toggleSupported ? ["Runtime Selection toggle capability is missing."] : []),
+    ...(!capabilities.clearSupported ? ["Runtime Selection clear capability is missing."] : []),
+    ...(!capabilities.reconciliationSupported
+      ? ["Runtime Selection reconciliation capability is missing."]
+      : []),
+    ...(!capabilities.groupRootSemanticsSupported
+      ? ["Runtime Selection group-root semantics are missing."]
+      : []),
+    ...(!capabilities.editChildSemanticsSupported
+      ? ["Runtime Selection edit-child semantics are missing."]
+      : []),
+    ...(!capabilities.staleUnselectableRemovalSupported
+      ? ["Runtime Selection stale/unselectable removal capability is missing."]
+      : []),
+    ...(!canonicalIdSupport
+      ? ["Runtime Selection contains a non-canonical entity identity."]
+      : []),
+    ...(!selectedEntitiesResolved
+      ? ["Runtime Selection contains an unresolved entity ID."]
+      : []),
+    ...(!selectedEntitiesVisible
+      ? ["Runtime Selection contains a hidden entity."]
+      : []),
+    ...(!selectedEntitiesSelectable
+      ? ["Runtime Selection contains a non-selectable entity."]
+      : []),
+    ...(!primarySelectionValid
+      ? ["Runtime Selection primary identity is inconsistent with the selected IDs."]
+      : []),
+    ...(!annotationExclusivityValid
+      ? ["Runtime Selection mixes an annotation with another selected entity."]
+      : []),
+    ...(!activeGroupEditValid
+      ? ["Runtime Selection active Edit Group identity is unresolved or invalid."]
+      : []),
+    ...(!activeGroupSelectionExclusive
+      ? ["Runtime Selection contains both the active group root and one of its children."]
+      : []),
+    ...(!groupChildPromotionValid
+      ? ["Runtime Selection contains a child outside the active Edit Group instead of its group root."]
+      : [])
+  ]);
 
   return {
-    authorityBound: true,
+    authorityBound: capabilities.authorityBound,
     canonicalIdSupport,
     currentSelectionIds: [...selection.ids],
     primarySelectionId: selection.primaryId ?? null,
-    replaceSupported: true,
-    toggleSupported: true,
-    clearSupported: true,
-    reconciliationSupported: true,
-    groupRootSemanticsSupported: true,
-    editChildSemanticsSupported: true,
-    staleUnselectableRemovalSupported: true,
-    ...(!canonicalIdSupport ? { reason: "Runtime Selection contains an unresolved or non-canonical entity ID." } : {})
+    replaceSupported: capabilities.replaceSupported,
+    toggleSupported: capabilities.toggleSupported,
+    clearSupported: capabilities.clearSupported,
+    reconciliationSupported: capabilities.reconciliationSupported,
+    groupRootSemanticsSupported: capabilities.groupRootSemanticsSupported,
+    editChildSemanticsSupported: capabilities.editChildSemanticsSupported,
+    staleUnselectableRemovalSupported: capabilities.staleUnselectableRemovalSupported,
+    selectedEntitiesResolved,
+    selectedEntitiesVisible,
+    selectedEntitiesSelectable,
+    primarySelectionValid,
+    annotationExclusivityValid,
+    activeGroupEditValid,
+    activeGroupSelectionExclusive,
+    groupChildPromotionValid,
+    reasons,
+    ...(reasons[0] ? { reason: reasons.join(" ") } : {})
   };
 };
 
 export const createRuntimeEntityAccessEvidence = ({
   entities,
-  adapterFamilies = ["machine", "civil", "annotation", "group"]
+  authority
 }: RuntimeEntityEvidenceInput): RuntimeEntityAccessEvidence => {
   const ids = entities.map((entity) => entity.id);
   const duplicateIds = findDuplicates(ids);
   const canonicalIdentity = entities.every(hasEntityShape);
-  const entityIds = new Set(ids);
-  const parentChildRelationshipsRepresented = entities.every((entity) =>
-    (!entity.parentId || entityIds.has(entity.parentId))
-    && entity.childrenIds.every((childId) => entityIds.has(childId))
+  const entityById = new Map(entities.map((entity) => [entity.id, entity]));
+  const ownerGroupIdsByChildId = new Map<string, string[]>();
+  const groupEntities = entities.filter((entity) => entity.type === "group");
+  groupEntities.forEach((group) => {
+    group.childrenIds.forEach((childId) => {
+      const owners = ownerGroupIdsByChildId.get(childId) ?? [];
+      ownerGroupIdsByChildId.set(childId, [...owners, group.id]);
+    });
+  });
+  const groupEntitiesValid = groupEntities.every((group) =>
+    group.childrenIds.length > 0
+    && new Set(group.childrenIds).size === group.childrenIds.length
   );
+  const groupChildrenAreReciprocal = groupEntities.every((group) =>
+    group.childrenIds.every((childId) => {
+      const child = entityById.get(childId);
+      return Boolean(child && child.parentId === group.id);
+    })
+  );
+  const parentLinksAreReciprocal = entities.every((entity) => {
+    if (!entity.parentId) {
+      return true;
+    }
+    const parent = entityById.get(entity.parentId);
+    return parent?.type === "group" && parent.childrenIds.includes(entity.id);
+  });
+  const uniqueGroupOwnership = [...ownerGroupIdsByChildId.values()]
+    .every((owners) => new Set(owners).size === 1);
+  const parentChildRelationshipsRepresented =
+    groupChildrenAreReciprocal
+    && parentLinksAreReciprocal
+    && uniqueGroupOwnership;
+  const reasons = uniqueSorted([
+    ...(!authority.authorityBound ? ["Runtime Entity adapter authority is not bound."] : []),
+    ...requiredAdapterFamilies
+      .filter((family) => !authority.adapterFamilies.includes(family))
+      .map((family) => `Runtime Entity adapter family "${family}" is missing.`),
+    ...(!canonicalIdentity ? ["One or more runtime entities have invalid canonical identity."] : []),
+    ...(duplicateIds.length > 0
+      ? [`Duplicate canonical entity IDs: ${duplicateIds.join(", ")}.`]
+      : []),
+    ...(!groupEntitiesValid
+      ? ["Runtime Entity snapshot contains an empty or duplicate-member group."]
+      : []),
+    ...(!groupChildrenAreReciprocal
+      ? ["Runtime Entity group child links are missing or not reciprocal."]
+      : []),
+    ...(!parentLinksAreReciprocal
+      ? ["Runtime Entity parent links are missing or not reciprocal."]
+      : []),
+    ...(!uniqueGroupOwnership
+      ? ["Runtime Entity child is owned by multiple groups."]
+      : [])
+  ]);
 
   return {
-    authorityBound: true,
-    adapterFamilies: uniqueSorted(adapterFamilies),
+    authorityBound: authority.authorityBound,
+    adapterFamilies: uniqueSorted(authority.adapterFamilies) as LegacyEntityFamily[],
     entityCount: entities.length,
     canonicalIdentity,
     duplicateIdentityRejected: duplicateIds.length === 0,
@@ -122,15 +306,13 @@ export const createRuntimeEntityAccessEvidence = ({
     visibilityRepresented: entities.every((entity) => typeof entity.visible === "boolean"),
     selectabilityRepresented: entities.every((entity) => typeof entity.selectable === "boolean"),
     lockContextRepresented: entities.every((entity) => typeof entity.locked === "boolean"),
-    layerAssociationRepresented: entities.every((entity) => typeof entity.layerId === "string"),
+    layerAssociationRepresented: entities.every((entity) =>
+      typeof entity.layerId === "string" && entity.layerId.length > 0
+    ),
+    groupEntitiesValid,
     entities: [...entities],
-    ...(duplicateIds.length > 0
-      ? { reason: `Duplicate canonical entity IDs: ${duplicateIds.join(", ")}.` }
-      : !canonicalIdentity
-        ? { reason: "One or more runtime entities do not have canonical identity." }
-        : !parentChildRelationshipsRepresented
-          ? { reason: "Runtime entity parent/child relationships are unresolved." }
-          : {})
+    reasons,
+    ...(reasons[0] ? { reason: reasons.join(" ") } : {})
   };
 };
 
@@ -391,10 +573,20 @@ export const createRuntimeFeatureAccessReport = (
       .filter((feature) => feature.status !== "ready")
       .map((feature) => feature.featureId)
   ]);
+  const verifiedSurfaceExecutionCommandIds = new Set(
+    input.evidence.surfaceExecution?.verifiedCommandIds ?? []
+  );
+  const missingSurfaceExecutionCommandIds =
+    requiredRuntimeSurfaceExecutionCommandIds.filter(
+      (commandId) => !verifiedSurfaceExecutionCommandIds.has(commandId)
+    );
   const issues = uniqueSorted([
     ...duplicateFeatureIds.map((featureId) => `Duplicate feature ID "${featureId}".`),
     ...staleSurfaceFeatureIds.map((featureId) => `Surface inventory references unknown feature "${featureId}".`),
     ...unmappedRuntimeSurfaceIds.map((surfaceId) => `Runtime surface "${surfaceId}" has no feature mapping.`),
+    ...missingSurfaceExecutionCommandIds.map(
+      (commandId) => `External browser execution evidence is missing for "${commandId}".`
+    ),
     ...features.flatMap((feature) =>
       feature.status === "blocked"
         ? feature.reasons.map((reason) => `${feature.featureId}: ${reason}`)
@@ -414,6 +606,8 @@ export const createRuntimeFeatureAccessReport = (
     staleSurfaceFeatureIds,
     unmappedRuntimeSurfaceIds,
     duplicateFeatureIds,
+    requiredSurfaceExecutionCommandIds: [...requiredRuntimeSurfaceExecutionCommandIds],
+    missingSurfaceExecutionCommandIds,
     issues
   };
 };

@@ -38,7 +38,9 @@ export type RuntimeFeatureCommandId =
 
 export type RuntimeFeatureCommandBinding = {
   getEnableState: (context: CommandContext) => CommandEnableState;
-  execute: (context: CommandContext) => void | Promise<void>;
+  execute: (
+    context: CommandContext
+  ) => RuntimeFeatureCommandOperationResult | Promise<RuntimeFeatureCommandOperationResult>;
 };
 
 export type RuntimeFeatureCommandBindings = Readonly<
@@ -54,8 +56,17 @@ export type RuntimeCommandReachability = {
   reason?: string;
 };
 
-export type RuntimeFeatureCommandExecutionResult = {
+export type RuntimeFeatureCommandOperationStatus =
+  | "executed"
+  | "cancelled"
+  | "disabled"
+  | "unavailable"
+  | "unsupported"
+  | "failed";
+
+export type RuntimeFeatureCommandOperationResult = {
   handled: boolean;
+  status: RuntimeFeatureCommandOperationStatus;
   reason?: string;
 };
 
@@ -66,6 +77,21 @@ const defaultContext: CommandContext = {
 };
 
 const disabled = (reason: string): CommandEnableState => ({ enabled: false, reason });
+export const createExecutedRuntimeFeatureCommandResult = (
+  reason?: string
+): RuntimeFeatureCommandOperationResult => ({
+  handled: true,
+  status: "executed",
+  ...(reason ? { reason } : {})
+});
+
+export const normalizeRuntimeFeatureCommandOperationResult = (
+  result: RuntimeFeatureCommandOperationResult
+): RuntimeFeatureCommandOperationResult => ({
+  handled: result.status === "executed",
+  status: result.status,
+  ...(result.reason ? { reason: result.reason } : {})
+});
 
 const createRuntimeDefinition = (
   commandId: RuntimeFeatureCommandId,
@@ -89,7 +115,10 @@ const createRuntimeDefinition = (
       if (!enableState.enabled) {
         return;
       }
-      return binding.execute(context);
+      const result = binding.execute(context);
+      if (result instanceof Promise) {
+        return result.then(() => undefined);
+      }
     }
   };
 };
@@ -143,27 +172,36 @@ export const createRuntimeFeatureCommandBridge = (
   const executeCommand = (
     commandId: CommandId,
     context: CommandContext = defaultContext
-  ): RuntimeFeatureCommandExecutionResult | Promise<RuntimeFeatureCommandExecutionResult> => {
+  ): RuntimeFeatureCommandOperationResult | Promise<RuntimeFeatureCommandOperationResult> => {
     const command = registry.get(commandId);
     if (!command) {
-      return { handled: false, reason: `Runtime command "${commandId}" is unknown.` };
+      return {
+        handled: false,
+        status: "unsupported",
+        reason: `Runtime command "${commandId}" is unknown.`
+      };
     }
     const binding = getBindings()[command.id as RuntimeFeatureCommandId];
     if (!binding) {
-      return { handled: false, reason: `Runtime command "${commandId}" is not bound.` };
+      return {
+        handled: false,
+        status: "unavailable",
+        reason: `Runtime command "${commandId}" is not bound.`
+      };
     }
     const enableState = binding.getEnableState(context);
     if (!enableState.enabled) {
       return {
         handled: false,
+        status: "disabled",
         reason: enableState.reason ?? `Runtime command "${commandId}" is disabled.`
       };
     }
     const result = binding.execute(context);
     if (result instanceof Promise) {
-      return result.then(() => ({ handled: true }));
+      return result.then(normalizeRuntimeFeatureCommandOperationResult);
     }
-    return { handled: true };
+    return normalizeRuntimeFeatureCommandOperationResult(result);
   };
 
   return {

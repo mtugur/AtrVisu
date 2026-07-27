@@ -54,7 +54,9 @@ Existing behavior is now routed through live command bindings for:
 - alignment, rotation snap, connection-point snap, collision access, and benchmark access;
 - Create Group, Add Selected, Remove Selected, Edit Group, Exit Group Edit, and Ungroup.
 
-Core Undo, Redo, Delete, and Duplicate continue through the existing core runtime bridge. Bridge execution evaluates enablement once, invokes a live operation once, never falls back to seed no-op execution, and propagates operation errors.
+Core Undo, Redo, Delete, and Duplicate continue through the existing core runtime bridge. Runtime Feature Command operations now return deterministic `executed`, `cancelled`, `disabled`, `unavailable`, `unsupported`, or `failed` results. The bridge evaluates enablement once, invokes a live operation at most once, awaits asynchronous completion before reporting success, never falls back to seed no-op execution, and keeps rejected operations observable.
+
+Project Manager save, export, and import controller operations are awaitable. Existing status and validation messages remain the UI authority, while completion or failure is also returned to the command caller. Panel-backed commands translate the actual Runtime Panel Registry result, so a dirty Library Manager cancellation cannot be reported as a successful Taxonomy Manager open.
 
 ### Panels
 
@@ -62,11 +64,15 @@ The report consumes `RuntimePanelRegistryBridge.getRuntimePanel()`. Required pan
 
 ### Selection
 
-The report reads the current authoritative Runtime Selection snapshot and verifies canonical IDs, primary selection, replace/toggle/clear support, reconciliation, stale/unselectable removal, and group-root/edit-child semantics. Empty selection is valid.
+The report consumes explicit capabilities from the live Runtime Selection authority. No capability defaults to true. It verifies canonical and resolved IDs, visibility, selectability, primary membership, annotation exclusivity, reconciliation, stale/unselectable removal, and active Edit Group identity.
+
+An active group root may be selected alone, or explicit active-group children may be selected without the root. Root and child coexistence is rejected. A child from another group must follow the existing root-promotion rule. Empty selection remains valid when the explicit authority capabilities are complete.
 
 ### Entities
 
-The report consumes the current legacy adapter snapshot for machines, civil references, annotations, and rigid groups. It verifies canonical identity, duplicate rejection, parent/child relationships, visibility, selectability, lock context, and layer association. Layers remain context rather than entities. An empty project is valid.
+The report consumes explicit live adapter authority and adapter-family declarations for machines, civil references, annotations, and rigid groups. No authority or family defaults to present. Canonical IDs must exactly match entity type, source IDs must be nonempty, IDs must be unique, and unsupported families are rejected.
+
+Assembly relationships must be reciprocal in both directions, with one owning group per child and no empty selectable group. Visibility, selectability, lock context, and layer association remain reported. Layers remain context rather than entities. An empty project is valid only with explicit bound authority and all required adapter families.
 
 ### Viewport
 
@@ -83,31 +89,34 @@ The complete gate passes only when:
 - no required feature is metadata-only;
 - no duplicate feature ID or unknown command, panel, or feature reference exists;
 - declared-planned features remain unbound and have no current runtime surface;
-- all quality signals have explicit passing external evidence.
+- all quality signals have explicit passing external evidence;
+- all representative required surfaces have explicit external browser-execution evidence.
 
 Failure reasons and blocked feature IDs are sorted deterministically.
 
 ## Diagnostics isolation
 
-`window.__atrvisuRuntimeFeatureAccess` exists only with `?e2eDiagnostics=1`. It exposes read-only report, feature lookup, gate evaluation with supplied quality evidence, blocked-required listing, and planned-feature listing.
+`window.__atrvisuRuntimeFeatureAccess` exists only with `?e2eDiagnostics=1`. It exposes read-only report, feature lookup, gate evaluation with supplied quality and surface evidence, blocked-required listing, planned-feature listing, and read-only command route probes.
 
-It does not expose mutable registries, React setters, Babylon objects, unrestricted command execution, or destructive APIs. The normal URL exposes no Feature Access diagnostics global.
+The route probes count actual UI command attempts and executed outcomes; they cannot invoke commands. The bridge does not expose mutable registries, React setters, Babylon objects, unrestricted command execution, or destructive APIs. The normal URL exposes no Feature Access diagnostics global.
 
 ## Surface inventory
 
-Current user controls, shortcuts, panels, modals, assembly actions, civil tools, display controls, and viewport access map to canonical features. Planned Fit View, Layout Explorer, Status Bar, and Diagnostics panel definitions no longer masquerade as current runtime surfaces. No-red-console is represented by an external quality evidence surface.
+Current user controls, shortcuts, panels, modals, assembly actions, civil tools, display controls, and viewport access map to canonical features. This static inventory proves declared mapping, not execution. Browser tests separately execute representative visible controls, verify their canonical command route once, and assert real state or DOM outcomes. The complete test gate receives that explicit external surface evidence; production runtime never self-asserts it.
+
+Planned Fit View, Layout Explorer, Status Bar, and Diagnostics panel definitions no longer masquerade as current runtime surfaces. No-red-console remains external quality evidence.
 
 ## Validation
 
 - `npm.cmd audit`: 0 vulnerabilities
 - `npm.cmd run build`: passed
-- `npm.cmd run test -- --run`: 92 files / 847 tests passed
-- `npm.cmd run test:e2e`: 30 tests passed
+- `npm.cmd run test -- --run`: 94 files / 869 tests passed
+- `npm.cmd run test:e2e`: 32 tests passed
 - Normal URL diagnostics isolation: passed
-- Complete gate with explicit no-red-console evidence: passed
-- Complete gate without evidence: blocked as designed
+- Complete gate with explicit no-red-console and surface-execution evidence: passed
+- Complete gate without either external evidence set: blocked as designed
 
-AtrVisit occupied preferred port 5173 during local validation and was not stopped. The E2E runner now verifies an existing server is AtrVisu before reuse and otherwise starts its own AtrVisu instance on the first available fallback port. The exact standard command passed on port 5174 and stopped only the server it owned.
+An existing server occupied preferred port 5173 during local validation and was not stopped. The E2E runner did not inspect or reuse it. By default the runner starts the current checkout on the first free port in 5173-5177, passed on port 5174, and stopped only its owned child after success and failure. External reuse requires both `ATRVISU_E2E_REUSE_EXISTING=1` and an explicit `ATRVISU_E2E_BASE_URL`; code identity is then the caller's responsibility.
 
 `npm audit fix` updated only transitive lockfile entries for `postcss` and `nanoid`; no direct dependency or `package.json` entry changed.
 

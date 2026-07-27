@@ -1,7 +1,8 @@
 export {
   createRuntimeEntityAccessEvidence,
   createRuntimeFeatureAccessReport,
-  createRuntimeSelectionAccessEvidence
+  createRuntimeSelectionAccessEvidence,
+  requiredRuntimeSurfaceExecutionCommandIds
 } from "./runtimeFeatureAccessReport";
 export {
   createRuntimeFeatureAccessGate,
@@ -10,7 +11,9 @@ export {
 export type {
   RuntimeCommandAccessEvidence,
   RuntimeEntityAccessEvidence,
+  RuntimeEntityAuthorityCapabilities,
   RuntimeFeatureAccessE2EBridge,
+  RuntimeFeatureAccessExternalEvidence,
   RuntimeFeatureAccessEvidence,
   RuntimeFeatureAccessGateResult,
   RuntimeFeatureAccessReport,
@@ -19,6 +22,9 @@ export type {
   RuntimeFeatureAccessStatus,
   RuntimePanelAccessEvidence,
   RuntimeQualityEvidence,
+  RuntimeCommandExecutionProbe,
   RuntimeSelectionAccessEvidence,
+  RuntimeSelectionAuthorityCapabilities,
+  RuntimeSurfaceExecutionEvidence,
   RuntimeViewportAccessEvidence
 } from "./runtimeFeatureAccessTypes";

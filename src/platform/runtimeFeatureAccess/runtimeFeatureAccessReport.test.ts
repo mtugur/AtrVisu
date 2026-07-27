@@ -3,12 +3,30 @@ import type { FeatureAccessEntry, PlatformEntity, SelectionState } from "../cont
 import {
   createRuntimeEntityAccessEvidence,
   createRuntimeFeatureAccessReport,
-  createRuntimeSelectionAccessEvidence
+  createRuntimeSelectionAccessEvidence,
+  requiredRuntimeSurfaceExecutionCommandIds
 } from "./runtimeFeatureAccessReport";
 import type {
+  RuntimeEntityAuthorityCapabilities,
   RuntimeFeatureAccessEvidence,
-  RuntimeFeatureAccessReportInput
+  RuntimeFeatureAccessReportInput,
+  RuntimeSelectionAuthorityCapabilities
 } from "./runtimeFeatureAccessTypes";
+
+const selectionCapabilities: RuntimeSelectionAuthorityCapabilities = {
+  authorityBound: true,
+  replaceSupported: true,
+  toggleSupported: true,
+  clearSupported: true,
+  reconciliationSupported: true,
+  groupRootSemanticsSupported: true,
+  editChildSemanticsSupported: true,
+  staleUnselectableRemovalSupported: true
+};
+const entityAuthority: RuntimeEntityAuthorityCapabilities = {
+  authorityBound: true,
+  adapterFamilies: ["machine", "civil", "annotation", "group"]
+};
 
 const entity: PlatformEntity = {
   id: "machine:m-1",
@@ -55,9 +73,10 @@ const evidence = (overrides: Partial<RuntimeFeatureAccessEvidence> = {}): Runtim
   selection: createRuntimeSelectionAccessEvidence({
     selection: { ids: [], source: "test" },
     entities: [],
-    activeGroupEditId: null
+    activeGroupEditId: null,
+    capabilities: selectionCapabilities
   }),
-  entities: createRuntimeEntityAccessEvidence({ entities: [] }),
+  entities: createRuntimeEntityAccessEvidence({ entities: [], authority: entityAuthority }),
   viewport: {
     viewportId: "viewport.main",
     registered: true,
@@ -70,6 +89,9 @@ const evidence = (overrides: Partial<RuntimeFeatureAccessEvidence> = {}): Runtim
     resizeSupported: true,
     sceneLifecycleGeneration: 1,
     resizeGeneration: 1
+  },
+  surfaceExecution: {
+    verifiedCommandIds: requiredRuntimeSurfaceExecutionCommandIds
   },
   ...overrides
 });
@@ -240,9 +262,13 @@ describe("runtime authority evidence", () => {
     const selection = createRuntimeSelectionAccessEvidence({
       selection: { ids: [], source: "test" },
       entities: [],
-      activeGroupEditId: null
+      activeGroupEditId: null,
+      capabilities: selectionCapabilities
     });
-    const entities = createRuntimeEntityAccessEvidence({ entities: [] });
+    const entities = createRuntimeEntityAccessEvidence({
+      entities: [],
+      authority: entityAuthority
+    });
 
     expect(selection).toMatchObject({
       authorityBound: true,
@@ -269,16 +295,20 @@ describe("runtime authority evidence", () => {
       childrenIds: [entity.id]
     };
     const child = { ...entity, parentId: group.id };
-    const entities = createRuntimeEntityAccessEvidence({ entities: [child, group] });
+    const entities = createRuntimeEntityAccessEvidence({
+      entities: [child, group],
+      authority: entityAuthority
+    });
     const selectionState: SelectionState = {
-      ids: [child.id, group.id],
+      ids: [child.id],
       primaryId: child.id,
       source: "test"
     };
     const selection = createRuntimeSelectionAccessEvidence({
       selection: selectionState,
       entities: [child, group],
-      activeGroupEditId: "g-1"
+      activeGroupEditId: "g-1",
+      capabilities: selectionCapabilities
     });
 
     expect(entities).toMatchObject({
@@ -298,7 +328,10 @@ describe("runtime authority evidence", () => {
   });
 
   it("reports duplicate canonical identities as invalid", () => {
-    const entities = createRuntimeEntityAccessEvidence({ entities: [entity, entity] });
+    const entities = createRuntimeEntityAccessEvidence({
+      entities: [entity, entity],
+      authority: entityAuthority
+    });
 
     expect(entities.duplicateIdentityRejected).toBe(false);
     expect(entities.reason).toContain("Duplicate canonical entity IDs");
@@ -308,11 +341,15 @@ describe("runtime authority evidence", () => {
     const staleSelection = createRuntimeSelectionAccessEvidence({
       selection: { ids: ["machine:missing"], source: "test" },
       entities: [],
-      activeGroupEditId: null
+      activeGroupEditId: null,
+      capabilities: selectionCapabilities
     });
     const incompleteEntities = createRuntimeEntityAccessEvidence({
       entities: [],
-      adapterFamilies: ["machine"]
+      authority: {
+        authorityBound: true,
+        adapterFamilies: ["machine"]
+      }
     });
     const report = createRuntimeFeatureAccessReport(input([requiredFeature], evidence({
       selection: staleSelection,
@@ -321,10 +358,12 @@ describe("runtime authority evidence", () => {
 
     expect(staleSelection.canonicalIdSupport).toBe(false);
     expect(report.features[0].status).toBe("blocked");
-    expect(report.features[0].reasons).toEqual(expect.arrayContaining([
-      "Runtime Selection contains an unresolved or non-canonical entity ID.",
-      "Runtime Entity authority, adapters, or required capabilities are missing."
-    ]));
+    expect(report.features[0].reasons.join(" ")).toContain(
+      "Runtime Selection contains an unresolved entity ID."
+    );
+    expect(report.features[0].reasons.join(" ")).toContain(
+      'Runtime Entity adapter family "annotation" is missing.'
+    );
   });
 
   it("keeps an unavailable bound viewport contextual but blocks missing resize capability", () => {
@@ -350,5 +389,241 @@ describe("runtime authority evidence", () => {
     });
     expect(unavailable.features[0].reasons).toContain("Viewport is initializing.");
     expect(missingResize.features[0].status).toBe("blocked");
+  });
+
+  it("blocks every missing Runtime Selection authority capability", () => {
+    (Object.keys(selectionCapabilities) as Array<keyof RuntimeSelectionAuthorityCapabilities>)
+      .forEach((capability) => {
+        const selection = createRuntimeSelectionAccessEvidence({
+          selection: { ids: [], source: "test" },
+          entities: [],
+          activeGroupEditId: null,
+          capabilities: { ...selectionCapabilities, [capability]: false }
+        });
+        const report = createRuntimeFeatureAccessReport(input([requiredFeature], evidence({
+          selection
+        })));
+
+        expect(report.features[0].status, capability).toBe("blocked");
+      });
+  });
+
+  it("blocks unresolved, hidden, non-selectable, and invalid primary selections", () => {
+    const cases: Array<{
+      selection: SelectionState;
+      entities: readonly PlatformEntity[];
+      expectedReason: string;
+    }> = [{
+      selection: { ids: ["machine:missing"], primaryId: "machine:missing", source: "test" },
+      entities: [],
+      expectedReason: "unresolved"
+    }, {
+      selection: { ids: [entity.id], primaryId: entity.id, source: "test" },
+      entities: [{ ...entity, visible: false }],
+      expectedReason: "hidden"
+    }, {
+      selection: { ids: [entity.id], primaryId: entity.id, source: "test" },
+      entities: [{ ...entity, selectable: false }],
+      expectedReason: "non-selectable"
+    }, {
+      selection: { ids: [entity.id], primaryId: "machine:other", source: "test" },
+      entities: [entity],
+      expectedReason: "primary"
+    }];
+
+    cases.forEach(({ selection, entities, expectedReason }) => {
+      const result = createRuntimeSelectionAccessEvidence({
+        selection,
+        entities,
+        activeGroupEditId: null,
+        capabilities: selectionCapabilities
+      });
+      expect(result.reasons.join(" ").toLowerCase()).toContain(expectedReason);
+      expect(createRuntimeFeatureAccessReport(input([requiredFeature], evidence({
+        selection: result
+      })))).toMatchObject({
+        features: [{ status: "blocked" }]
+      });
+    });
+  });
+
+  it("enforces annotation and active Edit Group selection exclusivity", () => {
+    const annotation: PlatformEntity = {
+      ...entity,
+      id: "annotation:a-1",
+      type: "annotation",
+      name: "Note"
+    };
+    const group: PlatformEntity = {
+      ...entity,
+      id: "group:g-1",
+      type: "group",
+      name: "Group",
+      childrenIds: [entity.id]
+    };
+    const child = { ...entity, parentId: group.id };
+    const mixedAnnotation = createRuntimeSelectionAccessEvidence({
+      selection: {
+        ids: [annotation.id, child.id],
+        primaryId: annotation.id,
+        source: "test"
+      },
+      entities: [annotation, child, group],
+      activeGroupEditId: "g-1",
+      capabilities: selectionCapabilities
+    });
+    const rootAndChild = createRuntimeSelectionAccessEvidence({
+      selection: {
+        ids: [group.id, child.id],
+        primaryId: group.id,
+        source: "test"
+      },
+      entities: [child, group],
+      activeGroupEditId: "g-1",
+      capabilities: selectionCapabilities
+    });
+
+    expect(mixedAnnotation.annotationExclusivityValid).toBe(false);
+    expect(rootAndChild.activeGroupSelectionExclusive).toBe(false);
+  });
+
+  it("accepts active group root-only and child-only selection", () => {
+    const group: PlatformEntity = {
+      ...entity,
+      id: "group:g-1",
+      type: "group",
+      childrenIds: [entity.id]
+    };
+    const child = { ...entity, parentId: group.id };
+    const rootOnly = createRuntimeSelectionAccessEvidence({
+      selection: { ids: [group.id], primaryId: group.id, source: "test" },
+      entities: [child, group],
+      activeGroupEditId: "g-1",
+      capabilities: selectionCapabilities
+    });
+    const childOnly = createRuntimeSelectionAccessEvidence({
+      selection: { ids: [child.id], primaryId: child.id, source: "test" },
+      entities: [child, group],
+      activeGroupEditId: "g-1",
+      capabilities: selectionCapabilities
+    });
+
+    expect(rootOnly.reasons).toEqual([]);
+    expect(childOnly.reasons).toEqual([]);
+  });
+
+  it("blocks invalid Edit Group identity and unpromoted children from another group", () => {
+    const group: PlatformEntity = {
+      ...entity,
+      id: "group:g-2",
+      type: "group",
+      childrenIds: [entity.id]
+    };
+    const child = { ...entity, parentId: group.id };
+    const invalidActiveGroup = createRuntimeSelectionAccessEvidence({
+      selection: { ids: [], source: "test" },
+      entities: [child, group],
+      activeGroupEditId: "missing",
+      capabilities: selectionCapabilities
+    });
+    const unpromotedChild = createRuntimeSelectionAccessEvidence({
+      selection: { ids: [child.id], primaryId: child.id, source: "test" },
+      entities: [child, group],
+      activeGroupEditId: null,
+      capabilities: selectionCapabilities
+    });
+
+    expect(invalidActiveGroup.activeGroupEditValid).toBe(false);
+    expect(unpromotedChild.groupChildPromotionValid).toBe(false);
+  });
+
+  it("requires explicit complete Runtime Entity authority for an empty snapshot", () => {
+    const missingAuthority = createRuntimeEntityAccessEvidence({
+      entities: [],
+      authority: { ...entityAuthority, authorityBound: false }
+    });
+    const missingFamily = createRuntimeEntityAccessEvidence({
+      entities: [],
+      authority: { authorityBound: true, adapterFamilies: ["machine", "civil", "group"] }
+    });
+    const complete = createRuntimeEntityAccessEvidence({
+      entities: [],
+      authority: entityAuthority
+    });
+
+    expect(missingAuthority.reason).toContain("not bound");
+    expect(missingFamily.reason).toContain('"annotation" is missing');
+    expect(complete.reasons).toEqual([]);
+  });
+
+  it("rejects type/family mismatch and invalid group relationships", () => {
+    const mismatched = createRuntimeEntityAccessEvidence({
+      entities: [{ ...entity, id: "civil:c-1" }],
+      authority: entityAuthority
+    });
+    const group: PlatformEntity = {
+      ...entity,
+      id: "group:g-1",
+      type: "group",
+      childrenIds: [entity.id]
+    };
+    const missingChild = createRuntimeEntityAccessEvidence({
+      entities: [group],
+      authority: entityAuthority
+    });
+    const oneSided = createRuntimeEntityAccessEvidence({
+      entities: [entity, group],
+      authority: entityAuthority
+    });
+    const childWithUnlistedParent = createRuntimeEntityAccessEvidence({
+      entities: [{ ...entity, parentId: group.id }, { ...group, childrenIds: ["civil:c-1"] }],
+      authority: entityAuthority
+    });
+    const secondGroup = { ...group, id: "group:g-2" };
+    const multiplyOwned = createRuntimeEntityAccessEvidence({
+      entities: [{ ...entity, parentId: group.id }, group, secondGroup],
+      authority: entityAuthority
+    });
+
+    expect(mismatched.canonicalIdentity).toBe(false);
+    expect(missingChild.parentChildRelationshipsRepresented).toBe(false);
+    expect(oneSided.parentChildRelationshipsRepresented).toBe(false);
+    expect(childWithUnlistedParent.parentChildRelationshipsRepresented).toBe(false);
+    expect(multiplyOwned.reason).toContain("multiple groups");
+  });
+
+  it("accepts a valid machine, civil, annotation, and group snapshot", () => {
+    const machine = { ...entity, parentId: "group:g-1" };
+    const civil: PlatformEntity = {
+      ...entity,
+      id: "civil:c-1",
+      type: "civil",
+      name: "Column"
+    };
+    const annotation: PlatformEntity = {
+      ...entity,
+      id: "annotation:a-1",
+      type: "annotation",
+      name: "Note"
+    };
+    const group: PlatformEntity = {
+      ...entity,
+      id: "group:g-1",
+      type: "group",
+      childrenIds: [machine.id]
+    };
+    const result = createRuntimeEntityAccessEvidence({
+      entities: [machine, civil, annotation, group],
+      authority: entityAuthority
+    });
+
+    expect(result).toMatchObject({
+      authorityBound: true,
+      canonicalIdentity: true,
+      duplicateIdentityRejected: true,
+      parentChildRelationshipsRepresented: true,
+      groupEntitiesValid: true
+    });
+    expect(result.reasons).toEqual([]);
   });
 });

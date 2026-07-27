@@ -36,7 +36,8 @@ export const evaluateRuntimeFeatureAccessGate = (
     || report.unknownPanelIds.length > 0
     || report.staleSurfaceFeatureIds.length > 0
     || report.unmappedRuntimeSurfaceIds.length > 0
-    || report.metadataOnlyRequiredFeatureIds.length > 0;
+    || report.metadataOnlyRequiredFeatureIds.length > 0
+    || report.missingSurfaceExecutionCommandIds.length > 0;
 
   return {
     passed: blockedFeatureIds.length === 0 && !structuralFailure,

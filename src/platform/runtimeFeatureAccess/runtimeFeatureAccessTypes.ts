@@ -6,7 +6,9 @@ import type {
   PlatformEntity,
   SelectionState
 } from "../contracts";
+import type { LegacyEntityFamily } from "../adapters";
 import type { PlatformSurfaceInventoryItem } from "../surfaceInventory";
+import type { RuntimeFeatureCommandOperationResult } from "../runtimeCommands/runtimeFeatureCommands";
 
 export type RuntimeFeatureAccessStatus =
   | "ready"
@@ -47,12 +49,21 @@ export type RuntimeSelectionAccessEvidence = {
   groupRootSemanticsSupported: boolean;
   editChildSemanticsSupported: boolean;
   staleUnselectableRemovalSupported: boolean;
+  selectedEntitiesResolved: boolean;
+  selectedEntitiesVisible: boolean;
+  selectedEntitiesSelectable: boolean;
+  primarySelectionValid: boolean;
+  annotationExclusivityValid: boolean;
+  activeGroupEditValid: boolean;
+  activeGroupSelectionExclusive: boolean;
+  groupChildPromotionValid: boolean;
+  reasons: readonly string[];
   reason?: string;
 };
 
 export type RuntimeEntityAccessEvidence = {
   authorityBound: boolean;
-  adapterFamilies: readonly string[];
+  adapterFamilies: readonly LegacyEntityFamily[];
   entityCount: number;
   canonicalIdentity: boolean;
   duplicateIdentityRejected: boolean;
@@ -61,8 +72,26 @@ export type RuntimeEntityAccessEvidence = {
   selectabilityRepresented: boolean;
   lockContextRepresented: boolean;
   layerAssociationRepresented: boolean;
+  groupEntitiesValid: boolean;
   entities: readonly PlatformEntity[];
+  reasons: readonly string[];
   reason?: string;
+};
+
+export type RuntimeSelectionAuthorityCapabilities = {
+  authorityBound: boolean;
+  replaceSupported: boolean;
+  toggleSupported: boolean;
+  clearSupported: boolean;
+  reconciliationSupported: boolean;
+  groupRootSemanticsSupported: boolean;
+  editChildSemanticsSupported: boolean;
+  staleUnselectableRemovalSupported: boolean;
+};
+
+export type RuntimeEntityAuthorityCapabilities = {
+  authorityBound: boolean;
+  adapterFamilies: readonly LegacyEntityFamily[];
 };
 
 export type RuntimeViewportAccessEvidence = {
@@ -84,6 +113,22 @@ export type RuntimeQualityEvidence = Readonly<
   Partial<Record<FeatureQualitySignalId, boolean>>
 >;
 
+export type RuntimeSurfaceExecutionEvidence = {
+  verifiedCommandIds: readonly string[];
+};
+
+export type RuntimeFeatureAccessExternalEvidence = {
+  quality?: RuntimeQualityEvidence;
+  surfaceExecution?: RuntimeSurfaceExecutionEvidence;
+};
+
+export type RuntimeCommandExecutionProbe = {
+  commandId: string;
+  attemptCount: number;
+  executedCount: number;
+  lastResult?: RuntimeFeatureCommandOperationResult;
+};
+
 export type RuntimeFeatureAccessEvidence = {
   getCommand: (commandId: string) => RuntimeCommandAccessEvidence;
   getPanel: (panelId: string) => RuntimePanelAccessEvidence | undefined;
@@ -91,6 +136,7 @@ export type RuntimeFeatureAccessEvidence = {
   entities?: RuntimeEntityAccessEvidence;
   viewport?: RuntimeViewportAccessEvidence;
   quality?: RuntimeQualityEvidence;
+  surfaceExecution?: RuntimeSurfaceExecutionEvidence;
 };
 
 export type RuntimeFeatureAccessReportItem = {
@@ -127,6 +173,8 @@ export type RuntimeFeatureAccessReport = {
   staleSurfaceFeatureIds: readonly string[];
   unmappedRuntimeSurfaceIds: readonly string[];
   duplicateFeatureIds: readonly string[];
+  requiredSurfaceExecutionCommandIds: readonly string[];
+  missingSurfaceExecutionCommandIds: readonly string[];
   issues: readonly string[];
 };
 
@@ -147,19 +195,22 @@ export type RuntimeSelectionEvidenceInput = {
   selection: SelectionState;
   entities: readonly PlatformEntity[];
   activeGroupEditId: string | null;
+  capabilities: RuntimeSelectionAuthorityCapabilities;
 };
 
 export type RuntimeEntityEvidenceInput = {
   entities: readonly PlatformEntity[];
-  adapterFamilies?: readonly string[];
+  authority: RuntimeEntityAuthorityCapabilities;
 };
 
 export type RuntimeFeatureAccessE2EBridge = {
   getReport: () => RuntimeFeatureAccessReport;
   getFeature: (featureId: string) => RuntimeFeatureAccessReportItem | undefined;
-  getGate: (quality: RuntimeQualityEvidence) => RuntimeFeatureAccessGateResult;
+  getGate: (evidence: RuntimeFeatureAccessExternalEvidence) => RuntimeFeatureAccessGateResult;
   listBlockedRequired: () => readonly RuntimeFeatureAccessReportItem[];
   listPlanned: () => readonly RuntimeFeatureAccessReportItem[];
+  getCommandExecution: (commandId: string) => RuntimeCommandExecutionProbe;
+  listCommandExecutions: () => readonly RuntimeCommandExecutionProbe[];
 };
 
 declare global {

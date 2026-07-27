@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FeatureAccessEntry } from "../contracts";
 import { createRuntimeFeatureAccessGate } from "./runtimeFeatureAccessGate";
+import { requiredRuntimeSurfaceExecutionCommandIds } from "./runtimeFeatureAccessReport";
 import type { RuntimeFeatureAccessEvidence } from "./runtimeFeatureAccessTypes";
 
 const required: FeatureAccessEntry = {
@@ -49,6 +50,9 @@ const evidence = (
     capabilities: ["open"]
   }),
   quality: { "no-red-console": true },
+  surfaceExecution: {
+    verifiedCommandIds: requiredRuntimeSurfaceExecutionCommandIds
+  },
   ...overrides
 });
 
@@ -136,7 +140,16 @@ describe("runtime feature access gate", () => {
         reconciliationSupported: true,
         groupRootSemanticsSupported: true,
         editChildSemanticsSupported: true,
-        staleUnselectableRemovalSupported: true
+        staleUnselectableRemovalSupported: true,
+        selectedEntitiesResolved: true,
+        selectedEntitiesVisible: true,
+        selectedEntitiesSelectable: true,
+        primarySelectionValid: true,
+        annotationExclusivityValid: true,
+        activeGroupEditValid: true,
+        activeGroupSelectionExclusive: true,
+        groupChildPromotionValid: true,
+        reasons: []
       },
       entities: {
         authorityBound: true,
@@ -149,7 +162,9 @@ describe("runtime feature access gate", () => {
         selectabilityRepresented: true,
         lockContextRepresented: true,
         layerAssociationRepresented: true,
-        entities: []
+        groupEntitiesValid: true,
+        entities: [],
+        reasons: []
       },
       viewport: {
         viewportId: "viewport.main",
@@ -184,6 +199,14 @@ describe("runtime feature access gate", () => {
     expect(createGate(evidence({ quality: undefined })).passed).toBe(false);
     expect(createGate(evidence({ quality: { "no-red-console": false } })).passed).toBe(false);
     expect(createGate(evidence({ quality: {} })).passed).toBe(false);
+  });
+
+  it("blocks missing external browser surface execution evidence", () => {
+    const gate = createGate(evidence({ surfaceExecution: undefined }));
+
+    expect(gate.passed).toBe(false);
+    expect(gate.report.missingSurfaceExecutionCommandIds)
+      .toEqual(requiredRuntimeSurfaceExecutionCommandIds);
   });
 
   it("reports deterministic sorted failure reasons", () => {
