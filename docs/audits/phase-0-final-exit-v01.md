@@ -150,14 +150,17 @@ Meaningful results:
 | Direct command execution guard | #84 | `b1b308192d41f2cc0660b0b563e031699b696144` | Run 156: success | Not required by the PR record |
 | Legacy Entity Adapter | #85 | `676d2244f5f8ae09d742aff7ae7df63aacb73f2d` | Run 158: success | Not required by the PR record |
 | Runtime Selection and Atomic Lock | #86 | `744899ebc3930835c5eb100e5b321ba92274b88e` | Run 162: success | Requested; no explicit PASS record found |
-| Assembly Group Runtime Entity | #87 | `04fe9cf29c77c74efb665e8b8d9a0212c87b3a6f` | Run 166: success | A focused session was requested; no explicit PASS record found |
+| Assembly Group Runtime Entity | #87 | `04fe9cf29c77c74efb665e8b8d9a0212c87b3a6f` | Run 166: success | Passed; explicitly recorded in the AtrVisu project task history |
 | Runtime Panel Registry | #88 | `3baefec70086571d89c208b381742bd6d330b667` | Run 170: success | Passed; explicitly recorded in the task history |
 | Runtime Viewport | #89 | `37344ff9d4a56c43c8db6255faab3b7d4b7b10ed` | Run 174: success | Orthographic acceptance recorded as passed in the maintained closure audit |
-| Runtime Feature Access | #90 | `d39e3ff2bfa0a463c1ca440c7feb8d12a824566f` | Run 177: success | Requested; no explicit PASS record found |
+| Runtime Feature Access | #90 | `d39e3ff2bfa0a463c1ca440c7feb8d12a824566f` | Run 177: success | Passed; the user explicitly reported `PR #90 manuel test PASS` before merge |
 
-Missing manual records are not silently converted to PASS. The current source,
-unit, E2E, and CI evidence is sufficient for the gates marked PASS below; the
-manual-record limitation remains explicit in section 17.
+The remaining missing manual record is not silently converted to PASS. The
+current source, unit, E2E, and CI evidence is sufficient for the gates marked
+PASS below; the PR #86 manual-record limitation remains explicit in section 17.
+Correcting the PR #87 and PR #90 task-history evidence does not change the final
+decision, either blocking finding, the current acceptance totals, or the
+prohibition on beginning Phase 1.
 
 ## 5. Historical Baseline
 
@@ -641,13 +644,21 @@ GitHub package evidence:
 
 ## 17. Evidence Limitations
 
-- No explicit focused manual PASS record was found for PRs #86, #87, or #90.
-  This report does not infer manual PASS from CI, PR descriptions, or a later
-  branch starting. Current source, deterministic tests, E2E, and CI independently
+- No explicit focused manual PASS record was found for PR #86. This report does
+  not infer a PR #86 manual PASS from CI, PR descriptions, or a later branch
+  starting. Current source, deterministic tests, E2E, and CI independently
   support the gates marked PASS.
-- PR #88 manual acceptance is explicitly recorded in the task history. PR #89
-  orthographic manual acceptance is explicitly recorded in the maintained
+- PR #87 Assembly Group Runtime Entity manual acceptance passed and is explicitly
+  recorded in the AtrVisu project task history.
+- PR #88 manual acceptance is explicitly recorded in the project task history.
+  PR #89 orthographic manual acceptance is explicitly recorded in the maintained
   closure-readiness audit.
+- PR #90 Runtime Feature Access Closure Gate manual acceptance passed; the user
+  explicitly reported `PR #90 manuel test PASS` before the PR was marked ready
+  and merged.
+- This manual-evidence correction does not change the final decision, either
+  blocker, the current acceptance totals, or the prohibition on beginning
+  Phase 1.
 - Browser evidence covers the current representative 19-command set and all 32
   current smoke scenarios, not every possible value combination, GLB asset, or
   pixel-level rendering outcome.
