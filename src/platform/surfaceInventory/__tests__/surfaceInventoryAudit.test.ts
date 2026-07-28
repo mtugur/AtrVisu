@@ -28,14 +28,20 @@ describe("surface inventory audit", () => {
     expect(getSurfaceInventoryItemsByCommandId("project.exportJson").map((item) => item.surfaceId)).toContain("surface.projectExportJson");
   });
 
-  it("covers viewport fit and no-red-console command seed links", () => {
-    expect(getSurfaceInventoryItemsByCommandId("view.fitView").length).toBeGreaterThan(0);
-    expect(getSurfaceInventoryItemsByCommandId("diagnostics.noRedConsole").length).toBeGreaterThan(0);
+  it("does not represent planned or quality-only capabilities as runtime commands", () => {
+    expect(getSurfaceInventoryItemsByCommandId("view.fitView")).toEqual([]);
+    expect(getSurfaceInventoryItemsByCommandId("diagnostics.noRedConsole")).toEqual([]);
   });
 
-  it("covers layout explorer and diagnostics panel seed links", () => {
-    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer").length).toBeGreaterThan(0);
-    expect(getSurfaceInventoryItemsByPanelId("panel.diagnostics").length).toBeGreaterThan(0);
+  it("does not represent declared-planned panels as live surfaces", () => {
+    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer")).toEqual([]);
+    expect(getSurfaceInventoryItemsByPanelId("panel.diagnostics")).toEqual([]);
+  });
+
+  it("represents no-red-console as external quality evidence", () => {
+    expect(
+      getSurfaceInventoryItemsByFeatureId("diagnostics.noRedConsole").map((item) => item.surfaceId)
+    ).toContain("surface.noRedConsoleQualityGate");
   });
 
   it("finds surfaces by feature id", () => {

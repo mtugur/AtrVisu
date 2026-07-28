@@ -30,7 +30,7 @@ describe("feature access integration", () => {
 
     expect(requiredCoverage.length).toBeGreaterThan(0);
     expect(requiredCoverageIds.has("project.exportJson")).toBe(true);
-    expect(requiredCoverageIds.has("object.duplicate")).toBe(false);
+    expect(requiredCoverageIds.has("object.duplicate")).toBe(true);
   });
 
   it("validates current coverage data without errors", () => {
@@ -68,16 +68,16 @@ describe("feature access integration", () => {
     expect(validateFeatureAccessCoverage(invalidCoverage).errors.some((error) => /panelId/.test(error.message))).toBe(true);
   });
 
-  it("reports metadata-only coverage without notes", () => {
+  it("reports runtime-authority coverage without notes", () => {
     const invalidCoverage: readonly FeatureAccessCoverageDefinition[] = [
       {
         featureId: "selection.singleSelect",
-        coverageType: "metadata-only",
+        coverageType: "runtime-authority",
         notes: " "
       }
     ];
 
-    expect(validateFeatureAccessCoverage(invalidCoverage).errors.some((error) => /Metadata-only/.test(error.message))).toBe(true);
+    expect(validateFeatureAccessCoverage(invalidCoverage).errors.some((error) => /runtime-authority/.test(error.message))).toBe(true);
   });
 
   it("does not mutate seed arrays during validation", () => {

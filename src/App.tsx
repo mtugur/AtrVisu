@@ -20,13 +20,17 @@ import { MultiSelectionProperties } from "./components/MultiSelectionProperties"
 import { PanelSection } from "./components/PanelSection";
 import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
 import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModal";
-import { ProjectManager } from "./components/ProjectManager";
+import {
+  ProjectManager,
+  type ProjectManagerRuntimeController
+} from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import { ViewpointsPanel } from "./components/ViewpointsPanel";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
 import type { AlignmentAction, DistributionAction, EqualGapAction, FootprintAnchor, PairAlignmentAction } from "./types/alignment";
 import type { NudgeSettings, SelectionMode } from "./types/selection";
-import type { VisualModelDiagnostics } from "./types/overlays";
+import type { OverlaySettings, VisualModelDiagnostics } from "./types/overlays";
+import type { PlacementSettings } from "./types/placement";
 import type { AtrVisuProject } from "./types/project";
 import type { ScenePerformanceMetrics } from "./types/performance";
 import type { MachineConnectionPoint } from "./types/ataraMachineData";
@@ -111,6 +115,15 @@ import {
   type AssemblyCommandId,
   type AssemblyRuntimeCommandBindings
 } from "./platform/runtimeCommands/assemblyRuntimeCommands";
+import {
+  RUNTIME_FEATURE_COMMAND_IDS,
+  createExecutedRuntimeFeatureCommandResult,
+  createRuntimeFeatureCommandBridge,
+  type RuntimeCommandReachability,
+  type RuntimeFeatureCommandBindings,
+  type RuntimeFeatureCommandId,
+  type RuntimeFeatureCommandOperationResult
+} from "./platform/runtimeCommands/runtimeFeatureCommands";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
 import {
   applyRuntimeSelectionRequest,
@@ -159,6 +172,7 @@ import {
   openMachineLibraryManagerExclusively,
   type RuntimePanelBinding,
   type RuntimePanelBindings,
+  type RuntimePanelOperationResult,
   type RuntimePanelState
 } from "./platform/runtimePanels";
 import { createViewportResizeRequest } from "./platform/contracts";
@@ -172,6 +186,23 @@ import {
   type RuntimeViewportInvariantSnapshot,
   type RuntimeViewportState
 } from "./platform/runtimeViewport";
+import { platformFeatureAccessMatrix } from "./platform/featureAccess";
+import { currentPlatformSurfaceInventory } from "./platform/surfaceInventory";
+import {
+  createRuntimeEntityAccessEvidence,
+  createRuntimeFeatureAccessGate,
+  createRuntimeFeatureAccessReport,
+  createRuntimeSelectionAccessEvidence,
+  type RuntimeCommandAccessEvidence,
+  type RuntimeCommandExecutionProbe,
+  type RuntimeFeatureAccessExternalEvidence,
+  type RuntimeFeatureAccessEvidence,
+  type RuntimeEntityAuthorityCapabilities,
+  type RuntimePanelAccessEvidence,
+  type RuntimeSelectionAuthorityCapabilities,
+  type RuntimeViewportAccessEvidence
+} from "./platform/runtimeFeatureAccess";
+import { getPlatformCommandSeedById } from "./platform/registrySeeds";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -189,6 +220,95 @@ const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   largeNudgeStepMm: 1000,
   smallNudgeStepMm: 10
 };
+const RUNTIME_SELECTION_AUTHORITY_CAPABILITIES = {
+  authorityBound: true,
+  replaceSupported: true,
+  toggleSupported: true,
+  clearSupported: true,
+  reconciliationSupported: true,
+  groupRootSemanticsSupported: true,
+  editChildSemanticsSupported: true,
+  staleUnselectableRemovalSupported: true
+} as const satisfies RuntimeSelectionAuthorityCapabilities;
+const RUNTIME_ENTITY_AUTHORITY_CAPABILITIES = {
+  authorityBound: true,
+  adapterFamilies: ["machine", "civil", "annotation", "group"]
+} as const satisfies RuntimeEntityAuthorityCapabilities;
+
+const mapPanelOperationToRuntimeCommandResult = (
+  result: RuntimePanelOperationResult
+): RuntimeFeatureCommandOperationResult => {
+  if (result.status === "executed") {
+    return createExecutedRuntimeFeatureCommandResult(result.reason);
+  }
+  return {
+    handled: false,
+    status: result.status === "cancelled"
+      ? "cancelled"
+      : result.status === "unavailable"
+        ? "unavailable"
+        : "unsupported",
+    ...(result.reason ? { reason: result.reason } : {})
+  };
+};
+
+const createFailedRuntimeFeatureCommandResult = (
+  error: unknown
+): RuntimeFeatureCommandOperationResult => ({
+  handled: false,
+  status: "failed",
+  reason: error instanceof Error ? error.message : "Runtime command failed."
+});
+
+type RuntimeAlignmentPayload =
+  | { kind: "align"; action: AlignmentAction }
+  | { kind: "distribute"; action: DistributionAction }
+  | { kind: "equal-gap"; action: EqualGapAction }
+  | { kind: "pair"; action: PairAlignmentAction; gapMm?: number }
+  | { kind: "anchor"; primaryAnchor: FootprintAnchor; secondaryAnchor: FootprintAnchor };
+
+type RuntimeConnectionSnapPayload = {
+  selection: ConnectionPointSnapSelection;
+  movingPoint: MachineConnectionPoint;
+  fixedPoint: MachineConnectionPoint;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isMachineLibrarySelection = (
+  value: unknown
+): value is { libraryId: string; definition: MachineDefinition } =>
+  isRecord(value)
+  && typeof value.libraryId === "string"
+  && isRecord(value.definition)
+  && typeof value.definition.id === "string";
+
+const isAnnotationType = (value: unknown): value is AnnotationType =>
+  typeof value === "string"
+  && ["note", "info", "warning", "callout", "dimension-note", "area-note"].includes(value);
+
+const isCivilReferenceType = (value: unknown): value is CivilReferenceType =>
+  typeof value === "string"
+  && ["floor-area", "wall", "column", "walkway", "restricted-area"].includes(value);
+
+const isPlacementSettings = (value: unknown): value is PlacementSettings =>
+  isRecord(value)
+  && typeof value.gridSnapEnabled === "boolean"
+  && typeof value.gridSnapStepMm === "number"
+  && typeof value.rotationSnapEnabled === "boolean"
+  && typeof value.rotationSnapStepDeg === "number"
+  && typeof value.showMeasurementHelpers === "boolean";
+
+const isOverlaySettings = (value: unknown): value is OverlaySettings =>
+  isRecord(value)
+  && typeof value.showLabels === "boolean"
+  && typeof value.showConnectionPoints === "boolean";
+
+const coreEditorRuntimeCommandIds = new Set<string>(Object.values(CORE_EDITOR_COMMAND_IDS));
+const assemblyRuntimeCommandIds = new Set<string>(Object.values(ASSEMBLY_COMMAND_IDS));
+const featureRuntimeCommandIds = new Set<string>(Object.values(RUNTIME_FEATURE_COMMAND_IDS));
+
 const DUPLICATE_MACHINE_OFFSET_MM = 250;
 
 const PANEL_SECTION_CONFIGS = [
@@ -309,6 +429,9 @@ export function App() {
   const placementSettingsRef = useRef(placementSettings);
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
   const runtimeSelectionRef = useRef(runtimeSelection);
+  const runtimeCommandExecutionProbesRef = useRef(
+    new Map<string, RuntimeCommandExecutionProbe>()
+  );
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
@@ -319,6 +442,7 @@ export function App() {
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
   const annotationEditHistoryRecordedRef = useRef(false);
   const libraryManagerRuntimeControllerRef = useRef<LibraryManagerRuntimeController | null>(null);
+  const projectManagerRuntimeControllerRef = useRef<ProjectManagerRuntimeController | null>(null);
   const runtimeCommandBindingsRef = useRef<CoreEditorRuntimeCommandBindings>({});
   const runtimeCommandBridge = useMemo(
     () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
@@ -327,6 +451,11 @@ export function App() {
   const assemblyCommandBindingsRef = useRef<AssemblyRuntimeCommandBindings>({});
   const assemblyCommandBridge = useMemo(
     () => createAssemblyRuntimeCommandBridge(() => assemblyCommandBindingsRef.current),
+    []
+  );
+  const runtimeFeatureCommandBindingsRef = useRef<RuntimeFeatureCommandBindings>({});
+  const runtimeFeatureCommandBridge = useMemo(
+    () => createRuntimeFeatureCommandBridge(() => runtimeFeatureCommandBindingsRef.current),
     []
   );
   const runtimePanelBindingsRef = useRef<RuntimePanelBindings>({});
@@ -2566,7 +2695,325 @@ export function App() {
     runtimeCommandBindingsRef.current = runtimeCommandBindings;
   }, [runtimeCommandBindings]);
 
+  const restoreAutosavedLayout = useCallback(() => {
+    if (!recoveryLayout) {
+      return;
+    }
+
+    importLayout(recoveryLayout);
+    setRecoveryLayout(null);
+    setAutosaveReady(true);
+  }, [importLayout, recoveryLayout]);
+
+  const dismissAutosavedLayout = useCallback(() => {
+    window.localStorage.removeItem(AUTOSAVE_KEY);
+    setRecoveryLayout(null);
+    setAutosaveReady(true);
+  }, []);
+
+  const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
+    [RUNTIME_FEATURE_COMMAND_IDS.projectSave]: {
+      getEnableState: () => projectManagerRuntimeControllerRef.current?.canSaveCurrentRevision
+        ? { enabled: true }
+        : { enabled: false, reason: "Open Project Manager and select a project and layout." },
+      execute: () => {
+        const controller = projectManagerRuntimeControllerRef.current;
+        if (!controller?.canSaveCurrentRevision) {
+          throw new Error("Project save runtime controller is unavailable.");
+        }
+        return controller.saveCurrentRevision();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.projectExportJson]: {
+      getEnableState: () => projectManagerRuntimeControllerRef.current?.canExportSelectedProject
+        ? { enabled: true }
+        : { enabled: false, reason: "Open Project Manager and select a project." },
+      execute: () => {
+        const controller = projectManagerRuntimeControllerRef.current;
+        if (!controller?.canExportSelectedProject) {
+          throw new Error("Project export runtime controller is unavailable.");
+        }
+        return controller.exportSelectedProject();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.projectImportJson]: {
+      getEnableState: (context) => projectManagerRuntimeControllerRef.current && context.payload instanceof File
+        ? { enabled: true }
+        : { enabled: false, reason: "Open Project Manager and choose a project JSON file." },
+      execute: (context) => {
+        const controller = projectManagerRuntimeControllerRef.current;
+        if (!controller || !(context.payload instanceof File)) {
+          throw new Error("Project import runtime controller or file is unavailable.");
+        }
+        return controller.importProjectFile(context.payload);
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt]: {
+      getEnableState: () => recoveryLayout
+        ? { enabled: true }
+        : { enabled: false, reason: "No autosaved layout is available." },
+      execute: () => {
+        restoreAutosavedLayout();
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        if (isOverlaySettings(context.payload)) {
+          setOverlaySettings(context.payload);
+          return createExecutedRuntimeFeatureCommandResult();
+        }
+        setOverlaySettings((current) => ({ ...current, showLabels: !current.showLabels }));
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.viewpoints]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.viewpoints)
+        );
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        if (isOverlaySettings(context.payload)) {
+          setOverlaySettings(context.payload);
+          return createExecutedRuntimeFeatureCommandResult();
+        }
+        setOverlaySettings((current) => ({
+          ...current,
+          showConnectionPoints: !current.showConnectionPoints
+        }));
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        if (isPlacementSettings(context.payload)) {
+          setPlacementSettings(context.payload);
+          return createExecutedRuntimeFeatureCommandResult();
+        }
+        setPlacementSettings((current) => ({
+          ...current,
+          showMeasurementHelpers: !current.showMeasurementHelpers
+        }));
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addMachine]: {
+      getEnableState: (context) => isMachineLibrarySelection(context.payload)
+        ? { enabled: true }
+        : { enabled: false, reason: "Choose a machine definition from the library." },
+      execute: (context) => {
+        if (!isMachineLibrarySelection(context.payload)) {
+          throw new Error("Machine library command requires a machine definition.");
+        }
+        addMachine(context.payload);
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.libraryManager]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.libraryManager)
+        );
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.taxonomyManager)
+        );
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.createAnnotation]: {
+      getEnableState: (context) => isAnnotationType(context.payload)
+        ? { enabled: true }
+        : { enabled: false, reason: "Choose an annotation type." },
+      execute: (context) => {
+        if (!isAnnotationType(context.payload)) {
+          throw new Error("Annotation command requires an annotation type.");
+        }
+        addAnnotation(context.payload);
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addFloor]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        addCivilReference("floor-area");
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addWall]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        addCivilReference("wall");
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addColumn]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        addCivilReference("column");
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addWalkway]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        addCivilReference("walkway");
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        addCivilReference("restricted-area");
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        addCivilReference("reference-zone");
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.alignSelection]: {
+      getEnableState: () => selectedAlignableEntityIds.length >= 2
+        && runtimeSelectionMovementEvaluation.allowed
+        ? { enabled: true }
+        : { enabled: false, reason: "Select at least two unlocked alignable entities." },
+      execute: (context) => {
+        if (!isRecord(context.payload) || typeof context.payload.kind !== "string") {
+          throw new Error("Alignment command requires an action payload.");
+        }
+        const payload = context.payload as RuntimeAlignmentPayload;
+        if (payload.kind === "align") {
+          applyAlignmentAction(payload.action);
+        } else if (payload.kind === "distribute") {
+          applyDistributionAction(payload.action);
+        } else if (payload.kind === "equal-gap") {
+          applyEqualGapAction(payload.action);
+        } else if (payload.kind === "pair") {
+          applyPairAlignmentAction(payload.action, payload.gapMm);
+        } else {
+          applyPairAnchorSnap(payload.primaryAnchor, payload.secondaryAnchor);
+        }
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.rotationSnap]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        if (!isPlacementSettings(context.payload)) {
+          throw new Error("Rotation snap command requires placement settings.");
+        }
+        setPlacementSettings(context.payload);
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap]: {
+      getEnableState: () => connectionPointSnapContext.available
+        ? { enabled: true }
+        : { enabled: false, reason: connectionPointSnapReason },
+      execute: (context) => {
+        if (!isRecord(context.payload)) {
+          throw new Error("Connection point snap command requires a snap payload.");
+        }
+        const payload = context.payload as RuntimeConnectionSnapPayload;
+        applyConnectionSnap(payload.selection, payload.movingPoint, payload.fixedPoint);
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.collisionCheck]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.collisionCheck)
+        );
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.performanceBenchmark]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.performanceBenchmark)
+        );
+      }
+    }
+  }), [
+    addAnnotation,
+    addCivilReference,
+    addMachine,
+    applyAlignmentAction,
+    applyConnectionSnap,
+    applyDistributionAction,
+    applyEqualGapAction,
+    applyPairAlignmentAction,
+    applyPairAnchorSnap,
+    connectionPointSnapContext.available,
+    connectionPointSnapReason,
+    recoveryLayout,
+    restoreAutosavedLayout,
+    runtimePanelBridge,
+    runtimeSelectionMovementEvaluation.allowed,
+    selectedAlignableEntityIds.length
+  ]);
+
+  useLayoutEffect(() => {
+    runtimeFeatureCommandBindingsRef.current = runtimeFeatureCommandBindings;
+  }, [runtimeFeatureCommandBindings]);
+
   const assemblyCommandBindings = useMemo<AssemblyRuntimeCommandBindings>(() => ({
+    [ASSEMBLY_COMMAND_IDS.createGroup]: {
+      getEnableState: () => explicitSelectedAlignableEntityIds.length >= 1
+        ? { enabled: true }
+        : { enabled: false, reason: "Select at least one ungrouped entity." },
+      execute: (context) => {
+        if (!isRecord(context.payload) || typeof context.payload.name !== "string") {
+          throw new Error("Create Group command requires a name.");
+        }
+        createGroupFromSelection(context.payload.name);
+      }
+    },
+    [ASSEMBLY_COMMAND_IDS.addSelected]: {
+      getEnableState: (context) => {
+        const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
+        return groupId && explicitSelectedAlignableEntityIds.length > 0
+          ? { enabled: true }
+          : { enabled: false, reason: "Select an assembly and eligible entities." };
+      },
+      execute: (context) => {
+        const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
+        if (!groupId) {
+          throw new Error("Add Selected command requires an assembly.");
+        }
+        addSelectionToGroup(groupId);
+      }
+    },
+    [ASSEMBLY_COMMAND_IDS.removeSelected]: {
+      getEnableState: (context) => {
+        const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
+        return groupId && removableActiveGroupEntityIds.length > 0
+          ? { enabled: true }
+          : { enabled: false, reason: "Select assembly members to remove." };
+      },
+      execute: (context) => {
+        const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
+        if (!groupId) {
+          throw new Error("Remove Selected command requires an assembly.");
+        }
+        removeSelectionFromGroup(groupId);
+      }
+    },
     [ASSEMBLY_COMMAND_IDS.enterEdit]: {
       getEnableState: (context) => {
         const groupId = getAssemblyCommandGroupId(context.primarySelectionId);
@@ -2593,10 +3040,15 @@ export function App() {
     }
   }), [
     activeGroupEditId,
+    addSelectionToGroup,
+    createGroupFromSelection,
     enterGroupEditMode,
+    explicitSelectedAlignableEntityIds.length,
     exitGroupEditMode,
     getAssemblyCommandGroupId,
     groups,
+    removableActiveGroupEntityIds.length,
+    removeSelectionFromGroup,
     ungroupAssembly
   ]);
 
@@ -2604,14 +3056,239 @@ export function App() {
     assemblyCommandBindingsRef.current = assemblyCommandBindings;
   }, [assemblyCommandBindings]);
 
-  const executeAssemblyCommand = useCallback((commandId: AssemblyCommandId, groupId?: string) => {
+  const recordRuntimeCommandExecution = useCallback((
+    commandId: string,
+    result: RuntimeFeatureCommandOperationResult
+  ) => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+    const current = runtimeCommandExecutionProbesRef.current.get(commandId);
+    runtimeCommandExecutionProbesRef.current.set(commandId, {
+      commandId,
+      attemptCount: (current?.attemptCount ?? 0) + 1,
+      executedCount: (current?.executedCount ?? 0) + (result.handled ? 1 : 0),
+      lastResult: result
+    });
+  }, [enableE2EDiagnostics]);
+
+  const getRuntimeFeatureCommandEvidence = useCallback((
+    commandId: string
+  ): RuntimeCommandAccessEvidence => {
+    const context = {
+      selectionIds: runtimeSelectionRef.current.ids,
+      primarySelectionId: runtimeSelectionRef.current.primaryId,
+      hasUnsavedChanges: hasUnsavedProjectChanges
+    };
+
+    if (coreEditorRuntimeCommandIds.has(commandId)) {
+      const registered = Boolean(runtimeCommandBridge.registry.get(commandId));
+      const binding = runtimeCommandBindingsRef.current[commandId as CoreEditorCommandId];
+      const enableState = binding?.getEnableState(context);
+      return {
+        commandId,
+        registered,
+        bound: Boolean(binding),
+        reachable: registered && Boolean(binding),
+        currentlyAvailable: enableState?.enabled ?? false,
+        ...(!registered
+          ? { reason: `Runtime command "${commandId}" is unknown.` }
+          : !binding
+            ? { reason: `Runtime command "${commandId}" is not live-bound.` }
+            : enableState?.reason
+              ? { reason: enableState.reason }
+              : {})
+      };
+    }
+
+    if (assemblyRuntimeCommandIds.has(commandId)) {
+      const registered = Boolean(assemblyCommandBridge.registry.get(commandId));
+      const binding = assemblyCommandBindingsRef.current[commandId as AssemblyCommandId];
+      const enableState = binding?.getEnableState(context);
+      return {
+        commandId,
+        registered,
+        bound: Boolean(binding),
+        reachable: registered && Boolean(binding),
+        currentlyAvailable: enableState?.enabled ?? false,
+        ...(!registered
+          ? { reason: `Runtime command "${commandId}" is unknown.` }
+          : !binding
+            ? { reason: `Runtime command "${commandId}" is not live-bound.` }
+            : enableState?.reason
+              ? { reason: enableState.reason }
+              : {})
+      };
+    }
+
+    if (featureRuntimeCommandIds.has(commandId)) {
+      const evidence: RuntimeCommandReachability =
+        runtimeFeatureCommandBridge.getRuntimeCommand(commandId, context);
+      return evidence;
+    }
+
+    const registeredSeed = getPlatformCommandSeedById(commandId);
+    return {
+      commandId,
+      registered: Boolean(registeredSeed),
+      bound: false,
+      reachable: false,
+      currentlyAvailable: false,
+      reason: registeredSeed
+        ? `Runtime command "${commandId}" is declared but has no live binding.`
+        : `Runtime command "${commandId}" is unknown.`
+    };
+  }, [
+    assemblyCommandBridge,
+    hasUnsavedProjectChanges,
+    runtimeCommandBridge,
+    runtimeFeatureCommandBridge
+  ]);
+
+  const getRuntimeFeaturePanelEvidence = useCallback((
+    panelId: string
+  ): RuntimePanelAccessEvidence | undefined => {
+    const panel = runtimePanelBridge.getRuntimePanel(panelId);
+    if (!panel) {
+      return undefined;
+    }
+    return {
+      panelId,
+      registered: panel.registered,
+      bound: panel.bound,
+      visible: panel.visible,
+      open: panel.open,
+      available: panel.available,
+      capabilities: panel.capabilities,
+      ...(panel.reason ? { reason: panel.reason } : {})
+    };
+  }, [runtimePanelBridge]);
+
+  const createCurrentRuntimeFeatureAccessEvidence = useCallback((
+    externalEvidence?: RuntimeFeatureAccessExternalEvidence
+  ): RuntimeFeatureAccessEvidence => {
+    const viewport = runtimeViewportBridge.getRuntimeViewport(RUNTIME_VIEWPORT_IDS.main);
+    const viewportEvidence: RuntimeViewportAccessEvidence = viewport
+      ? {
+          viewportId: viewport.viewportId,
+          registered: viewport.registered,
+          bound: viewport.bound,
+          available: viewport.available,
+          visible: viewport.visible,
+          cssWidth: viewport.cssWidth,
+          cssHeight: viewport.cssHeight,
+          cameraResolvable: viewport.cameraResolvable,
+          resizeSupported: viewport.bound,
+          sceneLifecycleGeneration: viewport.sceneLifecycleGeneration,
+          resizeGeneration: viewport.resizeGeneration,
+          ...(viewport.reason ? { reason: viewport.reason } : {})
+        }
+      : {
+          viewportId: RUNTIME_VIEWPORT_IDS.main,
+          registered: false,
+          bound: false,
+          available: false,
+          visible: false,
+          cssWidth: 0,
+          cssHeight: 0,
+          cameraResolvable: false,
+          resizeSupported: false,
+          sceneLifecycleGeneration: 0,
+          resizeGeneration: 0,
+          reason: `Runtime viewport "${RUNTIME_VIEWPORT_IDS.main}" is unknown.`
+        };
+
+    return {
+      getCommand: getRuntimeFeatureCommandEvidence,
+      getPanel: getRuntimeFeaturePanelEvidence,
+      selection: createRuntimeSelectionAccessEvidence({
+        selection: runtimeSelectionRef.current,
+        entities: platformEntitiesRef.current,
+        activeGroupEditId: activeGroupEditIdRef.current,
+        capabilities: RUNTIME_SELECTION_AUTHORITY_CAPABILITIES
+      }),
+      entities: createRuntimeEntityAccessEvidence({
+        entities: platformEntitiesRef.current,
+        authority: RUNTIME_ENTITY_AUTHORITY_CAPABILITIES
+      }),
+      viewport: viewportEvidence,
+      ...(externalEvidence?.quality ? { quality: externalEvidence.quality } : {}),
+      ...(externalEvidence?.surfaceExecution
+        ? { surfaceExecution: externalEvidence.surfaceExecution }
+        : {})
+    };
+  }, [
+    getRuntimeFeatureCommandEvidence,
+    getRuntimeFeaturePanelEvidence,
+    runtimeViewportBridge
+  ]);
+
+  const createCurrentRuntimeFeatureAccessReport = useCallback((
+    externalEvidence?: RuntimeFeatureAccessExternalEvidence
+  ) => createRuntimeFeatureAccessReport({
+    features: platformFeatureAccessMatrix,
+    surfaces: currentPlatformSurfaceInventory,
+    evidence: createCurrentRuntimeFeatureAccessEvidence(externalEvidence)
+  }), [createCurrentRuntimeFeatureAccessEvidence]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+
+    window.__atrvisuRuntimeFeatureAccess = {
+      getReport: () => createCurrentRuntimeFeatureAccessReport(),
+      getFeature: (featureId) =>
+        createCurrentRuntimeFeatureAccessReport().features.find(
+          (feature) => feature.featureId === featureId
+        ),
+      getGate: (externalEvidence) => createRuntimeFeatureAccessGate({
+        features: platformFeatureAccessMatrix,
+        surfaces: currentPlatformSurfaceInventory,
+        evidence: createCurrentRuntimeFeatureAccessEvidence(externalEvidence)
+      }),
+      listBlockedRequired: () =>
+        createCurrentRuntimeFeatureAccessReport().requiredRuntimeFeatures.filter(
+          (feature) => feature.status === "blocked"
+        ),
+      listPlanned: () => createCurrentRuntimeFeatureAccessReport().plannedFeatures,
+      getCommandExecution: (commandId) =>
+        runtimeCommandExecutionProbesRef.current.get(commandId)
+        ?? { commandId, attemptCount: 0, executedCount: 0 },
+      listCommandExecutions: () =>
+        [...runtimeCommandExecutionProbesRef.current.values()]
+          .sort((left, right) => left.commandId.localeCompare(right.commandId))
+    };
+
+    return () => {
+      delete window.__atrvisuRuntimeFeatureAccess;
+    };
+  }, [
+    createCurrentRuntimeFeatureAccessEvidence,
+    createCurrentRuntimeFeatureAccessReport,
+    enableE2EDiagnostics
+  ]);
+
+  const executeAssemblyCommand = useCallback((
+    commandId: AssemblyCommandId,
+    groupId?: string,
+    payload?: unknown
+  ) => {
     const groupEntityId = groupId ? createLegacyPlatformEntityId("group", groupId) : undefined;
-    return assemblyCommandBridge.executeCommand(commandId, {
+    const handled = assemblyCommandBridge.executeCommand(commandId, {
       selectionIds: groupEntityId ? [groupEntityId] : runtimeSelectionRef.current.ids,
       primarySelectionId: groupEntityId ?? runtimeSelectionRef.current.primaryId,
-      hasUnsavedChanges: hasUnsavedProjectChanges
+      hasUnsavedChanges: hasUnsavedProjectChanges,
+      payload
     });
-  }, [assemblyCommandBridge, hasUnsavedProjectChanges]);
+    recordRuntimeCommandExecution(
+      commandId,
+      handled
+        ? createExecutedRuntimeFeatureCommandResult()
+        : { handled: false, status: "disabled", reason: "Assembly command is unavailable." }
+    );
+    return handled;
+  }, [assemblyCommandBridge, hasUnsavedProjectChanges, recordRuntimeCommandExecution]);
 
   const coreEditorCommandContext = useMemo(() => ({
     selectionIds: runtimeSelection.ids,
@@ -2628,13 +3305,40 @@ export function App() {
     [coreEditorCommandContext, runtimeCommandBindings, runtimeCommandBridge]
   );
 
-  const executeCoreEditorCommand = useCallback(
-    (commandId: CoreEditorCommandId) => runtimeCommandBridge.executeCommand(
+  const executeCoreEditorCommand = useCallback((commandId: CoreEditorCommandId) => {
+    const result = runtimeCommandBridge.executeCommand(commandId, coreEditorCommandContext);
+    recordRuntimeCommandExecution(
       commandId,
-      coreEditorCommandContext
-    ).handled,
-    [coreEditorCommandContext, runtimeCommandBridge]
-  );
+      result.handled
+        ? createExecutedRuntimeFeatureCommandResult()
+        : { handled: false, status: "disabled", ...(result.reason ? { reason: result.reason } : {}) }
+    );
+    return result.handled;
+  }, [coreEditorCommandContext, recordRuntimeCommandExecution, runtimeCommandBridge]);
+
+  const executeRuntimeFeatureCommand = useCallback(async (
+    commandId: RuntimeFeatureCommandId,
+    payload?: unknown
+  ): Promise<RuntimeFeatureCommandOperationResult> => {
+    try {
+      const result = await runtimeFeatureCommandBridge.executeCommand(commandId, {
+        selectionIds: runtimeSelectionRef.current.ids,
+        primarySelectionId: runtimeSelectionRef.current.primaryId,
+        hasUnsavedChanges: hasUnsavedProjectChanges,
+        payload
+      });
+      recordRuntimeCommandExecution(commandId, result);
+      return result;
+    } catch (error) {
+      const result = createFailedRuntimeFeatureCommandResult(error);
+      recordRuntimeCommandExecution(commandId, result);
+      return result;
+    }
+  }, [
+    hasUnsavedProjectChanges,
+    recordRuntimeCommandExecution,
+    runtimeFeatureCommandBridge
+  ]);
 
   const canExecuteUndoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.undo).enabled;
   const canExecuteRedoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.redo).enabled;
@@ -2723,22 +3427,6 @@ export function App() {
     };
   }, [annotations.length, autosaveReady, civilReferences.length, createLayoutSnapshot, groups.length, isBenchmarkMode, layers.length, placedMachines.length, viewpoints.length]);
 
-  const restoreAutosavedLayout = () => {
-    if (!recoveryLayout) {
-      return;
-    }
-
-    importLayout(recoveryLayout);
-    setRecoveryLayout(null);
-    setAutosaveReady(true);
-  };
-
-  const dismissAutosavedLayout = () => {
-    window.localStorage.removeItem(AUTOSAVE_KEY);
-    setRecoveryLayout(null);
-    setAutosaveReady(true);
-  };
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const action = resolveEditorShortcut({
@@ -2824,15 +3512,11 @@ export function App() {
   const getPanelSectionRuntimeProps = (panelId: PanelSectionId) => ({
     expanded: panelSectionExpansion[panelId],
     onExpandedChange: (expanded: boolean) => {
-      if (panelId === RUNTIME_PANEL_IDS.machineLibrary) {
-        if (expanded) {
-          runtimePanelBridge.openPanel(panelId);
-        } else {
-          runtimePanelBridge.closePanel(panelId);
-        }
-        return;
+      if (expanded) {
+        runtimePanelBridge.openPanel(panelId);
+      } else {
+        runtimePanelBridge.closePanel(panelId);
       }
-      setPanelSectionExpanded(panelId, expanded);
     }
   });
 
@@ -2918,7 +3602,10 @@ export function App() {
             <section className="recovery-prompt" aria-label="Autosave recovery">
               <p>A previous unsaved layout was found. Restore it?</p>
               <div className="recovery-actions">
-                <button type="button" onClick={restoreAutosavedLayout}>
+                <button
+                  type="button"
+                  onClick={() => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt)}
+                >
                   Restore
                 </button>
                 <button type="button" onClick={dismissAutosavedLayout}>
@@ -2934,12 +3621,15 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.machineLibrary)}
           >
             <MachineLibrary
-              onAddMachine={addMachine}
+              onAddMachine={(selection) =>
+                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addMachine, selection)}
               isLibraryManagerOpen={isLibraryManagerOpen}
               isTaxonomyManagerOpen={isTaxonomyManagerOpen}
-              onOpenLibraryManager={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.libraryManager)}
+              onOpenLibraryManager={() =>
+                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.libraryManager)}
               onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
-              onOpenTaxonomyManager={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.taxonomyManager)}
+              onOpenTaxonomyManager={() =>
+                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager)}
               onCloseTaxonomyManager={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.taxonomyManager)}
               onLibraryManagerRuntimeControllerChange={setLibraryManagerRuntimeController}
             />
@@ -3001,7 +3691,24 @@ export function App() {
             badge={civilReferences.length > 0 ? `${civilReferences.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.civilReferences)}
           >
-            <CivilReferencePanel onAddCivilReference={addCivilReference} />
+            <CivilReferencePanel
+              onAddCivilReference={(type) => {
+                const commandId = {
+                  "floor-area": RUNTIME_FEATURE_COMMAND_IDS.addFloor,
+                  wall: RUNTIME_FEATURE_COMMAND_IDS.addWall,
+                  column: RUNTIME_FEATURE_COMMAND_IDS.addColumn,
+                  walkway: RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
+                  "restricted-area": RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
+                  "reference-zone": RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
+                } as const;
+                const runtimeCommandId = commandId[type as keyof typeof commandId];
+                if (runtimeCommandId) {
+                  executeRuntimeFeatureCommand(runtimeCommandId);
+                } else if (isCivilReferenceType(type)) {
+                  addCivilReference(type);
+                }
+              }}
+            />
           </PanelSection>
           <PanelSection
             title="Assembly Tree"
@@ -3018,9 +3725,12 @@ export function App() {
               activeGroupEditId={activeGroupEditId}
               explicitSelectedEntityCount={explicitSelectedAlignableEntityIds.length}
               removableSelectedEntityCount={removableActiveGroupEntityIds.length}
-              onCreateGroupFromSelection={createGroupFromSelection}
-              onAddSelectionToGroup={addSelectionToGroup}
-              onRemoveSelectionFromGroup={removeSelectionFromGroup}
+              onCreateGroupFromSelection={(name) =>
+                executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.createGroup, undefined, { name })}
+              onAddSelectionToGroup={(groupId) =>
+                executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.addSelected, groupId)}
+              onRemoveSelectionFromGroup={(groupId) =>
+                executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.removeSelected, groupId)}
               onRenameGroup={renameObjectGroup}
               onEnterGroupEdit={(groupId) => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.enterEdit, groupId)}
               onExitGroupEdit={() => executeAssemblyCommand(ASSEMBLY_COMMAND_IDS.exitEdit)}
@@ -3085,7 +3795,8 @@ export function App() {
                 className="manager-open-button"
                 data-testid="open-performance-benchmark"
                 type="button"
-                onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.performanceBenchmark)}
+                onClick={() =>
+                  executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.performanceBenchmark)}
               >
                 Performance Benchmark
               </button>
@@ -3119,7 +3830,8 @@ export function App() {
               placedMachines={placedMachines}
               layers={layers}
               isSelectedAnnotationLocked={selectedAnnotationLocked}
-              onAddAnnotation={addAnnotation}
+              onAddAnnotation={(type) =>
+                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.createAnnotation, type)}
               onSelectAnnotation={selectAnnotationForEditing}
               onUpdateAnnotation={updateSelectedAnnotation}
               onChangeAnnotationLayer={changeAnnotationLayer}
@@ -3138,7 +3850,20 @@ export function App() {
               settings={placementSettings}
               placedMachines={placedMachines}
               selectedMachine={singleSelectedMachine}
-              onChangeSettings={setPlacementSettings}
+              onChangeSettings={(settings) => {
+                const rotationChanged =
+                  settings.rotationSnapEnabled !== placementSettings.rotationSnapEnabled
+                  || settings.rotationSnapStepDeg !== placementSettings.rotationSnapStepDeg;
+                const measurementChanged =
+                  settings.showMeasurementHelpers !== placementSettings.showMeasurementHelpers;
+                if (rotationChanged) {
+                  executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.rotationSnap, settings);
+                } else if (measurementChanged) {
+                  executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.showMeasurements, settings);
+                } else {
+                  setPlacementSettings(settings);
+                }
+              }}
               onUpdateMachine={updateMachine}
             />
           </PanelSection>
@@ -3153,11 +3878,26 @@ export function App() {
               selectedEntityCount={selectedAlignableEntities.length}
               primarySelectionLabel={primarySelectedAlignable?.label}
               nudgeSettings={nudgeSettings}
-              onAlign={applyAlignmentAction}
-              onDistribute={applyDistributionAction}
-              onEqualGap={applyEqualGapAction}
-              onPairAlign={applyPairAlignmentAction}
-              onPairAnchorSnap={applyPairAnchorSnap}
+              onAlign={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "align", action } satisfies RuntimeAlignmentPayload
+              )}
+              onDistribute={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "distribute", action } satisfies RuntimeAlignmentPayload
+              )}
+              onEqualGap={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
+              )}
+              onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload
+              )}
+              onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
+              )}
               onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
@@ -3172,7 +3912,10 @@ export function App() {
               <ConnectionPointSnapPanel
                 selectedMachines={selectedMachines}
                 primarySelectedMachine={selectedMachine}
-                onSnap={applyConnectionSnap}
+                onSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
+                  RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
+                  { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
+                )}
                 onClearSelection={clearSelection}
               />
             </PanelSection>
@@ -3183,7 +3926,21 @@ export function App() {
             defaultExpanded={false}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.displayOverlayControls)}
           >
-            <DisplayOverlayControls settings={overlaySettings} onChange={setOverlaySettings} />
+            <DisplayOverlayControls
+              settings={overlaySettings}
+              onChange={(settings) => {
+                if (settings.showLabels !== overlaySettings.showLabels) {
+                  executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.toggleLabels, settings);
+                } else if (settings.showConnectionPoints !== overlaySettings.showConnectionPoints) {
+                  executeRuntimeFeatureCommand(
+                    RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
+                    settings
+                  );
+                } else {
+                  setOverlaySettings(settings);
+                }
+              }}
+            />
           </PanelSection>
           <PanelSection
             title="Collision Check"
@@ -3250,9 +4007,18 @@ export function App() {
                   assemblyName={selectedGroup?.name}
                   primarySelectedMachine={selectedMachine}
                   selectionBounds={selectionBounds}
-                  onAlign={applyAlignmentAction}
-                  onDistribute={applyDistributionAction}
-                  onEqualGap={applyEqualGapAction}
+                  onAlign={(action) => executeRuntimeFeatureCommand(
+                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                    { kind: "align", action } satisfies RuntimeAlignmentPayload
+                  )}
+                  onDistribute={(action) => executeRuntimeFeatureCommand(
+                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                    { kind: "distribute", action } satisfies RuntimeAlignmentPayload
+                  )}
+                  onEqualGap={(action) => executeRuntimeFeatureCommand(
+                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                    { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
+                  )}
                   canDuplicateSelected={canExecuteDuplicateSelectedCommand}
                   onDuplicateSelected={executeDuplicateSelectedCommand}
                   onClearSelection={clearSelection}
@@ -3313,6 +4079,12 @@ export function App() {
                 setCurrentRevisionId(revisionId);
                 void refreshProjects();
                 setHasUnsavedProjectChanges(false);
+              }}
+              onRuntimeControllerChange={(controller) => {
+                projectManagerRuntimeControllerRef.current = controller;
+              }}
+              onExecuteRuntimeCommand={(commandId, payload) => {
+                return executeRuntimeFeatureCommand(commandId, payload);
               }}
             />
           ) : null}

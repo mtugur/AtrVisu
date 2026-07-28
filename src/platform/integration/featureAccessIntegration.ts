@@ -1,6 +1,7 @@
 import type { FeatureAccessEntry } from "../contracts";
 import { platformFeatureAccessMatrix } from "../featureAccess";
 import { platformCommandSeedDefinitions, platformPanelSeedDefinitions } from "../registrySeeds";
+import { runtimePanelDescriptors } from "../runtimePanels";
 import {
   platformFeatureAccessCoverageDefinitions,
   type FeatureAccessCoverageDefinition
@@ -48,7 +49,10 @@ export const validateFeatureAccessCoverage = (
       .map((feature) => feature.featureId)
   );
   const commandIds = new Set(platformCommandSeedDefinitions.map((command) => command.id));
-  const panelIds = new Set(platformPanelSeedDefinitions.map((panel) => panel.id));
+  const panelIds = new Set([
+    ...platformPanelSeedDefinitions.map((panel) => panel.id),
+    ...runtimePanelDescriptors.map((panel) => panel.definition.id)
+  ]);
   const seenCoverageIds = new Set<string>();
 
   coverageDefinitions.forEach((coverage) => {
@@ -89,11 +93,18 @@ export const validateFeatureAccessCoverage = (
       }
     });
 
-    if (coverage.coverageType === "metadata-only" && !hasText(coverage.notes)) {
+    if (
+      (
+        coverage.coverageType === "runtime-authority"
+        || coverage.coverageType === "declared-planned"
+        || coverage.coverageType === "external-evidence"
+      )
+      && !hasText(coverage.notes)
+    ) {
       errors.push({
         severity: "error",
         featureId: coverage.featureId,
-        message: "Metadata-only coverage requires notes."
+        message: `${coverage.coverageType} coverage requires notes.`
       });
     }
     if (coverage.coverageType === "command" && !hasItems(coverage.commandIds)) {

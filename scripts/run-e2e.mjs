@@ -1,9 +1,17 @@
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
+import {
+  allowedE2EPorts,
+  createExternalServer,
+  createOwnedServer,
+  createPlaywrightEnvironment,
+  resolveE2EServerMode,
+  selectAvailableE2EPort,
+  stopOwnedE2EServer
+} from "./e2eRunnerHelpers.mjs";
 
 const host = "127.0.0.1";
-const port = 5173;
-const baseUrl = `http://${host}:${port}`;
 const startupTimeoutMs = 120_000;
 
 const run = (command, args, options = {}) =>
@@ -19,17 +27,29 @@ const run = (command, args, options = {}) =>
     });
   });
 
-const waitForServer = async () => {
+const isAtrVisuServer = async (baseUrl) => {
+  try {
+    const response = await fetch(baseUrl);
+    return response.ok && (await response.text()).includes("<title>AtrVisu</title>");
+  } catch {
+    return false;
+  }
+};
+
+const isPortAvailable = (port) => new Promise((resolve) => {
+  const server = createServer();
+  server.once("error", () => resolve(false));
+  server.listen(port, host, () => {
+    server.close(() => resolve(true));
+  });
+});
+
+const waitForServer = async (baseUrl) => {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < startupTimeoutMs) {
-    try {
-      const response = await fetch(baseUrl);
-      if (response.ok) {
-        return;
-      }
-    } catch {
-      // Vite is still starting.
+    if (await isAtrVisuServer(baseUrl)) {
+      return;
     }
 
     await delay(250);
@@ -39,29 +59,27 @@ const waitForServer = async () => {
 };
 
 const stopProcess = async (child) => {
-  if (child.exitCode !== null || child.killed) {
+  if (!child || child.exitCode !== null) {
     return;
   }
 
+  const waitForExit = () => new Promise((resolve) => {
+    child.once("exit", resolve);
+  });
   child.kill("SIGTERM");
-  await delay(2_000);
+  await Promise.race([waitForExit(), delay(2_000)]);
 
-  if (child.exitCode === null && !child.killed) {
+  if (child.exitCode === null) {
     child.kill("SIGKILL");
+    await Promise.race([waitForExit(), delay(2_000)]);
   }
 };
 
-const vite = spawn(
-  process.execPath,
-  ["./node_modules/vite/bin/vite.js", "--host", host, "--port", String(port), "--strictPort"],
-  {
-    stdio: "inherit",
-    shell: false
-  }
-);
+let serverOwnership = null;
 
 const teardown = async () => {
-  await stopProcess(vite);
+  await stopOwnedE2EServer(serverOwnership, stopProcess);
+  serverOwnership = null;
 };
 
 process.on("SIGINT", () => {
@@ -72,12 +90,40 @@ process.on("SIGTERM", () => {
 });
 
 try {
-  await waitForServer();
-  const result = await run(process.execPath, ["./node_modules/@playwright/test/cli.js", "test"], {
-    env: {
-      ...process.env,
-      ATRVISU_E2E_EXTERNAL_SERVER: "1"
-    }
+  const mode = resolveE2EServerMode(process.env);
+  let baseUrl;
+
+  if (mode.mode === "external") {
+    baseUrl = mode.baseUrl;
+    serverOwnership = createExternalServer(baseUrl);
+  } else {
+    const port = await selectAvailableE2EPort(allowedE2EPorts, isPortAvailable);
+    baseUrl = `http://${host}:${port}`;
+    const vite = spawn(
+      process.execPath,
+      [
+        "./node_modules/vite/bin/vite.js",
+        "--host",
+        host,
+        "--port",
+        String(port),
+        "--strictPort"
+      ],
+      {
+        stdio: "inherit",
+        shell: false
+      }
+    );
+    serverOwnership = createOwnedServer(vite);
+  }
+
+  await waitForServer(baseUrl);
+  const result = await run(process.execPath, [
+    "./node_modules/@playwright/test/cli.js",
+    "test",
+    ...process.argv.slice(2)
+  ], {
+    env: createPlaywrightEnvironment(process.env, baseUrl)
   });
   await teardown();
 

@@ -17,8 +17,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Babylon Scene Viewport",
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/BabylonScene.tsx"],
-    commandIds: ["view.fitView"],
-    featureIds: ["selection.singleSelect", "selection.multiSelect", "object.movePlan"]
+    featureIds: ["viewport.main", "selection.singleSelect", "selection.multiSelect", "object.movePlan"]
   },
   {
     surfaceId: "surface.inspector",
@@ -27,23 +26,13 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/components/CivilReferenceProperties.tsx"],
     panelIds: ["panel.inspector"],
-    featureIds: ["object.propertiesInspector", "panel.inspector", "object.rotateY", "object.movePlan"]
-  },
-  {
-    surfaceId: "surface.statusBar",
-    surfaceType: "panel",
-    label: "Status Bar",
-    owner: "existing-ui",
-    sourceFiles: ["src/App.tsx"],
-    panelIds: ["panel.statusBar"]
-  },
-  {
-    surfaceId: "surface.layoutExplorer",
-    surfaceType: "panel",
-    label: "Layout Explorer",
-    owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/AssemblyTreePanel.tsx"],
-    panelIds: ["panel.layoutExplorer"]
+    featureIds: [
+      "panel.rightPanelShell",
+      "object.propertiesInspector",
+      "panel.inspector",
+      "object.rotateY",
+      "object.movePlan"
+    ]
   },
   {
     surfaceId: "surface.projectSave",
@@ -53,7 +42,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/App.tsx", "src/components/ProjectManager.tsx", "src/utils/projectStorage.ts"],
     commandIds: ["project.save"],
     panelIds: ["panel.projectManager"],
-    featureIds: ["project.save"]
+    featureIds: ["project.save", "panel.projectStatus"]
   },
   {
     surfaceId: "surface.projectExportJson",
@@ -91,7 +80,12 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/ProjectManager.tsx"],
     panelIds: ["panel.projectManager"],
-    featureIds: ["project.save", "project.exportJson", "project.importJson"]
+    featureIds: [
+      "project.save",
+      "project.exportJson",
+      "project.importJson",
+      "panel.projectManager"
+    ]
   },
   {
     surfaceId: "surface.selection",
@@ -167,7 +161,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/ViewpointsPanel.tsx", "src/utils/viewpoints.ts"],
     commandIds: ["view.viewpoints"],
-    featureIds: ["view.viewpoints"]
+    panelIds: ["panel.viewpoints"],
+    featureIds: ["view.viewpoints", "panel.viewpoints"]
   },
   {
     surfaceId: "surface.measurements",
@@ -193,6 +188,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Coordinate Reference",
     owner: "legacy-compatible",
     sourceFiles: ["src/utils/coordinateReference.ts", "src/components/MachineProperties.tsx", "src/components/CivilReferenceProperties.tsx"],
+    featureIds: ["object.movePlan"],
     notes: "Coordinate/reference-point standard is represented through utility and property surfaces."
   },
   {
@@ -221,7 +217,23 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/AssemblyTreePanel.tsx", "src/utils/groups.ts"],
     panelIds: ["panel.groups"],
-    featureIds: ["panel.groups"]
+    commandIds: [
+      "assembly.createGroup",
+      "assembly.addSelected",
+      "assembly.removeSelected",
+      "assembly.enterEdit",
+      "assembly.exitEdit",
+      "assembly.ungroup"
+    ],
+    featureIds: [
+      "panel.groups",
+      "assembly.createGroup",
+      "assembly.addSelected",
+      "assembly.removeSelected",
+      "assembly.enterEdit",
+      "assembly.exitEdit",
+      "assembly.ungroup"
+    ]
   },
   {
     surfaceId: "surface.collisionCheck",
@@ -231,7 +243,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/App.tsx", "src/components/CollisionCheckPanel.tsx", "src/utils/collision.ts"],
     commandIds: ["collision.check"],
     panelIds: ["panel.collisionCheck"],
-    featureIds: ["collision.check"]
+    featureIds: ["collision.check", "panel.collisionCheck"]
   },
   {
     surfaceId: "surface.performanceBenchmark",
@@ -241,7 +253,11 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/App.tsx", "src/components/PerformanceBenchmarkModal.tsx", "src/utils/performanceBenchmark.ts"],
     commandIds: ["performance.benchmark"],
     panelIds: ["panel.performanceBenchmark"],
-    featureIds: ["performance.benchmark"]
+    featureIds: [
+      "performance.benchmark",
+      "panel.performanceBenchmark",
+      "panel.performanceBenchmarkLauncher"
+    ]
   },
   {
     surfaceId: "surface.visualDiagnostics",
@@ -249,8 +265,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Visual Model Diagnostics",
     owner: "existing-ui",
     sourceFiles: ["src/components/MachineProperties.tsx", "src/utils/visualModel.ts"],
-    commandIds: ["diagnostics.noRedConsole"],
-    panelIds: ["panel.inspector", "panel.diagnostics"],
+    panelIds: ["panel.inspector"],
     featureIds: ["object.propertiesInspector"]
   },
   {
@@ -261,7 +276,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/components/MachineLibrary.tsx", "src/components/LibraryManager.tsx"],
     commandIds: ["library.manager"],
     panelIds: ["panel.libraryManager"],
-    featureIds: ["library.manager"]
+    featureIds: ["library.manager", "panel.libraryManager"]
   },
   {
     surfaceId: "surface.taxonomyManager",
@@ -271,7 +286,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/components/MachineLibrary.tsx", "src/components/TaxonomyManager.tsx"],
     commandIds: ["library.taxonomyManager"],
     panelIds: ["panel.taxonomyManager"],
-    featureIds: ["library.taxonomyManager"]
+    featureIds: ["library.taxonomyManager", "panel.taxonomyManager"]
   },
   {
     surfaceId: "surface.civilFloor",
@@ -280,7 +295,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
     commandIds: ["civil.addFloor"],
-    featureIds: ["civil.floor"]
+    panelIds: ["panel.civilReferences"],
+    featureIds: ["civil.floor", "panel.civilReferences"]
   },
   {
     surfaceId: "surface.civilWall",
@@ -289,7 +305,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
     commandIds: ["civil.addWall"],
-    featureIds: ["civil.wall"]
+    panelIds: ["panel.civilReferences"],
+    featureIds: ["civil.wall", "panel.civilReferences"]
   },
   {
     surfaceId: "surface.civilColumn",
@@ -298,7 +315,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
     commandIds: ["civil.addColumn"],
-    featureIds: ["civil.column"]
+    panelIds: ["panel.civilReferences"],
+    featureIds: ["civil.column", "panel.civilReferences"]
   },
   {
     surfaceId: "surface.civilWalkway",
@@ -307,7 +325,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
     commandIds: ["civil.addWalkway"],
-    featureIds: ["civil.walkway"]
+    panelIds: ["panel.civilReferences"],
+    featureIds: ["civil.walkway", "panel.civilReferences"]
   },
   {
     surfaceId: "surface.civilRestrictedZone",
@@ -316,7 +335,18 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
     commandIds: ["civil.addRestrictedZone"],
-    featureIds: ["civil.restrictedZone"]
+    panelIds: ["panel.civilReferences"],
+    featureIds: ["civil.restrictedZone", "panel.civilReferences"]
+  },
+  {
+    surfaceId: "surface.civilReferenceZone",
+    surfaceType: "panel",
+    label: "Civil Reference Zone",
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
+    commandIds: ["civil.addReferenceZone"],
+    panelIds: ["panel.civilReferences"],
+    featureIds: ["civil.referenceZone", "panel.civilReferences"]
   },
   {
     surfaceId: "surface.rotationSnap",
@@ -325,7 +355,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/MachineProperties.tsx", "src/utils/placement.ts", "src/utils/placementSettings.ts"],
     commandIds: ["snap.rotation"],
-    featureIds: ["snap.rotation"]
+    panelIds: ["panel.precisionPlacement"],
+    featureIds: ["snap.rotation", "panel.precisionPlacement"]
   },
   {
     surfaceId: "surface.connectionPointSnap",
@@ -334,7 +365,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/ConnectionPointSnapPanel.tsx", "src/utils/connectionPointSnap.ts"],
     commandIds: ["snap.connectionPoint"],
-    featureIds: ["snap.connectionPoint"]
+    panelIds: ["panel.connectionPointSnap"],
+    featureIds: ["snap.connectionPoint", "panel.connectionPointSnap"]
   },
   {
     surfaceId: "surface.alignment",
@@ -343,6 +375,49 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
     commandIds: ["alignment.alignSelection"],
-    featureIds: ["alignment.alignSelection"]
+    panelIds: ["panel.alignmentTools"],
+    featureIds: ["alignment.alignSelection", "panel.alignmentTools"]
+  },
+  {
+    surfaceId: "surface.layoutControls",
+    surfaceType: "panel",
+    label: "Layout Controls",
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/LayoutControls.tsx"],
+    panelIds: ["panel.layoutControls"],
+    featureIds: ["panel.layoutControls"]
+  },
+  {
+    surfaceId: "surface.simulationControls",
+    surfaceType: "panel",
+    label: "Simulation Controls",
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/SimulationControls.tsx"],
+    panelIds: ["panel.simulationControls"],
+    featureIds: ["panel.simulationControls"]
+  },
+  {
+    surfaceId: "surface.displayOverlayControls",
+    surfaceType: "visual-overlay",
+    label: "Display And Overlay Controls",
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/DisplayOverlayControls.tsx"],
+    commandIds: ["view.toggleLabels", "view.toggleConnectionPoints", "view.showMeasurements"],
+    panelIds: ["panel.displayOverlayControls"],
+    featureIds: [
+      "view.toggleLabels",
+      "connectionPoints.toggle",
+      "measurements.show",
+      "panel.displayOverlayControls"
+    ]
+  },
+  {
+    surfaceId: "surface.noRedConsoleQualityGate",
+    surfaceType: "diagnostics",
+    label: "No Red Console Quality Gate",
+    owner: "platform",
+    sourceFiles: ["e2e/app-smoke.spec.ts", "docs/quality-gate.md"],
+    featureIds: ["diagnostics.noRedConsole"],
+    notes: "External browser evidence only; this is not a production command or panel."
   }
 ];

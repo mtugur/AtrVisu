@@ -51,11 +51,14 @@ describe("surface coverage audit", () => {
     expect(getSurfaceIdsByPanelId("panel.inspector")).toContain("surface.multiSelectionAlignment");
   });
 
-  it("covers the previously missing command and panel links", () => {
-    expect(getSurfaceIdsByCommandId("view.fitView").length).toBeGreaterThan(0);
-    expect(getSurfaceIdsByCommandId("diagnostics.noRedConsole").length).toBeGreaterThan(0);
-    expect(getSurfaceIdsByPanelId("panel.layoutExplorer").length).toBeGreaterThan(0);
-    expect(getSurfaceIdsByPanelId("panel.diagnostics").length).toBeGreaterThan(0);
+  it("keeps planned and quality-only definitions out of runtime surface links", () => {
+    expect(getSurfaceIdsByCommandId("view.fitView")).toEqual([]);
+    expect(getSurfaceIdsByCommandId("diagnostics.noRedConsole")).toEqual([]);
+    expect(getSurfaceIdsByPanelId("panel.layoutExplorer")).toEqual([]);
+    expect(getSurfaceIdsByPanelId("panel.diagnostics")).toEqual([]);
+    expect(getSurfaceIdsByFeatureId("diagnostics.noRedConsole")).toContain(
+      "surface.noRedConsoleQualityGate"
+    );
   });
 
   it("has no uncovered seeds or required features for current valid data", () => {

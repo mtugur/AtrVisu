@@ -5,6 +5,7 @@ import { createFeatureAccessRegistry } from "../registries";
 const createEntry = (overrides: Partial<FeatureAccessEntry> = {}): FeatureAccessEntry => ({
   featureId: "library.manager",
   label: "Library Manager",
+  classification: "required-runtime",
   surfaces: ["menu", "modal"],
   commandId: "tools.libraryManager",
   panelId: "library.manager",
@@ -41,6 +42,7 @@ describe("feature access registry", () => {
     const entry = createEntry({
       featureId: "future.clipboard",
       label: "Future Clipboard",
+      classification: "declared-planned",
       surfaces: [],
       commandId: undefined,
       panelId: undefined,
@@ -57,6 +59,35 @@ describe("feature access registry", () => {
 
     expect(() => registry.register(createEntry({ commandId: " " }))).toThrow(/commandId cannot be empty/);
     expect(() => registry.register(createEntry({ featureId: "project.manager", panelId: "" }))).toThrow(/panelId cannot be empty/);
+  });
+
+  it("keeps planned features out of required regression coverage", () => {
+    const registry = createFeatureAccessRegistry();
+
+    expect(() => registry.register(createEntry({
+      classification: "declared-planned",
+      requiredForRegression: true
+    }))).toThrow(/cannot be required for regression/);
+  });
+
+  it("requires quality signals to use external evidence instead of command or panel bindings", () => {
+    const registry = createFeatureAccessRegistry();
+
+    expect(() => registry.register(createEntry({
+      classification: "quality-signal",
+      commandIds: [],
+      panelIds: [],
+      commandId: undefined,
+      panelId: undefined,
+      qualitySignalId: undefined
+    }))).toThrow(/requires qualitySignalId/);
+    expect(() => registry.register(createEntry({
+      classification: "quality-signal",
+      commandIds: ["diagnostics.fake"],
+      commandId: undefined,
+      panelId: undefined,
+      qualitySignalId: "no-red-console"
+    }))).toThrow(/cannot require command or panel bindings/);
   });
 });
 

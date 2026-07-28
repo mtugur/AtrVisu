@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { platformFeatureAccessMatrix } from "../../featureAccess";
 import { platformCommandSeedDefinitions, platformPanelSeedDefinitions } from "../../registrySeeds";
+import { runtimePanelDescriptors } from "../../runtimePanels";
 import {
   platformFeatureAccessCoverageDefinitions,
   type FeatureAccessCoverageDefinition
@@ -10,7 +11,10 @@ describe("feature access coverage definitions", () => {
   const coverageDefinitions: readonly FeatureAccessCoverageDefinition[] = platformFeatureAccessCoverageDefinitions;
   const matrixFeatureIds: Set<string> = new Set(platformFeatureAccessMatrix.map((feature) => feature.featureId));
   const commandIds: Set<string> = new Set(platformCommandSeedDefinitions.map((command) => command.id));
-  const panelIds: Set<string> = new Set(platformPanelSeedDefinitions.map((panel) => panel.id));
+  const panelIds: Set<string> = new Set([
+    ...platformPanelSeedDefinitions.map((panel) => panel.id),
+    ...runtimePanelDescriptors.map((panel) => panel.definition.id)
+  ]);
 
   it("is not empty", () => {
     expect(coverageDefinitions.length).toBeGreaterThan(0);
@@ -48,11 +52,19 @@ describe("feature access coverage definitions", () => {
     expect(missingFeatureIds).toEqual([]);
   });
 
-  it("requires notes for metadata-only coverage", () => {
-    const metadataOnlyWithoutNotes = coverageDefinitions.filter(
-      (coverage) => coverage.coverageType === "metadata-only" && !coverage.notes?.trim()
+  it("requires notes for authority, planned, and external evidence coverage", () => {
+    const documentationOnlyCoverage = new Set(["runtime-authority", "declared-planned", "external-evidence"]);
+    const undocumented = coverageDefinitions.filter(
+      (coverage) => documentationOnlyCoverage.has(coverage.coverageType) && !coverage.notes?.trim()
     );
 
-    expect(metadataOnlyWithoutNotes).toEqual([]);
+    expect(undocumented).toEqual([]);
+  });
+
+  it("does not leave required runtime features as metadata-only", () => {
+    expect(coverageDefinitions.some((coverage) =>
+      coverage.coverageType === "runtime-authority"
+      && ["selection.singleSelect", "selection.multiSelect"].includes(coverage.featureId)
+    )).toBe(true);
   });
 });

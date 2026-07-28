@@ -110,12 +110,13 @@ const panel = (
 
 const seedClassifications: Readonly<Record<string, RuntimePanelClassification>> = {
   [RUNTIME_PANEL_IDS.machineLibrary]: "required-runtime",
-  [RUNTIME_PANEL_IDS.layoutExplorer]: "required-runtime",
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "declared-planned",
   [RUNTIME_PANEL_IDS.inspector]: "required-runtime",
-  [RUNTIME_PANEL_IDS.statusBar]: "required-runtime",
+  [RUNTIME_PANEL_IDS.statusBar]: "declared-planned",
   [RUNTIME_PANEL_IDS.annotations]: "required-runtime",
   [RUNTIME_PANEL_IDS.layers]: "required-runtime",
-  [RUNTIME_PANEL_IDS.groups]: "required-runtime"
+  [RUNTIME_PANEL_IDS.groups]: "required-runtime",
+  [RUNTIME_PANEL_IDS.diagnostics]: "declared-planned"
 };
 
 const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {

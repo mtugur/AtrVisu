@@ -2,6 +2,9 @@ import type { CommandContext, CommandDefinition, CommandEnableState } from "../c
 import { createCommandRegistry } from "../registries";
 
 export const ASSEMBLY_COMMAND_IDS = {
+  createGroup: "assembly.createGroup",
+  addSelected: "assembly.addSelected",
+  removeSelected: "assembly.removeSelected",
   enterEdit: "assembly.enterEdit",
   exitEdit: "assembly.exitEdit",
   ungroup: "assembly.ungroup"
@@ -19,6 +22,30 @@ export type AssemblyRuntimeCommandBindings = Readonly<
 >;
 
 const definitions: Readonly<Record<AssemblyCommandId, Omit<CommandDefinition, "enableRule" | "execute">>> = {
+  [ASSEMBLY_COMMAND_IDS.createGroup]: {
+    id: ASSEMBLY_COMMAND_IDS.createGroup,
+    group: "edit",
+    label: "Create Group",
+    tooltip: "Create an assembly from the selected layout entities.",
+    mutatesData: true,
+    requiresUndoTransaction: true
+  },
+  [ASSEMBLY_COMMAND_IDS.addSelected]: {
+    id: ASSEMBLY_COMMAND_IDS.addSelected,
+    group: "edit",
+    label: "Add Selected",
+    tooltip: "Add the selected layout entities to an assembly.",
+    mutatesData: true,
+    requiresUndoTransaction: true
+  },
+  [ASSEMBLY_COMMAND_IDS.removeSelected]: {
+    id: ASSEMBLY_COMMAND_IDS.removeSelected,
+    group: "edit",
+    label: "Remove Selected",
+    tooltip: "Remove the selected layout entities from an assembly.",
+    mutatesData: true,
+    requiresUndoTransaction: true
+  },
   [ASSEMBLY_COMMAND_IDS.enterEdit]: {
     id: ASSEMBLY_COMMAND_IDS.enterEdit,
     group: "edit",

@@ -1,5 +1,27 @@
 import { expect, type Dialog, type Page, test } from "@playwright/test";
 
+const requiredSurfaceExecutionCommandIds = [
+  "alignment.alignSelection",
+  "annotations.create",
+  "assembly.createGroup",
+  "assembly.enterEdit",
+  "assembly.exitEdit",
+  "assembly.ungroup",
+  "civil.addColumn",
+  "edit.deleteSelected",
+  "edit.duplicateSelected",
+  "edit.redo",
+  "edit.undo",
+  "library.addMachine",
+  "library.manager",
+  "library.taxonomyManager",
+  "performance.benchmark",
+  "snap.connectionPoint",
+  "view.showMeasurements",
+  "view.toggleConnectionPoints",
+  "view.toggleLabels"
+] as const;
+
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
 
@@ -64,6 +86,62 @@ const getRuntimeViewportSnapshot = async (page: Page) => page.evaluate(() => {
     invariants: bridge.getInvariants()
   };
 });
+
+const getRuntimeFeatureAccessReport = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuRuntimeFeatureAccess;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+  }
+  return bridge.getReport();
+});
+
+const getRuntimeFeatureAccessGate = async (page: Page, noRedConsole: boolean) =>
+  page.evaluate((passed) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.getGate({
+      quality: { "no-red-console": passed.noRedConsole },
+      surfaceExecution: { verifiedCommandIds: passed.commandIds }
+    });
+  }, {
+    noRedConsole,
+    commandIds: [...requiredSurfaceExecutionCommandIds]
+  });
+
+const getRuntimeCommandExecution = async (page: Page, commandId: string) =>
+  page.evaluate((id) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.getCommandExecution(id);
+  }, commandId);
+
+const expectOneRuntimeCommandExecution = async (
+  page: Page,
+  commandId: string,
+  action: () => Promise<unknown>
+) => {
+  const before = await getRuntimeCommandExecution(page, commandId);
+  await action();
+  await expect.poll(async () =>
+    (await getRuntimeCommandExecution(page, commandId)).attemptCount
+  ).toBe(before.attemptCount + 1);
+  const after = await getRuntimeCommandExecution(page, commandId);
+  expect(after.executedCount).toBe(before.executedCount + 1);
+  expect(after.lastResult).toMatchObject({ handled: true, status: "executed" });
+};
+
+const getRuntimeFeature = async (page: Page, featureId: string) =>
+  page.evaluate((id) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.getFeature(id);
+  }, featureId);
 
 const waitForRuntimeViewport = async (page: Page) => {
   await expect.poll(async () => {
@@ -287,6 +365,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).not.toHaveAttribute("data-civil-plan-positions");
   expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
   expect(await page.evaluate(() => window.__atrvisuRuntimeViewport === undefined)).toBe(true);
+  expect(await page.evaluate(() => window.__atrvisuRuntimeFeatureAccess === undefined)).toBe(true);
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
@@ -296,6 +375,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   await expect(canvas).toHaveAttribute("data-civil-plan-positions", "{}");
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeViewport))).toBe(true);
+  expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeFeatureAccess))).toBe(true);
   const diagnostics = await waitForRuntimeViewport(page);
   expect(diagnostics.viewport?.lastResizeReason).toBe("manual");
   expect(diagnostics.invariants).toMatchObject({
@@ -318,6 +398,117 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
+test("runtime feature access baseline closes only with explicit quality evidence", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+
+  const report = await getRuntimeFeatureAccessReport(page);
+  expect(report.requiredRuntimeFeatures.every((feature) =>
+    feature.status === "ready" || feature.status === "contextually-unavailable"
+  )).toBe(true);
+  expect(report.metadataOnlyRequiredFeatureIds).toEqual([]);
+  expect(report.unknownCommandIds).toEqual([]);
+  expect(report.unknownPanelIds).toEqual([]);
+  expect(report.staleSurfaceFeatureIds).toEqual([]);
+  expect(report.unmappedRuntimeSurfaceIds).toEqual([]);
+  expect(report.missingSurfaceExecutionCommandIds)
+    .toEqual(requiredSurfaceExecutionCommandIds);
+  expect(report.plannedFeatures.map((feature) => feature.featureId)).toEqual([
+    "view.fitView",
+    "panel.layoutExplorer",
+    "panel.statusBar",
+    "panel.diagnostics"
+  ]);
+  expect(report.plannedFeatures.every((feature) => feature.status === "planned-unbound")).toBe(true);
+  expect(report.qualitySignals).toEqual([
+    expect.objectContaining({
+      featureId: "diagnostics.noRedConsole",
+      status: "external-evidence-required"
+    })
+  ]);
+
+  const missingEvidenceGate = await page.evaluate(() =>
+    window.__atrvisuRuntimeFeatureAccess?.getGate({})
+  );
+  expect(missingEvidenceGate?.passed).toBe(false);
+  expect(missingEvidenceGate?.blockedFeatureIds).toContain("diagnostics.noRedConsole");
+  expect(missingEvidenceGate?.report.missingSurfaceExecutionCommandIds)
+    .toEqual(requiredSurfaceExecutionCommandIds);
+
+  const completeGate = await getRuntimeFeatureAccessGate(page, true);
+  expect(completeGate.passed).toBe(true);
+  expect(completeGate.blockedFeatureIds).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("required runtime command bindings are live without executing during report construction", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+
+  const report = await getRuntimeFeatureAccessReport(page);
+  const requiredCommandEvidence = report.requiredRuntimeFeatures.flatMap(
+    (feature) => feature.commandEvidence
+  );
+  expect(requiredCommandEvidence.length).toBeGreaterThan(0);
+  expect(requiredCommandEvidence.every((command) =>
+    command.registered && command.bound && command.reachable
+  )).toBe(true);
+  expect(report.features.find((feature) => feature.featureId === "view.fitView")).toMatchObject({
+    classification: "declared-planned",
+    status: "planned-unbound",
+    bound: false,
+    reachable: false
+  });
+
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("runtime feature evidence covers panels, selection, entities, viewport, and surfaces", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+
+  const report = await getRuntimeFeatureAccessReport(page);
+  const selectionFeature = report.features.find(
+    (feature) => feature.featureId === "selection.singleSelect"
+  );
+  const viewportFeature = report.features.find(
+    (feature) => feature.featureId === "viewport.main"
+  );
+  expect(selectionFeature?.selectionEvidence).toMatchObject({
+    authorityBound: true,
+    replaceSupported: true,
+    toggleSupported: true,
+    clearSupported: true,
+    reconciliationSupported: true
+  });
+  expect(selectionFeature?.entityEvidence).toMatchObject({
+    authorityBound: true,
+    canonicalIdentity: true,
+    duplicateIdentityRejected: true
+  });
+  expect(viewportFeature?.viewportEvidence).toMatchObject({
+    viewportId: "viewport.main",
+    registered: true,
+    bound: true,
+    available: true,
+    cameraResolvable: true,
+    resizeSupported: true
+  });
+  expect(report.requiredRuntimeFeatures.every(
+    (feature) => feature.inventoriedRuntimeSurfaceIds.length > 0
+  )).toBe(true);
+  expect(report.requiredRuntimeFeatures.flatMap(
+    (feature) => feature.panelEvidence
+  ).every((panel) => panel.registered && panel.bound)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test("app loads and core panels have no red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -336,8 +527,13 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
 
   await page.getByRole("button", { name: /Display \/ Overlay Controls/i }).click();
   await expect(page.getByTestId("overlay-controls")).toBeVisible();
-  await page.getByLabel("Show Labels").uncheck();
+  await expectOneRuntimeCommandExecution(page, "view.toggleLabels", () =>
+    page.getByLabel("Show Labels").uncheck()
+  );
   await page.getByLabel("Show Labels").check();
+  await expectOneRuntimeCommandExecution(page, "view.toggleConnectionPoints", () =>
+    page.getByLabel("Show Connection Points").check()
+  );
   await page.getByLabel("Show Collision Envelope").check();
 
   await expect(page.getByRole("button", { name: /Collision Check/i })).toBeVisible();
@@ -347,6 +543,9 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
 
   await expect(page.getByRole("button", { name: /Precision Placement/i })).toBeVisible();
   await expect(page.getByTestId("precision-placement-panel")).toBeVisible();
+  await expectOneRuntimeCommandExecution(page, "view.showMeasurements", () =>
+    page.getByLabel("Show Measurement Helpers").uncheck()
+  );
 
   expect(errors).toEqual([]);
 });
@@ -771,6 +970,42 @@ test("dirty Library Manager guards library navigation and discards only after ac
   expect(errors).toEqual([]);
 });
 
+test("dirty Library Manager reports cancelled Taxonomy command until discard is accepted", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  await page.getByTestId("open-library-manager").click();
+  await expect(page.getByTestId("library-manager-ready")).toBeVisible();
+  await selectExistingCustomLibraryItem(page);
+  const nameInput = page
+    .getByTestId("library-manager-selected-item-editor")
+    .getByRole("textbox", { name: "Name", exact: true });
+  await nameInput.fill(`${await nameInput.inputValue()} - pending taxonomy navigation`);
+
+  const taxonomyControl = page.getByTestId("open-taxonomy-manager");
+  const beforeCancelled = await getRuntimeCommandExecution(page, "library.taxonomyManager");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await taxonomyControl.evaluate((element) => (element as HTMLButtonElement).click());
+  await expect.poll(async () =>
+    (await getRuntimeCommandExecution(page, "library.taxonomyManager")).attemptCount
+  ).toBe(beforeCancelled.attemptCount + 1);
+  const cancelled = await getRuntimeCommandExecution(page, "library.taxonomyManager");
+  expect(cancelled.executedCount).toBe(beforeCancelled.executedCount);
+  expect(cancelled.lastResult).toMatchObject({ handled: false, status: "cancelled" });
+  await expect(page.getByTestId("library-manager-modal")).toBeVisible();
+  await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await expectOneRuntimeCommandExecution(page, "library.taxonomyManager", () =>
+    taxonomyControl.evaluate((element) => (element as HTMLButtonElement).click())
+  );
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("taxonomy-manager-modal")).toBeVisible();
+  await page.getByTestId("close-taxonomy-manager-header").click();
+  await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("Connection Point Snap uses the authoritative exact-two-machine context", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -793,9 +1028,18 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   await clickSceneMachine(page, machineIds[1]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
+  expect(await getRuntimeFeature(page, "snap.connectionPoint")).toMatchObject({
+    bound: true,
+    reachable: true,
+    status: "contextually-unavailable"
+  });
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
     available: false,
     visible: false
+  });
+  expect(await getRuntimeCommandExecution(page, "snap.connectionPoint")).toMatchObject({
+    attemptCount: 0,
+    executedCount: 0
   });
 
   await clickSceneMachine(page, machineIds[0]);
@@ -804,16 +1048,39 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
   await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(true);
+  await expect.poll(async () => (await getRuntimeFeature(page, "snap.connectionPoint"))?.status).toBe("ready");
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ visible: true });
 
-  await page.keyboard.down("Control");
+  const positionsBeforeSnap = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
+  const snapButton = page.getByTestId("connection-point-snap-button");
+  await expect(snapButton).toBeEnabled();
+  await expectOneRuntimeCommandExecution(page, "snap.connectionPoint", () => snapButton.click());
+  await expect.poll(() =>
+    readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  ).not.toEqual(positionsBeforeSnap);
+
   await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[0]);
   await page.keyboard.up("Control");
-  await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
-  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
-    available: false,
-    visible: false
-  });
+  const multiSelectionSection = page.getByRole("button", { name: /Multi-Selection/i });
+  if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
+    await multiSelectionSection.click();
+  }
+  const multiSelectionPanel = page.getByTestId("multi-selection-panel");
+  const positionsBeforeAlignment = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
+  await expectOneRuntimeCommandExecution(page, "alignment.alignSelection", () =>
+    multiSelectionPanel.getByRole("button", { name: "Align Left" }).click()
+  );
+  await expect.poll(() =>
+    readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  ).not.toEqual(positionsBeforeAlignment);
   expect(errors).toEqual([]);
 });
 
@@ -841,6 +1108,43 @@ test("selected object and numeric rotation smoke has no red console errors", asy
   await rotationInput.fill("50");
   await rotationInput.press("Enter");
   await expect(rotationInput).toHaveValue("45");
+
+  expect(errors).toEqual([]);
+});
+
+test("core editor visible controls execute canonical commands once", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  await expectOneRuntimeCommandExecution(page, "library.addMachine", () =>
+    page.locator(".machine-card").first().click()
+  );
+  await waitForMachineDiagnostics(page, 1);
+
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  const machineProperties = page.getByLabel("Selected machine properties");
+  await expectOneRuntimeCommandExecution(page, "edit.duplicateSelected", () =>
+    machineProperties.getByRole("button", { name: "Duplicate Selected" }).click()
+  );
+  await waitForMachineDiagnostics(page, 2);
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await expectOneRuntimeCommandExecution(page, "edit.deleteSelected", () =>
+    page.getByRole("button", { name: "Delete Selected" }).first().click()
+  );
+  await waitForMachineDiagnostics(page, 1);
+
+  await expectOneRuntimeCommandExecution(page, "edit.undo", () =>
+    page.getByRole("button", { name: "Undo", exact: true }).click()
+  );
+  await waitForMachineDiagnostics(page, 2);
+  await expectOneRuntimeCommandExecution(page, "edit.redo", () =>
+    page.getByRole("button", { name: "Redo", exact: true }).click()
+  );
+  await waitForMachineDiagnostics(page, 1);
 
   expect(errors).toEqual([]);
 });
@@ -1163,7 +1467,9 @@ test("project and performance modals open and close deterministically", async ({
   await expectNoModalBackdrop(page);
 
   await page.getByRole("button", { name: /Performance Benchmark/i }).click();
-  await page.getByTestId("open-performance-benchmark").click();
+  await expectOneRuntimeCommandExecution(page, "performance.benchmark", () =>
+    page.getByTestId("open-performance-benchmark").click()
+  );
   await expect(page.getByTestId("performance-benchmark-modal")).toBeVisible();
   await page.getByTestId("close-performance-benchmark").click();
   await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
@@ -1178,7 +1484,9 @@ test("annotation create and negative coordinate smoke has no red console errors"
 
   await page.getByRole("button", { name: /Annotations/i }).click();
   await expect(page.getByTestId("annotations-panel")).toBeVisible();
-  await page.getByTestId("add-note-annotation").click();
+  await expectOneRuntimeCommandExecution(page, "annotations.create", () =>
+    page.getByTestId("add-note-annotation").click()
+  );
   await expect(page.getByTestId("annotation-properties")).toBeVisible();
   await page.getByTestId("annotation-text-input").fill("Forklift access required");
   await page.getByTestId("annotation-text-input").blur();
@@ -1331,7 +1639,9 @@ test("building civil references can be added and edited without red console erro
     await civilSection.click();
   }
   await expect(page.getByTestId("civil-reference-panel")).toBeVisible();
-  await page.getByTestId("add-civil-column").click();
+  await expectOneRuntimeCommandExecution(page, "civil.addColumn", () =>
+    page.getByTestId("add-civil-column").click()
+  );
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("civil");
 
   const propertiesSection = page.getByRole("button", { name: /Civil Reference Properties/i });
@@ -1361,12 +1671,28 @@ test("assembly tree can create and select a group without red console errors", a
   page.once("dialog", async (dialog) => {
     await dialog.accept("Packaging Line 1");
   });
-  await page.getByTestId("create-group-from-selection").click();
+  await expectOneRuntimeCommandExecution(page, "assembly.createGroup", () =>
+    page.getByTestId("create-group-from-selection").click()
+  );
   const group = page.locator(".assembly-group-row").filter({ hasText: "Packaging Line 1" });
   await expect(group).toBeVisible();
   await expect(group).toContainText("1 item");
   await group.locator(".assembly-group-button").click();
   await expect(group).toHaveClass(/is-selected/);
+
+  await expectOneRuntimeCommandExecution(page, "assembly.enterEdit", () =>
+    group.getByRole("button", { name: /Edit Group Packaging Line 1/i }).click()
+  );
+  await expect(group).toContainText("Editing members");
+  await expectOneRuntimeCommandExecution(page, "assembly.exitEdit", () =>
+    group.getByRole("button", { name: /Exit Group Edit Packaging Line 1/i }).click()
+  );
+  await expect(group).not.toContainText("Editing members");
+  page.once("dialog", (dialog) => dialog.accept());
+  await expectOneRuntimeCommandExecution(page, "assembly.ungroup", () =>
+    group.getByRole("button", { name: /Ungroup Packaging Line 1/i }).click()
+  );
+  await expect(group).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });
@@ -1379,7 +1705,9 @@ test("Library Manager opens and closes with stable header control", async ({ pag
   const openLibraryManager = page.getByTestId("open-library-manager");
   await expect(openLibraryManager).toBeVisible();
   await expect(openLibraryManager).toBeEnabled();
-  await openLibraryManager.click();
+  await expectOneRuntimeCommandExecution(page, "library.manager", () =>
+    openLibraryManager.click()
+  );
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await expect(page.getByTestId("library-manager-ready")).toBeVisible();
   await expect(page.getByTestId("library-manager-tree-panel")).toBeVisible();
@@ -1409,7 +1737,9 @@ test("Taxonomy Manager opens and closes with stable header control", async ({ pa
   const openTaxonomyManager = page.getByTestId("open-taxonomy-manager");
   await expect(openTaxonomyManager).toBeVisible();
   await expect(openTaxonomyManager).toBeEnabled();
-  await openTaxonomyManager.click();
+  await expectOneRuntimeCommandExecution(page, "library.taxonomyManager", () =>
+    openTaxonomyManager.click()
+  );
   await expect(page.getByTestId("taxonomy-manager-modal")).toBeVisible();
   await expect(page.getByTestId("taxonomy-manager-ready")).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Taxonomy Manager" }).getByText("Material Handling")).toBeVisible();
