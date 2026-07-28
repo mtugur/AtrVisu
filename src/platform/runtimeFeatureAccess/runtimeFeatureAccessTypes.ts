@@ -8,7 +8,9 @@ import type {
 } from "../contracts";
 import type { LegacyEntityFamily } from "../adapters";
 import type { PlatformSurfaceInventoryItem } from "../surfaceInventory";
-import type { RuntimeFeatureCommandOperationResult } from "../runtimeCommands/runtimeFeatureCommands";
+import type {
+  RuntimeCommandExecutionProbe as SharedRuntimeCommandExecutionProbe
+} from "../runtimeCommands/runtimeCommandOperation";
 
 export type RuntimeFeatureAccessStatus =
   | "ready"
@@ -122,12 +124,7 @@ export type RuntimeFeatureAccessExternalEvidence = {
   surfaceExecution?: RuntimeSurfaceExecutionEvidence;
 };
 
-export type RuntimeCommandExecutionProbe = {
-  commandId: string;
-  attemptCount: number;
-  executedCount: number;
-  lastResult?: RuntimeFeatureCommandOperationResult;
-};
+export type RuntimeCommandExecutionProbe = SharedRuntimeCommandExecutionProbe;
 
 export type RuntimeFeatureAccessEvidence = {
   getCommand: (commandId: string) => RuntimeCommandAccessEvidence;

@@ -124,6 +124,14 @@ import {
   type RuntimeFeatureCommandId,
   type RuntimeFeatureCommandOperationResult
 } from "./platform/runtimeCommands/runtimeFeatureCommands";
+import {
+  createExecutedRuntimeCommandResult,
+  createFailedRuntimeCommandResult,
+  createNextRuntimeCommandExecutionProbe,
+  createUnavailableRuntimeCommandResult,
+  executeConfirmedRuntimeCommandOperation,
+  type RuntimeCommandOperationResult
+} from "./platform/runtimeCommands/runtimeCommandOperation";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
 import {
   applyRuntimeSelectionRequest,
@@ -251,14 +259,6 @@ const mapPanelOperationToRuntimeCommandResult = (
     ...(result.reason ? { reason: result.reason } : {})
   };
 };
-
-const createFailedRuntimeFeatureCommandResult = (
-  error: unknown
-): RuntimeFeatureCommandOperationResult => ({
-  handled: false,
-  status: "failed",
-  reason: error instanceof Error ? error.message : "Runtime command failed."
-});
 
 type RuntimeAlignmentPayload =
   | { kind: "align"; action: AlignmentAction }
@@ -2264,18 +2264,29 @@ export function App() {
   const ungroupAssembly = useCallback((primarySelectionId?: string) => {
     const groupId = getAssemblyCommandGroupId(primarySelectionId);
     const group = groupId ? groupsRef.current.find((item) => item.id === groupId) : undefined;
-    if (!group || !window.confirm(`Ungroup "${group.name}"? Member objects will remain in the layout.`)) {
-      return;
+    if (!group) {
+      return createUnavailableRuntimeCommandResult("The selected assembly is no longer available.");
     }
 
-    const result = ungroupObjectGroup(groupsRef.current, group.id);
-    if (!result) {
-      return;
-    }
-    markLayoutChanged();
-    setGroups(result.groups);
-    setActiveGroupEditId(null);
-    setRuntimeSelection(replaceRuntimeSelection(result.memberEntityIds, "command"));
+    return executeConfirmedRuntimeCommandOperation({
+      confirm: () => window.confirm(
+        `Ungroup "${group.name}"? Member objects will remain in the layout.`
+      ),
+      cancelledReason: "Ungroup was cancelled.",
+      execute: () => {
+        const result = ungroupObjectGroup(groupsRef.current, group.id);
+        if (!result) {
+          return createUnavailableRuntimeCommandResult(
+            "The selected assembly could not be ungrouped."
+          );
+        }
+        markLayoutChanged();
+        setGroups(result.groups);
+        setActiveGroupEditId(null);
+        setRuntimeSelection(replaceRuntimeSelection(result.memberEntityIds, "command"));
+        return createExecutedRuntimeCommandResult();
+      }
+    });
   }, [getAssemblyCommandGroupId, markLayoutChanged]);
 
   const applyAlignablePositionUpdates = useCallback((updates: Array<{ kind: "machine" | "civil"; id: string; xMm: number; yMm: number }>) => {
@@ -2510,18 +2521,29 @@ export function App() {
   const removeCivilReference = useCallback((id: string) => {
     const item = civilReferencesRef.current.find((reference) => reference.id === id);
     if (!item || item.locked || isLayerLocked(item.layerId, layersRef.current)) {
-      return;
+      return createUnavailableRuntimeCommandResult(
+        "The selected civil reference is unavailable or locked."
+      );
     }
-    if (!window.confirm(`Delete civil reference "${item.name}"?`)) {
-      return;
-    }
-    markLayoutChanged();
-    setCivilReferences((current) => deleteCivilReference(current, id));
-    setGroups((current) => removeObjectsFromGroups(current, [getAlignableEntityKey("civil", id)]));
-    setRuntimeSelection((selection) => replaceRuntimeSelection(
-      selection.ids.filter((entityId) => entityId !== createLegacyPlatformEntityId("civil", id)),
-      "command"
-    ));
+
+    return executeConfirmedRuntimeCommandOperation({
+      confirm: () => window.confirm(`Delete civil reference "${item.name}"?`),
+      cancelledReason: "Delete selected was cancelled.",
+      execute: () => {
+        markLayoutChanged();
+        setCivilReferences((current) => deleteCivilReference(current, id));
+        setGroups((current) =>
+          removeObjectsFromGroups(current, [getAlignableEntityKey("civil", id)])
+        );
+        setRuntimeSelection((selection) => replaceRuntimeSelection(
+          selection.ids.filter(
+            (entityId) => entityId !== createLegacyPlatformEntityId("civil", id)
+          ),
+          "command"
+        ));
+        return createExecutedRuntimeCommandResult();
+      }
+    });
   }, [markLayoutChanged]);
 
   const addAnnotation = useCallback((type: AnnotationType) => {
@@ -2598,8 +2620,10 @@ export function App() {
 
   const removeAnnotation = useCallback((annotationId: string) => {
     const annotation = annotationsRef.current.find((item) => item.id === annotationId);
-    if (annotation && isLayerLocked(annotation.layerId, layersRef.current)) {
-      return;
+    if (!annotation || isLayerLocked(annotation.layerId, layersRef.current)) {
+      return createUnavailableRuntimeCommandResult(
+        "The selected annotation is unavailable or locked."
+      );
     }
     markLayoutChanged();
     setAnnotations((current) => deleteAnnotation(current, annotationId));
@@ -2607,46 +2631,47 @@ export function App() {
       selection.ids.filter((entityId) => entityId !== createLegacyPlatformEntityId("annotation", annotationId)),
       "command"
     ));
+    return createExecutedRuntimeCommandResult();
   }, [markLayoutChanged]);
 
   const deleteSelectedMachines = useCallback(() => {
     const deletableMachines = selectedMachines.filter((machine) => !isLayerLocked(machine.layerId, layersRef.current));
     if (deletableMachines.length === 0) {
-      return;
+      return createUnavailableRuntimeCommandResult("No selected machine is available for deletion.");
     }
 
     const selectedNames = deletableMachines.map((machine) => machine.definition.name);
     const label = deletableMachines.length === 1
       ? selectedNames[0] ?? "the selected object"
       : `${deletableMachines.length} selected objects`;
-    const confirmed = window.confirm(`Delete ${label} from the layout?`);
-    if (!confirmed) {
-      return;
-    }
-
-    markLayoutChanged();
-    const ids = new Set(deletableMachines.map((machine) => machine.instanceId));
-    const groupIdsToRemove = deletableMachines.flatMap((machine) => [
-      machine.instanceId,
-      getAlignableEntityKey("machine", machine.instanceId)
-    ]);
-    setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
-    setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
-    setGroups((current) => removeObjectsFromGroups(current, groupIdsToRemove));
-    setActiveGroupEditId(null);
-    clearSelection();
+    return executeConfirmedRuntimeCommandOperation({
+      confirm: () => window.confirm(`Delete ${label} from the layout?`),
+      cancelledReason: "Delete selected was cancelled.",
+      execute: () => {
+        markLayoutChanged();
+        const ids = new Set(deletableMachines.map((machine) => machine.instanceId));
+        const groupIdsToRemove = deletableMachines.flatMap((machine) => [
+          machine.instanceId,
+          getAlignableEntityKey("machine", machine.instanceId)
+        ]);
+        setPlacedMachines((current) => current.filter((machine) => !ids.has(machine.instanceId)));
+        setAnnotations((current) => detachAnnotationsForDeletedObjects(current, ids));
+        setGroups((current) => removeObjectsFromGroups(current, groupIdsToRemove));
+        setActiveGroupEditId(null);
+        clearSelection();
+        return createExecutedRuntimeCommandResult();
+      }
+    });
   }, [clearSelection, markLayoutChanged, selectedMachines]);
 
   const deleteSelectedEntities = useCallback(() => {
     if (selectedCivilReferenceId) {
-      removeCivilReference(selectedCivilReferenceId);
-      return;
+      return removeCivilReference(selectedCivilReferenceId);
     }
     if (selectedAnnotationForDeleteId) {
-      removeAnnotation(selectedAnnotationForDeleteId);
-      return;
+      return removeAnnotation(selectedAnnotationForDeleteId);
     }
-    deleteSelectedMachines();
+    return deleteSelectedMachines();
   }, [
     deleteSelectedMachines,
     removeAnnotation,
@@ -2660,13 +2685,19 @@ export function App() {
       getEnableState: () => canUndo
         ? { enabled: true }
         : { enabled: false, reason: "Nothing to undo." },
-      execute: undoLayoutChange
+      execute: () => {
+        undoLayoutChange();
+        return createExecutedRuntimeCommandResult();
+      }
     },
     [CORE_EDITOR_COMMAND_IDS.redo]: {
       getEnableState: () => canRedo
         ? { enabled: true }
         : { enabled: false, reason: "Nothing to redo." },
-      execute: redoLayoutChange
+      execute: () => {
+        redoLayoutChange();
+        return createExecutedRuntimeCommandResult();
+      }
     },
     [CORE_EDITOR_COMMAND_IDS.deleteSelected]: {
       getEnableState: () => canDeleteSelectedEntities
@@ -2678,7 +2709,10 @@ export function App() {
       getEnableState: () => canDuplicateSelectedMachines
         ? { enabled: true }
         : { enabled: false, reason: "Select only machines on unlocked layers." },
-      execute: duplicateSelectedMachines
+      execute: () => {
+        duplicateSelectedMachines();
+        return createExecutedRuntimeCommandResult();
+      }
     }
   }), [
     canDeleteSelectedEntities,
@@ -2982,6 +3016,7 @@ export function App() {
           throw new Error("Create Group command requires a name.");
         }
         createGroupFromSelection(context.payload.name);
+        return createExecutedRuntimeCommandResult();
       }
     },
     [ASSEMBLY_COMMAND_IDS.addSelected]: {
@@ -2997,6 +3032,7 @@ export function App() {
           throw new Error("Add Selected command requires an assembly.");
         }
         addSelectionToGroup(groupId);
+        return createExecutedRuntimeCommandResult();
       }
     },
     [ASSEMBLY_COMMAND_IDS.removeSelected]: {
@@ -3012,6 +3048,7 @@ export function App() {
           throw new Error("Remove Selected command requires an assembly.");
         }
         removeSelectionFromGroup(groupId);
+        return createExecutedRuntimeCommandResult();
       }
     },
     [ASSEMBLY_COMMAND_IDS.enterEdit]: {
@@ -3021,13 +3058,19 @@ export function App() {
           ? { enabled: true }
           : { enabled: false, reason: "Select an assembly that is not already in edit mode." };
       },
-      execute: (context) => enterGroupEditMode(context.primarySelectionId)
+      execute: (context) => {
+        enterGroupEditMode(context.primarySelectionId);
+        return createExecutedRuntimeCommandResult();
+      }
     },
     [ASSEMBLY_COMMAND_IDS.exitEdit]: {
       getEnableState: () => activeGroupEditId
         ? { enabled: true }
         : { enabled: false, reason: "No assembly is in edit mode." },
-      execute: exitGroupEditMode
+      execute: () => {
+        exitGroupEditMode();
+        return createExecutedRuntimeCommandResult();
+      }
     },
     [ASSEMBLY_COMMAND_IDS.ungroup]: {
       getEnableState: (context) => {
@@ -3058,18 +3101,16 @@ export function App() {
 
   const recordRuntimeCommandExecution = useCallback((
     commandId: string,
-    result: RuntimeFeatureCommandOperationResult
+    result: RuntimeCommandOperationResult
   ) => {
     if (!enableE2EDiagnostics) {
       return;
     }
     const current = runtimeCommandExecutionProbesRef.current.get(commandId);
-    runtimeCommandExecutionProbesRef.current.set(commandId, {
+    runtimeCommandExecutionProbesRef.current.set(
       commandId,
-      attemptCount: (current?.attemptCount ?? 0) + 1,
-      executedCount: (current?.executedCount ?? 0) + (result.handled ? 1 : 0),
-      lastResult: result
-    });
+      createNextRuntimeCommandExecutionProbe(commandId, current, result)
+    );
   }, [enableE2EDiagnostics]);
 
   const getRuntimeFeatureCommandEvidence = useCallback((
@@ -3275,19 +3316,14 @@ export function App() {
     payload?: unknown
   ) => {
     const groupEntityId = groupId ? createLegacyPlatformEntityId("group", groupId) : undefined;
-    const handled = assemblyCommandBridge.executeCommand(commandId, {
+    const result = assemblyCommandBridge.executeCommand(commandId, {
       selectionIds: groupEntityId ? [groupEntityId] : runtimeSelectionRef.current.ids,
       primarySelectionId: groupEntityId ?? runtimeSelectionRef.current.primaryId,
       hasUnsavedChanges: hasUnsavedProjectChanges,
       payload
     });
-    recordRuntimeCommandExecution(
-      commandId,
-      handled
-        ? createExecutedRuntimeFeatureCommandResult()
-        : { handled: false, status: "disabled", reason: "Assembly command is unavailable." }
-    );
-    return handled;
+    recordRuntimeCommandExecution(commandId, result);
+    return result.handled;
   }, [assemblyCommandBridge, hasUnsavedProjectChanges, recordRuntimeCommandExecution]);
 
   const coreEditorCommandContext = useMemo(() => ({
@@ -3307,12 +3343,7 @@ export function App() {
 
   const executeCoreEditorCommand = useCallback((commandId: CoreEditorCommandId) => {
     const result = runtimeCommandBridge.executeCommand(commandId, coreEditorCommandContext);
-    recordRuntimeCommandExecution(
-      commandId,
-      result.handled
-        ? createExecutedRuntimeFeatureCommandResult()
-        : { handled: false, status: "disabled", ...(result.reason ? { reason: result.reason } : {}) }
-    );
+    recordRuntimeCommandExecution(commandId, result);
     return result.handled;
   }, [coreEditorCommandContext, recordRuntimeCommandExecution, runtimeCommandBridge]);
 
@@ -3330,7 +3361,7 @@ export function App() {
       recordRuntimeCommandExecution(commandId, result);
       return result;
     } catch (error) {
-      const result = createFailedRuntimeFeatureCommandResult(error);
+      const result = createFailedRuntimeCommandResult(error);
       recordRuntimeCommandExecution(commandId, result);
       return result;
     }

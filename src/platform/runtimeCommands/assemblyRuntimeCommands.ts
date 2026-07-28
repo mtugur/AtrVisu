@@ -1,5 +1,11 @@
 import type { CommandContext, CommandDefinition, CommandEnableState } from "../contracts";
 import { createCommandRegistry } from "../registries";
+import {
+  createDisabledRuntimeCommandResult,
+  createUnavailableRuntimeCommandResult,
+  normalizeRuntimeCommandOperationResult,
+  type RuntimeCommandOperationResult
+} from "./runtimeCommandOperation";
 
 export const ASSEMBLY_COMMAND_IDS = {
   createGroup: "assembly.createGroup",
@@ -14,7 +20,7 @@ export type AssemblyCommandId = typeof ASSEMBLY_COMMAND_IDS[keyof typeof ASSEMBL
 
 export type AssemblyRuntimeCommandBinding = {
   getEnableState: (context: CommandContext) => CommandEnableState;
-  execute: (context: CommandContext) => void;
+  execute: (context: CommandContext) => RuntimeCommandOperationResult;
 };
 
 export type AssemblyRuntimeCommandBindings = Readonly<
@@ -91,7 +97,7 @@ export const createAssemblyRuntimeCommandBridge = (
           throw new Error(`Runtime command "${commandId}" is not bound.`);
         }
         if (binding.getEnableState(context).enabled) {
-          binding.execute(context);
+          normalizeRuntimeCommandOperationResult(binding.execute(context));
         }
       }
     });
@@ -102,14 +108,17 @@ export const createAssemblyRuntimeCommandBridge = (
     executeCommand(commandId: AssemblyCommandId, context: CommandContext) {
       const binding = getBindings()[commandId];
       if (!binding) {
-        return false;
+        return createUnavailableRuntimeCommandResult(
+          `Runtime command "${commandId}" is not bound.`
+        );
       }
       const enableState = binding.getEnableState(context);
       if (!enableState.enabled) {
-        return false;
+        return createDisabledRuntimeCommandResult(
+          enableState.reason ?? `Runtime command "${commandId}" is disabled.`
+        );
       }
-      binding.execute(context);
-      return true;
+      return normalizeRuntimeCommandOperationResult(binding.execute(context));
     }
   };
 };

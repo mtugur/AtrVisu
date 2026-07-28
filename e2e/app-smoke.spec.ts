@@ -134,6 +134,21 @@ const expectOneRuntimeCommandExecution = async (
   expect(after.lastResult).toMatchObject({ handled: true, status: "executed" });
 };
 
+const expectCancelledRuntimeCommandExecution = async (
+  page: Page,
+  commandId: string,
+  action: () => Promise<unknown>
+) => {
+  const before = await getRuntimeCommandExecution(page, commandId);
+  await action();
+  await expect.poll(async () =>
+    (await getRuntimeCommandExecution(page, commandId)).attemptCount
+  ).toBe(before.attemptCount + 1);
+  const after = await getRuntimeCommandExecution(page, commandId);
+  expect(after.executedCount).toBe(before.executedCount);
+  expect(after.lastResult).toMatchObject({ handled: false, status: "cancelled" });
+};
+
 const getRuntimeFeature = async (page: Page, featureId: string) =>
   page.evaluate((id) => {
     const bridge = window.__atrvisuRuntimeFeatureAccess;
@@ -328,7 +343,9 @@ const createTwoMachineAssembly = async (
     await assemblySection.click();
   }
   page.once("dialog", async (dialog) => dialog.accept(name));
-  await page.getByTestId("create-group-from-selection").click();
+  await expectOneRuntimeCommandExecution(page, "assembly.createGroup", () =>
+    page.getByTestId("create-group-from-selection").click()
+  );
   const group = page.locator(".assembly-group-row").filter({ hasText: name });
   await expect(group).toContainText("1 item");
 
@@ -1131,6 +1148,41 @@ test("core editor visible controls execute canonical commands once", async ({ pa
   );
   await waitForMachineDiagnostics(page, 2);
 
+  const machinesBeforeCancellation = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
+  const undoEnabledBeforeCancellation = await page.getByRole(
+    "button",
+    { name: "Undo", exact: true }
+  ).isEnabled();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await expectCancelledRuntimeCommandExecution(page, "edit.deleteSelected", () =>
+    page.getByRole("button", { name: "Delete Selected" }).first().click()
+  );
+  expect(await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  )).toEqual(machinesBeforeCancellation);
+  await expect(machineProperties).toBeVisible();
+  expect(await page.getByRole("button", { name: "Undo", exact: true }).isEnabled())
+    .toBe(undoEnabledBeforeCancellation);
+
+  const selectedMachineId = (await getMachineIds(page)).at(-1);
+  if (!selectedMachineId) {
+    throw new Error("A selected machine is required for keyboard Delete cancellation.");
+  }
+  await clickSceneMachine(page, selectedMachineId);
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await expectCancelledRuntimeCommandExecution(page, "edit.deleteSelected", () =>
+    page.keyboard.press("Delete")
+  );
+  expect(await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  )).toEqual(machinesBeforeCancellation);
+  await expect(machineProperties).toBeVisible();
+
   page.once("dialog", (dialog) => dialog.accept());
   await expectOneRuntimeCommandExecution(page, "edit.deleteSelected", () =>
     page.getByRole("button", { name: "Delete Selected" }).first().click()
@@ -1499,6 +1551,10 @@ test("annotation create and negative coordinate smoke has no red console errors"
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await expect(page.getByRole("button", { name: /Forklift access required/ })).toBeVisible();
+  await expectOneRuntimeCommandExecution(page, "edit.deleteSelected", () =>
+    page.getByRole("button", { name: "Delete Annotation" }).click()
+  );
+  await expect(page.getByTestId("annotation-properties")).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });
@@ -1653,6 +1709,11 @@ test("building civil references can be added and edited without red console erro
   await page.getByTestId("civil-plan-x-input").fill("-200");
   await page.getByTestId("civil-plan-x-input").blur();
   await expect(page.getByTestId("civil-plan-x-input")).toHaveValue("-200");
+  page.once("dialog", (dialog) => dialog.accept());
+  await expectOneRuntimeCommandExecution(page, "edit.deleteSelected", () =>
+    page.getByRole("button", { name: "Delete Civil Reference" }).click()
+  );
+  await expect(page.getByTestId("civil-reference-properties")).toHaveCount(0);
 
   expect(errors).toEqual([]);
 });
@@ -1660,25 +1721,16 @@ test("building civil references can be added and edited without red console erro
 test("assembly tree can create and select a group without red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
-
-  await page.locator(".machine-card").first().click();
-  const assemblySection = page.getByRole("button", { name: /Assembly Tree/i });
-  if ((await assemblySection.getAttribute("aria-expanded")) !== "true") {
-    await assemblySection.click();
-  }
-  await expect(page.getByTestId("assembly-tree-panel")).toBeVisible();
-
-  page.once("dialog", async (dialog) => {
-    await dialog.accept("Packaging Line 1");
-  });
-  await expectOneRuntimeCommandExecution(page, "assembly.createGroup", () =>
-    page.getByTestId("create-group-from-selection").click()
+  const { canvas, group, groupId, machineIds } = await createTwoMachineAssembly(
+    page,
+    "Packaging Line 1"
   );
-  const group = page.locator(".assembly-group-row").filter({ hasText: "Packaging Line 1" });
-  await expect(group).toBeVisible();
-  await expect(group).toContainText("1 item");
-  await group.locator(".assembly-group-button").click();
-  await expect(group).toHaveClass(/is-selected/);
+  expect(groupId).not.toBeNull();
+  expect(machineIds).toHaveLength(2);
+  const memberTransforms = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
 
   await expectOneRuntimeCommandExecution(page, "assembly.enterEdit", () =>
     group.getByRole("button", { name: /Edit Group Packaging Line 1/i }).click()
@@ -1688,11 +1740,41 @@ test("assembly tree can create and select a group without red console errors", a
     group.getByRole("button", { name: /Exit Group Edit Packaging Line 1/i }).click()
   );
   await expect(group).not.toContainText("Editing members");
+
+  const undoEnabledBeforeCancellation = await page.getByRole(
+    "button",
+    { name: "Undo", exact: true }
+  ).isEnabled();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await expectCancelledRuntimeCommandExecution(page, "assembly.ungroup", () =>
+    group.getByRole("button", { name: /Ungroup Packaging Line 1/i }).click()
+  );
+  await expect(group).toBeVisible();
+  await expect(group).toHaveClass(/is-selected/);
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+  expect(await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  )).toEqual(memberTransforms);
+  expect(await page.getByRole("button", { name: "Undo", exact: true }).isEnabled())
+    .toBe(undoEnabledBeforeCancellation);
+
   page.once("dialog", (dialog) => dialog.accept());
   await expectOneRuntimeCommandExecution(page, "assembly.ungroup", () =>
     group.getByRole("button", { name: /Ungroup Packaging Line 1/i }).click()
   );
   await expect(group).toHaveCount(0);
+  expect(await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  )).toEqual(memberTransforms);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(group).toBeVisible();
+  await expect(group).toContainText("2 items");
+  expect(await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  )).toEqual(memberTransforms);
 
   expect(errors).toEqual([]);
 });
