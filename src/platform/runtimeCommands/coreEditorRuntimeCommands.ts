@@ -6,6 +6,13 @@ import type {
 } from "../contracts";
 import { createCommandRegistry } from "../registries";
 import { getPlatformCommandSeedById } from "../registrySeeds";
+import {
+  createDisabledRuntimeCommandResult,
+  createUnavailableRuntimeCommandResult,
+  createUnsupportedRuntimeCommandResult,
+  normalizeRuntimeCommandOperationResult,
+  type RuntimeCommandOperationResult
+} from "./runtimeCommandOperation";
 
 export const CORE_EDITOR_COMMAND_IDS = {
   undo: "edit.undo",
@@ -19,17 +26,12 @@ export type CoreEditorCommandId =
 
 export type CoreEditorRuntimeCommandBinding = {
   getEnableState: (context: CommandContext) => CommandEnableState;
-  execute: (context: CommandContext) => void;
+  execute: (context: CommandContext) => RuntimeCommandOperationResult;
 };
 
 export type CoreEditorRuntimeCommandBindings = Readonly<
   Partial<Record<CoreEditorCommandId, CoreEditorRuntimeCommandBinding>>
 >;
-
-export type RuntimeCommandExecutionResult = {
-  handled: boolean;
-  reason?: string;
-};
 
 export type CoreEditorCommandExecutor = (commandId: CoreEditorCommandId) => boolean;
 
@@ -112,7 +114,7 @@ const createRuntimeCommandDefinition = (
       if (!binding.getEnableState(context).enabled) {
         return;
       }
-      binding.execute(context);
+      normalizeRuntimeCommandOperationResult(binding.execute(context));
     }
   };
 };
@@ -144,33 +146,29 @@ export const createCoreEditorRuntimeCommandBridge = (
   const executeCommand = (
     commandId: CommandId,
     context: CommandContext = defaultCommandContext
-  ): RuntimeCommandExecutionResult => {
+  ): RuntimeCommandOperationResult => {
     const command = registry.get(commandId);
     if (!command) {
-      return {
-        handled: false,
-        reason: `Runtime command "${commandId}" is unknown.`
-      };
+      return createUnsupportedRuntimeCommandResult(
+        `Runtime command "${commandId}" is unknown.`
+      );
     }
 
     const binding = getBindings()[command.id as CoreEditorCommandId];
     if (!binding) {
-      return {
-        handled: false,
-        reason: `Runtime command "${commandId}" is not bound.`
-      };
+      return createUnavailableRuntimeCommandResult(
+        `Runtime command "${commandId}" is not bound.`
+      );
     }
 
     const enableState = binding.getEnableState(context);
     if (!enableState.enabled) {
-      return {
-        handled: false,
-        reason: enableState.reason ?? `Runtime command "${commandId}" is disabled.`
-      };
+      return createDisabledRuntimeCommandResult(
+        enableState.reason ?? `Runtime command "${commandId}" is disabled.`
+      );
     }
 
-    binding.execute(context);
-    return { handled: true };
+    return normalizeRuntimeCommandOperationResult(binding.execute(context));
   };
 
   return {

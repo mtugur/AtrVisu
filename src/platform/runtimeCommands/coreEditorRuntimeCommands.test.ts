@@ -10,6 +10,11 @@ import {
   isMachineSelectionDuplicable,
   type CoreEditorRuntimeCommandBindings
 } from "./coreEditorRuntimeCommands";
+import {
+  createCancelledRuntimeCommandResult,
+  createExecutedRuntimeCommandResult,
+  type RuntimeCommandOperationResult
+} from "./runtimeCommandOperation";
 
 const enabled = (): CommandEnableState => ({ enabled: true });
 const disabled = (reason = "Disabled for test."): CommandEnableState => ({
@@ -18,7 +23,9 @@ const disabled = (reason = "Disabled for test."): CommandEnableState => ({
 });
 
 const createBindings = (
-  execute: () => void = vi.fn(),
+  execute: () => RuntimeCommandOperationResult = vi.fn(
+    () => createExecutedRuntimeCommandResult()
+  ),
   getEnableState: () => CommandEnableState = enabled
 ): CoreEditorRuntimeCommandBindings => ({
   [CORE_EDITOR_COMMAND_IDS.undo]: { execute, getEnableState },
@@ -60,7 +67,7 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("direct registry execution evaluates enablement once and invokes an enabled live binding once", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const getEnableState = vi.fn(enabled);
     const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
     const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
@@ -72,7 +79,7 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("direct registry execution evaluates enablement once and skips a disabled binding", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const getEnableState = vi.fn(() => disabled());
     const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
     const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.redo);
@@ -84,8 +91,8 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("direct registry execution uses a replaced bindings object without rebuilding the registry", () => {
-    const oldExecute = vi.fn();
-    const replacementExecute = vi.fn();
+    const oldExecute = vi.fn(() => createExecutedRuntimeCommandResult());
+    const replacementExecute = vi.fn(() => createExecutedRuntimeCommandResult());
     let bindings = createBindings(oldExecute);
     const bridge = createCoreEditorRuntimeCommandBridge(() => bindings);
     const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
@@ -100,7 +107,7 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("direct registry execution invokes the live binding and never the seed noop", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute));
     const seed = getPlatformCommandSeedById(CORE_EDITOR_COMMAND_IDS.undo);
     const command = bridge.registry.get(CORE_EDITOR_COMMAND_IDS.undo);
@@ -121,22 +128,26 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("evaluates enablement once and executes an enabled command exactly once", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const getEnableState = vi.fn(enabled);
     const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
 
-    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({ handled: true });
+    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({
+      handled: true,
+      status: "executed"
+    });
     expect(getEnableState).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it("does not execute a disabled command", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const getEnableState = vi.fn(() => disabled());
     const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
 
     expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.redo)).toEqual({
       handled: false,
+      status: "disabled",
       reason: "Disabled for test."
     });
     expect(getEnableState).toHaveBeenCalledOnce();
@@ -144,13 +155,16 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("cannot report handled when a second enablement read would skip the callback", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const getEnableState = vi.fn()
       .mockReturnValueOnce(enabled())
       .mockReturnValue(disabled("A second read would be disabled."));
     const bridge = createCoreEditorRuntimeCommandBridge(() => createBindings(execute, getEnableState));
 
-    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({ handled: true });
+    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({
+      handled: true,
+      status: "executed"
+    });
     expect(getEnableState).toHaveBeenCalledOnce();
     expect(execute).toHaveBeenCalledOnce();
   });
@@ -160,14 +174,17 @@ describe("core editor runtime command bridge", () => {
 
     expect(bridge.executeCommand("edit.unknown")).toEqual({
       handled: false,
+      status: "unsupported",
       reason: 'Runtime command "edit.unknown" is unknown.'
     });
     expect(bridge.executeCommand("project.save")).toEqual({
       handled: false,
+      status: "unsupported",
       reason: 'Runtime command "project.save" is unknown.'
     });
     expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({
       handled: false,
+      status: "unavailable",
       reason: 'Runtime command "edit.undo" is not bound.'
     });
   });
@@ -175,8 +192,8 @@ describe("core editor runtime command bridge", () => {
   it("evaluates current undo and redo eligibility independently without rebuilding", () => {
     let canUndo = false;
     let canRedo = true;
-    const executeUndo = vi.fn();
-    const executeRedo = vi.fn();
+    const executeUndo = vi.fn(() => createExecutedRuntimeCommandResult());
+    const executeRedo = vi.fn(() => createExecutedRuntimeCommandResult());
     const bindings: CoreEditorRuntimeCommandBindings = {
       ...createBindings(),
       [CORE_EDITOR_COMMAND_IDS.undo]: {
@@ -211,14 +228,17 @@ describe("core editor runtime command bridge", () => {
   });
 
   it("uses a replaced bindings object without rebuilding the registry", () => {
-    const oldExecute = vi.fn();
-    const disabledReplacementExecute = vi.fn();
-    const currentExecute = vi.fn();
+    const oldExecute = vi.fn(() => createExecutedRuntimeCommandResult());
+    const disabledReplacementExecute = vi.fn(() => createExecutedRuntimeCommandResult());
+    const currentExecute = vi.fn(() => createExecutedRuntimeCommandResult());
     let bindings = createBindings(oldExecute);
     const bridge = createCoreEditorRuntimeCommandBridge(() => bindings);
     const originalRegistry = bridge.registry;
 
-    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({ handled: true });
+    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({
+      handled: true,
+      status: "executed"
+    });
 
     bindings = createBindings(
       disabledReplacementExecute,
@@ -231,6 +251,7 @@ describe("core editor runtime command bridge", () => {
     });
     expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({
       handled: false,
+      status: "disabled",
       reason: "Replacement is disabled."
     });
 
@@ -238,7 +259,10 @@ describe("core editor runtime command bridge", () => {
 
     expect(bridge.registry).toBe(originalRegistry);
     expect(bridge.canExecuteCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({ enabled: true });
-    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({ handled: true });
+    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toEqual({
+      handled: true,
+      status: "executed"
+    });
     expect(oldExecute).toHaveBeenCalledOnce();
     expect(disabledReplacementExecute).not.toHaveBeenCalled();
     expect(currentExecute).toHaveBeenCalledOnce();
@@ -251,6 +275,22 @@ describe("core editor runtime command bridge", () => {
     }));
 
     expect(() => bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.undo)).toThrow(error);
+  });
+
+  it("returns a cancelled Delete result without converting it to executed", () => {
+    const execute = vi.fn(() =>
+      createCancelledRuntimeCommandResult("Delete selected was cancelled.")
+    );
+    const bridge = createCoreEditorRuntimeCommandBridge(() =>
+      createBindings(execute)
+    );
+
+    expect(bridge.executeCommand(CORE_EDITOR_COMMAND_IDS.deleteSelected)).toEqual({
+      handled: false,
+      status: "cancelled",
+      reason: "Delete selected was cancelled."
+    });
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it("routes visible actions and keyboard shortcuts through the same command id", () => {

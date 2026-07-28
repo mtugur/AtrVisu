@@ -6,6 +6,14 @@ import type {
 } from "../contracts";
 import { createCommandRegistry } from "../registries";
 import { getPlatformCommandSeedById } from "../registrySeeds";
+import {
+  createExecutedRuntimeCommandResult,
+  createUnsupportedRuntimeCommandResult,
+  createUnavailableRuntimeCommandResult,
+  normalizeRuntimeCommandOperationResult,
+  type RuntimeCommandOperationResult,
+  type RuntimeCommandOperationStatus
+} from "./runtimeCommandOperation";
 
 export const RUNTIME_FEATURE_COMMAND_IDS = {
   projectSave: "project.save",
@@ -56,19 +64,8 @@ export type RuntimeCommandReachability = {
   reason?: string;
 };
 
-export type RuntimeFeatureCommandOperationStatus =
-  | "executed"
-  | "cancelled"
-  | "disabled"
-  | "unavailable"
-  | "unsupported"
-  | "failed";
-
-export type RuntimeFeatureCommandOperationResult = {
-  handled: boolean;
-  status: RuntimeFeatureCommandOperationStatus;
-  reason?: string;
-};
+export type RuntimeFeatureCommandOperationStatus = RuntimeCommandOperationStatus;
+export type RuntimeFeatureCommandOperationResult = RuntimeCommandOperationResult;
 
 const commandIds = Object.values(RUNTIME_FEATURE_COMMAND_IDS);
 const defaultContext: CommandContext = {
@@ -77,21 +74,11 @@ const defaultContext: CommandContext = {
 };
 
 const disabled = (reason: string): CommandEnableState => ({ enabled: false, reason });
-export const createExecutedRuntimeFeatureCommandResult = (
-  reason?: string
-): RuntimeFeatureCommandOperationResult => ({
-  handled: true,
-  status: "executed",
-  ...(reason ? { reason } : {})
-});
+export const createExecutedRuntimeFeatureCommandResult =
+  createExecutedRuntimeCommandResult;
 
-export const normalizeRuntimeFeatureCommandOperationResult = (
-  result: RuntimeFeatureCommandOperationResult
-): RuntimeFeatureCommandOperationResult => ({
-  handled: result.status === "executed",
-  status: result.status,
-  ...(result.reason ? { reason: result.reason } : {})
-});
+export const normalizeRuntimeFeatureCommandOperationResult =
+  normalizeRuntimeCommandOperationResult;
 
 const createRuntimeDefinition = (
   commandId: RuntimeFeatureCommandId,
@@ -117,8 +104,11 @@ const createRuntimeDefinition = (
       }
       const result = binding.execute(context);
       if (result instanceof Promise) {
-        return result.then(() => undefined);
+        return result.then((operationResult) => {
+          normalizeRuntimeCommandOperationResult(operationResult);
+        });
       }
+      normalizeRuntimeCommandOperationResult(result);
     }
   };
 };
@@ -175,19 +165,15 @@ export const createRuntimeFeatureCommandBridge = (
   ): RuntimeFeatureCommandOperationResult | Promise<RuntimeFeatureCommandOperationResult> => {
     const command = registry.get(commandId);
     if (!command) {
-      return {
-        handled: false,
-        status: "unsupported",
-        reason: `Runtime command "${commandId}" is unknown.`
-      };
+      return createUnsupportedRuntimeCommandResult(
+        `Runtime command "${commandId}" is unknown.`
+      );
     }
     const binding = getBindings()[command.id as RuntimeFeatureCommandId];
     if (!binding) {
-      return {
-        handled: false,
-        status: "unavailable",
-        reason: `Runtime command "${commandId}" is not bound.`
-      };
+      return createUnavailableRuntimeCommandResult(
+        `Runtime command "${commandId}" is not bound.`
+      );
     }
     const enableState = binding.getEnableState(context);
     if (!enableState.enabled) {
@@ -199,9 +185,9 @@ export const createRuntimeFeatureCommandBridge = (
     }
     const result = binding.execute(context);
     if (result instanceof Promise) {
-      return result.then(normalizeRuntimeFeatureCommandOperationResult);
+      return result.then(normalizeRuntimeCommandOperationResult);
     }
-    return normalizeRuntimeFeatureCommandOperationResult(result);
+    return normalizeRuntimeCommandOperationResult(result);
   };
 
   return {

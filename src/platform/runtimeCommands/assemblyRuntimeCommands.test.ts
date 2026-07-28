@@ -4,6 +4,10 @@ import {
   createAssemblyRuntimeCommandBridge,
   type AssemblyRuntimeCommandBindings
 } from "./assemblyRuntimeCommands";
+import {
+  createCancelledRuntimeCommandResult,
+  createExecutedRuntimeCommandResult
+} from "./runtimeCommandOperation";
 
 const context = {
   selectionIds: ["group:g1"],
@@ -26,20 +30,23 @@ describe("assembly runtime commands", () => {
   });
 
   it("executes only an enabled live binding", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const getEnableState = vi.fn(() => ({ enabled: true }));
     const bindings: AssemblyRuntimeCommandBindings = {
       [ASSEMBLY_COMMAND_IDS.enterEdit]: { execute, getEnableState }
     };
     const bridge = createAssemblyRuntimeCommandBridge(() => bindings);
 
-    expect(bridge.executeCommand(ASSEMBLY_COMMAND_IDS.enterEdit, context)).toBe(true);
+    expect(bridge.executeCommand(ASSEMBLY_COMMAND_IDS.enterEdit, context)).toEqual({
+      handled: true,
+      status: "executed"
+    });
     expect(getEnableState).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it("does not execute a disabled command", () => {
-    const execute = vi.fn();
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
     const bridge = createAssemblyRuntimeCommandBridge(() => ({
       [ASSEMBLY_COMMAND_IDS.ungroup]: {
         execute,
@@ -47,13 +54,17 @@ describe("assembly runtime commands", () => {
       }
     }));
 
-    expect(bridge.executeCommand(ASSEMBLY_COMMAND_IDS.ungroup, context)).toBe(false);
+    expect(bridge.executeCommand(ASSEMBLY_COMMAND_IDS.ungroup, context)).toEqual({
+      handled: false,
+      status: "disabled",
+      reason: "No assembly selected."
+    });
     expect(execute).not.toHaveBeenCalled();
   });
 
   it("uses replacement bindings without rebuilding the registry", () => {
-    const first = vi.fn();
-    const second = vi.fn();
+    const first = vi.fn(() => createExecutedRuntimeCommandResult());
+    const second = vi.fn(() => createExecutedRuntimeCommandResult());
     let bindings: AssemblyRuntimeCommandBindings = {
       [ASSEMBLY_COMMAND_IDS.exitEdit]: { execute: first, getEnableState: () => ({ enabled: true }) }
     };
@@ -68,5 +79,61 @@ describe("assembly runtime commands", () => {
     expect(bridge.registry).toBe(registry);
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an unbound command as unavailable", () => {
+    const bridge = createAssemblyRuntimeCommandBridge(() => ({}));
+
+    expect(bridge.executeCommand(ASSEMBLY_COMMAND_IDS.ungroup, context)).toEqual({
+      handled: false,
+      status: "unavailable",
+      reason: 'Runtime command "assembly.ungroup" is not bound.'
+    });
+  });
+
+  it("returns a cancelled Ungroup result without converting it to executed", () => {
+    const execute = vi.fn(() =>
+      createCancelledRuntimeCommandResult("Ungroup was cancelled.")
+    );
+    const bridge = createAssemblyRuntimeCommandBridge(() => ({
+      [ASSEMBLY_COMMAND_IDS.ungroup]: {
+        execute,
+        getEnableState: () => ({ enabled: true })
+      }
+    }));
+
+    expect(bridge.executeCommand(ASSEMBLY_COMMAND_IDS.ungroup, context)).toEqual({
+      handled: false,
+      status: "cancelled",
+      reason: "Ungroup was cancelled."
+    });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it("keeps direct registry execution enablement-protected", () => {
+    const execute = vi.fn(() => createExecutedRuntimeCommandResult());
+    const getEnableState = vi.fn(() => ({ enabled: false, reason: "Disabled." }));
+    const bridge = createAssemblyRuntimeCommandBridge(() => ({
+      [ASSEMBLY_COMMAND_IDS.ungroup]: { execute, getEnableState }
+    }));
+
+    bridge.registry.get(ASSEMBLY_COMMAND_IDS.ungroup)?.execute(context);
+
+    expect(getEnableState).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("keeps callback errors observable", () => {
+    const bridge = createAssemblyRuntimeCommandBridge(() => ({
+      [ASSEMBLY_COMMAND_IDS.ungroup]: {
+        getEnableState: () => ({ enabled: true }),
+        execute: () => {
+          throw new Error("Ungroup failed.");
+        }
+      }
+    }));
+
+    expect(() => bridge.executeCommand(ASSEMBLY_COMMAND_IDS.ungroup, context))
+      .toThrow("Ungroup failed.");
   });
 });
