@@ -10,6 +10,10 @@ import type {
   RuntimeSelectionAccessEvidence,
   RuntimeSelectionEvidenceInput
 } from "./runtimeFeatureAccessTypes";
+import {
+  deriveRequiredRuntimeSurfaceExecutionCommandIds,
+  validateRuntimeSurfaceExecutionAttestation
+} from "./runtimeSurfaceExecutionEvidence";
 
 const uniqueSorted = (values: readonly string[]) =>
   [...new Set(values)].sort((left, right) => left.localeCompare(right));
@@ -59,28 +63,6 @@ const hasEntityShape = (entity: PlatformEntity) =>
   && typeof entity.selectable === "boolean";
 
 const requiredAdapterFamilies = ["annotation", "civil", "group", "machine"] as const;
-
-export const requiredRuntimeSurfaceExecutionCommandIds = [
-  "alignment.alignSelection",
-  "annotations.create",
-  "assembly.createGroup",
-  "assembly.enterEdit",
-  "assembly.exitEdit",
-  "assembly.ungroup",
-  "civil.addColumn",
-  "edit.deleteSelected",
-  "edit.duplicateSelected",
-  "edit.redo",
-  "edit.undo",
-  "library.addMachine",
-  "library.manager",
-  "library.taxonomyManager",
-  "performance.benchmark",
-  "snap.connectionPoint",
-  "view.showMeasurements",
-  "view.toggleConnectionPoints",
-  "view.toggleLabels"
-] as const;
 
 const hasLiveSelectionCapabilities = (
   evidence: RuntimeSelectionAccessEvidence | undefined
@@ -538,6 +520,13 @@ const reportFeature = (
 export const createRuntimeFeatureAccessReport = (
   input: RuntimeFeatureAccessReportInput
 ): RuntimeFeatureAccessReport => {
+  const requiredSurfaceExecutionCommandIds =
+    deriveRequiredRuntimeSurfaceExecutionCommandIds(input.features);
+  const surfaceExecutionValidation = validateRuntimeSurfaceExecutionAttestation({
+    requiredCommandIds: requiredSurfaceExecutionCommandIds,
+    currentSessionId: input.runtimeSessionId,
+    attestation: input.evidence.surfaceExecution
+  });
   const duplicateFeatureIds = findDuplicates(input.features.map((feature) => feature.featureId));
   const featureIds = new Set(input.features.map((feature) => feature.featureId));
   const staleSurfaceFeatureIds = uniqueSorted(input.surfaces.flatMap((surface) =>
@@ -573,20 +562,13 @@ export const createRuntimeFeatureAccessReport = (
       .filter((feature) => feature.status !== "ready")
       .map((feature) => feature.featureId)
   ]);
-  const verifiedSurfaceExecutionCommandIds = new Set(
-    input.evidence.surfaceExecution?.verifiedCommandIds ?? []
-  );
   const missingSurfaceExecutionCommandIds =
-    requiredRuntimeSurfaceExecutionCommandIds.filter(
-      (commandId) => !verifiedSurfaceExecutionCommandIds.has(commandId)
-    );
+    surfaceExecutionValidation.missingCommandIds;
   const issues = uniqueSorted([
     ...duplicateFeatureIds.map((featureId) => `Duplicate feature ID "${featureId}".`),
     ...staleSurfaceFeatureIds.map((featureId) => `Surface inventory references unknown feature "${featureId}".`),
     ...unmappedRuntimeSurfaceIds.map((surfaceId) => `Runtime surface "${surfaceId}" has no feature mapping.`),
-    ...missingSurfaceExecutionCommandIds.map(
-      (commandId) => `External browser execution evidence is missing for "${commandId}".`
-    ),
+    ...surfaceExecutionValidation.reasons,
     ...features.flatMap((feature) =>
       feature.status === "blocked"
         ? feature.reasons.map((reason) => `${feature.featureId}: ${reason}`)
@@ -606,8 +588,9 @@ export const createRuntimeFeatureAccessReport = (
     staleSurfaceFeatureIds,
     unmappedRuntimeSurfaceIds,
     duplicateFeatureIds,
-    requiredSurfaceExecutionCommandIds: [...requiredRuntimeSurfaceExecutionCommandIds],
+    requiredSurfaceExecutionCommandIds,
     missingSurfaceExecutionCommandIds,
+    surfaceExecutionValidation,
     issues
   };
 };
