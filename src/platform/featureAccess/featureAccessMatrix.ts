@@ -12,6 +12,7 @@ type FeatureSeedOptions = {
   panelIds?: readonly string[];
   runtimeRequirements?: readonly FeatureRuntimeRequirement[];
   qualitySignalId?: FeatureQualitySignalId;
+  requiresSurfaceExecutionEvidence?: boolean;
   requiredForRegression?: boolean;
   notes?: string;
 };
@@ -30,6 +31,9 @@ const feature = (
   ...(options.panelIds ? { panelIds: options.panelIds } : {}),
   ...(options.runtimeRequirements ? { runtimeRequirements: options.runtimeRequirements } : {}),
   ...(options.qualitySignalId ? { qualitySignalId: options.qualitySignalId } : {}),
+  ...(options.requiresSurfaceExecutionEvidence
+    ? { requiresSurfaceExecutionEvidence: true }
+    : {}),
   requiredForRegression: options.requiredForRegression
     ?? options.classification !== "declared-planned",
   ...(options.notes ? { notes: options.notes } : {})
@@ -57,17 +61,25 @@ export const platformFeatureAccessMatrix = [
   feature("project.restorePrompt", "Restore autosaved layout", ["panel"], {
     commandIds: ["project.restorePrompt"]
   }),
-  feature("edit.undo", "Undo", ["toolbar", "shortcut"], { commandIds: ["edit.undo"] }),
-  feature("edit.redo", "Redo", ["toolbar", "shortcut"], { commandIds: ["edit.redo"] }),
+  feature("edit.undo", "Undo", ["toolbar", "shortcut"], {
+    commandIds: ["edit.undo"],
+    requiresSurfaceExecutionEvidence: true
+  }),
+  feature("edit.redo", "Redo", ["toolbar", "shortcut"], {
+    commandIds: ["edit.redo"],
+    requiresSurfaceExecutionEvidence: true
+  }),
   feature("edit.deleteSelected", "Delete selected entity", ["toolbar", "shortcut", "panel"], {
     commandIds: ["edit.deleteSelected"],
     panelIds: ["panel.inspector"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("object.duplicate", "Duplicate selected machines", ["panel", "shortcut"], {
     commandIds: ["edit.duplicateSelected"],
     panelIds: ["panel.inspector"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
 
   feature("view.fitView", "Fit view", ["api"], {
@@ -78,7 +90,8 @@ export const platformFeatureAccessMatrix = [
   }),
   feature("view.toggleLabels", "Toggle labels", ["panel"], {
     commandIds: ["view.toggleLabels"],
-    panelIds: ["panel.displayOverlayControls"]
+    panelIds: ["panel.displayOverlayControls"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("view.viewpoints", "Viewpoints", ["panel"], {
     commandIds: ["view.viewpoints"],
@@ -87,11 +100,13 @@ export const platformFeatureAccessMatrix = [
   }),
   feature("connectionPoints.toggle", "Toggle connection points", ["panel"], {
     commandIds: ["view.toggleConnectionPoints"],
-    panelIds: ["panel.displayOverlayControls"]
+    panelIds: ["panel.displayOverlayControls"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("measurements.show", "Show measurements", ["panel"], {
     commandIds: ["view.showMeasurements"],
-    panelIds: ["panel.displayOverlayControls"]
+    panelIds: ["panel.displayOverlayControls"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("viewport.main", "Main scene viewport", ["api"], {
     runtimeRequirements: ["viewport"]
@@ -100,15 +115,18 @@ export const platformFeatureAccessMatrix = [
   feature("library.addMachine", "Add machine from library", ["panel"], {
     commandIds: ["library.addMachine"],
     panelIds: ["panel.machineLibrary"],
-    runtimeRequirements: ["entity"]
+    runtimeRequirements: ["entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("library.manager", "Library Manager", ["panel", "modal"], {
     commandIds: ["library.manager"],
-    panelIds: ["panel.libraryManager"]
+    panelIds: ["panel.libraryManager"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("library.taxonomyManager", "Taxonomy Manager", ["panel", "modal"], {
     commandIds: ["library.taxonomyManager"],
-    panelIds: ["panel.taxonomyManager"]
+    panelIds: ["panel.taxonomyManager"],
+    requiresSurfaceExecutionEvidence: true
   }),
 
   feature("selection.singleSelect", "Single select entity", ["panel", "api"], {
@@ -133,7 +151,8 @@ export const platformFeatureAccessMatrix = [
   feature("annotations.create", "Create annotation", ["panel"], {
     commandIds: ["annotations.create"],
     panelIds: ["panel.annotations"],
-    runtimeRequirements: ["entity"]
+    runtimeRequirements: ["entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("collision.check", "Collision check", ["panel"], {
     commandIds: ["collision.check"],
@@ -146,12 +165,14 @@ export const platformFeatureAccessMatrix = [
   feature("snap.connectionPoint", "Connection point snap", ["panel"], {
     commandIds: ["snap.connectionPoint"],
     panelIds: ["panel.connectionPointSnap"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("alignment.alignSelection", "Align selection", ["panel"], {
     commandIds: ["alignment.alignSelection"],
     panelIds: ["panel.alignmentTools"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
 
   feature("civil.floor", "Civil floor area", ["panel"], {
@@ -167,7 +188,8 @@ export const platformFeatureAccessMatrix = [
   feature("civil.column", "Civil column", ["panel"], {
     commandIds: ["civil.addColumn"],
     panelIds: ["panel.civilReferences"],
-    runtimeRequirements: ["entity"]
+    runtimeRequirements: ["entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("civil.walkway", "Civil walkway", ["panel"], {
     commandIds: ["civil.addWalkway"],
@@ -188,7 +210,8 @@ export const platformFeatureAccessMatrix = [
   feature("assembly.createGroup", "Create Group", ["panel"], {
     commandIds: ["assembly.createGroup"],
     panelIds: ["panel.groups"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("assembly.addSelected", "Add Selected to Group", ["panel"], {
     commandIds: ["assembly.addSelected"],
@@ -203,22 +226,26 @@ export const platformFeatureAccessMatrix = [
   feature("assembly.enterEdit", "Edit Group", ["panel"], {
     commandIds: ["assembly.enterEdit"],
     panelIds: ["panel.groups"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("assembly.exitEdit", "Exit Group Edit", ["panel"], {
     commandIds: ["assembly.exitEdit"],
     panelIds: ["panel.groups"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
   feature("assembly.ungroup", "Ungroup", ["panel"], {
     commandIds: ["assembly.ungroup"],
     panelIds: ["panel.groups"],
-    runtimeRequirements: ["selection", "entity"]
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
   }),
 
   feature("performance.benchmark", "Performance benchmark", ["panel", "modal"], {
     commandIds: ["performance.benchmark"],
-    panelIds: ["panel.performanceBenchmark"]
+    panelIds: ["panel.performanceBenchmark"],
+    requiresSurfaceExecutionEvidence: true
   }),
 
   panelFeature("panel.rightPanelShell", "Right panel shell"),

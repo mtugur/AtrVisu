@@ -1,27 +1,5 @@
 import { expect, type Dialog, type Page, test } from "@playwright/test";
 
-const requiredSurfaceExecutionCommandIds = [
-  "alignment.alignSelection",
-  "annotations.create",
-  "assembly.createGroup",
-  "assembly.enterEdit",
-  "assembly.exitEdit",
-  "assembly.ungroup",
-  "civil.addColumn",
-  "edit.deleteSelected",
-  "edit.duplicateSelected",
-  "edit.redo",
-  "edit.undo",
-  "library.addMachine",
-  "library.manager",
-  "library.taxonomyManager",
-  "performance.benchmark",
-  "snap.connectionPoint",
-  "view.showMeasurements",
-  "view.toggleConnectionPoints",
-  "view.toggleLabels"
-] as const;
-
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
 
@@ -95,7 +73,27 @@ const getRuntimeFeatureAccessReport = async (page: Page) => page.evaluate(() => 
   return bridge.getReport();
 });
 
-const getRuntimeFeatureAccessGate = async (page: Page, noRedConsole: boolean) =>
+const getRuntimeFeatureAccessGate = async (
+  page: Page,
+  noRedConsole: boolean,
+  surfaceExecution?: {
+    source: "observed-runtime-probes";
+    sessionId: string;
+    observations: readonly {
+      commandId: string;
+      sessionId: string;
+      beforeAttemptCount: number;
+      beforeExecutedCount: number;
+      afterAttemptCount: number;
+      afterExecutedCount: number;
+      finalResult: {
+        handled: boolean;
+        status: "executed" | "cancelled" | "disabled" | "unavailable" | "unsupported" | "failed";
+        reason?: string;
+      };
+    }[];
+  }
+) =>
   page.evaluate((passed) => {
     const bridge = window.__atrvisuRuntimeFeatureAccess;
     if (!bridge) {
@@ -103,11 +101,23 @@ const getRuntimeFeatureAccessGate = async (page: Page, noRedConsole: boolean) =>
     }
     return bridge.getGate({
       quality: { "no-red-console": passed.noRedConsole },
-      surfaceExecution: { verifiedCommandIds: passed.commandIds }
+      ...(passed.surfaceExecution ? { surfaceExecution: passed.surfaceExecution } : {})
     });
   }, {
     noRedConsole,
-    commandIds: [...requiredSurfaceExecutionCommandIds]
+    surfaceExecution
+  });
+
+const getRuntimeFeatureAccessDiagnostics = async (page: Page) =>
+  page.evaluate(() => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return {
+      sessionId: bridge.getDiagnosticsSessionId(),
+      requiredCommandIds: bridge.getRequiredSurfaceExecutionCommandIds()
+    };
   });
 
 const getRuntimeCommandExecution = async (page: Page, commandId: string) =>
@@ -132,6 +142,18 @@ const expectOneRuntimeCommandExecution = async (
   const after = await getRuntimeCommandExecution(page, commandId);
   expect(after.executedCount).toBe(before.executedCount + 1);
   expect(after.lastResult).toMatchObject({ handled: true, status: "executed" });
+  return page.evaluate(({ id, beforeProbe, afterProbe }) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.createCommandExecutionObservation({
+      commandId: id,
+      sessionId: bridge.getDiagnosticsSessionId(),
+      before: beforeProbe,
+      after: afterProbe
+    });
+  }, { id: commandId, beforeProbe: before, afterProbe: after });
 };
 
 const expectCancelledRuntimeCommandExecution = async (
@@ -147,6 +169,7 @@ const expectCancelledRuntimeCommandExecution = async (
   const after = await getRuntimeCommandExecution(page, commandId);
   expect(after.executedCount).toBe(before.executedCount);
   expect(after.lastResult).toMatchObject({ handled: false, status: "cancelled" });
+  return { before, after };
 };
 
 const getRuntimeFeature = async (page: Page, featureId: string) =>
@@ -415,12 +438,13 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   expect(errors).toEqual([]);
 });
 
-test("runtime feature access baseline closes only with explicit quality evidence", async ({ page }) => {
+test("runtime feature access baseline requires observed surface execution evidence", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await waitForRuntimeViewport(page);
 
   const report = await getRuntimeFeatureAccessReport(page);
+  const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
   expect(report.requiredRuntimeFeatures.every((feature) =>
     feature.status === "ready" || feature.status === "contextually-unavailable"
   )).toBe(true);
@@ -430,7 +454,7 @@ test("runtime feature access baseline closes only with explicit quality evidence
   expect(report.staleSurfaceFeatureIds).toEqual([]);
   expect(report.unmappedRuntimeSurfaceIds).toEqual([]);
   expect(report.missingSurfaceExecutionCommandIds)
-    .toEqual(requiredSurfaceExecutionCommandIds);
+    .toEqual(diagnostics.requiredCommandIds);
   expect(report.plannedFeatures.map((feature) => feature.featureId)).toEqual([
     "view.fitView",
     "panel.layoutExplorer",
@@ -451,11 +475,285 @@ test("runtime feature access baseline closes only with explicit quality evidence
   expect(missingEvidenceGate?.passed).toBe(false);
   expect(missingEvidenceGate?.blockedFeatureIds).toContain("diagnostics.noRedConsole");
   expect(missingEvidenceGate?.report.missingSurfaceExecutionCommandIds)
-    .toEqual(requiredSurfaceExecutionCommandIds);
+    .toEqual(diagnostics.requiredCommandIds);
 
-  const completeGate = await getRuntimeFeatureAccessGate(page, true);
+  const qualityOnlyGate = await getRuntimeFeatureAccessGate(page, true);
+  expect(qualityOnlyGate.passed).toBe(false);
+  expect(qualityOnlyGate.report.surfaceExecutionValidation.verifiedCommandIds).toEqual([]);
+  expect(qualityOnlyGate.report.missingSurfaceExecutionCommandIds)
+    .toEqual(diagnostics.requiredCommandIds);
+  expect(errors).toEqual([]);
+});
+
+test("runtime feature access complete gate is bound to observed visible command routes", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+  const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
+  const observations: Awaited<ReturnType<typeof expectOneRuntimeCommandExecution>>[] = [];
+  const observe = async (commandId: string, action: () => Promise<unknown>) => {
+    observations.push(await expectOneRuntimeCommandExecution(page, commandId, action));
+  };
+
+  expect((await getRuntimeFeatureAccessGate(page, true)).passed).toBe(false);
+
+  const machineCard = page.locator(".machine-card").first();
+  await observe("library.addMachine", () => machineCard.click());
+  await machineCard.click();
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 3);
+
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  const machineProperties = page.getByLabel("Selected machine properties");
+  await observe("edit.duplicateSelected", () =>
+    machineProperties.getByRole("button", { name: "Duplicate Selected" }).click()
+  );
+  await waitForMachineDiagnostics(page, 4);
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await observe("edit.deleteSelected", () =>
+    page.getByRole("button", { name: "Delete Selected" }).first().click()
+  );
+  await waitForMachineDiagnostics(page, 3);
+  await observe("edit.undo", () =>
+    page.getByRole("button", { name: "Undo", exact: true }).click()
+  );
+  await waitForMachineDiagnostics(page, 4);
+  await observe("edit.redo", () =>
+    page.getByRole("button", { name: "Redo", exact: true }).click()
+  );
+  await waitForMachineDiagnostics(page, 3);
+
+  const overlaySection = page.getByRole("button", { name: /Display \/ Overlay Controls/i });
+  if ((await overlaySection.getAttribute("aria-expanded")) !== "true") {
+    await overlaySection.click();
+  }
+  await observe("view.toggleLabels", () => page.getByLabel("Show Labels").uncheck());
+  await expect(page.getByLabel("Show Labels")).not.toBeChecked();
+  await observe("view.toggleConnectionPoints", () =>
+    page.getByLabel("Show Connection Points").check()
+  );
+  await expect(page.getByLabel("Show Connection Points")).toBeChecked();
+  await observe("view.showMeasurements", () =>
+    page.getByLabel("Show Measurement Helpers").uncheck()
+  );
+  await expect(page.getByLabel("Show Measurement Helpers")).not.toBeChecked();
+
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  await machineProperties.getByLabel("Plan X").fill("-10000");
+  await machineProperties.getByLabel("Plan X").blur();
+  await expect(machineProperties.getByLabel("Plan X")).toHaveValue("-10000");
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.up("Control");
+  const snapButton = page.getByTestId("connection-point-snap-button");
+  await expect(snapButton).toBeEnabled();
+  const positionsBeforeSnap = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
+  await observe("snap.connectionPoint", () => snapButton.click());
+  await expect.poll(() =>
+    readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  ).not.toEqual(positionsBeforeSnap);
+
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.up("Control");
+  const multiSelectionSection = page.getByRole("button", { name: /Multi-Selection/i });
+  if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
+    await multiSelectionSection.click();
+  }
+  const multiSelectionPanel = page.getByTestId("multi-selection-panel");
+  const positionsBeforeAlignment = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
+  await observe("alignment.alignSelection", () =>
+    multiSelectionPanel.getByRole("button", { name: "Align Left" }).click()
+  );
+  await expect.poll(() =>
+    readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  ).not.toEqual(positionsBeforeAlignment);
+
+  await clickSceneMachine(page, machineIds[0]);
+  const assemblySection = page.getByRole("button", { name: /Assembly Tree/i });
+  if ((await assemblySection.getAttribute("aria-expanded")) !== "true") {
+    await assemblySection.click();
+  }
+  const createGroupButton = page.getByTestId("create-group-from-selection");
+  await expect(createGroupButton).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept("Observed Assembly"));
+  await observe("assembly.createGroup", () => createGroupButton.click());
+  const group = page.locator(".assembly-group-row").filter({ hasText: "Observed Assembly" });
+  await expect(group).toContainText("1 item");
+  await observe("assembly.enterEdit", () =>
+    group.getByRole("button", { name: /Edit Group Observed Assembly/i }).click()
+  );
+  await expect(group).toContainText("Editing members");
+  await observe("assembly.exitEdit", () =>
+    group.getByRole("button", { name: /Exit Group Edit Observed Assembly/i }).click()
+  );
+  await expect(group).not.toContainText("Editing members");
+  page.once("dialog", (dialog) => dialog.accept());
+  await observe("assembly.ungroup", () =>
+    group.getByRole("button", { name: /Ungroup Observed Assembly/i }).click()
+  );
+  await expect(group).toHaveCount(0);
+
+  const annotationsSection = page.getByRole("button", { name: /Annotations/i });
+  if ((await annotationsSection.getAttribute("aria-expanded")) !== "true") {
+    await annotationsSection.click();
+  }
+  await observe("annotations.create", () =>
+    page.getByTestId("add-note-annotation").click()
+  );
+  await expect(page.getByTestId("annotation-properties")).toBeVisible();
+
+  const civilSection = page.getByRole("button", { name: /Building \/ Civil/i });
+  if ((await civilSection.getAttribute("aria-expanded")) !== "true") {
+    await civilSection.click();
+  }
+  await observe("civil.addColumn", () => page.getByTestId("add-civil-column").click());
+  await expect(page.getByTestId("civil-reference-properties")).toBeVisible();
+
+  await observe("library.manager", () => page.getByTestId("open-library-manager").click());
+  await expect(page.getByTestId("library-manager-modal")).toBeVisible();
+  await page.getByTestId("close-library-manager-header").click();
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+
+  await observe("library.taxonomyManager", () =>
+    page.getByTestId("open-taxonomy-manager").click()
+  );
+  await expect(page.getByTestId("taxonomy-manager-modal")).toBeVisible();
+  await page.getByTestId("close-taxonomy-manager-header").click();
+  await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
+
+  const benchmarkSection = page.getByRole("button", { name: /Performance Benchmark/i });
+  if ((await benchmarkSection.getAttribute("aria-expanded")) !== "true") {
+    await benchmarkSection.click();
+  }
+  await observe("performance.benchmark", () =>
+    page.getByTestId("open-performance-benchmark").click()
+  );
+  await expect(page.getByTestId("performance-benchmark-modal")).toBeVisible();
+  await page.getByTestId("close-performance-benchmark").click();
+  await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
+
+  const attestation = {
+    source: "observed-runtime-probes" as const,
+    sessionId: diagnostics.sessionId,
+    observations
+  };
+  const validation = await page.evaluate((candidate) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.validateSurfaceExecutionAttestation(candidate);
+  }, attestation);
+  expect(validation.passed).toBe(true);
+  expect(validation.verifiedCommandIds).toEqual(diagnostics.requiredCommandIds);
+  expect([...observations.map((item) => item.commandId)].sort())
+    .toEqual(diagnostics.requiredCommandIds);
+
+  const completeGate = await getRuntimeFeatureAccessGate(page, errors.length === 0, attestation);
   expect(completeGate.passed).toBe(true);
   expect(completeGate.blockedFeatureIds).toEqual([]);
+  expect(completeGate.report.surfaceExecutionValidation.passed).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("runtime feature access rejects partial, cancelled, and stale browser evidence", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+  const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
+
+  const emptyGate = await getRuntimeFeatureAccessGate(page, true, {
+    source: "observed-runtime-probes",
+    sessionId: diagnostics.sessionId,
+    observations: []
+  });
+  expect(emptyGate.passed).toBe(false);
+  expect(emptyGate.report.missingSurfaceExecutionCommandIds)
+    .toEqual(diagnostics.requiredCommandIds);
+
+  const addMachineObservation = await expectOneRuntimeCommandExecution(
+    page,
+    "library.addMachine",
+    () => page.locator(".machine-card").first().click()
+  );
+  await waitForMachineDiagnostics(page, 1);
+  const partialAttestation = {
+    source: "observed-runtime-probes" as const,
+    sessionId: diagnostics.sessionId,
+    observations: [addMachineObservation]
+  };
+  const partialGate = await getRuntimeFeatureAccessGate(page, true, partialAttestation);
+  expect(partialGate.passed).toBe(false);
+  expect(partialGate.report.surfaceExecutionValidation.verifiedCommandIds)
+    .toEqual(["library.addMachine"]);
+  expect(partialGate.report.missingSurfaceExecutionCommandIds)
+    .toEqual(diagnostics.requiredCommandIds.filter((id) => id !== "library.addMachine"));
+
+  page.once("dialog", (dialog) => dialog.dismiss());
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  const cancelled = await expectCancelledRuntimeCommandExecution(
+    page,
+    "edit.deleteSelected",
+    () => page.getByLabel("Selected machine properties")
+      .getByRole("button", { name: "Delete Selected" })
+      .click()
+  );
+  const cancelledValidation = await page.evaluate(({ sessionId, before, after }) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge || !after.lastResult) {
+      throw new Error("AtrVisu runtime feature access cancellation probe is unavailable.");
+    }
+    return bridge.validateSurfaceExecutionAttestation({
+      source: "observed-runtime-probes",
+      sessionId,
+      observations: [{
+        commandId: "edit.deleteSelected",
+        sessionId,
+        beforeAttemptCount: before.attemptCount,
+        beforeExecutedCount: before.executedCount,
+        afterAttemptCount: after.attemptCount,
+        afterExecutedCount: after.executedCount,
+        finalResult: after.lastResult
+      }]
+    });
+  }, {
+    sessionId: diagnostics.sessionId,
+    before: cancelled.before,
+    after: cancelled.after
+  });
+  expect(cancelledValidation.passed).toBe(false);
+  expect(cancelledValidation.cancelledCommandIds).toEqual(["edit.deleteSelected"]);
+  expect(cancelledValidation.attemptedOnlyCommandIds).toEqual(["edit.deleteSelected"]);
+
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForRuntimeViewport(page);
+  const reloadedDiagnostics = await getRuntimeFeatureAccessDiagnostics(page);
+  expect(reloadedDiagnostics.sessionId).not.toBe(diagnostics.sessionId);
+  const staleGate = await getRuntimeFeatureAccessGate(page, true, partialAttestation);
+  expect(staleGate.passed).toBe(false);
+  expect(staleGate.report.surfaceExecutionValidation.staleCommandIds)
+    .toEqual(["library.addMachine"]);
   expect(errors).toEqual([]);
 });
 

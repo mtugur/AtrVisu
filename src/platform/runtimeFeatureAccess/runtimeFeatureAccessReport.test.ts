@@ -3,8 +3,7 @@ import type { FeatureAccessEntry, PlatformEntity, SelectionState } from "../cont
 import {
   createRuntimeEntityAccessEvidence,
   createRuntimeFeatureAccessReport,
-  createRuntimeSelectionAccessEvidence,
-  requiredRuntimeSurfaceExecutionCommandIds
+  createRuntimeSelectionAccessEvidence
 } from "./runtimeFeatureAccessReport";
 import type {
   RuntimeEntityAuthorityCapabilities,
@@ -89,9 +88,6 @@ const evidence = (overrides: Partial<RuntimeFeatureAccessEvidence> = {}): Runtim
     resizeSupported: true,
     sceneLifecycleGeneration: 1,
     resizeGeneration: 1
-  },
-  surfaceExecution: {
-    verifiedCommandIds: requiredRuntimeSurfaceExecutionCommandIds
   },
   ...overrides
 });

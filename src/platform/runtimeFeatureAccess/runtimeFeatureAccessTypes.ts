@@ -9,7 +9,8 @@ import type {
 import type { LegacyEntityFamily } from "../adapters";
 import type { PlatformSurfaceInventoryItem } from "../surfaceInventory";
 import type {
-  RuntimeCommandExecutionProbe as SharedRuntimeCommandExecutionProbe
+  RuntimeCommandExecutionProbe as SharedRuntimeCommandExecutionProbe,
+  RuntimeCommandOperationResult
 } from "../runtimeCommands/runtimeCommandOperation";
 
 export type RuntimeFeatureAccessStatus =
@@ -115,13 +116,46 @@ export type RuntimeQualityEvidence = Readonly<
   Partial<Record<FeatureQualitySignalId, boolean>>
 >;
 
-export type RuntimeSurfaceExecutionEvidence = {
+export type RuntimeCommandExecutionObservation = {
+  commandId: string;
+  sessionId: string;
+  beforeAttemptCount: number;
+  beforeExecutedCount: number;
+  afterAttemptCount: number;
+  afterExecutedCount: number;
+  finalResult: RuntimeCommandOperationResult;
+};
+
+export type RuntimeCommandExecutionObservationInput = {
+  commandId: string;
+  sessionId: string;
+  before: RuntimeCommandExecutionProbe;
+  after: RuntimeCommandExecutionProbe;
+};
+
+export type RuntimeSurfaceExecutionAttestation = {
+  source: "observed-runtime-probes";
+  sessionId: string;
+  observations: readonly RuntimeCommandExecutionObservation[];
+};
+
+export type RuntimeSurfaceExecutionAttestationValidation = {
+  passed: boolean;
   verifiedCommandIds: readonly string[];
+  missingCommandIds: readonly string[];
+  duplicateCommandIds: readonly string[];
+  staleCommandIds: readonly string[];
+  cancelledCommandIds: readonly string[];
+  failedCommandIds: readonly string[];
+  attemptedOnlyCommandIds: readonly string[];
+  unknownCommandIds: readonly string[];
+  malformedCommandIds: readonly string[];
+  reasons: readonly string[];
 };
 
 export type RuntimeFeatureAccessExternalEvidence = {
   quality?: RuntimeQualityEvidence;
-  surfaceExecution?: RuntimeSurfaceExecutionEvidence;
+  surfaceExecution?: RuntimeSurfaceExecutionAttestation;
 };
 
 export type RuntimeCommandExecutionProbe = SharedRuntimeCommandExecutionProbe;
@@ -133,7 +167,7 @@ export type RuntimeFeatureAccessEvidence = {
   entities?: RuntimeEntityAccessEvidence;
   viewport?: RuntimeViewportAccessEvidence;
   quality?: RuntimeQualityEvidence;
-  surfaceExecution?: RuntimeSurfaceExecutionEvidence;
+  surfaceExecution?: RuntimeSurfaceExecutionAttestation;
 };
 
 export type RuntimeFeatureAccessReportItem = {
@@ -172,6 +206,7 @@ export type RuntimeFeatureAccessReport = {
   duplicateFeatureIds: readonly string[];
   requiredSurfaceExecutionCommandIds: readonly string[];
   missingSurfaceExecutionCommandIds: readonly string[];
+  surfaceExecutionValidation: RuntimeSurfaceExecutionAttestationValidation;
   issues: readonly string[];
 };
 
@@ -186,6 +221,7 @@ export type RuntimeFeatureAccessReportInput = {
   features: readonly FeatureAccessEntry[];
   surfaces: readonly PlatformSurfaceInventoryItem[];
   evidence: RuntimeFeatureAccessEvidence;
+  runtimeSessionId?: string;
 };
 
 export type RuntimeSelectionEvidenceInput = {
@@ -208,6 +244,14 @@ export type RuntimeFeatureAccessE2EBridge = {
   listPlanned: () => readonly RuntimeFeatureAccessReportItem[];
   getCommandExecution: (commandId: string) => RuntimeCommandExecutionProbe;
   listCommandExecutions: () => readonly RuntimeCommandExecutionProbe[];
+  getDiagnosticsSessionId: () => string;
+  getRequiredSurfaceExecutionCommandIds: () => readonly string[];
+  createCommandExecutionObservation: (
+    input: RuntimeCommandExecutionObservationInput
+  ) => RuntimeCommandExecutionObservation;
+  validateSurfaceExecutionAttestation: (
+    attestation: RuntimeSurfaceExecutionAttestation
+  ) => RuntimeSurfaceExecutionAttestationValidation;
 };
 
 declare global {

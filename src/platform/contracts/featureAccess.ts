@@ -17,6 +17,7 @@ export type FeatureAccessEntry = {
   panelIds?: readonly PanelId[];
   runtimeRequirements?: readonly FeatureRuntimeRequirement[];
   qualitySignalId?: FeatureQualitySignalId;
+  requiresSurfaceExecutionEvidence?: boolean;
   /**
    * Legacy singular links remain readable while existing metadata consumers
    * migrate to the canonical arrays above.

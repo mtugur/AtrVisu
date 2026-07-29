@@ -198,9 +198,11 @@ import { platformFeatureAccessMatrix } from "./platform/featureAccess";
 import { currentPlatformSurfaceInventory } from "./platform/surfaceInventory";
 import {
   createRuntimeEntityAccessEvidence,
+  createRuntimeCommandExecutionObservation,
   createRuntimeFeatureAccessGate,
   createRuntimeFeatureAccessReport,
   createRuntimeSelectionAccessEvidence,
+  validateRuntimeSurfaceExecutionAttestation,
   type RuntimeCommandAccessEvidence,
   type RuntimeCommandExecutionProbe,
   type RuntimeFeatureAccessExternalEvidence,
@@ -365,6 +367,9 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 export function App() {
   const [enableE2EDiagnostics] = useState(() =>
     new URLSearchParams(window.location.search).get("e2eDiagnostics") === "1"
+  );
+  const [runtimeFeatureAccessDiagnosticsSessionId] = useState(() =>
+    enableE2EDiagnostics ? window.crypto.randomUUID() : null
   );
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [civilReferences, setCivilReferences] = useState<CivilReferenceItem[]>([]);
@@ -3269,11 +3274,18 @@ export function App() {
   ) => createRuntimeFeatureAccessReport({
     features: platformFeatureAccessMatrix,
     surfaces: currentPlatformSurfaceInventory,
-    evidence: createCurrentRuntimeFeatureAccessEvidence(externalEvidence)
-  }), [createCurrentRuntimeFeatureAccessEvidence]);
+    evidence: createCurrentRuntimeFeatureAccessEvidence(externalEvidence),
+    ...(runtimeFeatureAccessDiagnosticsSessionId
+      ? { runtimeSessionId: runtimeFeatureAccessDiagnosticsSessionId }
+      : {})
+  }), [
+    createCurrentRuntimeFeatureAccessEvidence,
+    runtimeFeatureAccessDiagnosticsSessionId
+  ]);
 
   useEffect(() => {
-    if (!enableE2EDiagnostics) {
+    const diagnosticsSessionId = runtimeFeatureAccessDiagnosticsSessionId;
+    if (!enableE2EDiagnostics || !diagnosticsSessionId) {
       return;
     }
 
@@ -3286,7 +3298,8 @@ export function App() {
       getGate: (externalEvidence) => createRuntimeFeatureAccessGate({
         features: platformFeatureAccessMatrix,
         surfaces: currentPlatformSurfaceInventory,
-        evidence: createCurrentRuntimeFeatureAccessEvidence(externalEvidence)
+        evidence: createCurrentRuntimeFeatureAccessEvidence(externalEvidence),
+        runtimeSessionId: diagnosticsSessionId
       }),
       listBlockedRequired: () =>
         createCurrentRuntimeFeatureAccessReport().requiredRuntimeFeatures.filter(
@@ -3298,7 +3311,22 @@ export function App() {
         ?? { commandId, attemptCount: 0, executedCount: 0 },
       listCommandExecutions: () =>
         [...runtimeCommandExecutionProbesRef.current.values()]
-          .sort((left, right) => left.commandId.localeCompare(right.commandId))
+          .sort((left, right) => left.commandId.localeCompare(right.commandId)),
+      getDiagnosticsSessionId: () => diagnosticsSessionId,
+      getRequiredSurfaceExecutionCommandIds: () =>
+        createCurrentRuntimeFeatureAccessReport().requiredSurfaceExecutionCommandIds,
+      createCommandExecutionObservation: (input) =>
+        createRuntimeCommandExecutionObservation({
+          ...input,
+          currentSessionId: diagnosticsSessionId
+        }),
+      validateSurfaceExecutionAttestation: (attestation) =>
+        validateRuntimeSurfaceExecutionAttestation({
+          requiredCommandIds:
+            createCurrentRuntimeFeatureAccessReport().requiredSurfaceExecutionCommandIds,
+          currentSessionId: diagnosticsSessionId,
+          attestation
+        })
     };
 
     return () => {
@@ -3307,7 +3335,8 @@ export function App() {
   }, [
     createCurrentRuntimeFeatureAccessEvidence,
     createCurrentRuntimeFeatureAccessReport,
-    enableE2EDiagnostics
+    enableE2EDiagnostics,
+    runtimeFeatureAccessDiagnosticsSessionId
   ]);
 
   const executeAssemblyCommand = useCallback((

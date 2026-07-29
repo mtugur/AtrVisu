@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { FeatureAccessEntry } from "../contracts";
 import { createRuntimeFeatureAccessGate } from "./runtimeFeatureAccessGate";
-import { requiredRuntimeSurfaceExecutionCommandIds } from "./runtimeFeatureAccessReport";
 import type { RuntimeFeatureAccessEvidence } from "./runtimeFeatureAccessTypes";
+
+const runtimeSessionId = "runtime-session";
 
 const required: FeatureAccessEntry = {
   featureId: "test.required",
   label: "Required",
   classification: "required-runtime",
   surfaces: ["panel"],
-  commandIds: ["test.command"],
+  commandIds: ["edit.undo"],
   panelIds: ["panel.test"],
+  requiresSurfaceExecutionEvidence: true,
   requiredForRegression: true
 };
 const planned: FeatureAccessEntry = {
@@ -51,7 +53,17 @@ const evidence = (
   }),
   quality: { "no-red-console": true },
   surfaceExecution: {
-    verifiedCommandIds: requiredRuntimeSurfaceExecutionCommandIds
+    source: "observed-runtime-probes",
+    sessionId: runtimeSessionId,
+    observations: [{
+      commandId: "edit.undo",
+      sessionId: runtimeSessionId,
+      beforeAttemptCount: 0,
+      beforeExecutedCount: 0,
+      afterAttemptCount: 1,
+      afterExecutedCount: 1,
+      finalResult: { handled: true, status: "executed" }
+    }]
   },
   ...overrides
 });
@@ -78,7 +90,8 @@ const createGate = (
     sourceFiles: ["e2e/test.ts"],
     featureIds: [quality.featureId]
   }],
-  evidence: runtimeEvidence
+  evidence: runtimeEvidence,
+  runtimeSessionId
 });
 
 describe("runtime feature access gate", () => {
@@ -206,7 +219,44 @@ describe("runtime feature access gate", () => {
 
     expect(gate.passed).toBe(false);
     expect(gate.report.missingSurfaceExecutionCommandIds)
-      .toEqual(requiredRuntimeSurfaceExecutionCommandIds);
+      .toEqual(["edit.undo"]);
+  });
+
+  it("blocks partial, cancelled, and copied-ID-only surface evidence", () => {
+    const partial = createGate(evidence({
+      surfaceExecution: {
+        source: "observed-runtime-probes",
+        sessionId: runtimeSessionId,
+        observations: []
+      }
+    }));
+    const cancelled = createGate(evidence({
+      surfaceExecution: {
+        source: "observed-runtime-probes",
+        sessionId: runtimeSessionId,
+        observations: [{
+          commandId: "edit.undo",
+          sessionId: runtimeSessionId,
+          beforeAttemptCount: 0,
+          beforeExecutedCount: 0,
+          afterAttemptCount: 1,
+          afterExecutedCount: 0,
+          finalResult: { handled: false, status: "cancelled" }
+        }]
+      }
+    }));
+    const copiedIdsOnly: unknown = { verifiedCommandIds: ["edit.undo"] };
+    const copied = createGate(evidence({
+      surfaceExecution: copiedIdsOnly as RuntimeFeatureAccessEvidence["surfaceExecution"]
+    }));
+
+    expect(partial.passed).toBe(false);
+    expect(partial.report.missingSurfaceExecutionCommandIds).toEqual(["edit.undo"]);
+    expect(cancelled.passed).toBe(false);
+    expect(cancelled.report.surfaceExecutionValidation.cancelledCommandIds)
+      .toEqual(["edit.undo"]);
+    expect(copied.passed).toBe(false);
+    expect(copied.report.surfaceExecutionValidation.verifiedCommandIds).toEqual([]);
   });
 
   it("reports deterministic sorted failure reasons", () => {
