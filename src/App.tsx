@@ -198,18 +198,20 @@ import { platformFeatureAccessMatrix } from "./platform/featureAccess";
 import { currentPlatformSurfaceInventory } from "./platform/surfaceInventory";
 import {
   createRuntimeEntityAccessEvidence,
-  createRuntimeCommandExecutionObservation,
   createRuntimeFeatureAccessGate,
   createRuntimeFeatureAccessReport,
   createRuntimeSelectionAccessEvidence,
-  validateRuntimeSurfaceExecutionAttestation,
+  createRuntimeSurfaceExecutionAuthority,
+  deriveRequiredRuntimeSurfaceExecutionCommandIds,
   type RuntimeCommandAccessEvidence,
   type RuntimeCommandExecutionProbe,
   type RuntimeFeatureAccessExternalEvidence,
+  type RuntimeFeatureAccessE2EBridge,
   type RuntimeFeatureAccessEvidence,
   type RuntimeEntityAuthorityCapabilities,
   type RuntimePanelAccessEvidence,
   type RuntimeSelectionAuthorityCapabilities,
+  type RuntimeSurfaceExecutionAuthority,
   type RuntimeViewportAccessEvidence
 } from "./platform/runtimeFeatureAccess";
 import { getPlatformCommandSeedById } from "./platform/registrySeeds";
@@ -437,6 +439,20 @@ export function App() {
   const runtimeCommandExecutionProbesRef = useRef(
     new Map<string, RuntimeCommandExecutionProbe>()
   );
+  const [runtimeSurfaceExecutionAuthority] = useState<
+    RuntimeSurfaceExecutionAuthority | null
+  >(() => {
+    if (!enableE2EDiagnostics || !runtimeFeatureAccessDiagnosticsSessionId) {
+      return null;
+    }
+    return createRuntimeSurfaceExecutionAuthority({
+      sessionId: runtimeFeatureAccessDiagnosticsSessionId,
+      requiredCommandIds:
+        deriveRequiredRuntimeSurfaceExecutionCommandIds(platformFeatureAccessMatrix),
+      getProbe: (commandId) =>
+        runtimeCommandExecutionProbesRef.current.get(commandId)
+    });
+  });
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
@@ -3259,13 +3275,14 @@ export function App() {
       }),
       viewport: viewportEvidence,
       ...(externalEvidence?.quality ? { quality: externalEvidence.quality } : {}),
-      ...(externalEvidence?.surfaceExecution
-        ? { surfaceExecution: externalEvidence.surfaceExecution }
+      ...(runtimeSurfaceExecutionAuthority
+        ? { surfaceExecution: runtimeSurfaceExecutionAuthority.getEvidenceSnapshot() }
         : {})
     };
   }, [
     getRuntimeFeatureCommandEvidence,
     getRuntimeFeaturePanelEvidence,
+    runtimeSurfaceExecutionAuthority,
     runtimeViewportBridge
   ]);
 
@@ -3283,13 +3300,21 @@ export function App() {
     runtimeFeatureAccessDiagnosticsSessionId
   ]);
 
+  useEffect(() => () => {
+    runtimeSurfaceExecutionAuthority?.reset();
+  }, [runtimeSurfaceExecutionAuthority]);
+
   useEffect(() => {
     const diagnosticsSessionId = runtimeFeatureAccessDiagnosticsSessionId;
-    if (!enableE2EDiagnostics || !diagnosticsSessionId) {
+    if (
+      !enableE2EDiagnostics
+      || !diagnosticsSessionId
+      || !runtimeSurfaceExecutionAuthority
+    ) {
       return;
     }
 
-    window.__atrvisuRuntimeFeatureAccess = {
+    const diagnosticsBridge: RuntimeFeatureAccessE2EBridge = {
       getReport: () => createCurrentRuntimeFeatureAccessReport(),
       getFeature: (featureId) =>
         createCurrentRuntimeFeatureAccessReport().features.find(
@@ -3314,29 +3339,27 @@ export function App() {
           .sort((left, right) => left.commandId.localeCompare(right.commandId)),
       getDiagnosticsSessionId: () => diagnosticsSessionId,
       getRequiredSurfaceExecutionCommandIds: () =>
-        createCurrentRuntimeFeatureAccessReport().requiredSurfaceExecutionCommandIds,
-      createCommandExecutionObservation: (input) =>
-        createRuntimeCommandExecutionObservation({
-          ...input,
-          currentSessionId: diagnosticsSessionId
-        }),
-      validateSurfaceExecutionAttestation: (attestation) =>
-        validateRuntimeSurfaceExecutionAttestation({
-          requiredCommandIds:
-            createCurrentRuntimeFeatureAccessReport().requiredSurfaceExecutionCommandIds,
-          currentSessionId: diagnosticsSessionId,
-          attestation
-        })
+        runtimeSurfaceExecutionAuthority.requiredCommandIds,
+      beginSurfaceExecutionObservation: (commandId) =>
+        runtimeSurfaceExecutionAuthority.beginObservation(commandId),
+      completeSurfaceExecutionObservation: (token) =>
+        runtimeSurfaceExecutionAuthority.completeObservation(token),
+      getSurfaceExecutionEvidence: () =>
+        runtimeSurfaceExecutionAuthority.getEvidenceSnapshot()
     };
+    window.__atrvisuRuntimeFeatureAccess = diagnosticsBridge;
 
     return () => {
-      delete window.__atrvisuRuntimeFeatureAccess;
+      if (window.__atrvisuRuntimeFeatureAccess === diagnosticsBridge) {
+        delete window.__atrvisuRuntimeFeatureAccess;
+      }
     };
   }, [
     createCurrentRuntimeFeatureAccessEvidence,
     createCurrentRuntimeFeatureAccessReport,
     enableE2EDiagnostics,
-    runtimeFeatureAccessDiagnosticsSessionId
+    runtimeFeatureAccessDiagnosticsSessionId,
+    runtimeSurfaceExecutionAuthority
   ]);
 
   const executeAssemblyCommand = useCallback((

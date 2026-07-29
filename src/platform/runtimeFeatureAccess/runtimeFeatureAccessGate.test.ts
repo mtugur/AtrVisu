@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { FeatureAccessEntry } from "../contracts";
+import {
+  createRuntimeCommandOperationResult,
+  type RuntimeCommandExecutionProbe,
+  type RuntimeCommandOperationStatus
+} from "../runtimeCommands/runtimeCommandOperation";
 import { createRuntimeFeatureAccessGate } from "./runtimeFeatureAccessGate";
+import { createRuntimeSurfaceExecutionAuthority } from "./runtimeSurfaceExecutionAuthority";
 import type { RuntimeFeatureAccessEvidence } from "./runtimeFeatureAccessTypes";
 
 const runtimeSessionId = "runtime-session";
@@ -32,6 +38,32 @@ const quality: FeatureAccessEntry = {
   requiredForRegression: true
 };
 
+const createSurfaceExecutionSnapshot = (
+  status: RuntimeCommandOperationStatus = "executed",
+  sessionId = runtimeSessionId
+) => {
+  const probes = new Map<string, RuntimeCommandExecutionProbe>();
+  const authority = createRuntimeSurfaceExecutionAuthority({
+    sessionId,
+    requiredCommandIds: ["edit.undo"],
+    getProbe: (commandId) => probes.get(commandId),
+    createToken: () => `token-${status}`
+  });
+  const handle = authority.beginObservation("edit.undo");
+  probes.set("edit.undo", {
+    commandId: "edit.undo",
+    attemptCount: 1,
+    executedCount: status === "executed" ? 1 : 0,
+    lastResult: createRuntimeCommandOperationResult(status)
+  });
+  try {
+    authority.completeObservation(handle.token);
+  } catch {
+    // Rejected live transitions remain visible in the authority snapshot.
+  }
+  return authority.getEvidenceSnapshot();
+};
+
 const evidence = (
   overrides: Partial<RuntimeFeatureAccessEvidence> = {}
 ): RuntimeFeatureAccessEvidence => ({
@@ -52,19 +84,7 @@ const evidence = (
     capabilities: ["open"]
   }),
   quality: { "no-red-console": true },
-  surfaceExecution: {
-    source: "observed-runtime-probes",
-    sessionId: runtimeSessionId,
-    observations: [{
-      commandId: "edit.undo",
-      sessionId: runtimeSessionId,
-      beforeAttemptCount: 0,
-      beforeExecutedCount: 0,
-      afterAttemptCount: 1,
-      afterExecutedCount: 1,
-      finalResult: { handled: true, status: "executed" }
-    }]
-  },
+  surfaceExecution: createSurfaceExecutionSnapshot(),
   ...overrides
 });
 
@@ -223,31 +243,35 @@ describe("runtime feature access gate", () => {
   });
 
   it("blocks partial, cancelled, and copied-ID-only surface evidence", () => {
+    const emptyAuthority = createRuntimeSurfaceExecutionAuthority({
+      sessionId: runtimeSessionId,
+      requiredCommandIds: ["edit.undo"],
+      getProbe: () => undefined,
+      createToken: () => "unused"
+    });
     const partial = createGate(evidence({
-      surfaceExecution: {
-        source: "observed-runtime-probes",
-        sessionId: runtimeSessionId,
-        observations: []
-      }
+      surfaceExecution: emptyAuthority.getEvidenceSnapshot()
     }));
     const cancelled = createGate(evidence({
-      surfaceExecution: {
-        source: "observed-runtime-probes",
-        sessionId: runtimeSessionId,
-        observations: [{
-          commandId: "edit.undo",
-          sessionId: runtimeSessionId,
-          beforeAttemptCount: 0,
-          beforeExecutedCount: 0,
-          afterAttemptCount: 1,
-          afterExecutedCount: 0,
-          finalResult: { handled: false, status: "cancelled" }
-        }]
-      }
+      surfaceExecution: createSurfaceExecutionSnapshot("cancelled")
     }));
     const copiedIdsOnly: unknown = { verifiedCommandIds: ["edit.undo"] };
     const copied = createGate(evidence({
       surfaceExecution: copiedIdsOnly as RuntimeFeatureAccessEvidence["surfaceExecution"]
+    }));
+    const rawObservationsOnly: unknown = {
+      observations: [{
+        commandId: "edit.undo",
+        beforeAttemptCount: 0,
+        afterAttemptCount: 1,
+        beforeExecutedCount: 0,
+        afterExecutedCount: 1,
+        finalResult: { handled: true, status: "executed" }
+      }]
+    };
+    const rawObservations = createGate(evidence({
+      surfaceExecution:
+        rawObservationsOnly as RuntimeFeatureAccessEvidence["surfaceExecution"]
     }));
 
     expect(partial.passed).toBe(false);
@@ -257,6 +281,19 @@ describe("runtime feature access gate", () => {
       .toEqual(["edit.undo"]);
     expect(copied.passed).toBe(false);
     expect(copied.report.surfaceExecutionValidation.verifiedCommandIds).toEqual([]);
+    expect(rawObservations.passed).toBe(false);
+    expect(rawObservations.report.surfaceExecutionValidation.verifiedCommandIds)
+      .toEqual([]);
+  });
+
+  it("blocks a trusted authority snapshot from a stale session", () => {
+    const gate = createGate(evidence({
+      surfaceExecution: createSurfaceExecutionSnapshot("executed", "old-session")
+    }));
+
+    expect(gate.passed).toBe(false);
+    expect(gate.report.surfaceExecutionValidation.staleCommandIds)
+      .toEqual(["edit.undo"]);
   });
 
   it("reports deterministic sorted failure reasons", () => {

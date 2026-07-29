@@ -4,10 +4,13 @@ export {
   createRuntimeSelectionAccessEvidence
 } from "./runtimeFeatureAccessReport";
 export {
-  createRuntimeCommandExecutionObservation,
   deriveRequiredRuntimeSurfaceExecutionCommandIds,
-  validateRuntimeSurfaceExecutionAttestation
+  validateRuntimeSurfaceExecutionAuthoritySnapshot
 } from "./runtimeSurfaceExecutionEvidence";
+export {
+  createRuntimeSurfaceExecutionAuthority,
+  isRuntimeSurfaceExecutionAuthoritySnapshot
+} from "./runtimeSurfaceExecutionAuthority";
 export {
   createRuntimeFeatureAccessGate,
   evaluateRuntimeFeatureAccessGate
@@ -27,11 +30,14 @@ export type {
   RuntimePanelAccessEvidence,
   RuntimeQualityEvidence,
   RuntimeCommandExecutionProbe,
-  RuntimeCommandExecutionObservation,
-  RuntimeCommandExecutionObservationInput,
   RuntimeSelectionAccessEvidence,
   RuntimeSelectionAuthorityCapabilities,
-  RuntimeSurfaceExecutionAttestation,
-  RuntimeSurfaceExecutionAttestationValidation,
+  RuntimeSurfaceExecutionAuthority,
+  RuntimeSurfaceExecutionAuthoritySnapshot,
+  RuntimeSurfaceExecutionAuthorityValidation,
+  RuntimeSurfaceExecutionCompletion,
+  RuntimeSurfaceExecutionObservationHandle,
+  RuntimeSurfaceExecutionRejection,
+  RuntimeSurfaceExecutionRejectionKind,
   RuntimeViewportAccessEvidence
 } from "./runtimeFeatureAccessTypes";

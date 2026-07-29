@@ -75,38 +75,17 @@ const getRuntimeFeatureAccessReport = async (page: Page) => page.evaluate(() => 
 
 const getRuntimeFeatureAccessGate = async (
   page: Page,
-  noRedConsole: boolean,
-  surfaceExecution?: {
-    source: "observed-runtime-probes";
-    sessionId: string;
-    observations: readonly {
-      commandId: string;
-      sessionId: string;
-      beforeAttemptCount: number;
-      beforeExecutedCount: number;
-      afterAttemptCount: number;
-      afterExecutedCount: number;
-      finalResult: {
-        handled: boolean;
-        status: "executed" | "cancelled" | "disabled" | "unavailable" | "unsupported" | "failed";
-        reason?: string;
-      };
-    }[];
-  }
+  noRedConsole: boolean
 ) =>
-  page.evaluate((passed) => {
+  page.evaluate((passedNoRedConsole) => {
     const bridge = window.__atrvisuRuntimeFeatureAccess;
     if (!bridge) {
       throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
     }
     return bridge.getGate({
-      quality: { "no-red-console": passed.noRedConsole },
-      ...(passed.surfaceExecution ? { surfaceExecution: passed.surfaceExecution } : {})
+      quality: { "no-red-console": passedNoRedConsole }
     });
-  }, {
-    noRedConsole,
-    surfaceExecution
-  });
+  }, noRedConsole);
 
 const getRuntimeFeatureAccessDiagnostics = async (page: Page) =>
   page.evaluate(() => {
@@ -129,11 +108,43 @@ const getRuntimeCommandExecution = async (page: Page, commandId: string) =>
     return bridge.getCommandExecution(id);
   }, commandId);
 
+const beginRuntimeSurfaceExecutionObservation = async (
+  page: Page,
+  commandId: string
+) => page.evaluate((id) => {
+  const bridge = window.__atrvisuRuntimeFeatureAccess;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+  }
+  return bridge.beginSurfaceExecutionObservation(id);
+}, commandId);
+
+const completeRuntimeSurfaceExecutionObservation = async (
+  page: Page,
+  token: string
+) => page.evaluate((observationToken) => {
+  const bridge = window.__atrvisuRuntimeFeatureAccess;
+  if (!bridge) {
+    throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+  }
+  return bridge.completeSurfaceExecutionObservation(observationToken);
+}, token);
+
+const getRuntimeSurfaceExecutionEvidence = async (page: Page) =>
+  page.evaluate(() => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.getSurfaceExecutionEvidence();
+  });
+
 const expectOneRuntimeCommandExecution = async (
   page: Page,
   commandId: string,
   action: () => Promise<unknown>
 ) => {
+  const observation = await beginRuntimeSurfaceExecutionObservation(page, commandId);
   const before = await getRuntimeCommandExecution(page, commandId);
   await action();
   await expect.poll(async () =>
@@ -142,18 +153,11 @@ const expectOneRuntimeCommandExecution = async (
   const after = await getRuntimeCommandExecution(page, commandId);
   expect(after.executedCount).toBe(before.executedCount + 1);
   expect(after.lastResult).toMatchObject({ handled: true, status: "executed" });
-  return page.evaluate(({ id, beforeProbe, afterProbe }) => {
-    const bridge = window.__atrvisuRuntimeFeatureAccess;
-    if (!bridge) {
-      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
-    }
-    return bridge.createCommandExecutionObservation({
-      commandId: id,
-      sessionId: bridge.getDiagnosticsSessionId(),
-      before: beforeProbe,
-      after: afterProbe
-    });
-  }, { id: commandId, beforeProbe: before, afterProbe: after });
+  const completion = await completeRuntimeSurfaceExecutionObservation(
+    page,
+    observation.token
+  );
+  return { ...completion, token: observation.token };
 };
 
 const expectCancelledRuntimeCommandExecution = async (
@@ -491,9 +495,9 @@ test("runtime feature access complete gate is bound to observed visible command 
   await openCleanApp(page);
   await waitForRuntimeViewport(page);
   const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
-  const observations: Awaited<ReturnType<typeof expectOneRuntimeCommandExecution>>[] = [];
+  const completions: Awaited<ReturnType<typeof expectOneRuntimeCommandExecution>>[] = [];
   const observe = async (commandId: string, action: () => Promise<unknown>) => {
-    observations.push(await expectOneRuntimeCommandExecution(page, commandId, action));
+    completions.push(await expectOneRuntimeCommandExecution(page, commandId, action));
   };
 
   expect((await getRuntimeFeatureAccessGate(page, true)).passed).toBe(false);
@@ -649,68 +653,117 @@ test("runtime feature access complete gate is bound to observed visible command 
   await page.getByTestId("close-performance-benchmark").click();
   await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
 
-  const attestation = {
-    source: "observed-runtime-probes" as const,
-    sessionId: diagnostics.sessionId,
-    observations
-  };
-  const validation = await page.evaluate((candidate) => {
-    const bridge = window.__atrvisuRuntimeFeatureAccess;
-    if (!bridge) {
-      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
-    }
-    return bridge.validateSurfaceExecutionAttestation(candidate);
-  }, attestation);
-  expect(validation.passed).toBe(true);
-  expect(validation.verifiedCommandIds).toEqual(diagnostics.requiredCommandIds);
-  expect([...observations.map((item) => item.commandId)].sort())
+  const authorityEvidence = await getRuntimeSurfaceExecutionEvidence(page);
+  expect(authorityEvidence.complete).toBe(true);
+  expect(authorityEvidence.verifiedCommandIds).toEqual(diagnostics.requiredCommandIds);
+  expect([...completions.map((item) => item.commandId)].sort())
     .toEqual(diagnostics.requiredCommandIds);
 
-  const completeGate = await getRuntimeFeatureAccessGate(page, errors.length === 0, attestation);
+  const completeGate = await getRuntimeFeatureAccessGate(page, errors.length === 0);
   expect(completeGate.passed).toBe(true);
   expect(completeGate.blockedFeatureIds).toEqual([]);
   expect(completeGate.report.surfaceExecutionValidation.passed).toBe(true);
   expect(errors).toEqual([]);
 });
 
-test("runtime feature access rejects partial, cancelled, and stale browser evidence", async ({ page }) => {
+test("runtime feature access authority rejects synthetic, forged, replayed, cancelled, stale, and partial evidence", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await waitForRuntimeViewport(page);
   const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
 
-  const emptyGate = await getRuntimeFeatureAccessGate(page, true, {
-    source: "observed-runtime-probes",
-    sessionId: diagnostics.sessionId,
-    observations: []
-  });
-  expect(emptyGate.passed).toBe(false);
-  expect(emptyGate.report.missingSurfaceExecutionCommandIds)
+  const initial = await page.evaluate((requiredCommandIds) => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    const syntheticEvidence = {
+      quality: { "no-red-console": true },
+      surfaceExecution: {
+        source: "live-runtime-probe-authority",
+        sessionId: bridge.getDiagnosticsSessionId(),
+        verifiedCommandIds: requiredCommandIds,
+        missingCommandIds: [],
+        rejectedCommandIds: [],
+        rejections: [],
+        complete: true,
+        reasons: []
+      },
+      observations: requiredCommandIds.map((commandId) => ({
+        commandId,
+        beforeAttemptCount: 0,
+        afterAttemptCount: 1,
+        beforeExecutedCount: 0,
+        afterExecutedCount: 1,
+        finalResult: { handled: true, status: "executed" }
+      })),
+      verifiedCommandIds: requiredCommandIds
+    };
+    return {
+      bridgeKeys: Object.keys(bridge).sort(),
+      probes: bridge.listCommandExecutions(),
+      evidence: bridge.getSurfaceExecutionEvidence(),
+      syntheticGate: bridge.getGate(syntheticEvidence)
+    };
+  }, diagnostics.requiredCommandIds);
+
+  expect(initial.bridgeKeys).not.toContain("createCommandExecutionObservation");
+  expect(initial.bridgeKeys).not.toContain("validateSurfaceExecutionAttestation");
+  expect(initial.probes).toEqual([]);
+  expect(initial.evidence.complete).toBe(false);
+  expect(initial.evidence.verifiedCommandIds).toEqual([]);
+  expect(initial.syntheticGate.passed).toBe(false);
+  expect(initial.syntheticGate.report.surfaceExecutionValidation.verifiedCommandIds)
+    .toEqual([]);
+  expect(initial.syntheticGate.report.missingSurfaceExecutionCommandIds)
     .toEqual(diagnostics.requiredCommandIds);
 
-  const addMachineObservation = await expectOneRuntimeCommandExecution(
+  await expect(
+    completeRuntimeSurfaceExecutionObservation(
+      page,
+      `${diagnostics.sessionId}.forged-token`
+    )
+  ).rejects.toThrow("unknown");
+  expect((await getRuntimeSurfaceExecutionEvidence(page)).verifiedCommandIds)
+    .toEqual([]);
+
+  const noExecution = await beginRuntimeSurfaceExecutionObservation(page, "edit.undo");
+  await expect(
+    completeRuntimeSurfaceExecutionObservation(page, noExecution.token)
+  ).rejects.toThrow("attemptCount");
+  await expect(
+    completeRuntimeSurfaceExecutionObservation(page, noExecution.token)
+  ).rejects.toThrow("already been consumed");
+
+  const addMachineCompletion = await expectOneRuntimeCommandExecution(
     page,
     "library.addMachine",
     () => page.locator(".machine-card").first().click()
   );
   await waitForMachineDiagnostics(page, 1);
-  const partialAttestation = {
-    source: "observed-runtime-probes" as const,
-    sessionId: diagnostics.sessionId,
-    observations: [addMachineObservation]
-  };
-  const partialGate = await getRuntimeFeatureAccessGate(page, true, partialAttestation);
+  await expect(
+    completeRuntimeSurfaceExecutionObservation(page, addMachineCompletion.token)
+  ).rejects.toThrow("already been consumed");
+
+  const partialEvidence = await getRuntimeSurfaceExecutionEvidence(page);
+  expect(partialEvidence.complete).toBe(false);
+  expect(partialEvidence.verifiedCommandIds).toEqual(["library.addMachine"]);
+  expect(partialEvidence.missingCommandIds)
+    .toEqual(diagnostics.requiredCommandIds.filter((id) => id !== "library.addMachine"));
+  const partialGate = await getRuntimeFeatureAccessGate(page, true);
   expect(partialGate.passed).toBe(false);
   expect(partialGate.report.surfaceExecutionValidation.verifiedCommandIds)
     .toEqual(["library.addMachine"]);
-  expect(partialGate.report.missingSurfaceExecutionCommandIds)
-    .toEqual(diagnostics.requiredCommandIds.filter((id) => id !== "library.addMachine"));
 
-  page.once("dialog", (dialog) => dialog.dismiss());
   const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
   if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
     await propertiesSection.click();
   }
+  const cancelledHandle = await beginRuntimeSurfaceExecutionObservation(
+    page,
+    "edit.deleteSelected"
+  );
+  page.once("dialog", (dialog) => dialog.dismiss());
   const cancelled = await expectCancelledRuntimeCommandExecution(
     page,
     "edit.deleteSelected",
@@ -718,42 +771,41 @@ test("runtime feature access rejects partial, cancelled, and stale browser evide
       .getByRole("button", { name: "Delete Selected" })
       .click()
   );
-  const cancelledValidation = await page.evaluate(({ sessionId, before, after }) => {
-    const bridge = window.__atrvisuRuntimeFeatureAccess;
-    if (!bridge || !after.lastResult) {
-      throw new Error("AtrVisu runtime feature access cancellation probe is unavailable.");
-    }
-    return bridge.validateSurfaceExecutionAttestation({
-      source: "observed-runtime-probes",
-      sessionId,
-      observations: [{
-        commandId: "edit.deleteSelected",
-        sessionId,
-        beforeAttemptCount: before.attemptCount,
-        beforeExecutedCount: before.executedCount,
-        afterAttemptCount: after.attemptCount,
-        afterExecutedCount: after.executedCount,
-        finalResult: after.lastResult
-      }]
-    });
-  }, {
-    sessionId: diagnostics.sessionId,
-    before: cancelled.before,
-    after: cancelled.after
-  });
-  expect(cancelledValidation.passed).toBe(false);
-  expect(cancelledValidation.cancelledCommandIds).toEqual(["edit.deleteSelected"]);
-  expect(cancelledValidation.attemptedOnlyCommandIds).toEqual(["edit.deleteSelected"]);
+  expect(cancelled.after.attemptCount).toBe(cancelled.before.attemptCount + 1);
+  expect(cancelled.after.executedCount).toBe(cancelled.before.executedCount);
+  await expect(
+    completeRuntimeSurfaceExecutionObservation(page, cancelledHandle.token)
+  ).rejects.toThrow('status "cancelled"');
+  const cancelledEvidence = await getRuntimeSurfaceExecutionEvidence(page);
+  expect(cancelledEvidence.rejections).toContainEqual(
+    expect.objectContaining({
+      commandId: "edit.deleteSelected",
+      kind: "cancelled"
+    })
+  );
+  expect((await getRuntimeFeatureAccessGate(page, true)).passed).toBe(false);
 
+  const staleHandle = await beginRuntimeSurfaceExecutionObservation(
+    page,
+    "annotations.create"
+  );
+  const previousSessionId = diagnostics.sessionId;
   await page.reload();
   await expect(page.getByTestId("app-root")).toBeVisible();
   await waitForRuntimeViewport(page);
   const reloadedDiagnostics = await getRuntimeFeatureAccessDiagnostics(page);
-  expect(reloadedDiagnostics.sessionId).not.toBe(diagnostics.sessionId);
-  const staleGate = await getRuntimeFeatureAccessGate(page, true, partialAttestation);
-  expect(staleGate.passed).toBe(false);
-  expect(staleGate.report.surfaceExecutionValidation.staleCommandIds)
-    .toEqual(["library.addMachine"]);
+  expect(reloadedDiagnostics.sessionId).not.toBe(previousSessionId);
+  await expect(
+    completeRuntimeSurfaceExecutionObservation(page, staleHandle.token)
+  ).rejects.toThrow("stale session");
+
+  const reloadedEvidence = await getRuntimeSurfaceExecutionEvidence(page);
+  expect(reloadedEvidence.verifiedCommandIds).toEqual([]);
+  expect(reloadedEvidence.complete).toBe(false);
+  const reloadedGate = await getRuntimeFeatureAccessGate(page, true);
+  expect(reloadedGate.passed).toBe(false);
+  expect(reloadedGate.report.missingSurfaceExecutionCommandIds)
+    .toEqual(reloadedDiagnostics.requiredCommandIds);
   expect(errors).toEqual([]);
 });
 

@@ -1,28 +1,15 @@
 import type { FeatureAccessEntry } from "../contracts";
 import { getPlatformCommandSeedById } from "../registrySeeds";
-import {
-  normalizeRuntimeCommandOperationResult,
-  type RuntimeCommandExecutionProbe,
-  type RuntimeCommandOperationResult
-} from "../runtimeCommands/runtimeCommandOperation";
 import type {
-  RuntimeCommandExecutionObservation,
-  RuntimeSurfaceExecutionAttestation,
-  RuntimeSurfaceExecutionAttestationValidation
+  RuntimeSurfaceExecutionAuthoritySnapshot,
+  RuntimeSurfaceExecutionAuthorityValidation
 } from "./runtimeFeatureAccessTypes";
+import { isRuntimeSurfaceExecutionAuthoritySnapshot } from "./runtimeSurfaceExecutionAuthority";
 
-type CreateRuntimeCommandExecutionObservationInput = {
-  commandId: string;
-  sessionId: string;
-  currentSessionId: string;
-  before: RuntimeCommandExecutionProbe;
-  after: RuntimeCommandExecutionProbe;
-};
-
-type ValidateRuntimeSurfaceExecutionAttestationInput = {
+type ValidateRuntimeSurfaceExecutionAuthoritySnapshotInput = {
   requiredCommandIds: readonly string[];
   currentSessionId?: string;
-  attestation?: RuntimeSurfaceExecutionAttestation;
+  snapshot?: RuntimeSurfaceExecutionAuthoritySnapshot;
 };
 
 const uniqueSorted = (values: readonly string[]) =>
@@ -77,214 +64,110 @@ export const deriveRequiredRuntimeSurfaceExecutionCommandIds = (
   return requiredCommandIds;
 };
 
-const assertMatchingProbe = (
-  commandId: string,
-  probe: RuntimeCommandExecutionProbe,
-  label: "before" | "after"
-) => {
-  if (probe.commandId !== commandId) {
-    throw new Error(
-      `Runtime command observation ${label} probe does not match "${commandId}".`
-    );
-  }
-};
-
-export const createRuntimeCommandExecutionObservation = ({
-  commandId,
-  sessionId,
-  currentSessionId,
-  before,
-  after
-}: CreateRuntimeCommandExecutionObservationInput): RuntimeCommandExecutionObservation => {
-  if (sessionId !== currentSessionId) {
-    throw new Error(`Runtime command observation for "${commandId}" belongs to a stale session.`);
-  }
-  assertMatchingProbe(commandId, before, "before");
-  assertMatchingProbe(commandId, after, "after");
-  if (after.attemptCount !== before.attemptCount + 1) {
-    throw new Error(
-      `Runtime command observation for "${commandId}" must increment attemptCount by exactly one.`
-    );
-  }
-  if (after.executedCount !== before.executedCount + 1) {
-    throw new Error(
-      `Runtime command observation for "${commandId}" must increment executedCount by exactly one.`
-    );
-  }
-  const finalResult = normalizeRuntimeCommandOperationResult(after.lastResult);
-  if (
-    !after.lastResult
-    || after.lastResult.handled !== true
-    || after.lastResult.status !== "executed"
-    || !finalResult.handled
-    || finalResult.status !== "executed"
-  ) {
-    throw new Error(
-      `Runtime command observation for "${commandId}" must finish with status "executed".`
-    );
-  }
-
-  return {
-    commandId,
-    sessionId,
-    beforeAttemptCount: before.attemptCount,
-    beforeExecutedCount: before.executedCount,
-    afterAttemptCount: after.attemptCount,
-    afterExecutedCount: after.executedCount,
-    finalResult
-  };
-};
-
-const getNormalizedFinalResult = (
-  observation: RuntimeCommandExecutionObservation
-): RuntimeCommandOperationResult | null => {
-  try {
-    return normalizeRuntimeCommandOperationResult(observation.finalResult);
-  } catch {
-    return null;
-  }
-};
-
-export const validateRuntimeSurfaceExecutionAttestation = ({
+export const validateRuntimeSurfaceExecutionAuthoritySnapshot = ({
   requiredCommandIds,
   currentSessionId,
-  attestation
-}: ValidateRuntimeSurfaceExecutionAttestationInput): RuntimeSurfaceExecutionAttestationValidation => {
+  snapshot
+}: ValidateRuntimeSurfaceExecutionAuthoritySnapshotInput): RuntimeSurfaceExecutionAuthorityValidation => {
   const sortedRequiredCommandIds = uniqueSorted(requiredCommandIds);
-  const observations = attestation?.observations ?? [];
-  const observedCommandIds = observations.map((observation) => observation.commandId);
-  const duplicateCommandIds = findDuplicates(observedCommandIds);
   const requiredCommandIdSet = new Set(sortedRequiredCommandIds);
-  const duplicateCommandIdSet = new Set(duplicateCommandIds);
-  const staleCommandIds = new Set<string>();
-  const cancelledCommandIds = new Set<string>();
-  const failedCommandIds = new Set<string>();
-  const attemptedOnlyCommandIds = new Set<string>();
-  const malformedCommandIds = new Set<string>();
-  const unknownCommandIds = new Set<string>();
-  const verifiedCommandIds = new Set<string>();
 
-  observations.forEach((observation) => {
-    const commandId = observation.commandId;
-    if (!requiredCommandIdSet.has(commandId)) {
-      unknownCommandIds.add(commandId);
-      return;
-    }
-    if (
-      !attestation
-      || attestation.source !== "observed-runtime-probes"
-      || !currentSessionId
-      || attestation.sessionId !== currentSessionId
-      || observation.sessionId !== currentSessionId
-    ) {
-      staleCommandIds.add(commandId);
-      return;
-    }
-    if (duplicateCommandIdSet.has(commandId)) {
-      return;
-    }
+  if (!isRuntimeSurfaceExecutionAuthoritySnapshot(snapshot)) {
+    return {
+      passed: sortedRequiredCommandIds.length === 0 && snapshot === undefined,
+      verifiedCommandIds: [],
+      missingCommandIds: sortedRequiredCommandIds,
+      duplicateCommandIds: [],
+      staleCommandIds: [],
+      cancelledCommandIds: [],
+      failedCommandIds: [],
+      attemptedOnlyCommandIds: [],
+      unknownCommandIds: [],
+      malformedCommandIds: snapshot === undefined ? [] : sortedRequiredCommandIds,
+      reasons: uniqueSorted([
+        ...sortedRequiredCommandIds.map(
+          (commandId) => `Live runtime execution evidence is missing for "${commandId}".`
+        ),
+        ...(snapshot === undefined
+          ? []
+          : ["Runtime surface execution evidence is not owned by the live probe authority."])
+      ])
+    };
+  }
 
-    const finalResult = getNormalizedFinalResult(observation);
-    if (
-      !finalResult
-      || finalResult.handled !== observation.finalResult.handled
-      || finalResult.status !== observation.finalResult.status
-    ) {
-      malformedCommandIds.add(commandId);
-      return;
-    }
-    const attemptDelta = observation.afterAttemptCount - observation.beforeAttemptCount;
-    const executedDelta = observation.afterExecutedCount - observation.beforeExecutedCount;
-    if (attemptDelta !== 1 || executedDelta < 0 || executedDelta > 1) {
-      malformedCommandIds.add(commandId);
-      return;
-    }
-    if (executedDelta === 0) {
-      attemptedOnlyCommandIds.add(commandId);
-      if (finalResult.status === "cancelled") {
-        cancelledCommandIds.add(commandId);
-      } else if (finalResult.status === "failed") {
-        failedCommandIds.add(commandId);
-      }
-      return;
-    }
-    if (!finalResult.handled || finalResult.status !== "executed") {
-      malformedCommandIds.add(commandId);
-      return;
-    }
-    verifiedCommandIds.add(commandId);
-  });
-
-  const sortedVerifiedCommandIds = [...verifiedCommandIds].sort((left, right) =>
-    left.localeCompare(right)
+  const verifiedCommandIds = [...snapshot.verifiedCommandIds];
+  const duplicateCommandIds = findDuplicates(verifiedCommandIds);
+  const unknownCommandIds = uniqueSorted(
+    verifiedCommandIds.filter((commandId) => !requiredCommandIdSet.has(commandId))
   );
+  const stale = !currentSessionId || snapshot.sessionId !== currentSessionId;
+  const staleCommandIds = stale ? sortedRequiredCommandIds : [];
+  const verifiedCommandIdSet = new Set(
+    stale ? [] : verifiedCommandIds.filter((commandId) => requiredCommandIdSet.has(commandId))
+  );
+  const rejectionByCommandId = new Map(
+    snapshot.rejections.map((rejection) => [rejection.commandId, rejection])
+  );
+  const cancelledCommandIds = uniqueSorted(snapshot.rejections
+    .filter((rejection) => rejection.kind === "cancelled")
+    .map((rejection) => rejection.commandId));
+  const failedCommandIds = uniqueSorted(snapshot.rejections
+    .filter((rejection) => rejection.kind === "failed")
+    .map((rejection) => rejection.commandId));
+  const attemptedOnlyCommandIds = uniqueSorted(snapshot.rejections
+    .filter((rejection) =>
+      rejection.kind === "cancelled"
+      || rejection.kind === "disabled"
+      || rejection.kind === "unavailable"
+      || rejection.kind === "unsupported"
+      || rejection.kind === "failed"
+    )
+    .map((rejection) => rejection.commandId));
+  const malformedCommandIds = uniqueSorted(snapshot.rejections
+    .filter((rejection) =>
+      rejection.kind === "attempt-delta"
+      || rejection.kind === "execution-delta"
+      || rejection.kind === "malformed"
+    )
+    .map((rejection) => rejection.commandId));
   const missingCommandIds = sortedRequiredCommandIds.filter(
-    (commandId) => !verifiedCommandIds.has(commandId)
-  );
-  const sortedUnknownCommandIds = [...unknownCommandIds].sort((left, right) =>
-    left.localeCompare(right)
-  );
-  const sortedStaleCommandIds = [...staleCommandIds].sort((left, right) =>
-    left.localeCompare(right)
-  );
-  const sortedCancelledCommandIds = [...cancelledCommandIds].sort((left, right) =>
-    left.localeCompare(right)
-  );
-  const sortedFailedCommandIds = [...failedCommandIds].sort((left, right) =>
-    left.localeCompare(right)
-  );
-  const sortedAttemptedOnlyCommandIds = [...attemptedOnlyCommandIds].sort(
-    (left, right) => left.localeCompare(right)
-  );
-  const sortedMalformedCommandIds = [...malformedCommandIds].sort((left, right) =>
-    left.localeCompare(right)
+    (commandId) => !verifiedCommandIdSet.has(commandId)
   );
   const reasons = uniqueSorted([
     ...missingCommandIds.map(
-      (commandId) => `Observed runtime execution evidence is missing for "${commandId}".`
+      (commandId) => `Live runtime execution evidence is missing for "${commandId}".`
     ),
     ...duplicateCommandIds.map(
-      (commandId) => `Observed runtime execution evidence is duplicated for "${commandId}".`
+      (commandId) => `Live runtime execution evidence is duplicated for "${commandId}".`
     ),
-    ...sortedUnknownCommandIds.map(
-      (commandId) => `Observed runtime execution evidence references unknown command "${commandId}".`
+    ...unknownCommandIds.map(
+      (commandId) => `Live runtime execution evidence references unknown command "${commandId}".`
     ),
-    ...sortedStaleCommandIds.map(
-      (commandId) => `Observed runtime execution evidence is stale for "${commandId}".`
+    ...staleCommandIds.map(
+      (commandId) => `Live runtime execution evidence is stale for "${commandId}".`
     ),
-    ...sortedCancelledCommandIds.map(
-      (commandId) => `Observed runtime execution was cancelled for "${commandId}".`
-    ),
-    ...sortedFailedCommandIds.map(
-      (commandId) => `Observed runtime execution failed for "${commandId}".`
-    ),
-    ...sortedAttemptedOnlyCommandIds.map(
-      (commandId) => `Observed runtime execution did not execute "${commandId}".`
-    ),
-    ...sortedMalformedCommandIds.map(
-      (commandId) => `Observed runtime execution evidence is malformed for "${commandId}".`
-    )
+    ...sortedRequiredCommandIds.flatMap((commandId) => {
+      const rejection = rejectionByCommandId.get(commandId);
+      return rejection ? [rejection.reason] : [];
+    })
   ]);
 
   return {
     passed:
-      missingCommandIds.length === 0
+      !stale
+      && missingCommandIds.length === 0
       && duplicateCommandIds.length === 0
-      && sortedUnknownCommandIds.length === 0
-      && sortedStaleCommandIds.length === 0
-      && sortedCancelledCommandIds.length === 0
-      && sortedFailedCommandIds.length === 0
-      && sortedAttemptedOnlyCommandIds.length === 0
-      && sortedMalformedCommandIds.length === 0,
-    verifiedCommandIds: sortedVerifiedCommandIds,
+      && unknownCommandIds.length === 0
+      && snapshot.complete,
+    verifiedCommandIds: uniqueSorted(verifiedCommandIds),
     missingCommandIds,
     duplicateCommandIds,
-    staleCommandIds: sortedStaleCommandIds,
-    cancelledCommandIds: sortedCancelledCommandIds,
-    failedCommandIds: sortedFailedCommandIds,
-    attemptedOnlyCommandIds: sortedAttemptedOnlyCommandIds,
-    unknownCommandIds: sortedUnknownCommandIds,
-    malformedCommandIds: sortedMalformedCommandIds,
+    staleCommandIds,
+    cancelledCommandIds,
+    failedCommandIds,
+    attemptedOnlyCommandIds,
+    unknownCommandIds,
+    malformedCommandIds,
     reasons
   };
 };

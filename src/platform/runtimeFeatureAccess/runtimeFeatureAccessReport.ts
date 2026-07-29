@@ -12,7 +12,7 @@ import type {
 } from "./runtimeFeatureAccessTypes";
 import {
   deriveRequiredRuntimeSurfaceExecutionCommandIds,
-  validateRuntimeSurfaceExecutionAttestation
+  validateRuntimeSurfaceExecutionAuthoritySnapshot
 } from "./runtimeSurfaceExecutionEvidence";
 
 const uniqueSorted = (values: readonly string[]) =>
@@ -522,10 +522,10 @@ export const createRuntimeFeatureAccessReport = (
 ): RuntimeFeatureAccessReport => {
   const requiredSurfaceExecutionCommandIds =
     deriveRequiredRuntimeSurfaceExecutionCommandIds(input.features);
-  const surfaceExecutionValidation = validateRuntimeSurfaceExecutionAttestation({
+  const surfaceExecutionValidation = validateRuntimeSurfaceExecutionAuthoritySnapshot({
     requiredCommandIds: requiredSurfaceExecutionCommandIds,
     currentSessionId: input.runtimeSessionId,
-    attestation: input.evidence.surfaceExecution
+    snapshot: input.evidence.surfaceExecution
   });
   const duplicateFeatureIds = findDuplicates(input.features.map((feature) => feature.featureId));
   const featureIds = new Set(input.features.map((feature) => feature.featureId));
