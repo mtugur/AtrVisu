@@ -473,8 +473,15 @@ GitHub evidence:
 
 - PRs #86-#93 each have a completed successful Quality Gate on their exact head.
 - PR #93's successful CI does not include the synthetic/live-store mismatch case.
-- This audit branch's GitHub Quality Gate is pending until the report commit is
-  pushed and must be inspected before handoff.
+- Before this correction, audit head
+  `575fdace43cde34a554b4de9b11f9c594eed2294` received successful Quality Gate
+  run `30440854522` (run number `186`); Build, Unit Tests, and E2E Smoke Tests
+  passed.
+- The audit PR's exact-head GitHub Quality Gate is external merge evidence. It
+  must be successful before the PR is marked Ready and merged.
+- GitHub PR metadata is the authoritative source for the final correction head's
+  merge-time Quality Gate status. That final status is verified externally
+  rather than self-recorded inside the commit being validated.
 
 ## 16. Residual Non-Blocking Debt
 
