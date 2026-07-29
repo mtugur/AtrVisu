@@ -9,8 +9,7 @@ import type {
 import type { LegacyEntityFamily } from "../adapters";
 import type { PlatformSurfaceInventoryItem } from "../surfaceInventory";
 import type {
-  RuntimeCommandExecutionProbe as SharedRuntimeCommandExecutionProbe,
-  RuntimeCommandOperationResult
+  RuntimeCommandExecutionProbe as SharedRuntimeCommandExecutionProbe
 } from "../runtimeCommands/runtimeCommandOperation";
 
 export type RuntimeFeatureAccessStatus =
@@ -116,30 +115,46 @@ export type RuntimeQualityEvidence = Readonly<
   Partial<Record<FeatureQualitySignalId, boolean>>
 >;
 
-export type RuntimeCommandExecutionObservation = {
+export type RuntimeSurfaceExecutionObservationHandle = {
+  token: string;
   commandId: string;
-  sessionId: string;
-  beforeAttemptCount: number;
-  beforeExecutedCount: number;
-  afterAttemptCount: number;
-  afterExecutedCount: number;
-  finalResult: RuntimeCommandOperationResult;
 };
 
-export type RuntimeCommandExecutionObservationInput = {
+export type RuntimeSurfaceExecutionCompletion = {
+  source: "live-runtime-probe-authority";
+  sessionId: string;
   commandId: string;
-  sessionId: string;
-  before: RuntimeCommandExecutionProbe;
-  after: RuntimeCommandExecutionProbe;
+  status: "verified";
 };
 
-export type RuntimeSurfaceExecutionAttestation = {
-  source: "observed-runtime-probes";
-  sessionId: string;
-  observations: readonly RuntimeCommandExecutionObservation[];
+export type RuntimeSurfaceExecutionRejectionKind =
+  | "attempt-delta"
+  | "execution-delta"
+  | "cancelled"
+  | "disabled"
+  | "unavailable"
+  | "unsupported"
+  | "failed"
+  | "malformed";
+
+export type RuntimeSurfaceExecutionRejection = {
+  commandId: string;
+  kind: RuntimeSurfaceExecutionRejectionKind;
+  reason: string;
 };
 
-export type RuntimeSurfaceExecutionAttestationValidation = {
+export type RuntimeSurfaceExecutionAuthoritySnapshot = {
+  source: "live-runtime-probe-authority";
+  sessionId: string;
+  verifiedCommandIds: readonly string[];
+  missingCommandIds: readonly string[];
+  rejectedCommandIds: readonly string[];
+  rejections: readonly RuntimeSurfaceExecutionRejection[];
+  complete: boolean;
+  reasons: readonly string[];
+};
+
+export type RuntimeSurfaceExecutionAuthorityValidation = {
   passed: boolean;
   verifiedCommandIds: readonly string[];
   missingCommandIds: readonly string[];
@@ -155,10 +170,18 @@ export type RuntimeSurfaceExecutionAttestationValidation = {
 
 export type RuntimeFeatureAccessExternalEvidence = {
   quality?: RuntimeQualityEvidence;
-  surfaceExecution?: RuntimeSurfaceExecutionAttestation;
 };
 
 export type RuntimeCommandExecutionProbe = SharedRuntimeCommandExecutionProbe;
+
+export type RuntimeSurfaceExecutionAuthority = {
+  readonly sessionId: string;
+  readonly requiredCommandIds: readonly string[];
+  beginObservation: (commandId: string) => RuntimeSurfaceExecutionObservationHandle;
+  completeObservation: (token: string) => RuntimeSurfaceExecutionCompletion;
+  getEvidenceSnapshot: () => RuntimeSurfaceExecutionAuthoritySnapshot;
+  reset: () => void;
+};
 
 export type RuntimeFeatureAccessEvidence = {
   getCommand: (commandId: string) => RuntimeCommandAccessEvidence;
@@ -167,7 +190,7 @@ export type RuntimeFeatureAccessEvidence = {
   entities?: RuntimeEntityAccessEvidence;
   viewport?: RuntimeViewportAccessEvidence;
   quality?: RuntimeQualityEvidence;
-  surfaceExecution?: RuntimeSurfaceExecutionAttestation;
+  surfaceExecution?: RuntimeSurfaceExecutionAuthoritySnapshot;
 };
 
 export type RuntimeFeatureAccessReportItem = {
@@ -206,7 +229,7 @@ export type RuntimeFeatureAccessReport = {
   duplicateFeatureIds: readonly string[];
   requiredSurfaceExecutionCommandIds: readonly string[];
   missingSurfaceExecutionCommandIds: readonly string[];
-  surfaceExecutionValidation: RuntimeSurfaceExecutionAttestationValidation;
+  surfaceExecutionValidation: RuntimeSurfaceExecutionAuthorityValidation;
   issues: readonly string[];
 };
 
@@ -246,12 +269,13 @@ export type RuntimeFeatureAccessE2EBridge = {
   listCommandExecutions: () => readonly RuntimeCommandExecutionProbe[];
   getDiagnosticsSessionId: () => string;
   getRequiredSurfaceExecutionCommandIds: () => readonly string[];
-  createCommandExecutionObservation: (
-    input: RuntimeCommandExecutionObservationInput
-  ) => RuntimeCommandExecutionObservation;
-  validateSurfaceExecutionAttestation: (
-    attestation: RuntimeSurfaceExecutionAttestation
-  ) => RuntimeSurfaceExecutionAttestationValidation;
+  beginSurfaceExecutionObservation: (
+    commandId: string
+  ) => RuntimeSurfaceExecutionObservationHandle;
+  completeSurfaceExecutionObservation: (
+    token: string
+  ) => RuntimeSurfaceExecutionCompletion;
+  getSurfaceExecutionEvidence: () => RuntimeSurfaceExecutionAuthoritySnapshot;
 };
 
 declare global {
