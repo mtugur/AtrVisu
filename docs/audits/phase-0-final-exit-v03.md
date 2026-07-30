@@ -103,15 +103,20 @@ as raw-count proof:
 | #88 | Runtime Panel Registry Bridge | `3baefec70086571d89c208b381742bd6d330b667` | Run `29924286031`: success | No explicit PASS record used |
 | #89 | Runtime Viewport Isolation | `37344ff9d4a56c43c8db6255faab3b7d4b7b10ed` | Run `30084435883`: success | Focused orthographic acceptance passed |
 | #90 | Runtime Feature Access Closure Gate | `d39e3ff2bfa0a463c1ca440c7feb8d12a824566f` | Run `30271814956`: success | User explicitly reported PASS |
-| #91 | Phase 0 documentation evidence correction | `0f6324d0a939d8e1dca4155a3ca0a545c26985f1` | Run `30362545268`: success | No focused manual record required |
-| #92 | Runtime command cancellation outcomes | `5e26b7f91561638e825a94e8a1f241558ec9670a` | Run `30366641801`: success | Deterministic automation; manual not required |
-| #93 | Runtime Feature Access observed evidence | `a345ab24ebd7e53592fc0fdc9aca49b01b63f2a9` | Run `30434667920`: success | Deterministic automation; manual not required |
-| #94 | Documentation consistency correction | `a1563127c3c68d3819dd0cf777a70acd6a473210` | Run `30445386885`: success | No focused manual record required |
+| #91 | Final Phase 0 Exit Audit v0.1 | `0f6324d3ca3d2aba4f3a83e9358129ccc33b44e6` | Run `30362545268`: success | No focused manual record required |
+| #92 | Runtime command cancellation outcomes | `5e26b7f2db6dcbdc3cc75aab18b370541d1af15e` | Run `30366641801`: success | Deterministic automation; manual not required |
+| #93 | Runtime Feature Access observed evidence | `a345ab296ae11e023c8c73bc21548f12625ef195` | Run `30434667920`: success | Deterministic automation; manual not required |
+| #94 | Final Phase 0 Exit Audit v0.2 | `a1563127c3c68d3819dd0cf777a70acd6a473210` | Run `30445386885`: success | No focused manual record required |
 | #95 | Live-probe authority and attestation | `e52498801f88b2bc5394d7072b7100b87e6d0903` | Run `30449965658`: success | Deterministic automation; manual not required |
 
 Missing focused manual records were not converted into invented PASS claims.
 Current source, deterministic tests, browser evidence, and exact-head CI are
 sufficient for the technical gates marked PASS.
+
+These package-metadata corrections do not change the Final Decision, P0-B3,
+the acceptance totals, or the exit-gate totals. They do not implement the
+Feature Access documentation correction, authorize Phase 1, or alter any
+technical closure finding.
 
 ## 5. Historical Baseline
 
