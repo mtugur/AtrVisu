@@ -1680,9 +1680,55 @@ test("scene lifecycle stays stable through selection and accepted pointer drag",
   await openCleanApp(page);
 
   const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator('[data-workbench-region="editor-host"]')).toHaveCount(1);
+  await expect(canvas).toHaveCount(1);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
   const initialLifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
   expect(initialLifecycleGeneration).not.toBeNull();
+  const initialViewport = await waitForRuntimeViewport(page);
+  expect(initialViewport.viewport?.viewportId).toBe("viewport.main");
+
+  expect(await invokeRuntimePanel(page, "close", "panel.rightPanelShell"))
+    .toMatchObject({ handled: true });
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open right panel" })).toBeVisible();
+  const collapsedViewport = await waitForRuntimeViewport(page);
+  expect(collapsedViewport.viewport?.viewportId).toBe(initialViewport.viewport?.viewportId);
+  expect(collapsedViewport.viewport?.sceneLifecycleGeneration)
+    .toBe(initialViewport.viewport?.sceneLifecycleGeneration);
+
+  expect(await invokeRuntimePanel(page, "open", "panel.rightPanelShell"))
+    .toMatchObject({ handled: true });
+  const rightPanel = page.getByTestId("right-panel");
+  await expect(rightPanel).toBeVisible();
+  const reopenedViewport = await waitForRuntimeViewport(page);
+  expect(reopenedViewport.viewport?.viewportId).toBe(initialViewport.viewport?.viewportId);
+  expect(reopenedViewport.viewport?.sceneLifecycleGeneration)
+    .toBe(initialViewport.viewport?.sceneLifecycleGeneration);
+
+  const panelWidthBefore = await rightPanel.evaluate(
+    (element) => element.getBoundingClientRect().width
+  );
+  const resizeHandle = page.getByRole("button", { name: "Resize right panel" });
+  const resizeHandleBounds = await resizeHandle.boundingBox();
+  if (!resizeHandleBounds) {
+    throw new Error("Right-panel resize handle bounds are unavailable.");
+  }
+  await page.mouse.move(
+    resizeHandleBounds.x + resizeHandleBounds.width / 2,
+    resizeHandleBounds.y + 40
+  );
+  await page.mouse.down();
+  await page.mouse.move(resizeHandleBounds.x - 48, resizeHandleBounds.y + 40, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(async () =>
+    rightPanel.evaluate((element) => element.getBoundingClientRect().width)
+  ).toBeGreaterThan(panelWidthBefore);
+  const resizedViewport = await waitForRuntimeViewport(page);
+  expect(resizedViewport.viewport?.viewportId).toBe(initialViewport.viewport?.viewportId);
+  expect(resizedViewport.viewport?.sceneLifecycleGeneration)
+    .toBe(initialViewport.viewport?.sceneLifecycleGeneration);
 
   await page.locator(".machine-card").first().click();
   await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toBeVisible();

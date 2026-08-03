@@ -61,7 +61,7 @@ export function EditorHost({
     <div
       data-testid="editor-host"
       data-active-editor-id={activeEditorId}
-      style={{ display: "contents" }}
+      style={{ position: "absolute", inset: 0, minWidth: 0, overflow: "hidden" }}
     >
       {failure ? (
         <section
