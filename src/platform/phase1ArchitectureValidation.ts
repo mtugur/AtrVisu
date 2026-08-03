@@ -30,6 +30,7 @@ type MutableValidationError = Phase1ArchitectureValidationError;
 type RecordValue = Record<string, unknown>;
 
 const STABLE_ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$/;
+const METADATA_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9._-]*$/;
 const PROPERTY_PATH_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
 const WORKBENCH_REGION_ROLES = [
   "application",
@@ -41,6 +42,45 @@ const WORKBENCH_REGION_ROLES = [
   "overlay"
 ] as const;
 const WORKBENCH_DOCK_IDS = ["primary-dock", "secondary-dock", "bottom-dock"] as const;
+const WORKBENCH_REGION_KEYS = ["id", "role", "labelKey", "order", "hostsPanels"] as const;
+const EDITOR_DEFINITION_KEYS = [
+  "schemaVersion",
+  "id",
+  "kind",
+  "titleKey",
+  "tooltipKey",
+  "iconId",
+  "availability",
+  "unavailableReasonKey"
+] as const;
+const WORKSPACE_PRESET_KEYS = [
+  "schemaVersion",
+  "id",
+  "labelKey",
+  "tooltipKey",
+  "defaultEditorId",
+  "initiallyVisiblePanelIds",
+  "emphasizedCommandIds",
+  "inspectorMode",
+  "densityPreference"
+] as const;
+const UI_PREFERENCES_KEYS = ["schemaVersion", "theme", "density", "activeWorkspaceId", "panels"] as const;
+const PANEL_PREFERENCE_KEYS = ["panelId", "visible", "collapsed", "size", "order", "dock"] as const;
+const PROPERTY_SCHEMA_KEYS = ["schemaVersion", "id", "labelKey", "sections"] as const;
+const PROPERTY_SECTION_KEYS = ["id", "labelKey", "order", "appliesTo", "fields"] as const;
+const PROPERTY_FIELD_KEYS = [
+  "id",
+  "path",
+  "labelKey",
+  "dataType",
+  "unit",
+  "editable",
+  "required",
+  "validation",
+  "exportMappings"
+] as const;
+const PROPERTY_VALIDATION_KEYS = ["min", "max", "step", "pattern", "allowedValues", "validatorId"] as const;
+const PROPERTY_EXPORT_MAPPING_KEYS = ["target", "key"] as const;
 const DOMAIN_PAYLOAD_KEYS = new Set([
   "entities",
   "transforms",
@@ -65,6 +105,14 @@ const DOMAIN_PAYLOAD_KEYS = new Set([
 const isRecord = (value: unknown): value is RecordValue => (
   typeof value === "object" && value !== null && !Array.isArray(value)
 );
+
+const isPlainRecord = (value: unknown): value is RecordValue => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
 
 const isNonEmptyString = (value: unknown): value is string => (
   typeof value === "string" && value.trim().length > 0
@@ -96,11 +144,57 @@ const findNonSerializableValue = (
   if (typeof value === "function") {
     return { code: "value.executable", path, message: "Executable values are not serializable metadata." };
   }
+  if (value === undefined) {
+    return { code: "value.undefined", path, message: "Undefined is not valid JSON metadata." };
+  }
   if (typeof value === "symbol" || typeof value === "bigint") {
     return { code: "value.non_serializable", path, message: "Value is not JSON serializable." };
   }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return { code: "value.non_finite", path, message: "JSON metadata numbers must be finite." };
+  }
   if (typeof value !== "object" || value === null) {
     return null;
+  }
+  if (Array.isArray(value)) {
+    if (Object.getPrototypeOf(value) !== Array.prototype) {
+      return { code: "value.non_plain_object", path, message: "Metadata arrays must use the plain Array prototype." };
+    }
+    for (let index = 0; index < value.length; index += 1) {
+      if (!Object.prototype.hasOwnProperty.call(value, index)) {
+        return { code: "value.sparse_array", path: `${path}.${index}`, message: "Sparse arrays are not valid JSON metadata." };
+      }
+    }
+    const unexpectedKey = Reflect.ownKeys(value).find((key) => (
+      key !== "length" && (
+        typeof key !== "string"
+        || !/^(0|[1-9][0-9]*)$/.test(key)
+        || Number(key) >= value.length
+      )
+    ));
+    if (unexpectedKey !== undefined) {
+      return {
+        code: "value.non_json_property",
+        path: `${path}.${String(unexpectedKey)}`,
+        message: "Arrays may contain indexed JSON values only."
+      };
+    }
+  } else if (!isPlainRecord(value)) {
+    return { code: "value.non_plain_object", path, message: "Metadata objects must be plain JSON records." };
+  } else {
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") {
+        return { code: "value.non_serializable", path: `${path}.${String(key)}`, message: "Symbol keys are not valid JSON metadata." };
+      }
+      const descriptor = descriptors[key];
+      if (!descriptor.enumerable) {
+        return { code: "value.non_json_property", path: `${path}.${key}`, message: "Metadata properties must be enumerable." };
+      }
+      if (!("value" in descriptor)) {
+        return { code: "value.accessor", path: `${path}.${key}`, message: "Metadata properties may not use accessors." };
+      }
+    }
   }
   if (seen.has(value)) {
     return { code: "value.circular", path, message: "Circular metadata is not supported." };
@@ -153,6 +247,16 @@ const addStableIdError = (
   }
 };
 
+const addMetadataIdentifierError = (
+  value: unknown,
+  path: string,
+  errors: MutableValidationError[]
+) => {
+  if (!isNonEmptyString(value) || !METADATA_IDENTIFIER_PATTERN.test(value)) {
+    addError(errors, "identifier.invalid", path, "Expected a non-empty metadata identifier.");
+  }
+};
+
 const addLocalizationKeyError = (
   value: unknown,
   path: string,
@@ -161,6 +265,29 @@ const addLocalizationKeyError = (
   if (!isNonEmptyString(value)) {
     addError(errors, "localization.required", path, "A non-empty localization key is required.");
   }
+};
+
+const addOptionalLocalizationKeyError = (
+  value: unknown,
+  path: string,
+  errors: MutableValidationError[]
+) => {
+  if (value !== undefined) {
+    addLocalizationKeyError(value, path, errors);
+  }
+};
+
+const addUnknownKeyErrors = (
+  value: RecordValue,
+  allowedKeys: readonly string[],
+  path: string,
+  errors: MutableValidationError[]
+) => {
+  Object.keys(value).forEach((key) => {
+    if (!allowedKeys.includes(key)) {
+      addError(errors, "contract.unknown_key", `${path}.${key}`, `Unknown contract key "${key}" is not allowed.`);
+    }
+  });
 };
 
 const findDuplicates = (values: readonly string[]) => {
@@ -207,14 +334,27 @@ const readStringArray = (
 };
 
 const addDomainPayloadErrors = (
-  value: RecordValue,
+  value: unknown,
   path: string,
-  errors: MutableValidationError[]
+  errors: MutableValidationError[],
+  seen = new WeakSet<object>()
 ) => {
-  Object.keys(value).forEach((key) => {
+  if (typeof value !== "object" || value === null || seen.has(value)) {
+    return;
+  }
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => addDomainPayloadErrors(item, `${path}.${index}`, errors, seen));
+    return;
+  }
+  if (!isPlainRecord(value)) {
+    return;
+  }
+  Object.entries(value).forEach(([key, child]) => {
     if (DOMAIN_PAYLOAD_KEYS.has(key)) {
       addError(errors, "boundary.domain_payload", `${path}.${key}`, "Domain data is not allowed in this contract.");
     }
+    addDomainPayloadErrors(child, `${path}.${key}`, errors, seen);
   });
 };
 
@@ -229,16 +369,48 @@ export const validateCanonicalWorkbenchRegions = (
   }
 
   const ids: string[] = [];
+  const orders: string[] = [];
   input.forEach((item, index) => {
     const path = `regions.${index}`;
     if (!isRecord(item)) {
       addError(errors, "workbench.region_type", path, "Region must be an object.");
       return;
     }
+    addUnknownKeyErrors(item, WORKBENCH_REGION_KEYS, path, errors);
+    const canonicalAtIndex = CANONICAL_WORKBENCH_REGION_DEFINITIONS[index];
+    if (canonicalAtIndex && item.id !== canonicalAtIndex.id) {
+      addError(
+        errors,
+        "workbench.sequence",
+        `${path}.id`,
+        `Expected canonical region "${canonicalAtIndex.id}" at index ${index}.`
+      );
+    }
     if (isNonEmptyString(item.id)) {
       ids.push(item.id);
       if (!(WORKBENCH_REGION_IDS as readonly string[]).includes(item.id)) {
         addError(errors, "workbench.unknown_region", `${path}.id`, `Unknown canonical region "${item.id}".`);
+      } else {
+        const canonical = CANONICAL_WORKBENCH_REGION_DEFINITIONS.find((region) => region.id === item.id);
+        if (canonical) {
+          if (item.role !== canonical.role) {
+            addError(errors, "workbench.canonical_role", `${path}.role`, `Region "${item.id}" must use role "${canonical.role}".`);
+          }
+          if (item.labelKey !== canonical.labelKey) {
+            addError(errors, "workbench.canonical_label", `${path}.labelKey`, `Region "${item.id}" must use its canonical label key.`);
+          }
+          if (item.order !== canonical.order) {
+            addError(errors, "workbench.canonical_order", `${path}.order`, `Region "${item.id}" must use order ${canonical.order}.`);
+          }
+          if (item.hostsPanels !== canonical.hostsPanels) {
+            addError(
+              errors,
+              "workbench.canonical_hosts_panels",
+              `${path}.hostsPanels`,
+              `Region "${item.id}" must preserve canonical panel-hosting semantics.`
+            );
+          }
+        }
       }
     } else {
       addError(errors, "id.required", `${path}.id`, "Region ID is required.");
@@ -249,6 +421,8 @@ export const validateCanonicalWorkbenchRegions = (
     addLocalizationKeyError(item.labelKey, `${path}.labelKey`, errors);
     if (!isFiniteNumber(item.order) || item.order < 0) {
       addError(errors, "workbench.order", `${path}.order`, "Region order must be a non-negative finite number.");
+    } else {
+      orders.push(String(item.order));
     }
     if (typeof item.hostsPanels !== "boolean") {
       addError(errors, "workbench.hosts_panels", `${path}.hostsPanels`, "hostsPanels must be boolean.");
@@ -256,6 +430,7 @@ export const validateCanonicalWorkbenchRegions = (
   });
 
   addDuplicateErrors(ids, "regions", "workbench.duplicate_region", errors);
+  addDuplicateErrors(orders, "regions", "workbench.duplicate_order", errors);
   WORKBENCH_REGION_IDS.forEach((id) => {
     if (!ids.includes(id)) {
       addError(errors, "workbench.missing_region", "regions", `Missing canonical region "${id}".`);
@@ -274,15 +449,21 @@ export const validateEditorDefinition = (input: unknown): Phase1ArchitectureVali
     addError(errors, "editor.type", "editor", "Editor definition must be an object.");
     return result(errors);
   }
+  addUnknownKeyErrors(input, EDITOR_DEFINITION_KEYS, "editor", errors);
   addVersionError(input.schemaVersion, EDITOR_DEFINITION_SCHEMA_VERSION, "editor.schemaVersion", errors);
   addStableIdError(input.id, "editor.id", errors);
   if (!(EDITOR_KINDS as readonly unknown[]).includes(input.kind)) {
     addError(errors, "editor.kind", "editor.kind", "Unsupported editor kind.");
   }
   addLocalizationKeyError(input.titleKey, "editor.titleKey", errors);
+  addOptionalLocalizationKeyError(input.tooltipKey, "editor.tooltipKey", errors);
+  if (input.iconId !== undefined) {
+    addMetadataIdentifierError(input.iconId, "editor.iconId", errors);
+  }
   if (!(EDITOR_AVAILABILITY_STATES as readonly unknown[]).includes(input.availability)) {
     addError(errors, "editor.availability", "editor.availability", "Unsupported editor availability state.");
   }
+  addOptionalLocalizationKeyError(input.unavailableReasonKey, "editor.unavailableReasonKey", errors);
   return result(errors);
 };
 
@@ -294,9 +475,11 @@ export const validateWorkspacePreset = (input: unknown): Phase1ArchitectureValid
     return result(errors);
   }
   addDomainPayloadErrors(input, "workspace", errors);
+  addUnknownKeyErrors(input, WORKSPACE_PRESET_KEYS, "workspace", errors);
   addVersionError(input.schemaVersion, WORKSPACE_PRESET_SCHEMA_VERSION, "workspace.schemaVersion", errors);
   addStableIdError(input.id, "workspace.id", errors);
   addLocalizationKeyError(input.labelKey, "workspace.labelKey", errors);
+  addOptionalLocalizationKeyError(input.tooltipKey, "workspace.tooltipKey", errors);
   addStableIdError(input.defaultEditorId, "workspace.defaultEditorId", errors);
   const panels = readStringArray(input.initiallyVisiblePanelIds, "workspace.initiallyVisiblePanelIds", errors);
   const commands = readStringArray(input.emphasizedCommandIds, "workspace.emphasizedCommandIds", errors);
@@ -319,6 +502,7 @@ export const validateWorkbenchUiPreferences = (input: unknown): Phase1Architectu
     return result(errors);
   }
   addDomainPayloadErrors(input, "uiPreferences", errors);
+  addUnknownKeyErrors(input, UI_PREFERENCES_KEYS, "uiPreferences", errors);
   addVersionError(input.schemaVersion, UI_PREFERENCES_SCHEMA_VERSION, "uiPreferences.schemaVersion", errors);
   if (!(THEME_IDS as readonly unknown[]).includes(input.theme)) {
     addError(errors, "ui_preferences.theme", "uiPreferences.theme", "Unsupported theme preference.");
@@ -340,6 +524,7 @@ export const validateWorkbenchUiPreferences = (input: unknown): Phase1Architectu
       addError(errors, "ui_preferences.panel_type", path, "Panel preference must be an object.");
       return;
     }
+    addUnknownKeyErrors(panel, PANEL_PREFERENCE_KEYS, path, errors);
     if (isNonEmptyString(panel.panelId)) {
       panelIds.push(panel.panelId);
     } else {
@@ -398,6 +583,7 @@ const validatePropertyField = (
     addError(errors, "property.field_type", path, "Property field must be an object.");
     return;
   }
+  addUnknownKeyErrors(field, PROPERTY_FIELD_KEYS, path, errors);
   if (isNonEmptyString(field.id)) {
     fieldIds.push(field.id);
   } else {
@@ -409,6 +595,9 @@ const validatePropertyField = (
     fieldPaths.push(field.path);
   }
   addLocalizationKeyError(field.labelKey, `${path}.labelKey`, errors);
+  if (field.unit !== undefined) {
+    addMetadataIdentifierError(field.unit, `${path}.unit`, errors);
+  }
   if (!(PROPERTY_FIELD_DATA_TYPES as readonly unknown[]).includes(field.dataType)) {
     addError(errors, "property.data_type", `${path}.dataType`, "Unsupported property field data type.");
     return;
@@ -427,9 +616,7 @@ const validatePropertyField = (
       addError(errors, "property.validation_type", validationPath, "Validation must be an object.");
     } else {
       const validation = field.validation;
-      if (validation.required !== undefined && typeof validation.required !== "boolean") {
-        addError(errors, "property.validation_required", `${validationPath}.required`, "required must be boolean.");
-      }
+      addUnknownKeyErrors(validation, PROPERTY_VALIDATION_KEYS, validationPath, errors);
       if (validation.min !== undefined && !isFiniteNumber(validation.min)) {
         addError(errors, "property.min", `${validationPath}.min`, "min must be finite.");
       }
@@ -461,8 +648,8 @@ const validatePropertyField = (
       } else if (dataType === "enum") {
         addError(errors, "property.enum_values", `${validationPath}.allowedValues`, "Enum fields require allowedValues.");
       }
-      if (validation.validatorId !== undefined && !isNonEmptyString(validation.validatorId)) {
-        addError(errors, "property.validator_id", `${validationPath}.validatorId`, "validatorId must be a non-empty identifier.");
+      if (validation.validatorId !== undefined) {
+        addMetadataIdentifierError(validation.validatorId, `${validationPath}.validatorId`, errors);
       }
     }
   } else if (dataType === "enum") {
@@ -481,6 +668,7 @@ const validatePropertyField = (
           addError(errors, "property.export_mapping_type", mappingPath, "Export mapping must be an object.");
           return;
         }
+        addUnknownKeyErrors(mapping, PROPERTY_EXPORT_MAPPING_KEYS, mappingPath, errors);
         if (!(PROPERTY_EXPORT_TARGETS as readonly unknown[]).includes(mapping.target)) {
           addError(errors, "property.export_target", `${mappingPath}.target`, "Unsupported export target.");
         } else {
@@ -502,6 +690,7 @@ export const validatePropertySchemaDefinition = (input: unknown): Phase1Architec
     addError(errors, "property.schema_type", "propertySchema", "Property schema must be an object.");
     return result(errors);
   }
+  addUnknownKeyErrors(input, PROPERTY_SCHEMA_KEYS, "propertySchema", errors);
   addVersionError(input.schemaVersion, PROPERTY_SCHEMA_VERSION, "propertySchema.schemaVersion", errors);
   addStableIdError(input.id, "propertySchema.id", errors);
   addLocalizationKeyError(input.labelKey, "propertySchema.labelKey", errors);
@@ -518,6 +707,7 @@ export const validatePropertySchemaDefinition = (input: unknown): Phase1Architec
       addError(errors, "property.section_type", sectionPath, "Property section must be an object.");
       return;
     }
+    addUnknownKeyErrors(section, PROPERTY_SECTION_KEYS, sectionPath, errors);
     if (isNonEmptyString(section.id)) {
       sectionIds.push(section.id);
     } else {

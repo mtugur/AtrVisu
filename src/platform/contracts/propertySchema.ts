@@ -4,7 +4,6 @@ export type PropertyFieldDataType = (typeof PROPERTY_FIELD_DATA_TYPES)[number];
 export type PropertyAllowedValue = string | number | boolean;
 
 export type PropertyValidationDefinition = {
-  required?: boolean;
   min?: number;
   max?: number;
   step?: number;

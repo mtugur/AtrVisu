@@ -86,7 +86,6 @@ const identityField = (): PropertyFieldDefinition => ({
   editable: true,
   required: true,
   validation: {
-    required: true,
     pattern: "^[A-Z0-9-]+$",
     validatorId: "validator.machineCode"
   },
@@ -174,6 +173,45 @@ describe("Phase 1 workbench architecture validation", () => {
     expect(validateCanonicalWorkbenchRegions(unknown).errors.map((error) => error.code))
       .toContain("workbench.unknown_region");
   });
+
+  it("rejects changes to canonical region role, panel hosting, label, order, and sequence", () => {
+    const role = CANONICAL_WORKBENCH_REGION_DEFINITIONS.map((region) => (
+      region.id === "application-bar" ? { ...region, role: "dock" } : region
+    ));
+    const hostsPanels = CANONICAL_WORKBENCH_REGION_DEFINITIONS.map((region) => (
+      region.id === "primary-dock" ? { ...region, hostsPanels: false } : region
+    ));
+    const label = CANONICAL_WORKBENCH_REGION_DEFINITIONS.map((region) => (
+      region.id === "menu-bar" ? { ...region, labelKey: "workbench.region.changed" } : region
+    ));
+    const order = CANONICAL_WORKBENCH_REGION_DEFINITIONS.map((region) => (
+      region.id === "secondary-dock" ? { ...region, order: 3 } : region
+    ));
+    const sequence = [
+      CANONICAL_WORKBENCH_REGION_DEFINITIONS[1],
+      CANONICAL_WORKBENCH_REGION_DEFINITIONS[0],
+      ...CANONICAL_WORKBENCH_REGION_DEFINITIONS.slice(2)
+    ];
+
+    expectError(validateCanonicalWorkbenchRegions(role), "workbench.canonical_role", "regions.0.role");
+    expectError(
+      validateCanonicalWorkbenchRegions(hostsPanels),
+      "workbench.canonical_hosts_panels",
+      "regions.3.hostsPanels"
+    );
+    expectError(validateCanonicalWorkbenchRegions(label), "workbench.canonical_label", "regions.1.labelKey");
+    expectError(validateCanonicalWorkbenchRegions(order), "workbench.canonical_order", "regions.5.order");
+    expectError(validateCanonicalWorkbenchRegions(order), "workbench.duplicate_order", "regions");
+    expectError(validateCanonicalWorkbenchRegions(sequence), "workbench.sequence", "regions.0.id");
+  });
+
+  it("rejects unknown workbench region metadata", () => {
+    const regions = CANONICAL_WORKBENCH_REGION_DEFINITIONS.map((region, index) => (
+      index === 0 ? { ...region, runtimeComponent: "ApplicationBar" } : region
+    ));
+
+    expectError(validateCanonicalWorkbenchRegions(regions), "contract.unknown_key", "regions.0.runtimeComponent");
+  });
 });
 
 describe("Phase 1 editor metadata validation", () => {
@@ -205,6 +243,40 @@ describe("Phase 1 editor metadata validation", () => {
       path: "editor.render"
     }));
     expect(render).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Date", new Date("2026-01-01T00:00:00.000Z")],
+    ["Map", new Map([["mode", "visual"]])],
+    ["Set", new Set(["visual"])],
+    ["RegExp", /visual/],
+    ["class instance", new (class RuntimeMetadata { mode = "visual"; })()]
+  ])("rejects %s as non-plain editor metadata", (_label, metadata) => {
+    const validation = validateEditorDefinition({ ...validEditor(), metadata });
+
+    expectError(validation, "value.non_plain_object", "editor.metadata");
+    expectError(validation, "contract.unknown_key", "editor.metadata");
+  });
+
+  it("rejects explicit undefined, non-finite numbers, and unknown editor keys", () => {
+    const undefinedValue = validateEditorDefinition({ ...validEditor(), tooltipKey: undefined });
+    const nonFinite = validateEditorDefinition({ ...validEditor(), priority: Number.POSITIVE_INFINITY });
+    const unknown = validateEditorDefinition({ ...validEditor(), runtimeHandle: "editor-runtime" });
+
+    expectError(undefinedValue, "value.undefined", "editor.tooltipKey");
+    expectError(nonFinite, "value.non_finite", "editor.priority");
+    expectError(nonFinite, "contract.unknown_key", "editor.priority");
+    expectError(unknown, "contract.unknown_key", "editor.runtimeHandle");
+  });
+
+  it("validates optional editor localization and identifier metadata", () => {
+    const tooltip = validateEditorDefinition({ ...validEditor(), tooltipKey: "" });
+    const unavailableReason = validateEditorDefinition({ ...validEditor(), unavailableReasonKey: " " });
+    const icon = validateEditorDefinition({ ...validEditor(), iconId: "invalid icon" });
+
+    expectError(tooltip, "localization.required", "editor.tooltipKey");
+    expectError(unavailableReason, "localization.required", "editor.unavailableReasonKey");
+    expectError(icon, "identifier.invalid", "editor.iconId");
   });
 });
 
@@ -249,6 +321,26 @@ describe("Phase 1 workspace validation", () => {
         path: `workspace.${key}`
       }));
     });
+  });
+
+  it("rejects unknown workspace keys and recursively detects nested domain leakage", () => {
+    const result = validateWorkspacePreset({
+      ...salesWorkspace(),
+      metadata: {
+        presentation: {
+          project: { id: "project.hidden" }
+        }
+      }
+    });
+
+    expectError(result, "contract.unknown_key", "workspace.metadata");
+    expectError(result, "boundary.domain_payload", "workspace.metadata.presentation.project");
+  });
+
+  it("validates optional workspace localization metadata", () => {
+    const result = validateWorkspacePreset({ ...salesWorkspace(), tooltipKey: "" });
+
+    expectError(result, "localization.required", "workspace.tooltipKey");
   });
 });
 
@@ -297,6 +389,35 @@ describe("Phase 1 UI preference validation", () => {
         path: `uiPreferences.${key}`
       }));
     });
+  });
+
+  it("rejects unknown UI preference and panel keys with nested domain leakage", () => {
+    const root = validateWorkbenchUiPreferences({ ...validUiPreferences(), experimental: true });
+    const panel = validateWorkbenchUiPreferences({
+      ...validUiPreferences(),
+      panels: [{
+        ...validUiPreferences().panels[0],
+        metadata: { nested: { selection: ["machine:1"] } }
+      }]
+    });
+
+    expectError(root, "contract.unknown_key", "uiPreferences.experimental");
+    expectError(panel, "contract.unknown_key", "uiPreferences.panels.0.metadata");
+    expectError(panel, "boundary.domain_payload", "uiPreferences.panels.0.metadata.nested.selection");
+  });
+
+  it("rejects non-finite panel preference values", () => {
+    const nan = validateWorkbenchUiPreferences({
+      ...validUiPreferences(),
+      panels: [{ ...validUiPreferences().panels[0], size: Number.NaN }]
+    });
+    const infinity = validateWorkbenchUiPreferences({
+      ...validUiPreferences(),
+      panels: [{ ...validUiPreferences().panels[0], order: Number.POSITIVE_INFINITY }]
+    });
+
+    expectError(nan, "value.non_finite", "uiPreferences.panels.0.size");
+    expectError(infinity, "value.non_finite", "uiPreferences.panels.0.order");
   });
 });
 
@@ -431,6 +552,108 @@ describe("Phase 1 Property Schema validation", () => {
 
     expectError(result, "value.executable", "propertySchema.sections.0.fields.0.renderer");
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("keeps requiredness on the field as the single authority", () => {
+    const schema = propertySchema();
+    const result = validatePropertySchemaDefinition({
+      ...schema,
+      sections: [{
+        ...schema.sections[0],
+        fields: [{
+          ...identityField(),
+          validation: { ...identityField().validation, required: false }
+        }]
+      }]
+    });
+
+    expectError(
+      result,
+      "contract.unknown_key",
+      "propertySchema.sections.0.fields.0.validation.required"
+    );
+  });
+
+  it("rejects malformed unit and validator identifiers", () => {
+    const schema = propertySchema();
+    const unit = validatePropertySchemaDefinition({
+      ...schema,
+      sections: [{
+        ...schema.sections[1],
+        fields: [{ ...capacityField(), unit: " " }]
+      }]
+    });
+    const validator = validatePropertySchemaDefinition({
+      ...schema,
+      sections: [{
+        ...schema.sections[0],
+        fields: [{
+          ...identityField(),
+          validation: { ...identityField().validation, validatorId: "invalid validator" }
+        }]
+      }]
+    });
+
+    expectError(unit, "identifier.invalid", "propertySchema.sections.0.fields.0.unit");
+    expectError(
+      validator,
+      "identifier.invalid",
+      "propertySchema.sections.0.fields.0.validation.validatorId"
+    );
+  });
+
+  it("rejects unknown keys at every Property Schema contract level", () => {
+    const schema = propertySchema();
+    const cases = [
+      [
+        { ...schema, runtimeSchema: true },
+        "propertySchema.runtimeSchema"
+      ],
+      [
+        { ...schema, sections: [{ ...schema.sections[0], runtimeSection: true }] },
+        "propertySchema.sections.0.runtimeSection"
+      ],
+      [
+        {
+          ...schema,
+          sections: [{
+            ...schema.sections[0],
+            fields: [{ ...identityField(), rendererId: "renderer.text" }]
+          }]
+        },
+        "propertySchema.sections.0.fields.0.rendererId"
+      ],
+      [
+        {
+          ...schema,
+          sections: [{
+            ...schema.sections[0],
+            fields: [{
+              ...identityField(),
+              validation: { ...identityField().validation, severity: "error" }
+            }]
+          }]
+        },
+        "propertySchema.sections.0.fields.0.validation.severity"
+      ],
+      [
+        {
+          ...schema,
+          sections: [{
+            ...schema.sections[0],
+            fields: [{
+              ...identityField(),
+              exportMappings: [{ target: "bom", key: "machineCode", formatter: "text" }]
+            }]
+          }]
+        },
+        "propertySchema.sections.0.fields.0.exportMappings.0.formatter"
+      ]
+    ] as const;
+
+    cases.forEach(([input, path]) => {
+      expectError(validatePropertySchemaDefinition(input), "contract.unknown_key", path);
+    });
   });
 
   it("accepts shared BOM and report export mappings", () => {

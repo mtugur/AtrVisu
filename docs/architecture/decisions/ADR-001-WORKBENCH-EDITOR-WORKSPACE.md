@@ -50,7 +50,11 @@ presentation preset to mutate domain state.
 
 P1-B introduces the minimal Editor Host and binds `layout.3d` to the existing
 viewport/scene path. It must preserve current AppShell anchors and all Phase 0
-authorities. Later workbench regions and workspaces consume stable IDs only.
+authorities. P1-C owns the Design System & Command Surfaces foundation:
+semantic token implementation, light/dark/system theme infrastructure,
+technical-palette governance, and registry-backed application/menu/command
+surfaces. These foundations precede or accompany broader shell UI migration.
+Later workbench regions and workspaces consume stable IDs only.
 
 ## Verification Obligations
 

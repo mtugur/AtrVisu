@@ -15,6 +15,7 @@ packages. Master Plan v3.0 remains the canonical roadmap.
 | Saved viewpoints are domain data | Architecture and ADR-002 classify viewpoints under layout/revision data | PASS | Yes | P1-D |
 | Semantic token families defined | Canonical readonly design-token family tuple | PASS | Yes | P1-C |
 | Technical palette policy defined | Central policy with documented allowlist direction | PASS | Yes | P1-C |
+| Design-system and theme implementation ownership assigned | P1-C explicitly owns semantic tokens, light/dark/system infrastructure, palette governance, and command surfaces | PASS | Yes | P1-C |
 | Property Schema is declarative and versioned | Versioned contract rejects executable content and invalid rules | PASS | Yes | P1-E |
 | Inspector/BOM/report share one source | ADR-003 and export mappings use one Property Schema | PASS | Yes | P1-E/P1-G |
 | Localization keys required | Contracts and validators require title/label keys | PASS | Yes | P1-C/P1-E |

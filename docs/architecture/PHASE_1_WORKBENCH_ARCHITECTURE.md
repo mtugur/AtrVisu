@@ -183,9 +183,11 @@ contains ordered sections with localization keys, applicability metadata, and
 fields. Fields define stable IDs and paths, localized labels, data type, unit,
 editability, requirement state, declarative validation, and export mappings.
 
-Supported field types are `string`, `number`, `boolean`, and `enum`. Validation
-supports required, min, max, positive step, regex pattern syntax,
-allowed-values, and registered `validatorId` references.
+Supported field types are `string`, `number`, `boolean`, and `enum`. Field
+requiredness has one authority: `PropertyFieldDefinition.required`. Declarative
+validation supports min, max, positive step, regex pattern syntax,
+allowed-values, and registered `validatorId` references without repeating the
+requiredness flag.
 
 Schema content is serializable. It contains no function, `eval`, JavaScript
 expression, embedded interpreter, or executable validation body. Complex
@@ -275,8 +277,12 @@ output. P1-A implements none of these outputs.
 
 1. **P1-B Workbench Runtime Foundation**: minimal Editor Host, `layout.3d`
    runtime binding, and strangler shell boundary using these contracts.
-2. **P1-C Workbench Navigation Surfaces**: registry-backed application/menu/
-   command surfaces and accessibility behavior.
+2. **P1-C Design System & Command Surfaces**: semantic token implementation,
+   light/dark/system theme infrastructure, technical-palette governance and
+   allowlisting, registry-backed application/menu/command surfaces, and their
+   accessibility behavior. This foundation is delivered before or with broader
+   shell UI migration; navigation surfaces may not invent local styling
+   authorities.
 3. **P1-D Workspace and UI Preferences Runtime**: preset application with
    invariance checks and versioned `uiPreferences` persistence migration.
 4. **P1-E Schema-Driven Inspector Foundation**: validator registry and generic
