@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { AppShell } from "./components/AppShell";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import { EditorHost } from "./components/EditorHost";
+import { WorkbenchShell } from "./components/WorkbenchShell";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
@@ -215,6 +216,12 @@ import {
   type RuntimeViewportAccessEvidence
 } from "./platform/runtimeFeatureAccess";
 import { getPlatformCommandSeedById } from "./platform/registrySeeds";
+import { createEditorDefinitionRegistry } from "./platform/editorDefinitionRegistry";
+import { createEditorRuntimeRegistry } from "./workbench/editorRuntimeRegistry";
+import {
+  LAYOUT_3D_EDITOR_DEFINITION,
+  LAYOUT_3D_EDITOR_ID
+} from "./workbench/layout3dEditorDefinition";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -461,6 +468,10 @@ export function App() {
   const activeGroupEditIdRef = useRef<string | null>(activeGroupEditId);
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
   const sceneRef = useRef<BabylonSceneHandle | null>(null);
+  const editorDefinitionRegistry = useMemo(
+    () => createEditorDefinitionRegistry([LAYOUT_3D_EDITOR_DEFINITION]),
+    []
+  );
   const annotationEditHistoryRecordedRef = useRef(false);
   const libraryManagerRuntimeControllerRef = useRef<LibraryManagerRuntimeController | null>(null);
   const projectManagerRuntimeControllerRef = useRef<ProjectManagerRuntimeController | null>(null);
@@ -3603,10 +3614,11 @@ export function App() {
     }
   });
 
-  return (
-    <AppShell
-      viewportRightInset={isPanelCollapsed ? 0 : panelWidth}
-      viewport={(
+  const editorRuntimeRegistry = createEditorRuntimeRegistry(
+    editorDefinitionRegistry,
+    [{
+      editorId: LAYOUT_3D_EDITOR_ID,
+      render: () => (
         <BabylonScene
           ref={sceneRef}
           placedMachines={visiblePlacedMachines}
@@ -3639,8 +3651,21 @@ export function App() {
           onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
           onPerformanceMetricsChange={setLatestPerformanceMetrics}
         />
+      )
+    }]
+  );
+
+  return (
+    <WorkbenchShell
+      editorRightInset={isPanelCollapsed ? 0 : panelWidth}
+      editorHost={(
+        <EditorHost
+          activeEditorId={LAYOUT_3D_EDITOR_ID}
+          definitionRegistry={editorDefinitionRegistry}
+          runtimeRegistry={editorRuntimeRegistry}
+        />
       )}
-      rightPanel={isPanelCollapsed ? (
+      secondaryDock={isPanelCollapsed ? (
         <button
           className="panel-reopen-tab"
           type="button"
@@ -4137,7 +4162,7 @@ export function App() {
           ) : null}
         </aside>
       )}
-      modalLayer={(
+      overlayLayer={(
         <>
           {isProjectManagerOpen ? (
             <ProjectManager
