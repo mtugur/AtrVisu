@@ -1,0 +1,68 @@
+:root {
+  /* Spacing */
+  --av-space-0: 0;
+  --av-space-1: 4px;
+  --av-space-2: 8px;
+  --av-space-3: 12px;
+  --av-space-4: 16px;
+  --av-space-5: 20px;
+  --av-space-6: 24px;
+  --av-space-8: 32px;
+  --av-space-10: 40px;
+
+  /* Typography */
+  --av-font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --av-font-size-xs: 0.72rem;
+  --av-font-size-sm: 0.78rem;
+  --av-font-size-md: 0.86rem;
+  --av-font-size-lg: 1rem;
+  --av-font-size-xl: 1.2rem;
+  --av-font-weight-regular: 400;
+  --av-font-weight-medium: 600;
+  --av-font-weight-strong: 800;
+  --av-line-height-tight: 1.2;
+  --av-line-height-normal: 1.45;
+
+  /* Control and icon sizes */
+  --av-control-height-sm: 28px;
+  --av-control-height-md: 34px;
+  --av-control-height-lg: 40px;
+  --av-control-radius-sm: 4px;
+  --av-control-radius-md: 6px;
+  --av-control-radius-lg: 8px;
+  --av-icon-size-sm: 14px;
+  --av-icon-size-md: 18px;
+  --av-icon-size-lg: 22px;
+
+  /* Shell elevation and z-index */
+  --av-elevation-panel: 0 12px 32px var(--av-shadow-panel);
+  --av-elevation-modal: 0 22px 70px var(--av-shadow-modal);
+  --av-z-viewport: 0;
+  --av-z-panel: 20;
+  --av-z-command-surface: 30;
+  --av-z-overlay: 80;
+  --av-z-modal: 100;
+}
+
+.av-design-system-root {
+  width: 100%;
+  height: 100%;
+  color: var(--av-text-primary);
+  background: var(--av-surface-canvas);
+  font-family: var(--av-font-family-sans);
+  font-size: var(--av-font-size-md);
+  line-height: var(--av-line-height-normal);
+}
+
+.av-design-system-root[data-av-density="comfortable"] {
+  --av-density-control-height: var(--av-control-height-md);
+  --av-density-panel-gap: var(--av-space-3);
+  --av-density-panel-padding: var(--av-space-4);
+}
+
+.av-design-system-root[data-av-density="compact"] {
+  --av-density-control-height: var(--av-control-height-sm);
+  --av-density-panel-gap: var(--av-space-2);
+  --av-density-panel-padding: var(--av-space-3);
+}
