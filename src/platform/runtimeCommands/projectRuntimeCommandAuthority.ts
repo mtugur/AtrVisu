@@ -13,8 +13,24 @@ import {
 } from "./runtimeCommandOperation";
 import {
   RUNTIME_FEATURE_COMMAND_IDS,
-  type RuntimeFeatureCommandBindings
+  type RuntimeFeatureCommandBindings,
+  type RuntimeFeatureCommandOperationResult
 } from "./runtimeFeatureCommands";
+
+export const PROJECT_RUNTIME_COMMAND_IDS = [
+  RUNTIME_FEATURE_COMMAND_IDS.projectSave,
+  RUNTIME_FEATURE_COMMAND_IDS.projectExportJson,
+  RUNTIME_FEATURE_COMMAND_IDS.projectImportJson
+] as const;
+
+export type ProjectRuntimeCommandId = typeof PROJECT_RUNTIME_COMMAND_IDS[number];
+
+export type ProjectRuntimeCommandE2EBridge = {
+  execute: (
+    commandId: ProjectRuntimeCommandId,
+    payload?: unknown
+  ) => Promise<RuntimeFeatureCommandOperationResult>;
+};
 
 export type ProjectExportCommandPayload = {
   projectId: string;
@@ -23,6 +39,13 @@ export type ProjectExportCommandPayload = {
 export type ProjectImportCommandPayload = {
   file: File;
 };
+
+export const executeProjectImportFileSelection = async (
+  file: File | undefined,
+  execute: (
+    payload: ProjectImportCommandPayload
+  ) => Promise<RuntimeFeatureCommandOperationResult>
+) => file ? execute({ file }) : null;
 
 type ProjectRuntimeCommandStorage = {
   createRevision: typeof createRevision;
@@ -249,3 +272,9 @@ export const createProjectRuntimeCommandBindings = ({
     }
   }
 });
+
+declare global {
+  interface Window {
+    __atrvisuProjectCommands?: ProjectRuntimeCommandE2EBridge;
+  }
+}

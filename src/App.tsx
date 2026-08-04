@@ -133,6 +133,9 @@ import {
 } from "./platform/runtimeCommands/runtimeCommandOperation";
 import {
   createProjectRuntimeCommandBindings,
+  executeProjectImportFileSelection,
+  PROJECT_RUNTIME_COMMAND_IDS,
+  type ProjectRuntimeCommandE2EBridge,
   type ProjectImportCommandPayload
 } from "./platform/runtimeCommands/projectRuntimeCommandAuthority";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
@@ -3439,20 +3442,45 @@ export function App() {
   ) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
-    if (!file) {
+    const result = await executeProjectImportFileSelection(
+      file,
+      (payload: ProjectImportCommandPayload) => executeRuntimeFeatureCommand(
+        RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
+        payload
+      )
+    );
+    if (!result) {
       return;
     }
-
-    const payload: ProjectImportCommandPayload = { file };
-    const result = await executeRuntimeFeatureCommand(
-      RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
-      payload
-    );
     input.value = "";
     const listener = projectImportResultListenerRef.current;
     projectImportResultListenerRef.current = null;
     listener?.(result);
   }, [executeRuntimeFeatureCommand]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+
+    const diagnosticsBridge: ProjectRuntimeCommandE2EBridge = {
+      execute: (commandId, payload) => {
+        if (!PROJECT_RUNTIME_COMMAND_IDS.includes(commandId)) {
+          return Promise.resolve(createUnavailableRuntimeCommandResult(
+            `Project runtime command "${commandId}" is unsupported.`
+          ));
+        }
+        return executeRuntimeFeatureCommand(commandId, payload);
+      }
+    };
+    window.__atrvisuProjectCommands = diagnosticsBridge;
+
+    return () => {
+      if (window.__atrvisuProjectCommands === diagnosticsBridge) {
+        delete window.__atrvisuProjectCommands;
+      }
+    };
+  }, [enableE2EDiagnostics, executeRuntimeFeatureCommand]);
 
   const canExecuteUndoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.undo).enabled;
   const canExecuteRedoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.redo).enabled;
