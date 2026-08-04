@@ -5,7 +5,11 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
-import { WorkbenchShell } from "./WorkbenchShell";
+import { WORKBENCH_REGION_IDS } from "../platform/contracts";
+import {
+  WORKBENCH_SHELL_REGION_BY_SLOT,
+  WorkbenchShell
+} from "./WorkbenchShell";
 
 const actEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -36,17 +40,8 @@ describe("WorkbenchShell", () => {
       overlayLayer: slot("overlayLayer")
     }));
 
-    [
-      "application-bar",
-      "menu-bar",
-      "command-bar",
-      "primary-dock",
-      "editor-host",
-      "secondary-dock",
-      "bottom-dock",
-      "status-bar",
-      "overlay-layer"
-    ].forEach((region) => {
+    expect(Object.values(WORKBENCH_SHELL_REGION_BY_SLOT)).toEqual(WORKBENCH_REGION_IDS);
+    WORKBENCH_REGION_IDS.forEach((region) => {
       expect(markup).toContain(`data-workbench-region="${region}"`);
     });
     expect(markup).toContain('data-testid="app-root"');
@@ -66,9 +61,9 @@ describe("WorkbenchShell", () => {
     expect(markup).not.toContain("applicationBar");
     expect(markup).not.toContain("secondaryDock");
     expect(markup).not.toContain("overlayLayer");
-    expect(markup).not.toContain("application-bar");
-    expect(markup).not.toContain("secondary-dock");
-    expect(markup).not.toContain("overlay-layer");
+    expect(markup).not.toContain(WORKBENCH_SHELL_REGION_BY_SLOT.applicationBar);
+    expect(markup).not.toContain(WORKBENCH_SHELL_REGION_BY_SLOT.secondaryDock);
+    expect(markup).not.toContain(WORKBENCH_SHELL_REGION_BY_SLOT.overlayLayer);
   });
 
   it("preserves AppShell right-inset normalization", () => {

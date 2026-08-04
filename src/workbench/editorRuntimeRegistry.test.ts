@@ -28,6 +28,7 @@ describe("EditorRuntimeRegistry", () => {
       render
     }]);
 
+    expect(registry.definitionRegistry).toBe(definitions);
     expect(registry.require("layout.3d").render).toBe(render);
     expect(render).not.toHaveBeenCalled();
   });
@@ -50,6 +51,34 @@ describe("EditorRuntimeRegistry", () => {
       editorId: "editor.unknown",
       render: () => null
     }])).toThrowError(expect.objectContaining({ code: "editor_runtime.unknown_definition" }));
+  });
+
+  it("rejects malformed binding objects with a stable error code", () => {
+    const definitions = createEditorDefinitionRegistry([LAYOUT_3D_EDITOR_DEFINITION]);
+
+    expect(() => createEditorRuntimeRegistry(
+      definitions,
+      [null] as unknown as readonly EditorRuntimeBinding[]
+    )).toThrowError(expect.objectContaining({ code: "editor_runtime.invalid_binding" }));
+  });
+
+  it("rejects a non-callable render value without invoking another callback", () => {
+    const render = vi.fn(() => createElement("canvas"));
+    const definitions = createEditorDefinitionRegistry([
+      LAYOUT_3D_EDITOR_DEFINITION,
+      createDefinition("editor.invalid")
+    ]);
+
+    expect(() => createEditorRuntimeRegistry(definitions, [
+      { editorId: "layout.3d", render },
+      { editorId: "editor.invalid", render: "not-callable" }
+    ] as unknown as readonly EditorRuntimeBinding[])).toThrowError(
+      expect.objectContaining({
+        code: "editor_runtime.invalid_render",
+        editorId: "editor.invalid"
+      })
+    );
+    expect(render).not.toHaveBeenCalled();
   });
 
   it("rejects a missing binding for an available editor", () => {

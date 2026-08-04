@@ -93,10 +93,16 @@ describe("EditorHost", () => {
 
   it("renders an accessible fallback for a missing runtime binding", () => {
     const definitions = createEditorDefinitionRegistry([LAYOUT_3D_EDITOR_DEFINITION]);
-    const runtimeDefinitions = createEditorDefinitionRegistry([
-      createDefinition("layout.3d", "unavailable")
-    ]);
-    const runtime = createEditorRuntimeRegistry(runtimeDefinitions, []);
+    const validRuntime = createEditorRuntimeRegistry(definitions, [{
+      editorId: "layout.3d",
+      render: () => createElement("canvas")
+    }]);
+    const runtime = {
+      ...validRuntime,
+      bindings: [],
+      has: () => false,
+      get: () => undefined
+    };
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const markup = renderToStaticMarkup(createElement(EditorHost, {
@@ -109,6 +115,28 @@ describe("EditorHost", () => {
     expect(markup).toContain('data-editor-host-error="missing-binding"');
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it("does not execute a binding when definition and runtime registries mismatch", () => {
+    const definitions = createEditorDefinitionRegistry([LAYOUT_3D_EDITOR_DEFINITION]);
+    const runtimeDefinitions = createEditorDefinitionRegistry([
+      { ...LAYOUT_3D_EDITOR_DEFINITION }
+    ]);
+    const render = vi.fn(() => createElement("canvas"));
+    const runtime = createEditorRuntimeRegistry(runtimeDefinitions, [{
+      editorId: "layout.3d",
+      render
+    }]);
+
+    const markup = renderToStaticMarkup(createElement(EditorHost, {
+      activeEditorId: "layout.3d",
+      definitionRegistry: definitions,
+      runtimeRegistry: runtime
+    }));
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('data-editor-host-error="registry-mismatch"');
+    expect(render).not.toHaveBeenCalled();
   });
 
   it("preserves the mounted child when the binding object changes for the same active editor", async () => {

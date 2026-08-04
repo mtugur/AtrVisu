@@ -57,8 +57,11 @@ snapshots, and provides deterministic lookup with stable error codes.
 
 The Runtime Editor Registry is a separate React-aware layer. It rejects unknown
 or duplicate bindings and requires a binding for every available definition.
-Unavailable and disabled definitions may remain unbound. Registry construction
-never invokes render callbacks and creates no global mutable singleton.
+It retains the exact source Editor Definition Registry, rejects malformed
+binding objects and non-callable render values with stable error codes, and
+never invokes render callbacks during either successful or rejected registry
+construction. Unavailable and disabled definitions may remain unbound. No
+global mutable singleton is created.
 
 ## 6. EditorHost Behavior
 
@@ -67,6 +70,11 @@ renders only that binding. Unknown, unavailable, disabled, and missing-binding
 states produce a small accessible `role="alert"` fallback without console
 errors or unrelated binding execution.
 
+EditorHost also requires its supplied definition registry to be the exact
+source authority retained by the runtime registry. A mismatched pair produces
+the controlled `registry-mismatch` fallback before any definition lookup,
+binding lookup, or render callback execution.
+
 The measurable host boundary fills the existing scene viewport so the current
 Babylon parent-size contract remains valid. Component tests prove that a new
 runtime binding object with the same active editor and rendered element type
@@ -74,9 +82,12 @@ does not remount the editor child.
 
 ## 7. WorkbenchShell and AppShell Relationship
 
-WorkbenchShell exposes all nine accepted logical region slots. Only
-`editorHost` is required; absent regions produce no placeholder or visible UI.
-It does not import or reference BabylonScene.
+WorkbenchShell exposes all nine accepted logical region slots through one typed,
+exhaustive slot-to-region map constrained by the P1-A `WorkbenchRegionId`
+contract. Tests compare that map and all rendered anchors directly with the
+canonical `WORKBENCH_REGION_IDS` tuple rather than a second handwritten region
+list. Only `editorHost` is required; absent regions produce no placeholder or
+visible UI. WorkbenchShell does not import or reference BabylonScene.
 
 WorkbenchShell is now the application composition boundary. AppShell remains
 its internal compatibility adapter and retains the existing shell class,
@@ -123,18 +134,24 @@ existing visible routes remain under their Phase 0 owners.
 
 ## 11. Validation Evidence
 
-- Focused new tests: passed, 5 files / 26 tests
-- Focused E2E lifecycle and diagnostics: passed, 2 tests
-- `npm.cmd audit`: passed, 0 vulnerabilities
+- Review-correction focused tests: passed, 5 files / 29 tests
+- `npm.cmd audit`: failed; 1 high-severity vulnerability in transitive
+  `undici@7.28.0` through `jsdom@29.1.1`
 - `npm.cmd run build`: passed, 2,093 modules transformed
-- `npm.cmd run test -- --run`: passed, 103 files / 989 tests
+- `npm.cmd run test -- --run`: passed, 103 files / 992 tests
 - `npm.cmd run test:e2e`: passed, 34 Chromium tests
-- `git diff --check`: passed before documentation commit and required again at handoff
+- `git diff --check`: required again at handoff
 - Browser console/page errors: none in maintained E2E assertions
 
 The existing Vite warning for a generated chunk larger than 500 kB remains
 non-blocking and unchanged in nature. The E2E runner owned its temporary Vite
 process; port 5173 is checked again before handoff.
+
+The audit advisory was published after the original exact-head green result.
+`npm audit` reports that remediation is available through `npm audit fix`,
+which would change package-lock state. This review-correction task explicitly
+forbids package changes, so no dependency or lockfile mutation was made and the
+audit failure remains a blocking external validation result.
 
 ## 12. Explicit Non-Goals
 
@@ -158,14 +175,23 @@ size or NumericInput debt.
   deliberately absent.
 - Browser evidence is Chromium smoke coverage, not full visual regression or
   every graphics driver.
+- The current lock resolves dev-only `jsdom` dependency `undici@7.28.0`, which
+  npm now reports with one high-severity advisory. A separately authorized
+  dependency remediation is required before the full package gate can pass.
 
-These are non-blocking for this narrow foundation.
+The first three items are non-blocking for this narrow foundation. The npm
+audit advisory is blocking because the P1-B gate requires a clean audit.
 
 ## 14. Decision
 
-**READY FOR REVIEW**
+**BLOCKED**
 
-All mandatory P1-B gates are proven. The intended visible delta is zero: no CSS
-or visible control was added, the real application shell and modal flows pass,
-and viewport/editor identity remains stable. Manual acceptance is not required
-unless independent review detects an unintended visual delta.
+All three requested review corrections are implemented and proven. The intended
+visible delta remains zero: no CSS or visible control was added, the real
+application shell and modal flows pass, and viewport/editor identity remains
+stable. Manual acceptance is not required unless independent review detects an
+unintended visual delta.
+
+P1-B cannot be marked ready while `npm audit` reports the transitive high
+severity advisory. Resolving it requires package/lockfile work that is expressly
+outside this correction package and was not performed.

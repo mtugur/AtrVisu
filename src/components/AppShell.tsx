@@ -1,28 +1,33 @@
 import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
+import type { WorkbenchRegionId } from "../platform/contracts";
+
+type EditorHostRegionId = Extract<WorkbenchRegionId, "editor-host">;
+type SecondaryDockRegionId = Extract<WorkbenchRegionId, "secondary-dock">;
+type OverlayLayerRegionId = Extract<WorkbenchRegionId, "overlay-layer">;
 
 type AppShellProps = {
   beforeViewport?: ReactNode;
   viewport?: ReactNode;
   viewportRightInset?: number;
-  viewportWorkbenchRegion?: string;
+  viewportWorkbenchRegion?: EditorHostRegionId;
   rightPanel?: ReactNode;
-  rightPanelWorkbenchRegion?: string;
+  rightPanelWorkbenchRegion?: SecondaryDockRegionId;
   afterRightPanel?: ReactNode;
   modalLayer?: ReactNode;
-  modalLayerWorkbenchRegion?: string;
+  modalLayerWorkbenchRegion?: OverlayLayerRegionId;
   diagnostics?: ReactNode;
   children?: ReactNode;
 };
 
 type ShellAnchorProps = {
   "data-app-shell-zone"?: string;
-  "data-workbench-region"?: string;
+  "data-workbench-region"?: WorkbenchRegionId;
 };
 
 const withZoneAnchor = (
   node: ReactNode,
   zone: string,
-  workbenchRegion?: string
+  workbenchRegion?: WorkbenchRegionId
 ): ReactNode => {
   if (!isValidElement<ShellAnchorProps>(node) || node.type === Fragment) {
     return node;

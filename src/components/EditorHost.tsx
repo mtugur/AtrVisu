@@ -9,7 +9,7 @@ type EditorHostProps = {
 };
 
 type EditorHostFailure = Readonly<{
-  code: "unknown" | "unavailable" | "disabled" | "missing-binding";
+  code: "registry-mismatch" | "unknown" | "unavailable" | "disabled" | "missing-binding";
   message: string;
 }>;
 
@@ -18,6 +18,12 @@ const getEditorHostFailure = (
   definitionRegistry: EditorDefinitionRegistry,
   runtimeRegistry: EditorRuntimeRegistry
 ): EditorHostFailure | undefined => {
+  if (runtimeRegistry.definitionRegistry !== definitionRegistry) {
+    return {
+      code: "registry-mismatch",
+      message: "Editor definition and runtime registries do not share one authority."
+    };
+  }
   const definition = definitionRegistry.get(activeEditorId);
   if (!definition) {
     return {
