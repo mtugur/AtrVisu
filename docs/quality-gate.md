@@ -5,6 +5,7 @@ AtrVisu has an automated quality gate for pull requests and pushes to `main`.
 ## Local Commands
 
 ```text
+npm.cmd audit
 npm.cmd run build
 npm.cmd run test
 npm.cmd run test:e2e
@@ -16,6 +17,7 @@ In environments where `npm.cmd` is not on `PATH`, use the installed npm executab
 
 The v0.1 gate covers:
 
+- Production and development dependency security through `npm audit`.
 - TypeScript and Vite production build.
 - Unit conversion helpers.
 - Coordinate conversion helpers.
@@ -47,9 +49,11 @@ The GitHub Actions workflow is:
 It runs on `pull_request` and pushes to `main`:
 
 1. `npm ci`
-2. `npm run build`
-3. `npm run test`
-4. `npx playwright install --with-deps chromium`
-5. `npm run test:e2e`
+2. `npm audit --audit-level=low`
+3. `npm run build`
+4. `npm run test`
+5. `npx playwright install --with-deps chromium`
+6. `npm run test:e2e`
 
-Unsafe PRs should be blocked when build, unit tests, or the smoke test fail.
+Dependency audit findings block the pull request. Unsafe PRs should also be
+blocked when build, unit tests, or the smoke test fail.
