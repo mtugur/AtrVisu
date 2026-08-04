@@ -30,7 +30,15 @@ export type ProjectRuntimeCommandE2EBridge = {
     commandId: ProjectRuntimeCommandId,
     payload?: unknown
   ) => Promise<RuntimeFeatureCommandOperationResult>;
+  getActiveContext: () => ProjectRuntimeCommandActiveContext;
 };
+
+export type ProjectRuntimeCommandActiveContext = Readonly<{
+  projectId: string | null;
+  layoutId: string | null;
+  revisionId: string | null;
+  hasUnsavedChanges: boolean;
+}>;
 
 export type ProjectExportCommandPayload = {
   projectId: string;
@@ -40,12 +48,68 @@ export type ProjectImportCommandPayload = {
   file: File;
 };
 
+export type ProjectImportRequest = Readonly<{
+  requestId: number;
+  onResult: (result: RuntimeFeatureCommandOperationResult) => void;
+}>;
+
+export type ProjectImportRequestLifecycle = {
+  begin: (onResult: ProjectImportRequest["onResult"]) => ProjectImportRequest;
+  getCurrent: () => ProjectImportRequest | null;
+  capture: (requestId: number) => ProjectImportRequest | null;
+  cancel: (requestId: number) => boolean;
+};
+
+export const createProjectImportRequestLifecycle = (): ProjectImportRequestLifecycle => {
+  let nextRequestId = 1;
+  let currentRequest: ProjectImportRequest | null = null;
+
+  const clearMatchingRequest = (requestId: number) => {
+    if (currentRequest?.requestId !== requestId) {
+      return null;
+    }
+    const matchingRequest = currentRequest;
+    currentRequest = null;
+    return matchingRequest;
+  };
+
+  return {
+    begin: (onResult) => {
+      const request = { requestId: nextRequestId, onResult };
+      nextRequestId += 1;
+      currentRequest = request;
+      return request;
+    },
+    getCurrent: () => currentRequest,
+    capture: clearMatchingRequest,
+    cancel: (requestId) => clearMatchingRequest(requestId) !== null
+  };
+};
+
 export const executeProjectImportFileSelection = async (
   file: File | undefined,
   execute: (
     payload: ProjectImportCommandPayload
   ) => Promise<RuntimeFeatureCommandOperationResult>
 ) => file ? execute({ file }) : null;
+
+export const executeProjectImportRequest = async (
+  request: ProjectImportRequest | null,
+  file: File | undefined,
+  execute: (
+    payload: ProjectImportCommandPayload
+  ) => Promise<RuntimeFeatureCommandOperationResult>
+) => {
+  if (!request) {
+    return null;
+  }
+  const result = await executeProjectImportFileSelection(file, execute);
+  if (!result) {
+    return null;
+  }
+  request.onResult(result);
+  return result;
+};
 
 type ProjectRuntimeCommandStorage = {
   createRevision: typeof createRevision;

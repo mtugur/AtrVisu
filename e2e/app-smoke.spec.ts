@@ -119,6 +119,14 @@ const executeProjectRuntimeCommand = async (
   return bridge.execute(id);
 }, commandId);
 
+const getActiveProjectRuntimeContext = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuProjectCommands;
+  if (!bridge) {
+    throw new Error("AtrVisu project runtime command E2E bridge is unavailable.");
+  }
+  return bridge.getActiveContext();
+});
+
 const beginRuntimeSurfaceExecutionObservation = async (
   page: Page,
   commandId: string
@@ -1939,7 +1947,7 @@ test("project and performance modals open and close deterministically", async ({
   expect(errors).toEqual([]);
 });
 
-test("project save and active export execute while Project Manager is closed", async ({ page }) => {
+test("project save clears a real dirty scene and updates its active revision while Project Manager is closed", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
@@ -1954,6 +1962,19 @@ test("project save and active export execute while Project Manager is closed", a
   await page.getByTestId("close-project-manager").click();
   await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
 
+  const cleanContext = await getActiveProjectRuntimeContext(page);
+  expect(cleanContext.projectId).not.toBeNull();
+  expect(cleanContext.layoutId).not.toBeNull();
+  expect(cleanContext.revisionId).not.toBeNull();
+  expect(cleanContext.hasUnsavedChanges).toBe(false);
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  await expect.poll(() => getActiveProjectRuntimeContext(page)).toEqual({
+    ...cleanContext,
+    hasUnsavedChanges: true
+  });
+
   let promptCount = 0;
   page.on("dialog", async (dialog) => {
     if (dialog.type() === "prompt") {
@@ -1964,6 +1985,13 @@ test("project save and active export execute while Project Manager is closed", a
     handled: true,
     status: "executed"
   });
+  await expect.poll(() => getActiveProjectRuntimeContext(page)).toMatchObject({
+    projectId: cleanContext.projectId,
+    layoutId: cleanContext.layoutId,
+    hasUnsavedChanges: false
+  });
+  const savedContext = await getActiveProjectRuntimeContext(page);
+  expect(savedContext.revisionId).not.toBe(cleanContext.revisionId);
 
   await page.getByTestId("open-project-manager").click();
   await expect(page.getByRole("button", { name: /Layout-1 2 revisions/ })).toBeVisible();
@@ -2023,6 +2051,7 @@ test("persistent project import input survives Project Manager close without sce
   ]);
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
+  const activeContextBeforeImport = await getActiveProjectRuntimeContext(page);
   const before = await getRuntimeViewportSnapshot(page);
 
   const chooserPromise = page.waitForEvent("filechooser");
@@ -2039,6 +2068,8 @@ test("persistent project import input survives Project Manager close without sce
   await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("import-project-file")).toHaveCount(1);
   const after = await getRuntimeViewportSnapshot(page);
+  const activeContextAfterImport = await getActiveProjectRuntimeContext(page);
+  expect(activeContextAfterImport).toEqual(activeContextBeforeImport);
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   expect(after.invariants.selectionIds).toEqual(before.invariants.selectionIds);
   expect(after.invariants.undoDepth).toBe(before.invariants.undoDepth);

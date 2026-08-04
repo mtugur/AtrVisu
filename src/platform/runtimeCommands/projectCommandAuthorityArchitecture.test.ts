@@ -37,5 +37,8 @@ describe("project command runtime ownership architecture", () => {
     expect(appSource.match(/data-testid="import-project-file"/g)).toHaveLength(1);
     expect(managerSource).not.toContain('data-testid="import-project-file"');
     expect(appSource).toContain("createProjectRuntimeCommandBindings");
+    expect(appSource).toContain("createProjectImportRequestLifecycle");
+    expect(appSource).toContain('addEventListener("cancel", handleProjectImportFileCancel)');
+    expect(appSource).toContain('removeEventListener("cancel", handleProjectImportFileCancel)');
   });
 });

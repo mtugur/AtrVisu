@@ -5,12 +5,15 @@ import type { AtrVisuLayout } from "../../types/machine";
 import type { AtrVisuProject } from "../../types/project";
 import {
   RUNTIME_FEATURE_COMMAND_IDS,
-  createRuntimeFeatureCommandBridge
+  createRuntimeFeatureCommandBridge,
+  type RuntimeFeatureCommandOperationResult
 } from "./runtimeFeatureCommands";
 import {
+  createProjectImportRequestLifecycle,
   createProjectRuntimeCommandBindings,
   downloadProjectJson,
   executeProjectImportFileSelection,
+  executeProjectImportRequest,
   type ProjectExportCommandPayload
 } from "./projectRuntimeCommandAuthority";
 
@@ -50,6 +53,14 @@ const context = (payload?: unknown) => ({
   hasUnsavedChanges: false,
   payload
 });
+
+const createDeferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+};
 
 const createHarness = (overrides: Partial<Parameters<typeof createProjectRuntimeCommandBindings>[0]> = {}) => {
   const activeProject = project("active");
@@ -212,22 +223,16 @@ describe("project runtime command authority", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:project");
   });
 
-  it("imports a valid File payload, refreshes projects, and does not mutate caller state", async () => {
+  it("imports a valid File payload and refreshes projects", async () => {
     const harness = createHarness();
     const file = new File(["{}"], "project.json", { type: "application/json" });
     Object.defineProperty(file, "text", { value: vi.fn(async () => JSON.stringify(project("source"))) });
-    const selection = ["machine:one"];
-    const history = { undoDepth: 2, redoDepth: 1 };
-    const activeIds = { projectId: "active", layoutId: "active-layout", revisionId: "active-revision-0" };
 
     await expect(harness.bindings[RUNTIME_FEATURE_COMMAND_IDS.projectImportJson]?.execute(context({ file })))
       .resolves.toMatchObject({ handled: true, status: "executed" });
     expect(harness.importProject).toHaveBeenCalledWith(project("source"));
     expect(harness.refreshProjects).toHaveBeenCalledOnce();
     expect(harness.onProjectImported).toHaveBeenCalledWith("imported");
-    expect(selection).toEqual(["machine:one"]);
-    expect(history).toEqual({ undoDepth: 2, redoDepth: 1 });
-    expect(activeIds).toEqual({ projectId: "active", layoutId: "active-layout", revisionId: "active-revision-0" });
   });
 
   it("rejects missing files and returns failed evidence for malformed or invalid project JSON", async () => {
@@ -256,7 +261,81 @@ describe("project runtime command authority", () => {
     });
   });
 
-  it("executes no runtime command when file acquisition is cancelled", async () => {
+  it("keeps concurrent import results bound to their captured request callbacks", async () => {
+    const lifecycle = createProjectImportRequestLifecycle();
+    const firstListener = vi.fn();
+    const secondListener = vi.fn();
+    const firstDeferred = createDeferred<RuntimeFeatureCommandOperationResult>();
+    const secondDeferred = createDeferred<RuntimeFeatureCommandOperationResult>();
+    const firstFile = new File(["first"], "first.project.json");
+    const secondFile = new File(["second"], "second.project.json");
+    const execute = vi.fn(({ file }: { file: File }) =>
+      file === firstFile ? firstDeferred.promise : secondDeferred.promise
+    );
+
+    const firstPending = lifecycle.begin(firstListener);
+    const firstRequest = lifecycle.capture(firstPending.requestId);
+    const firstExecution = executeProjectImportRequest(firstRequest, firstFile, execute);
+
+    const secondPending = lifecycle.begin(secondListener);
+    const secondRequest = lifecycle.capture(secondPending.requestId);
+    const secondExecution = executeProjectImportRequest(secondRequest, secondFile, execute);
+    const secondResult: RuntimeFeatureCommandOperationResult = {
+      handled: true,
+      status: "executed",
+      reason: "second"
+    };
+    secondDeferred.resolve(secondResult);
+    await expect(secondExecution).resolves.toEqual(secondResult);
+    expect(secondListener).toHaveBeenCalledOnce();
+    expect(secondListener).toHaveBeenCalledWith(secondResult);
+    expect(firstListener).not.toHaveBeenCalled();
+
+    const firstResult: RuntimeFeatureCommandOperationResult = {
+      handled: true,
+      status: "executed",
+      reason: "first"
+    };
+    firstDeferred.resolve(firstResult);
+    await expect(firstExecution).resolves.toEqual(firstResult);
+    expect(firstListener).toHaveBeenCalledOnce();
+    expect(firstListener).toHaveBeenCalledWith(firstResult);
+    expect(secondListener).toHaveBeenCalledOnce();
+    expect(secondListener).toHaveBeenCalledWith(secondResult);
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels only the pending chooser request without executing or leaking its listener", async () => {
+    const lifecycle = createProjectImportRequestLifecycle();
+    const cancelledListener = vi.fn();
+    const nextListener = vi.fn();
+    const execute = vi.fn(async () => ({ handled: true, status: "executed" as const }));
+    const cancelledRequest = lifecycle.begin(cancelledListener);
+
+    expect(lifecycle.cancel(cancelledRequest.requestId)).toBe(true);
+    await expect(executeProjectImportRequest(
+      lifecycle.capture(cancelledRequest.requestId),
+      undefined,
+      execute
+    )).resolves.toBeNull();
+    expect(execute).not.toHaveBeenCalled();
+    expect(cancelledListener).not.toHaveBeenCalled();
+
+    const nextRequest = lifecycle.begin(nextListener);
+    expect(lifecycle.cancel(cancelledRequest.requestId)).toBe(false);
+    expect(lifecycle.getCurrent()).toBe(nextRequest);
+    const capturedNextRequest = lifecycle.capture(nextRequest.requestId);
+    const nextFile = new File(["{}"], "next.project.json");
+    const nextResult = await executeProjectImportRequest(capturedNextRequest, nextFile, execute);
+
+    expect(nextResult).toEqual({ handled: true, status: "executed" });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(cancelledListener).not.toHaveBeenCalled();
+    expect(nextListener).toHaveBeenCalledOnce();
+    expect(nextListener).toHaveBeenCalledWith(nextResult);
+  });
+
+  it("executes no runtime command when file acquisition has no file", async () => {
     const execute = vi.fn(async () => ({ handled: true, status: "executed" as const }));
 
     await expect(executeProjectImportFileSelection(undefined, execute)).resolves.toBeNull();

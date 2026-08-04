@@ -132,8 +132,9 @@ import {
   type RuntimeCommandOperationResult
 } from "./platform/runtimeCommands/runtimeCommandOperation";
 import {
+  createProjectImportRequestLifecycle,
   createProjectRuntimeCommandBindings,
-  executeProjectImportFileSelection,
+  executeProjectImportRequest,
   PROJECT_RUNTIME_COMMAND_IDS,
   type ProjectRuntimeCommandE2EBridge,
   type ProjectImportCommandPayload
@@ -480,9 +481,7 @@ export function App() {
   const annotationEditHistoryRecordedRef = useRef(false);
   const libraryManagerRuntimeControllerRef = useRef<LibraryManagerRuntimeController | null>(null);
   const projectImportFileInputRef = useRef<HTMLInputElement | null>(null);
-  const projectImportResultListenerRef = useRef<
-    ((result: RuntimeFeatureCommandOperationResult) => void) | null
-  >(null);
+  const projectImportRequestLifecycleRef = useRef(createProjectImportRequestLifecycle());
   const runtimeCommandBindingsRef = useRef<CoreEditorRuntimeCommandBindings>({});
   const runtimeCommandBridge = useMemo(
     () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
@@ -3433,8 +3432,14 @@ export function App() {
   const requestProjectImportFile = useCallback((
     onResult: (result: RuntimeFeatureCommandOperationResult) => void
   ) => {
-    projectImportResultListenerRef.current = onResult;
-    projectImportFileInputRef.current?.click();
+    const request = projectImportRequestLifecycleRef.current.begin(onResult);
+    const input = projectImportFileInputRef.current;
+    if (!input) {
+      projectImportRequestLifecycleRef.current.cancel(request.requestId);
+      return;
+    }
+    input.value = "";
+    input.click();
   }, []);
 
   const handleProjectImportFileChange = useCallback(async (
@@ -3442,21 +3447,41 @@ export function App() {
   ) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
-    const result = await executeProjectImportFileSelection(
+    const currentRequest = projectImportRequestLifecycleRef.current.getCurrent();
+    const request = currentRequest
+      ? projectImportRequestLifecycleRef.current.capture(currentRequest.requestId)
+      : null;
+    input.value = "";
+    await executeProjectImportRequest(
+      request,
       file,
       (payload: ProjectImportCommandPayload) => executeRuntimeFeatureCommand(
         RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
         payload
       )
     );
-    if (!result) {
+  }, [executeRuntimeFeatureCommand]);
+
+  const handleProjectImportFileCancel = useCallback(() => {
+    const currentRequest = projectImportRequestLifecycleRef.current.getCurrent();
+    if (currentRequest) {
+      projectImportRequestLifecycleRef.current.cancel(currentRequest.requestId);
+    }
+    if (projectImportFileInputRef.current) {
+      projectImportFileInputRef.current.value = "";
+    }
+  }, []);
+
+  useEffect(() => {
+    const input = projectImportFileInputRef.current;
+    if (!input) {
       return;
     }
-    input.value = "";
-    const listener = projectImportResultListenerRef.current;
-    projectImportResultListenerRef.current = null;
-    listener?.(result);
-  }, [executeRuntimeFeatureCommand]);
+    input.addEventListener("cancel", handleProjectImportFileCancel);
+    return () => {
+      input.removeEventListener("cancel", handleProjectImportFileCancel);
+    };
+  }, [handleProjectImportFileCancel]);
 
   useEffect(() => {
     if (!enableE2EDiagnostics) {
@@ -3471,7 +3496,13 @@ export function App() {
           ));
         }
         return executeRuntimeFeatureCommand(commandId, payload);
-      }
+      },
+      getActiveContext: () => ({
+        projectId: currentProjectId,
+        layoutId: currentLayoutId,
+        revisionId: currentRevisionId,
+        hasUnsavedChanges: hasUnsavedProjectChanges
+      })
     };
     window.__atrvisuProjectCommands = diagnosticsBridge;
 
@@ -3480,7 +3511,14 @@ export function App() {
         delete window.__atrvisuProjectCommands;
       }
     };
-  }, [enableE2EDiagnostics, executeRuntimeFeatureCommand]);
+  }, [
+    currentLayoutId,
+    currentProjectId,
+    currentRevisionId,
+    enableE2EDiagnostics,
+    executeRuntimeFeatureCommand,
+    hasUnsavedProjectChanges
+  ]);
 
   const canExecuteUndoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.undo).enabled;
   const canExecuteRedoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.redo).enabled;

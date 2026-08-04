@@ -63,9 +63,13 @@ normalized evidence. Malformed and invalid project JSON produce failed results.
 
 One App-owned hidden input is always mounted. It only acquires a file, invokes
 the runtime bridge, resets its value, and reports the result to the requesting
-surface. Cancellation executes no command. Import does not replace the scene,
-load a revision, alter active project/layout/revision IDs, mutate Runtime
-Selection or history, or mark the current scene dirty.
+surface. Each request has a monotonic token; its callback is captured and its
+pending record is cleared before asynchronous import execution. A later request
+therefore cannot receive an earlier result, and completion never clears a newer
+request. Native chooser cancellation clears only the matching pending request
+and input value without executing a command or callback. Import does not replace
+the scene, load a revision, alter active project/layout/revision IDs, mutate
+Runtime Selection or history, or mark the current scene dirty.
 
 ## 8. ProjectManager Client Boundary
 
@@ -104,15 +108,15 @@ panel, editor, selection, viewport, or Feature Access file changed.
 
 ## 11. Validation Evidence
 
-- Focused authority/ProjectManager/static tests: 3 files / 22 tests passed.
-- Focused project Chromium tests: 3 tests passed.
+- Focused authority/ProjectManager/static tests: 3 files / 24 tests passed.
+- Focused project Chromium tests: 2 tests passed.
 - `npm.cmd ci`: passed; 101 packages installed and 102 audited.
 - `npm.cmd audit`: passed; 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: passed; 0 vulnerabilities.
 - `npm.cmd run check:design-tokens`: not present on the exact main baseline and
   was not introduced.
 - `npm.cmd run build`: passed; TypeScript and Vite production build succeeded.
-- `npm.cmd run test -- --run`: 105 files / 1011 tests passed.
+- `npm.cmd run test -- --run`: 105 files / 1013 tests passed.
 - `npm.cmd run test:e2e`: 37 Chromium tests passed.
 - E2E no-red-console/page-error assertions passed.
 - E2E runner-owned AtrVisu server stopped after validation.
@@ -128,8 +132,9 @@ surface inventory.
 
 ## 13. Residual Risks
 
-- Operating-system file chooser appearance and native cancellation UI remain
-  browser/OS responsibilities; cancellation is intentionally a no-op.
+- Operating-system file chooser appearance remains browser/OS-owned. The
+  provider handles the native cancel lifecycle as a command-free, callback-free
+  cleanup operation.
 - The future File menu must reuse the established provider and canonical
   runtime command rather than add another file input or storage path.
 - Manual acceptance is not required because the intended visible delta is zero;
