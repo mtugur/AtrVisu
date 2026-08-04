@@ -37,7 +37,16 @@ export const TECHNICAL_COLOR_RGB = Object.freeze({
   warningTint: [0.24, 0.2, 0.05],
   collisionEmissive: [0.18, 0.03, 0.02],
   warningEmissive: [0.28, 0.22, 0.06],
-  annotationLeader: [0.74, 0.86, 0.78]
+  annotationLeader: [0.74, 0.86, 0.78],
+  measurement: [0.98, 0.98, 0.72],
+  annotation: [0.55, 0.94, 0.82],
+  connectionPoint: [0.45, 0.82, 1],
+  neutralFrame: [0.74, 0.86, 0.78],
+  selectedCollision: [1, 0.22, 0.16],
+  axisX: [0.86, 0.24, 0.2],
+  axisY: [0.34, 0.72, 0.32],
+  axisZ: [0.25, 0.5, 0.92],
+  diagnosticsInfo: [0.25, 0.78, 1]
 } as const satisfies Record<string, TechnicalRgb>);
 
 export const TECHNICAL_COLOR_RGBA = Object.freeze({

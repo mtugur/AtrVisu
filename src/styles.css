@@ -115,6 +115,193 @@ select:disabled {
   outline: none;
 }
 
+.workbench-application-bar,
+.workbench-menu-bar,
+.workbench-command-bar {
+  position: relative;
+  z-index: var(--av-z-chrome);
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  border-bottom: 1px solid var(--av-border-subtle);
+  background: var(--av-surface-panel);
+  color: var(--av-text-primary);
+}
+
+.workbench-application-bar {
+  height: var(--av-workbench-application-bar-height);
+  gap: var(--av-spacing-sm);
+  padding: 0 var(--av-spacing-md);
+}
+
+.workbench-product-name {
+  color: var(--av-text-accent);
+  font-size: var(--av-font-size-md);
+  font-weight: var(--av-font-weight-bold);
+}
+
+.workbench-save-state {
+  padding-inline: var(--av-spacing-xs);
+  border-left: 1px solid var(--av-border-subtle);
+  color: var(--av-text-success);
+  font-size: var(--av-font-size-xs);
+  font-weight: var(--av-font-weight-semibold);
+}
+
+.workbench-save-state[data-dirty="true"] {
+  color: var(--av-text-warning);
+}
+
+.workbench-project-context {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: var(--av-spacing-xs);
+  overflow: hidden;
+  color: var(--av-text-muted);
+  font-size: var(--av-font-size-sm);
+  white-space: nowrap;
+}
+
+.workbench-project-context span:not([aria-hidden="true"]) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workbench-save-command,
+.workbench-menu-trigger,
+.workbench-menu-item,
+.workbench-command-button {
+  min-height: var(--av-control-min-pointer-target);
+  border: 1px solid var(--av-border-interactive);
+  border-radius: var(--av-control-radius-sm);
+  color: var(--av-text-primary);
+  background: var(--av-surface-control);
+  cursor: pointer;
+  font-size: var(--av-font-size-sm);
+  font-weight: var(--av-font-weight-medium);
+}
+
+.workbench-save-command:hover,
+.workbench-menu-trigger:hover,
+.workbench-menu-item:hover,
+.workbench-command-button:hover {
+  border-color: var(--av-border-accent);
+  background: var(--av-interaction-hover);
+}
+
+.workbench-save-command:focus-visible,
+.workbench-menu-trigger:focus-visible,
+.workbench-menu-item:focus-visible,
+.workbench-command-button:focus-visible {
+  outline: var(--av-focus-ring-width) solid var(--av-focus-ring);
+  outline-offset: 1px;
+}
+
+.workbench-save-command:disabled,
+.workbench-menu-item:disabled,
+.workbench-command-button:disabled {
+  border-color: var(--av-border-subtle);
+  color: var(--av-text-disabled);
+  background: var(--av-interaction-disabled);
+  cursor: not-allowed;
+}
+
+.workbench-save-command {
+  height: var(--av-control-height-sm);
+  padding: 0 var(--av-spacing-sm);
+  white-space: nowrap;
+}
+
+.workbench-menu-bar {
+  height: var(--av-workbench-menu-bar-height);
+  gap: var(--av-spacing-2xs);
+  padding: 0 var(--av-spacing-sm);
+  overflow: visible;
+}
+
+.workbench-menu {
+  position: relative;
+  height: 100%;
+}
+
+.workbench-menu-trigger {
+  height: 100%;
+  min-height: 0;
+  padding: 0 var(--av-spacing-sm);
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.workbench-menu-trigger[aria-expanded="true"] {
+  color: var(--av-text-accent);
+  background: var(--av-interaction-active);
+}
+
+.workbench-menu-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--av-z-popover);
+  display: grid;
+  min-width: 240px;
+  gap: var(--av-spacing-2xs);
+  padding: var(--av-spacing-xs);
+  border: 1px solid var(--av-border-default);
+  border-radius: 0 0 var(--av-control-radius-md) var(--av-control-radius-md);
+  background: var(--av-surface-overlay);
+  box-shadow: var(--av-elevation-panel);
+}
+
+.workbench-menu-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--av-spacing-lg);
+  padding: 0 var(--av-spacing-sm);
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.workbench-menu-item kbd {
+  color: var(--av-text-muted);
+  font-family: var(--av-font-family-mono);
+  font-size: var(--av-font-size-xs);
+}
+
+.workbench-command-bar {
+  height: var(--av-workbench-command-bar-height);
+  gap: var(--av-spacing-xs);
+  padding: 0 var(--av-spacing-sm);
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.workbench-command-button {
+  height: var(--av-control-height-md);
+  flex: 0 0 auto;
+  padding: 0 var(--av-spacing-sm);
+}
+
+.workbench-command-button[aria-pressed="true"] {
+  border-color: var(--av-border-accent);
+  color: var(--av-text-accent);
+  background: var(--av-interaction-selected);
+}
+
+@media (forced-colors: active) {
+  .workbench-save-command:focus-visible,
+  .workbench-menu-trigger:focus-visible,
+  .workbench-menu-item:focus-visible,
+  .workbench-command-button:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
 .machine-panel {
   position: absolute;
   top: 0;

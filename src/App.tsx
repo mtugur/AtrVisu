@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { EditorHost } from "./components/EditorHost";
 import { WorkbenchShell } from "./components/WorkbenchShell";
+import {
+  WorkbenchApplicationBar,
+  WorkbenchCommandBar,
+  WorkbenchMenuBar
+} from "./components/workbench";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
@@ -38,6 +43,7 @@ import type { CivilReferenceItem, CivilReferenceType } from "./types/civil";
 import type { ObjectGroup } from "./types/groups";
 import type { LayoutLayer } from "./types/layers";
 import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
+import { createCommandSurfaceAdapter } from "./workbench/commandSurfaces";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT, getCivilReferenceFootprintBoundsMm } from "./utils/coordinateReference";
@@ -190,7 +196,7 @@ import {
   type RuntimePanelOperationResult,
   type RuntimePanelState
 } from "./platform/runtimePanels";
-import { createViewportResizeRequest } from "./platform/contracts";
+import { createViewportResizeRequest, type CommandContext } from "./platform/contracts";
 import {
   RUNTIME_VIEWPORT_IDS,
   createRuntimeViewportInvariantSnapshot,
@@ -447,6 +453,8 @@ export function App() {
   });
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
   const placementSettingsRef = useRef(placementSettings);
+  const overlaySettingsRef = useRef(overlaySettings);
+  const hasUnsavedProjectChangesRef = useRef(hasUnsavedProjectChanges);
   const isBenchmarkModeRef = useRef(isBenchmarkMode);
   const runtimeSelectionRef = useRef(runtimeSelection);
   const runtimeCommandExecutionProbesRef = useRef(
@@ -482,6 +490,8 @@ export function App() {
   const libraryManagerRuntimeControllerRef = useRef<LibraryManagerRuntimeController | null>(null);
   const projectImportFileInputRef = useRef<HTMLInputElement | null>(null);
   const projectImportRequestLifecycleRef = useRef(createProjectImportRequestLifecycle());
+  const projectImportAcquisitionPendingRef = useRef(false);
+  const [, setIsProjectImportAcquisitionPending] = useState(false);
   const runtimeCommandBindingsRef = useRef<CoreEditorRuntimeCommandBindings>({});
   const runtimeCommandBridge = useMemo(
     () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
@@ -839,7 +849,9 @@ export function App() {
   useLayoutEffect(() => {
     runtimeSelectionRef.current = runtimeSelection;
     platformEntitiesRef.current = platformEntities;
-  }, [platformEntities, runtimeSelection]);
+    hasUnsavedProjectChangesRef.current = hasUnsavedProjectChanges;
+    overlaySettingsRef.current = overlaySettings;
+  }, [hasUnsavedProjectChanges, overlaySettings, platformEntities, runtimeSelection]);
 
   useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
@@ -3432,14 +3444,20 @@ export function App() {
   const requestProjectImportFile = useCallback((
     onResult: (result: RuntimeFeatureCommandOperationResult) => void
   ) => {
+    if (projectImportAcquisitionPendingRef.current) {
+      return false;
+    }
     const request = projectImportRequestLifecycleRef.current.begin(onResult);
     const input = projectImportFileInputRef.current;
     if (!input) {
       projectImportRequestLifecycleRef.current.cancel(request.requestId);
-      return;
+      return false;
     }
+    projectImportAcquisitionPendingRef.current = true;
+    setIsProjectImportAcquisitionPending(true);
     input.value = "";
     input.click();
+    return true;
   }, []);
 
   const handleProjectImportFileChange = useCallback(async (
@@ -3452,14 +3470,19 @@ export function App() {
       ? projectImportRequestLifecycleRef.current.capture(currentRequest.requestId)
       : null;
     input.value = "";
-    await executeProjectImportRequest(
-      request,
-      file,
-      (payload: ProjectImportCommandPayload) => executeRuntimeFeatureCommand(
-        RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
-        payload
-      )
-    );
+    try {
+      await executeProjectImportRequest(
+        request,
+        file,
+        (payload: ProjectImportCommandPayload) => executeRuntimeFeatureCommand(
+          RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
+          payload
+        )
+      );
+    } finally {
+      projectImportAcquisitionPendingRef.current = false;
+      setIsProjectImportAcquisitionPending(false);
+    }
   }, [executeRuntimeFeatureCommand]);
 
   const handleProjectImportFileCancel = useCallback(() => {
@@ -3470,6 +3493,8 @@ export function App() {
     if (projectImportFileInputRef.current) {
       projectImportFileInputRef.current.value = "";
     }
+    projectImportAcquisitionPendingRef.current = false;
+    setIsProjectImportAcquisitionPending(false);
   }, []);
 
   useEffect(() => {
@@ -3482,6 +3507,92 @@ export function App() {
       input.removeEventListener("cancel", handleProjectImportFileCancel);
     };
   }, [handleProjectImportFileCancel]);
+
+  const commandSurfaceMetadataRegistry = useMemo(() => ({
+    get: (commandId: string) => runtimeCommandBridge.registry.get(commandId)
+      ?? runtimeFeatureCommandBridge.registry.get(commandId)
+  }), [runtimeCommandBridge, runtimeFeatureCommandBridge]);
+
+  const commandSurfaceCoreBridge = useMemo(() => ({
+    registry: runtimeCommandBridge.registry,
+    canExecuteCommand: runtimeCommandBridge.canExecuteCommand,
+    executeCommand: (commandId: string, context?: CommandContext) => {
+      const resolvedContext = context ?? {
+      selectionIds: runtimeSelectionRef.current.ids,
+      primarySelectionId: runtimeSelectionRef.current.primaryId,
+      hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+      };
+      const result = runtimeCommandBridge.executeCommand(commandId, resolvedContext);
+      recordRuntimeCommandExecution(commandId, result);
+      return result;
+    }
+  }), [recordRuntimeCommandExecution, runtimeCommandBridge]);
+
+  const commandSurfaceRuntimeBridge = useMemo(() => ({
+    registry: runtimeFeatureCommandBridge.registry,
+    getRuntimeCommand: runtimeFeatureCommandBridge.getRuntimeCommand,
+    executeCommand: async (commandId: string, context?: CommandContext) => {
+      const resolvedContext = context ?? {
+      selectionIds: runtimeSelectionRef.current.ids,
+      primarySelectionId: runtimeSelectionRef.current.primaryId,
+      hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+      };
+      const result = await runtimeFeatureCommandBridge.executeCommand(commandId, resolvedContext);
+      recordRuntimeCommandExecution(commandId, result);
+      return result;
+    }
+  }), [recordRuntimeCommandExecution, runtimeFeatureCommandBridge]);
+
+  const getCommandSurfaceContext = useCallback(() => ({
+    selectionIds: runtimeSelectionRef.current.ids,
+    primarySelectionId: runtimeSelectionRef.current.primaryId,
+    hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+  }), []);
+
+  const getCommandSurfacePressedState = useCallback((commandId: string) => {
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.toggleLabels) {
+      return overlaySettingsRef.current.showLabels;
+    }
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.showMeasurements) {
+      return placementSettingsRef.current.showMeasurementHelpers;
+    }
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints) {
+      return overlaySettingsRef.current.showConnectionPoints;
+    }
+    return undefined;
+  }, []);
+
+  const commandSurfaceAdapter = useMemo(() => createCommandSurfaceAdapter({
+    metadataRegistry: commandSurfaceMetadataRegistry,
+    coreBridge: commandSurfaceCoreBridge,
+    runtimeBridge: commandSurfaceRuntimeBridge,
+    getContext: getCommandSurfaceContext,
+    getPressed: getCommandSurfacePressedState,
+    importRequest: {
+      request: requestProjectImportFile,
+      isPending: () => projectImportAcquisitionPendingRef.current
+    }
+  }), [
+    commandSurfaceCoreBridge,
+    commandSurfaceMetadataRegistry,
+    commandSurfaceRuntimeBridge,
+    getCommandSurfaceContext,
+    getCommandSurfacePressedState,
+    requestProjectImportFile
+  ]);
+
+  useSyncExternalStore(
+    commandSurfaceAdapter.subscribe,
+    commandSurfaceAdapter.getRevision,
+    commandSurfaceAdapter.getRevision
+  );
+
+  const commandSurfaceMenus = commandSurfaceAdapter.getMenus();
+  const commandBarItems = commandSurfaceAdapter.getCommandBarItems();
+  const applicationSaveItem = commandSurfaceAdapter.getApplicationSaveItem();
+  const executeCommandSurfaceItem = useCallback((commandId: string) => {
+    void commandSurfaceAdapter.execute(commandId);
+  }, [commandSurfaceAdapter]);
 
   useEffect(() => {
     if (!enableE2EDiagnostics) {
@@ -3743,6 +3854,30 @@ export function App() {
 
   return (
     <WorkbenchShell
+      applicationBar={(
+        <WorkbenchApplicationBar
+          saveItem={applicationSaveItem}
+          hasUnsavedChanges={hasUnsavedProjectChanges}
+          projectContext={{
+            project: currentProject?.projectName ?? "No project",
+            layout: currentLayout?.layoutName ?? "No layout",
+            revision: currentRevision?.revisionCode ?? "No revision"
+          }}
+          onExecute={executeCommandSurfaceItem}
+        />
+      )}
+      menuBar={(
+        <WorkbenchMenuBar
+          menus={commandSurfaceMenus}
+          onExecute={executeCommandSurfaceItem}
+        />
+      )}
+      commandBar={(
+        <WorkbenchCommandBar
+          items={commandBarItems}
+          onExecute={executeCommandSurfaceItem}
+        />
+      )}
       editorRightInset={isPanelCollapsed ? 0 : panelWidth}
       editorHost={(
         <EditorHost

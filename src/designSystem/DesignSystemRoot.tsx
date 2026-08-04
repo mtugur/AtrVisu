@@ -5,14 +5,14 @@ import "./themes.css";
 
 export type DesignSystemRootProps = {
   children: ReactNode;
-  themeId?: ThemeId;
-  densityId?: DensityId;
+  themeId: ThemeId;
+  densityId: DensityId;
 };
 
 export function DesignSystemRoot({
   children,
-  themeId = "dark",
-  densityId = "comfortable"
+  themeId,
+  densityId
 }: DesignSystemRootProps) {
   return (
     <div

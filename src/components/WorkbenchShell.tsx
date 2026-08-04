@@ -19,6 +19,8 @@ export type WorkbenchShellProps = {
   editorRightInset?: number;
 };
 
+export const WORKBENCH_CHROME_TOP_INSET = "var(--av-workbench-top-inset)";
+
 type WorkbenchShellRegionSlot = Exclude<
   keyof WorkbenchShellProps,
   "diagnostics" | "editorRightInset"
@@ -80,6 +82,7 @@ export function WorkbenchShell({
         </>
       )}
       viewport={editorHost}
+      viewportTopInset={WORKBENCH_CHROME_TOP_INSET}
       viewportRightInset={editorRightInset}
       viewportWorkbenchRegion={WORKBENCH_SHELL_REGION_BY_SLOT.editorHost}
       rightPanel={secondaryDock}

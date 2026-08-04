@@ -2,6 +2,100 @@ import type { PlatformSurfaceInventoryItem } from "./surfaceInventoryTypes";
 
 export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryItem[] = [
   {
+    surfaceId: "surface.workbenchApplicationBar",
+    surfaceType: "toolbar-action",
+    label: "Workbench Application Bar",
+    owner: "platform",
+    sourceFiles: [
+      "src/App.tsx",
+      "src/components/workbench/WorkbenchApplicationBar.tsx",
+      "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
+    ],
+    commandIds: ["project.save"],
+    featureIds: ["project.save", "panel.projectStatus"],
+    notes: "Registry metadata is projected through the existing Runtime Feature Command Bridge; project context is read-only."
+  },
+  {
+    surfaceId: "surface.workbenchMenuBar",
+    surfaceType: "toolbar-action",
+    label: "Workbench Menu Bar",
+    owner: "platform",
+    sourceFiles: [
+      "src/App.tsx",
+      "src/components/workbench/WorkbenchMenuBar.tsx",
+      "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
+    ],
+    commandIds: [
+      "project.save",
+      "project.exportJson",
+      "project.importJson",
+      "project.restorePrompt",
+      "edit.undo",
+      "edit.redo",
+      "edit.duplicateSelected",
+      "edit.deleteSelected",
+      "view.toggleLabels",
+      "view.viewpoints",
+      "view.toggleConnectionPoints",
+      "view.showMeasurements",
+      "library.manager",
+      "library.taxonomyManager",
+      "collision.check",
+      "performance.benchmark"
+    ],
+    featureIds: [
+      "project.save",
+      "project.exportJson",
+      "project.importJson",
+      "project.restorePrompt",
+      "edit.undo",
+      "edit.redo",
+      "object.duplicate",
+      "edit.deleteSelected",
+      "view.toggleLabels",
+      "view.viewpoints",
+      "connectionPoints.toggle",
+      "measurements.show",
+      "library.manager",
+      "library.taxonomyManager",
+      "collision.check",
+      "performance.benchmark"
+    ],
+    notes: "File/Edit/View/Tools commands execute through existing runtime bridges. project.importJson reuses the single persistent App-owned file acquisition provider."
+  },
+  {
+    surfaceId: "surface.workbenchCommandBar",
+    surfaceType: "toolbar-action",
+    label: "Workbench Command Bar",
+    owner: "platform",
+    sourceFiles: [
+      "src/App.tsx",
+      "src/components/workbench/WorkbenchCommandBar.tsx",
+      "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
+    ],
+    commandIds: [
+      "edit.undo",
+      "edit.redo",
+      "edit.duplicateSelected",
+      "edit.deleteSelected",
+      "view.toggleLabels",
+      "view.showMeasurements",
+      "view.toggleConnectionPoints",
+      "view.viewpoints"
+    ],
+    featureIds: [
+      "edit.undo",
+      "edit.redo",
+      "object.duplicate",
+      "edit.deleteSelected",
+      "view.toggleLabels",
+      "measurements.show",
+      "connectionPoints.toggle",
+      "view.viewpoints"
+    ],
+    notes: "One-row registry-backed command projection with live enablement, pending, disabled-reason and pressed-state presentation."
+  },
+  {
     surfaceId: "surface.machineLibrary",
     surfaceType: "panel",
     label: "Machine Library",

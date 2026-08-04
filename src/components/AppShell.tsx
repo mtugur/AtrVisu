@@ -1,4 +1,4 @@
-import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
+import { Fragment, cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import type { WorkbenchRegionId } from "../platform/contracts";
 
 type EditorHostRegionId = Extract<WorkbenchRegionId, "editor-host">;
@@ -9,6 +9,7 @@ type AppShellProps = {
   beforeViewport?: ReactNode;
   viewport?: ReactNode;
   viewportRightInset?: number;
+  viewportTopInset?: string;
   viewportWorkbenchRegion?: EditorHostRegionId;
   rightPanel?: ReactNode;
   rightPanelWorkbenchRegion?: SecondaryDockRegionId;
@@ -22,12 +23,14 @@ type AppShellProps = {
 type ShellAnchorProps = {
   "data-app-shell-zone"?: string;
   "data-workbench-region"?: WorkbenchRegionId;
+  style?: CSSProperties;
 };
 
 const withZoneAnchor = (
   node: ReactNode,
   zone: string,
-  workbenchRegion?: WorkbenchRegionId
+  workbenchRegion?: WorkbenchRegionId,
+  style?: CSSProperties
 ): ReactNode => {
   if (!isValidElement<ShellAnchorProps>(node) || node.type === Fragment) {
     return node;
@@ -35,7 +38,8 @@ const withZoneAnchor = (
 
   return cloneElement(node, {
     "data-app-shell-zone": zone,
-    ...(workbenchRegion ? { "data-workbench-region": workbenchRegion } : {})
+    ...(workbenchRegion ? { "data-workbench-region": workbenchRegion } : {}),
+    ...(style ? { style: { ...node.props.style, ...style } } : {})
   });
 };
 
@@ -43,6 +47,7 @@ export function AppShell({
   beforeViewport,
   viewport,
   viewportRightInset = 0,
+  viewportTopInset = "0px",
   viewportWorkbenchRegion,
   rightPanel,
   rightPanelWorkbenchRegion,
@@ -62,11 +67,17 @@ export function AppShell({
           {...(viewportWorkbenchRegion
             ? { "data-workbench-region": viewportWorkbenchRegion }
             : {})}
-          style={{ right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))` }}
+          style={{
+            top: viewportTopInset,
+            right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))`
+          }}
         >
           {viewport}
         </div>
-        {withZoneAnchor(rightPanel, "machine-properties", rightPanelWorkbenchRegion)}
+        {withZoneAnchor(rightPanel, "machine-properties", rightPanelWorkbenchRegion, {
+          top: viewportTopInset,
+          height: `calc(100% - ${viewportTopInset})`
+        })}
         {afterRightPanel}
         {children}
       </main>
