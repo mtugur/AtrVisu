@@ -1,0 +1,4 @@
+.fixture {
+  color: var(--av-text-primary);
+  background: var(--av-surface-panel);
+}

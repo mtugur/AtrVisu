@@ -215,6 +215,7 @@ select:disabled {
 }
 
 .workbench-menu-bar {
+  z-index: var(--av-z-popover);
   height: var(--av-workbench-menu-bar-height);
   gap: var(--av-spacing-2xs);
   padding: 0 var(--av-spacing-sm);

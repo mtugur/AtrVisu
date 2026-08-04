@@ -1,0 +1,11 @@
+.hex-fixture {
+  color: #123456;
+}
+
+.rgb-fixture {
+  color: rgba(10, 20, 30, 0.5);
+}
+
+.hsl-fixture {
+  color: hsl(210, 50%, 40%);
+}

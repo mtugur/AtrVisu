@@ -78,6 +78,6 @@ describe("AppShell render contract", () => {
     );
 
     expect(markup).toContain('class="scene-viewport-host"');
-    expect(markup).toContain('style="right:min(420px, calc(100vw - 28px))"');
+    expect(markup).toContain('style="top:0px;right:min(420px, calc(100vw - 28px))"');
   });
 });
