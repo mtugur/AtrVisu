@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, createElement } from "react";
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -54,12 +54,12 @@ describe("WorkbenchApplicationBar", () => {
   it("shows identity, dirty state, read-only context, and invokes project.save", async () => {
     const onExecute = vi.fn();
     const container = await mount(
-      <WorkbenchApplicationBar
-        saveItem={item("project.save", "application-bar", { label: "Save Project" })}
-        hasUnsavedChanges
-        projectContext={{ project: "Factory", layout: "Line 1", revision: "R03" }}
-        onExecute={onExecute}
-      />
+      createElement(WorkbenchApplicationBar, {
+        saveItem: item("project.save", "application-bar", { label: "Save Project" }),
+        hasUnsavedChanges: true,
+        projectContext: { project: "Factory", layout: "Line 1", revision: "R03" },
+        onExecute
+      })
     );
 
     expect(container.textContent).toContain("AtrVisu");
@@ -73,16 +73,16 @@ describe("WorkbenchApplicationBar", () => {
   it("does not execute disabled Save and exposes its reason", async () => {
     const onExecute = vi.fn();
     const container = await mount(
-      <WorkbenchApplicationBar
-        saveItem={item("project.save", "application-bar", {
+      createElement(WorkbenchApplicationBar, {
+        saveItem: item("project.save", "application-bar", {
           label: "Save Project",
           disabled: true,
           disabledReason: "No active project."
-        })}
-        hasUnsavedChanges={false}
-        projectContext={{ project: "No project", layout: "No layout", revision: "No revision" }}
-        onExecute={onExecute}
-      />
+        }),
+        hasUnsavedChanges: false,
+        projectContext: { project: "No project", layout: "No layout", revision: "No revision" },
+        onExecute
+      })
     );
     const button = container.querySelector("button") as HTMLButtonElement;
 
@@ -102,7 +102,10 @@ describe("WorkbenchMenuBar", () => {
   ];
 
   it("supports keyboard opening, switching, Escape restoration, Tab, and outside closure", async () => {
-    const container = await mount(<WorkbenchMenuBar menus={menus} onExecute={() => undefined} />);
+    const container = await mount(createElement(WorkbenchMenuBar, {
+      menus,
+      onExecute: () => undefined
+    }));
     const triggers = [...container.querySelectorAll<HTMLButtonElement>(".workbench-menu-trigger")];
     triggers[0].focus();
 
@@ -126,7 +129,7 @@ describe("WorkbenchMenuBar", () => {
 
   it("executes enabled metadata command and not disabled items", async () => {
     const onExecute = vi.fn();
-    const container = await mount(<WorkbenchMenuBar menus={menus} onExecute={onExecute} />);
+    const container = await mount(createElement(WorkbenchMenuBar, { menus, onExecute }));
     const triggers = [...container.querySelectorAll<HTMLButtonElement>(".workbench-menu-trigger")];
 
     await act(async () => triggers[1].click());
@@ -148,7 +151,10 @@ describe("WorkbenchCommandBar", () => {
       item("edit.redo", "command-bar", { label: "Redo", disabled: true }),
       item("view.toggleLabels", "command-bar", { label: "Toggle Labels", pressed: true })
     ];
-    const container = await mount(<WorkbenchCommandBar items={items} onExecute={() => undefined} />);
+    const container = await mount(createElement(WorkbenchCommandBar, {
+      items,
+      onExecute: () => undefined
+    }));
     const toolbar = container.querySelector('[role="toolbar"]') as HTMLElement;
     const buttons = [...toolbar.querySelectorAll<HTMLButtonElement>("button")];
 
@@ -170,13 +176,13 @@ describe("WorkbenchCommandBar", () => {
   it("executes only enabled adapter commands", async () => {
     const onExecute = vi.fn();
     const container = await mount(
-      <WorkbenchCommandBar
-        items={[
+      createElement(WorkbenchCommandBar, {
+        items: [
           item("edit.undo", "command-bar", { disabled: true }),
           item("edit.redo", "command-bar")
-        ]}
-        onExecute={onExecute}
-      />
+        ],
+        onExecute
+      })
     );
     const buttons = [...container.querySelectorAll<HTMLButtonElement>("button")];
 
