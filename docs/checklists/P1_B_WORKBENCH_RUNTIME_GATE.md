@@ -23,11 +23,12 @@ PR #99 and its merged Phase 1 architecture contracts remain authoritative.
 | No new visible surface | Unused regions render no placeholders and no CSS was added | PASS | Yes | WorkbenchShell absent-slot test; changed-file scope |
 | No duplicate runtime authority | Shell/host create no command, panel, selection, entity, viewport, resize, or Feature Access authority | PASS | Yes | Architecture test; unchanged Phase 0 authority modules |
 | No storage migration | No IndexedDB, project schema, package, or persistence file changed | PASS | Yes | Changed-file scope; this package audit section 10 |
-| Full validation passed | Audit, build, focused tests, full unit, Chromium E2E, and diff check pass | BLOCKED | Yes | Build/tests/E2E pass; `npm audit` reports one new high-severity transitive `undici@7.28.0` advisory; package changes are outside this correction scope |
+| Full validation passed | Audit, build, focused tests, full unit, Chromium E2E, and diff check pass | PASS | Yes | PR #101 merged as `c56d402cd07caa76429484c0308ef714761610a1`; `undici` resolves from 7.28.0 to 7.29.0; local audit reports 0 vulnerabilities; focused 5/29, unit 103/992, and E2E 34/34 pass; PR #101 exact-head GitHub Dependency security audit step passed |
 | Manual acceptance requirement | Not required unless review detects an unintended visual delta | PASS | Yes | Zero-visible-delta E2E evidence; no CSS or visible content added |
 
-All review-correction gates pass. The package remains blocked only by the
-2026-08-04 npm advisory result recorded above; no unauthorized package or
-lockfile remediation was performed. This checklist does not authorize editor
-switching, new workbench surfaces, workspace state, persistence, or later
-Phase 1 UI work.
+All review-correction and full-validation gates pass. The historical 2026-08-04
+npm advisory blocker was resolved in merged PR #101, and the GitHub Quality
+Gate now enforces `npm audit --audit-level=low` before build and tests. Manual
+acceptance remains unnecessary because the intended visual delta is still zero.
+This checklist does not authorize editor switching, new workbench surfaces,
+workspace state, persistence, or later Phase 1 UI work.

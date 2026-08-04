@@ -6,6 +6,8 @@
 - Branch: `feat/phase-1-workbench-runtime-foundation-v01`
 - Base SHA: `2eae4ae01019a0bf7c555834e6917238ce8791b7`
 - Authority: merged PR #99, P1-A architecture freeze
+- Security baseline update: merged PR #101 at
+  `c56d402cd07caa76429484c0308ef714761610a1`
 - Opening worktree: clean
 
 PR #99 remains authoritative. The feature branch was created directly from the
@@ -135,12 +137,13 @@ existing visible routes remain under their Phase 0 owners.
 ## 11. Validation Evidence
 
 - Review-correction focused tests: passed, 5 files / 29 tests
-- `npm.cmd audit`: failed; 1 high-severity vulnerability in transitive
-  `undici@7.28.0` through `jsdom@29.1.1`
+- `npm.cmd ci`: passed; 0 vulnerabilities
+- `npm.cmd audit`: passed; 0 vulnerabilities
+- `npm.cmd audit --audit-level=low`: passed; 0 vulnerabilities
 - `npm.cmd run build`: passed, 2,093 modules transformed
 - `npm.cmd run test -- --run`: passed, 103 files / 992 tests
 - `npm.cmd run test:e2e`: passed, 34 Chromium tests
-- `git diff --check`: required again at handoff
+- `git diff --check origin/main...HEAD`: passed
 - Browser console/page errors: none in maintained E2E assertions
 
 The existing Vite warning for a generated chunk larger than 500 kB remains
@@ -148,10 +151,15 @@ non-blocking and unchanged in nature. The E2E runner owned its temporary Vite
 process; port 5173 is checked again before handoff.
 
 The audit advisory was published after the original exact-head green result.
-`npm audit` reports that remediation is available through `npm audit fix`,
-which would change package-lock state. This review-correction task explicitly
-forbids package changes, so no dependency or lockfile mutation was made and the
-audit failure remains a blocking external validation result.
+At that time, package changes were outside the P1-B correction scope, so the
+transitive dev-only `jsdom@29.1.1 -> undici@7.28.0` finding correctly remained
+blocking. The separately reviewed security package in PR #101 updated only the
+compatible lock resolution to `undici@7.29.0`, added
+`npm audit --audit-level=low` immediately after `npm ci` in the GitHub Quality
+Gate, and merged as `c56d402cd07caa76429484c0308ef714761610a1`.
+Its exact-head Quality Gate, including the named Dependency security audit
+step, passed before merge. The updated main was merged normally into this
+branch and the complete local P1-B gate now reports zero vulnerabilities.
 
 ## 12. Explicit Non-Goals
 
@@ -175,16 +183,13 @@ size or NumericInput debt.
   deliberately absent.
 - Browser evidence is Chromium smoke coverage, not full visual regression or
   every graphics driver.
-- The current lock resolves dev-only `jsdom` dependency `undici@7.28.0`, which
-  npm now reports with one high-severity advisory. A separately authorized
-  dependency remediation is required before the full package gate can pass.
 
-The first three items are non-blocking for this narrow foundation. The npm
-audit advisory is blocking because the P1-B gate requires a clean audit.
+These items are non-blocking for this narrow foundation. The former dependency
+security blocker is resolved by the merged PR #101 evidence above.
 
 ## 14. Decision
 
-**BLOCKED**
+**READY FOR REVIEW**
 
 All three requested review corrections are implemented and proven. The intended
 visible delta remains zero: no CSS or visible control was added, the real
@@ -192,6 +197,7 @@ application shell and modal flows pass, and viewport/editor identity remains
 stable. Manual acceptance is not required unless independent review detects an
 unintended visual delta.
 
-P1-B cannot be marked ready while `npm audit` reports the transitive high
-severity advisory. Resolving it requires package/lockfile work that is expressly
-outside this correction package and was not performed.
+The P1-B security gate is resolved: local audit commands report zero
+vulnerabilities and the maintained GitHub Quality Gate now enforces the same
+dependency audit before build and tests. PR #100 remains Draft for final
+independent review and is not approved or merged by this audit decision.
