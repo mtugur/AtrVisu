@@ -1,5 +1,6 @@
 import type { AnnotationObject, AnnotationType } from "../types/annotations";
 import type { PlacedMachine } from "../types/machine";
+import { ANNOTATION_TECHNICAL_STYLES } from "../designSystem";
 import { getMachinePlanPositionMm } from "./placement";
 
 export type AnnotationVisualStyle = {
@@ -59,45 +60,27 @@ const defaultTextByType: Record<AnnotationType, string> = {
 const typeStyleMap: Record<AnnotationType, Pick<AnnotationVisualStyle, "indicator" | "textColor" | "backgroundColor" | "borderColor" | "accentColor">> = {
   note: {
     indicator: "NOTE",
-    textColor: "#f6fbf5",
-    backgroundColor: "rgba(18, 24, 23, 0.86)",
-    borderColor: "#6e8178",
-    accentColor: "#aab8ae"
+    ...ANNOTATION_TECHNICAL_STYLES.note
   },
   info: {
     indicator: "INFO",
-    textColor: "#e9f7ff",
-    backgroundColor: "rgba(12, 42, 59, 0.9)",
-    borderColor: "#56b5df",
-    accentColor: "#7ed8ff"
+    ...ANNOTATION_TECHNICAL_STYLES.info
   },
   warning: {
     indicator: "WARN",
-    textColor: "#fff3d2",
-    backgroundColor: "rgba(67, 38, 9, 0.92)",
-    borderColor: "#ffb547",
-    accentColor: "#ffd166"
+    ...ANNOTATION_TECHNICAL_STYLES.warning
   },
   callout: {
     indicator: "CALL",
-    textColor: "#effff9",
-    backgroundColor: "rgba(9, 45, 38, 0.9)",
-    borderColor: "#58d1af",
-    accentColor: "#8ff0d1"
+    ...ANNOTATION_TECHNICAL_STYLES.callout
   },
   "dimension-note": {
     indicator: "DIM",
-    textColor: "#eef6ff",
-    backgroundColor: "rgba(19, 35, 62, 0.9)",
-    borderColor: "#8fb7ff",
-    accentColor: "#b9d1ff"
+    ...ANNOTATION_TECHNICAL_STYLES["dimension-note"]
   },
   "area-note": {
     indicator: "AREA",
-    textColor: "#f5f0ff",
-    backgroundColor: "rgba(42, 30, 67, 0.9)",
-    borderColor: "#b69cff",
-    accentColor: "#d4c3ff"
+    ...ANNOTATION_TECHNICAL_STYLES["area-note"]
   }
 };
 

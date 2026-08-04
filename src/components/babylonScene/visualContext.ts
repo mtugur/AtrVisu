@@ -1,6 +1,4 @@
 import {
-  Color3,
-  Color4,
   HemisphericLight,
   Mesh,
   MeshBuilder,
@@ -8,6 +6,7 @@ import {
   StandardMaterial,
   Vector3
 } from "@babylonjs/core";
+import { createTechnicalColor3, createTechnicalColor4 } from "../../designSystem/technicalPaletteBabylon";
 
 export const SCENE_VISUAL_CONTEXT_GRID_SIZE = 42;
 export const SCENE_VISUAL_CONTEXT_GRID_MAJOR_STEP = 6;
@@ -43,21 +42,21 @@ export const getSceneVisualContextGridLines = (): readonly SceneVisualContextGri
 };
 
 export const createSceneVisualContext = (scene: Scene): SceneVisualContext => {
-  scene.clearColor = new Color4(0.035, 0.045, 0.055, 1);
-  scene.ambientColor = new Color3(0.18, 0.22, 0.25);
+  scene.clearColor = createTechnicalColor4("sceneClear");
+  scene.ambientColor = createTechnicalColor3("sceneAmbient");
 
   const keyLight = new HemisphericLight("key-light", new Vector3(0.2, 1, 0.35), scene);
   keyLight.intensity = 0.88;
-  keyLight.groundColor = new Color3(0.08, 0.09, 0.1);
+  keyLight.groundColor = createTechnicalColor3("sceneGround");
 
   const gridMaterial = new StandardMaterial("grid-material", scene);
-  gridMaterial.diffuseColor = new Color3(0.18, 0.68, 0.74);
-  gridMaterial.emissiveColor = new Color3(0.04, 0.17, 0.18);
+  gridMaterial.diffuseColor = createTechnicalColor3("gridMinor");
+  gridMaterial.emissiveColor = createTechnicalColor3("gridMinorEmissive");
   gridMaterial.alpha = 0.88;
 
   const majorMaterial = new StandardMaterial("major-grid-material", scene);
-  majorMaterial.diffuseColor = new Color3(0.7, 0.86, 0.56);
-  majorMaterial.emissiveColor = new Color3(0.12, 0.16, 0.08);
+  majorMaterial.diffuseColor = createTechnicalColor3("gridMajor");
+  majorMaterial.emissiveColor = createTechnicalColor3("gridMajorEmissive");
   majorMaterial.alpha = 0.95;
 
   for (const gridLine of getSceneVisualContextGridLines()) {

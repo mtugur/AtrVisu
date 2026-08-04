@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import {
   AbstractMesh,
   Camera,
-  Color3,
+  type Color3,
   DynamicTexture,
   LinesMesh,
   Matrix,
@@ -91,6 +91,14 @@ import {
   type ViewportResizeController
 } from "./babylonScene/viewportResize";
 import type { ArcRotateCamera } from "@babylonjs/core";
+import {
+  CIVIL_TECHNICAL_COLORS,
+  TECHNICAL_CSS_COLORS
+} from "../designSystem";
+import {
+  createTechnicalColor3,
+  createTechnicalColor3FromHex
+} from "../designSystem/technicalPaletteBabylon";
 
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
@@ -213,42 +221,25 @@ type CivilReferenceNode = {
 };
 
 const hexToColor3 = (hex: string) => {
-  return Color3.FromHexString(hex);
+  return createTechnicalColor3FromHex(hex);
 };
 
 const getCivilColor = (item: CivilReferenceItem) => {
   const colorToken = item.style?.colorToken;
   if (typeof colorToken === "string" && colorToken.startsWith("#")) {
-    return Color3.FromHexString(colorToken);
+    return createTechnicalColor3FromHex(colorToken);
   }
-
-  switch (item.type) {
-    case "wall":
-      return Color3.FromHexString("#8d98a5");
-    case "column":
-      return Color3.FromHexString("#b6bdc8");
-    case "restricted-area":
-      return Color3.FromHexString("#d77957");
-    case "walkway":
-      return Color3.FromHexString("#d5c25d");
-    case "door-opening":
-      return Color3.FromHexString("#7ec8de");
-    case "floor-area":
-      return Color3.FromHexString("#3f6f91");
-    case "reference-zone":
-    default:
-      return Color3.FromHexString("#75b99d");
-  }
+  return createTechnicalColor3FromHex(CIVIL_TECHNICAL_COLORS[item.type]);
 };
 
 const createLabel = (scene: Scene, textureKey: string, text: string, y: number) => {
   const texture = new DynamicTexture(`label-texture-${textureKey}`, { width: 512, height: 128 }, scene);
   texture.hasAlpha = true;
-  texture.drawText(text, null, 78, "bold 42px Arial", "#f8fbf6", "transparent", true, true);
+  texture.drawText(text, null, 78, "bold 42px Arial", TECHNICAL_CSS_COLORS.labelText, TECHNICAL_CSS_COLORS.transparent, true, true);
 
   const material = new StandardMaterial(`label-material-${textureKey}`, scene);
   material.diffuseTexture = texture;
-  material.emissiveColor = new Color3(1, 1, 1);
+  material.emissiveColor = createTechnicalColor3("white");
   material.opacityTexture = texture;
   material.disableLighting = true;
   material.backFaceCulling = false;
@@ -336,9 +327,9 @@ const createAnnotationNode = (scene: Scene, annotation: AnnotationObject, select
   const contentHeight = Math.ceil(visualStyle.paddingPx * 2 + lines.length * visualStyle.lineHeightPx);
   const originX = 24;
   const originY = 24;
-  const borderColor = selected ? "#ffe58a" : visualStyle.borderColor;
-  const textColor = selected ? "#fff2a8" : visualStyle.textColor;
-  const backgroundColor = selected ? "rgba(48, 43, 20, 0.94)" : visualStyle.backgroundColor;
+  const borderColor = selected ? TECHNICAL_CSS_COLORS.annotationSelectedBorder : visualStyle.borderColor;
+  const textColor = selected ? TECHNICAL_CSS_COLORS.annotationSelectedText : visualStyle.textColor;
+  const backgroundColor = selected ? TECHNICAL_CSS_COLORS.annotationSelectedBackground : visualStyle.backgroundColor;
 
   if (visualStyle.filledBackground) {
     fillRoundedRect(context, originX, originY, contentWidth, contentHeight, 22);
@@ -351,11 +342,11 @@ const createAnnotationNode = (scene: Scene, annotation: AnnotationObject, select
   context.strokeStyle = borderColor;
   context.stroke();
 
-  context.fillStyle = selected ? "#ffe58a" : visualStyle.accentColor;
+  context.fillStyle = selected ? TECHNICAL_CSS_COLORS.annotationSelectedBorder : visualStyle.accentColor;
   context.fillRect(originX, originY + 10, Math.max(6, visualStyle.borderWidthPx + 1), contentHeight - 20);
 
   context.font = badgeFont;
-  context.fillStyle = selected ? "#ffe58a" : visualStyle.accentColor;
+  context.fillStyle = selected ? TECHNICAL_CSS_COLORS.annotationSelectedBorder : visualStyle.accentColor;
   context.fillText(visualStyle.indicator, originX + visualStyle.paddingPx, originY + visualStyle.paddingPx + 3);
 
   context.font = `${visualStyle.fontWeight} ${visualStyle.fontSizePx}px Arial`;
@@ -372,7 +363,7 @@ const createAnnotationNode = (scene: Scene, annotation: AnnotationObject, select
   const material = new StandardMaterial(`annotation-material-${annotation.id}`, scene);
   material.diffuseTexture = texture;
   material.opacityTexture = texture;
-  material.emissiveColor = new Color3(1, 1, 1);
+  material.emissiveColor = createTechnicalColor3("white");
   material.disableLighting = true;
   material.backFaceCulling = false;
 
@@ -382,9 +373,9 @@ const createAnnotationNode = (scene: Scene, annotation: AnnotationObject, select
   hitMaterial.backFaceCulling = false;
 
   const anchorMaterial = new StandardMaterial(`annotation-anchor-material-${annotation.id}`, scene);
-  anchorMaterial.diffuseColor = selected ? new Color3(1, 0.86, 0.28) : visualStyle.accentColor ? Color3.FromHexString(visualStyle.accentColor) : new Color3(0.7, 0.85, 0.76);
+  anchorMaterial.diffuseColor = selected ? createTechnicalColor3("annotationSelected") : visualStyle.accentColor ? createTechnicalColor3FromHex(visualStyle.accentColor) : createTechnicalColor3("annotationFallback");
   anchorMaterial.emissiveColor = anchorMaterial.diffuseColor.scale(selected ? 0.75 : 0.45);
-  anchorMaterial.specularColor = new Color3(0.08, 0.08, 0.08);
+  anchorMaterial.specularColor = createTechnicalColor3("darkSpecular");
 
   const planeSize = {
     width: Math.max(2.15, contentWidth / 155),
@@ -432,7 +423,7 @@ const createAnnotationNode = (scene: Scene, annotation: AnnotationObject, select
     { points: [Vector3.Zero(), Vector3.Zero()] },
     scene
   );
-  handleStem.color = selected ? new Color3(1, 0.86, 0.28) : Color3.FromHexString(visualStyle.accentColor);
+  handleStem.color = selected ? createTechnicalColor3("annotationSelected") : createTechnicalColor3FromHex(visualStyle.accentColor);
   handleStem.isPickable = false;
   handleStem.renderingGroupId = 2;
 
@@ -454,21 +445,21 @@ const disposeAnnotationNode = (node: AnnotationNode) => {
 const connectionPointColor = (type: string) => {
   switch (type) {
     case "product-in":
-      return new Color3(0.45, 0.82, 1);
+      return createTechnicalColor3("connectionProductIn");
     case "product-out":
-      return new Color3(0.7, 1, 0.48);
+      return createTechnicalColor3("connectionProductOut");
     case "electrical":
-      return new Color3(1, 0.82, 0.2);
+      return createTechnicalColor3("connectionElectrical");
     case "pneumatic":
     case "compressed-air":
-      return new Color3(0.55, 0.72, 1);
+      return createTechnicalColor3("connectionPneumatic");
     case "network":
-      return new Color3(0.75, 0.55, 1);
+      return createTechnicalColor3("connectionNetwork");
     case "aspiration":
     case "dust-collection":
-      return new Color3(0.95, 0.62, 0.42);
+      return createTechnicalColor3("connectionAspiration");
     default:
-      return new Color3(0.92, 0.92, 0.92);
+      return createTechnicalColor3("nearWhite");
   }
 };
 
@@ -481,7 +472,7 @@ const createConnectionPointMarker = (
   const markerMaterial = new StandardMaterial(`connection-point-material-${machine.instanceId}-${point.id}`, scene);
   markerMaterial.diffuseColor = connectionPointColor(point.type);
   markerMaterial.emissiveColor = markerMaterial.diffuseColor.scale(0.48);
-  markerMaterial.specularColor = new Color3(0.08, 0.1, 0.1);
+  markerMaterial.specularColor = createTechnicalColor3("darkCoolSpecular");
 
   const marker = MeshBuilder.CreateSphere(
     `connection-point-${machine.instanceId}-${point.id}`,
@@ -505,11 +496,11 @@ const createConnectionPointMarker = (
   texture.hasAlpha = true;
   const markerText = getConnectionPointMarkerLabel(point);
   const trimmedText = markerText.length > 28 ? `${markerText.slice(0, 25)}...` : markerText;
-  texture.drawText(trimmedText, null, 86, "bold 42px Arial", "#f8fbf6", "transparent", true, true);
+  texture.drawText(trimmedText, null, 86, "bold 42px Arial", TECHNICAL_CSS_COLORS.labelText, TECHNICAL_CSS_COLORS.transparent, true, true);
   const labelMaterial = new StandardMaterial(`connection-point-label-material-${machine.instanceId}-${point.id}`, scene);
   labelMaterial.diffuseTexture = texture;
   labelMaterial.opacityTexture = texture;
-  labelMaterial.emissiveColor = new Color3(1, 1, 1);
+  labelMaterial.emissiveColor = createTechnicalColor3("white");
   labelMaterial.disableLighting = true;
   labelMaterial.backFaceCulling = false;
   const label = MeshBuilder.CreatePlane(
@@ -587,7 +578,7 @@ const createSelectionFrame = (scene: Scene, machine: PlacedMachine) => {
     },
     scene
   );
-  frame.color = new Color3(1, 0.93, 0.38);
+  frame.color = createTechnicalColor3("selectionFrame");
   frame.isPickable = false;
   frame.isVisible = false;
 
@@ -641,7 +632,7 @@ const createMetadataFrame = (scene: Scene, machine: PlacedMachine) => {
     scene,
     `metadata-frame-${machine.instanceId}`,
     getMachineDimensionsMeters(machine.definition),
-    new Color3(0.25, 0.78, 1)
+    createTechnicalColor3("metadataFrame")
   );
 };
 
@@ -653,7 +644,7 @@ const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): Civil
   const color = getCivilColor(item);
   material.diffuseColor = color;
   material.emissiveColor = color.scale(0.18);
-  material.specularColor = new Color3(0.08, 0.09, 0.1);
+  material.specularColor = createTechnicalColor3("sceneGround");
   material.alpha = item.style?.opacity ?? 0.45;
 
   const mesh = MeshBuilder.CreateBox(
@@ -670,7 +661,7 @@ const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): Civil
     scene,
     `civil-selection-frame-${item.id}`,
     { width, depth, height: Math.max(height, 0.08) },
-    new Color3(1, 0.86, 0.28)
+    createTechnicalColor3("selectionPrimary")
   );
   selectionFrame.parent = mesh;
   selectionFrame.isVisible = false;
@@ -733,7 +724,7 @@ const createClearanceFrame = (scene: Scene, machine: PlacedMachine) => {
     scene,
     `clearance-frame-${machine.instanceId}`,
     { width, depth, height: dimensions.height },
-    new Color3(1, 0.56, 0.22)
+    createTechnicalColor3("clearanceFrame")
   );
 };
 
@@ -749,7 +740,7 @@ const createCollisionFrame = (scene: Scene, machine: PlacedMachine) => {
       depth: mmToMeters(envelope.depthMm),
       height: mmToMeters(envelope.heightMm)
     },
-    new Color3(0.35, 0.72, 1)
+    createTechnicalColor3("collisionFrame")
   );
   frame.position.x = mmToMeters(offset.xMm);
   frame.position.y = mmToMeters(offset.yMm) + mmToMeters(envelope.heightMm) / 2 - dimensions.height / 2;
@@ -780,7 +771,7 @@ const createFlowArrow = (scene: Scene, machine: PlacedMachine) => {
     },
     scene
   );
-  arrow.color = new Color3(0.98, 0.98, 0.72);
+  arrow.color = createTechnicalColor3("flowArrow");
   arrow.isPickable = false;
 
   return arrow;
@@ -788,9 +779,9 @@ const createFlowArrow = (scene: Scene, machine: PlacedMachine) => {
 
 const createProductMeshes = (scene: Scene, machine: PlacedMachine) => {
   const material = new StandardMaterial(`product-material-${machine.instanceId}`, scene);
-  material.diffuseColor = new Color3(0.96, 0.82, 0.38);
-  material.emissiveColor = new Color3(0.08, 0.05, 0.01);
-  material.specularColor = new Color3(0.12, 0.1, 0.05);
+  material.diffuseColor = createTechnicalColor3("product");
+  material.emissiveColor = createTechnicalColor3("productEmissive");
+  material.specularColor = createTechnicalColor3("productSpecular");
 
   return Array.from({ length: 3 }, (_, index) => {
     const product = MeshBuilder.CreateBox(
@@ -1101,10 +1092,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       const isPrimary = instanceId === primarySelectedMachineId;
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(instanceId);
       node.selectionFrame.isVisible = isSelected && overlaySettingsRef.current.showSelectionBox;
-      node.selectionFrame.color = isPrimary ? new Color3(1, 0.86, 0.28) : new Color3(0.37, 0.78, 1);
+      node.selectionFrame.color = isPrimary ? createTechnicalColor3("selectionPrimary") : createTechnicalColor3("selectionSecondary");
       node.metadataFrame.isVisible = isSelected && overlaySettingsRef.current.showMetadataBox;
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
-      node.collisionFrame.color = isColliding ? new Color3(1, 0.22, 0.16) : new Color3(0.35, 0.72, 1);
+      node.collisionFrame.color = isColliding ? createTechnicalColor3("collisionActive") : createTechnicalColor3("collisionFrame");
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible = isSelected && overlaySettingsRef.current.showClearanceEnvelope;
       }
@@ -1114,11 +1105,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       });
       node.material.emissiveColor = isSelected
         ? isColliding
-          ? new Color3(0.42, 0.08, 0.04)
-          : new Color3(0.24, 0.2, 0.05)
+          ? createTechnicalColor3("collisionTint")
+          : createTechnicalColor3("warningTint")
         : isColliding
-          ? new Color3(0.18, 0.03, 0.02)
-          : Color3.Black();
+          ? createTechnicalColor3("collisionEmissive")
+          : createTechnicalColor3("black");
     });
   }, [primarySelectedMachineId, selectedMachineIds]);
 
@@ -1129,7 +1120,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       const isSelected = selectedCivilReferenceIds.includes(id);
       node.selectionFrame.isVisible = isSelected;
       node.material.emissiveColor = isSelected
-        ? new Color3(0.28, 0.22, 0.06)
+        ? createTechnicalColor3("warningEmissive")
         : getCivilColor(civilReferencesRef.current.find((item) => item.id === id) ?? {
             id,
             type: "reference-zone",
@@ -1267,7 +1258,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             },
             scene
           );
-          node.leader.color = isSelected ? new Color3(1, 0.86, 0.28) : new Color3(0.74, 0.86, 0.78);
+          node.leader.color = isSelected ? createTechnicalColor3("selectionPrimary") : createTechnicalColor3("annotationLeader");
           node.leader.isPickable = false;
           node.leader.isVisible = overlaySettings.showAnnotations;
           node.leader.renderingGroupId = 2;
@@ -1283,15 +1274,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     machineNodesRef.current.forEach((node, instanceId) => {
       const isSelected = selectedMachineIdsRef.current.includes(instanceId);
       const isColliding = collisionResult.collidingObjectIds.includes(instanceId);
-      node.collisionFrame.color = isColliding ? new Color3(1, 0.22, 0.16) : new Color3(0.35, 0.72, 1);
+      node.collisionFrame.color = isColliding ? createTechnicalColor3("collisionActive") : createTechnicalColor3("collisionFrame");
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
       node.material.emissiveColor = isSelected
         ? isColliding
-          ? new Color3(0.42, 0.08, 0.04)
-          : new Color3(0.24, 0.2, 0.05)
+          ? createTechnicalColor3("collisionTint")
+          : createTechnicalColor3("warningTint")
         : isColliding
-          ? new Color3(0.18, 0.03, 0.02)
-          : Color3.Black();
+          ? createTechnicalColor3("collisionEmissive")
+          : createTechnicalColor3("black");
     });
   }, [collisionResult]);
 
@@ -2118,7 +2109,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       };
       const material = new StandardMaterial(`machine-material-${instanceId}`, scene);
       material.diffuseColor = hexToColor3(definition.defaultColor);
-      material.specularColor = new Color3(0.14, 0.16, 0.18);
+      material.specularColor = createTechnicalColor3("objectSpecular");
       material.alpha = 1;
 
       const box = MeshBuilder.CreateBox(
@@ -2146,7 +2137,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       selectionFrame.isVisible =
         selectedMachineIdsRef.current.includes(instanceId) && overlaySettingsRef.current.showSelectionBox;
       selectionFrame.color =
-        primarySelectedMachineIdRef.current === instanceId ? new Color3(1, 0.86, 0.28) : new Color3(0.37, 0.78, 1);
+        primarySelectedMachineIdRef.current === instanceId ? createTechnicalColor3("selectionPrimary") : createTechnicalColor3("selectionSecondary");
 
       const metadataFrame = createMetadataFrame(scene, machine);
       metadataFrame.parent = box;
@@ -2157,8 +2148,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       collisionFrame.parent = box;
       collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
       collisionFrame.color = collisionResultRef.current.collidingObjectIds.includes(instanceId)
-        ? new Color3(1, 0.22, 0.16)
-        : new Color3(0.35, 0.72, 1);
+        ? createTechnicalColor3("collisionActive")
+        : createTechnicalColor3("collisionFrame");
 
       const clearanceFrame = createClearanceFrame(scene, machine);
       if (clearanceFrame) {
@@ -2310,14 +2301,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showSelectionBox;
       node.selectionFrame.color =
         machine.instanceId === primarySelectedMachineIdRef.current
-          ? new Color3(1, 0.86, 0.28)
-          : new Color3(0.37, 0.78, 1);
+          ? createTechnicalColor3("selectionPrimary")
+          : createTechnicalColor3("selectionSecondary");
       node.metadataFrame.isVisible =
         selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showMetadataBox;
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
       node.collisionFrame.color = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId)
-        ? new Color3(1, 0.22, 0.16)
-        : new Color3(0.35, 0.72, 1);
+        ? createTechnicalColor3("collisionActive")
+        : createTechnicalColor3("collisionFrame");
       if (node.clearanceFrame) {
         node.clearanceFrame.isVisible =
           selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showClearanceEnvelope;
@@ -2331,11 +2322,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId);
       node.material.emissiveColor = isSelected
         ? isColliding
-          ? new Color3(0.42, 0.08, 0.04)
-          : new Color3(0.24, 0.2, 0.05)
+          ? createTechnicalColor3("collisionTint")
+          : createTechnicalColor3("warningTint")
         : isColliding
-          ? new Color3(0.18, 0.03, 0.02)
-          : Color3.Black();
+          ? createTechnicalColor3("collisionEmissive")
+          : createTechnicalColor3("black");
     });
   }, [placedMachines]);
 

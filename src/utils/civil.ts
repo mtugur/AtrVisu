@@ -1,5 +1,6 @@
 import type { CivilReferenceItem, CivilReferenceType } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
+import { CIVIL_TECHNICAL_COLORS } from "../designSystem";
 import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT } from "./coordinateReference";
 import { getLayerId, isLayerVisible } from "./layers";
 
@@ -22,13 +23,13 @@ const CIVIL_DEFAULTS: Record<CivilReferenceType, {
   colorToken: string;
   opacity: number;
 }> = {
-  "floor-area": { widthMm: 12000, depthMm: 8000, heightMm: 20, colorToken: "#3f6f91", opacity: 0.22 },
-  wall: { widthMm: 6000, depthMm: 200, heightMm: 3000, colorToken: "#8d98a5", opacity: 0.68 },
-  column: { widthMm: 600, depthMm: 600, heightMm: 3500, colorToken: "#b6bdc8", opacity: 0.78 },
-  "door-opening": { widthMm: 1800, depthMm: 160, heightMm: 2200, colorToken: "#7ec8de", opacity: 0.54 },
-  "restricted-area": { widthMm: 4000, depthMm: 3000, heightMm: 25, colorToken: "#d77957", opacity: 0.3 },
-  walkway: { widthMm: 6000, depthMm: 1400, heightMm: 20, colorToken: "#d5c25d", opacity: 0.28 },
-  "reference-zone": { widthMm: 5000, depthMm: 3500, heightMm: 20, colorToken: "#75b99d", opacity: 0.24 }
+  "floor-area": { widthMm: 12000, depthMm: 8000, heightMm: 20, colorToken: CIVIL_TECHNICAL_COLORS["floor-area"], opacity: 0.22 },
+  wall: { widthMm: 6000, depthMm: 200, heightMm: 3000, colorToken: CIVIL_TECHNICAL_COLORS.wall, opacity: 0.68 },
+  column: { widthMm: 600, depthMm: 600, heightMm: 3500, colorToken: CIVIL_TECHNICAL_COLORS.column, opacity: 0.78 },
+  "door-opening": { widthMm: 1800, depthMm: 160, heightMm: 2200, colorToken: CIVIL_TECHNICAL_COLORS["door-opening"], opacity: 0.54 },
+  "restricted-area": { widthMm: 4000, depthMm: 3000, heightMm: 25, colorToken: CIVIL_TECHNICAL_COLORS["restricted-area"], opacity: 0.3 },
+  walkway: { widthMm: 6000, depthMm: 1400, heightMm: 20, colorToken: CIVIL_TECHNICAL_COLORS.walkway, opacity: 0.28 },
+  "reference-zone": { widthMm: 5000, depthMm: 3500, heightMm: 20, colorToken: CIVIL_TECHNICAL_COLORS["reference-zone"], opacity: 0.24 }
 };
 
 export const getCivilTypeLabel = (type: CivilReferenceType) => CIVIL_TYPE_LABELS[type] ?? type;

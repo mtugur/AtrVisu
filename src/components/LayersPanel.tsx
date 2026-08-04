@@ -2,6 +2,7 @@ import type { AnnotationObject } from "../types/annotations";
 import type { CivilReferenceItem } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
+import { TECHNICAL_CSS_COLORS } from "../designSystem";
 import { getLayerItemCounts } from "../utils/layers";
 
 type LayersPanelProps = {
@@ -70,7 +71,7 @@ export function LayersPanel({
                 data-testid={`layer-row-${layer.id}`}
                 onClick={() => onSelectLayer(layer.id)}
               >
-                <span className="layer-color" style={{ background: layer.color ?? "#a8c978" }} aria-hidden="true" />
+                <span className="layer-color" style={{ background: layer.color ?? TECHNICAL_CSS_COLORS.layerDefault }} aria-hidden="true" />
                 <strong>{layer.name}</strong>
                 <small>
                   {itemCount} item{itemCount === 1 ? "" : "s"} {layer.systemLayer ? "| default system" : ""}
