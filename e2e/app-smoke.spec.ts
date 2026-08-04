@@ -108,6 +108,25 @@ const getRuntimeCommandExecution = async (page: Page, commandId: string) =>
     return bridge.getCommandExecution(id);
   }, commandId);
 
+const executeProjectRuntimeCommand = async (
+  page: Page,
+  commandId: "project.save" | "project.exportJson"
+) => page.evaluate((id) => {
+  const bridge = window.__atrvisuProjectCommands;
+  if (!bridge) {
+    throw new Error("AtrVisu project runtime command E2E bridge is unavailable.");
+  }
+  return bridge.execute(id);
+}, commandId);
+
+const getActiveProjectRuntimeContext = async (page: Page) => page.evaluate(() => {
+  const bridge = window.__atrvisuProjectCommands;
+  if (!bridge) {
+    throw new Error("AtrVisu project runtime command E2E bridge is unavailable.");
+  }
+  return bridge.getActiveContext();
+});
+
 const beginRuntimeSurfaceExecutionObservation = async (
   page: Page,
   commandId: string
@@ -410,6 +429,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   expect(await page.evaluate(() => window.__atrvisuRuntimePanels === undefined)).toBe(true);
   expect(await page.evaluate(() => window.__atrvisuRuntimeViewport === undefined)).toBe(true);
   expect(await page.evaluate(() => window.__atrvisuRuntimeFeatureAccess === undefined)).toBe(true);
+  expect(await page.evaluate(() => window.__atrvisuProjectCommands === undefined)).toBe(true);
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
@@ -420,6 +440,7 @@ test("heavy scene diagnostics require explicit E2E opt in", async ({ page }) => 
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimePanels))).toBe(true);
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeViewport))).toBe(true);
   expect(await page.evaluate(() => Boolean(window.__atrvisuRuntimeFeatureAccess))).toBe(true);
+  expect(await page.evaluate(() => Boolean(window.__atrvisuProjectCommands))).toBe(true);
   const diagnostics = await waitForRuntimeViewport(page);
   expect(diagnostics.viewport?.lastResizeReason).toBe("manual");
   expect(diagnostics.invariants).toMatchObject({
@@ -1923,6 +1944,138 @@ test("project and performance modals open and close deterministically", async ({
   await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
   await expectNoModalBackdrop(page);
 
+  expect(errors).toEqual([]);
+});
+
+test("project save clears a real dirty scene and updates its active revision while Project Manager is closed", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  await page.getByTestId("open-project-manager").click();
+  await page.getByTestId("new-project-name").fill("Closed Command Project");
+  await page.getByTestId("new-customer-name").fill("E2E Customer");
+  await page.getByTestId("create-project").click();
+  await expect(page.getByTestId("project-manager-project-list")).toContainText("Closed Command Project");
+  await page.getByTestId("close-project-manager").click();
+  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
+
+  const cleanContext = await getActiveProjectRuntimeContext(page);
+  expect(cleanContext.projectId).not.toBeNull();
+  expect(cleanContext.layoutId).not.toBeNull();
+  expect(cleanContext.revisionId).not.toBeNull();
+  expect(cleanContext.hasUnsavedChanges).toBe(false);
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  await expect.poll(() => getActiveProjectRuntimeContext(page)).toEqual({
+    ...cleanContext,
+    hasUnsavedChanges: true
+  });
+
+  let promptCount = 0;
+  page.on("dialog", async (dialog) => {
+    if (dialog.type() === "prompt") {
+      await dialog.accept(promptCount++ === 0 ? "R01" : "Saved with modal closed");
+    }
+  });
+  await expect(executeProjectRuntimeCommand(page, "project.save")).resolves.toMatchObject({
+    handled: true,
+    status: "executed"
+  });
+  await expect.poll(() => getActiveProjectRuntimeContext(page)).toMatchObject({
+    projectId: cleanContext.projectId,
+    layoutId: cleanContext.layoutId,
+    hasUnsavedChanges: false
+  });
+  const savedContext = await getActiveProjectRuntimeContext(page);
+  expect(savedContext.revisionId).not.toBe(cleanContext.revisionId);
+
+  await page.getByTestId("open-project-manager").click();
+  await expect(page.getByRole("button", { name: /Layout-1 2 revisions/ })).toBeVisible();
+  await page.getByTestId("close-project-manager").click();
+
+  const [download, exportResult] = await Promise.all([
+    page.waitForEvent("download"),
+    executeProjectRuntimeCommand(page, "project.exportJson")
+  ]);
+  expect(exportResult).toMatchObject({ handled: true, status: "executed" });
+  expect(download.suggestedFilename()).toBe("Closed-Command-Project.project.json");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect(page.locator("canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("Project Manager export uses its selected project payload", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.getByTestId("open-project-manager").click();
+
+  for (const projectName of ["Selected Export", "Active Other Project"]) {
+    await page.getByTestId("new-project-name").fill(projectName);
+    await page.getByTestId("new-customer-name").fill("E2E Customer");
+    await page.getByTestId("create-project").click();
+    await expect(page.getByTestId("project-manager-project-list")).toContainText(projectName);
+  }
+
+  await page.getByTestId("project-manager-project-list")
+    .getByRole("button", { name: /Selected Export/ })
+    .click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Export Project JSON" }).click()
+  ]);
+
+  expect(download.suggestedFilename()).toBe("Selected-Export.project.json");
+  expect(errors).toEqual([]);
+});
+
+test("persistent project import input survives Project Manager close without scene mutation", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+
+  await expect(page.getByTestId("import-project-file")).toHaveCount(1);
+  await page.getByTestId("open-project-manager").click();
+  await page.getByTestId("new-project-name").fill("Persistent Import Source");
+  await page.getByTestId("new-customer-name").fill("E2E Customer");
+  await page.getByTestId("create-project").click();
+  await expect(page.getByTestId("project-manager-project-list")).toContainText("Persistent Import Source");
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Export Project JSON" }).click()
+  ]);
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+  const activeContextBeforeImport = await getActiveProjectRuntimeContext(page);
+  const before = await getRuntimeViewportSnapshot(page);
+
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Import Project JSON" }).click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles(downloadPath ?? "");
+
+  await expect(page.getByText("Project imported.")).toBeVisible();
+  await expect(page.getByTestId("project-manager-project-list")).toContainText("Persistent Import Source Imported");
+  await expect(page.getByTestId("import-project-file")).toHaveCount(1);
+  await expect(page.getByTestId("import-project-file")).toHaveValue("");
+
+  await page.getByTestId("close-project-manager").click();
+  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
+  await expect(page.getByTestId("import-project-file")).toHaveCount(1);
+  const after = await getRuntimeViewportSnapshot(page);
+  const activeContextAfterImport = await getActiveProjectRuntimeContext(page);
+  expect(activeContextAfterImport).toEqual(activeContextBeforeImport);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.invariants.selectionIds).toEqual(before.invariants.selectionIds);
+  expect(after.invariants.undoDepth).toBe(before.invariants.undoDepth);
+  expect(after.invariants.redoDepth).toBe(before.invariants.redoDepth);
+  expect(after.invariants.projectDirty).toBe(before.invariants.projectDirty);
+  await expect(page.locator("canvas")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 

@@ -1,33 +1,22 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AtrVisuLayout } from "../types/machine";
 import type { AtrVisuProject } from "../types/project";
 import type { RuntimeFeatureCommandOperationResult } from "../platform/runtimeCommands/runtimeFeatureCommands";
+import type { ProjectExportCommandPayload } from "../platform/runtimeCommands/projectRuntimeCommandAuthority";
 import {
   createLayout,
   createProject,
-  createRevision,
   deleteLayout,
   deleteProject,
   deleteRevision,
   duplicateProject,
   duplicateRevision,
-  exportProject,
-  importProject,
   listProjects,
-  nextRevisionCode,
   renameLayout,
   setActiveRevision,
   updateProjectMetadata
 } from "../utils/projectStorage";
-
-export type ProjectManagerRuntimeController = {
-  saveCurrentRevision: () => Promise<RuntimeFeatureCommandOperationResult>;
-  exportSelectedProject: () => Promise<RuntimeFeatureCommandOperationResult>;
-  importProjectFile: (file: File) => Promise<RuntimeFeatureCommandOperationResult>;
-  canSaveCurrentRevision: boolean;
-  canExportSelectedProject: boolean;
-};
 
 type ProjectManagerProps = {
   projects: AtrVisuProject[];
@@ -42,11 +31,13 @@ type ProjectManagerProps = {
   onCurrentSelectionChange: (projectId: string | null, layoutId: string | null, revisionId: string | null) => void;
   onLoadRevision: (projectId: string, layoutId: string, revisionId: string, snapshot: AtrVisuLayout) => void;
   onSavedRevision: (projectId: string, layoutId: string, revisionId: string) => void;
-  onRuntimeControllerChange?: (controller: ProjectManagerRuntimeController | null) => void;
-  onExecuteRuntimeCommand?: (
+  onExecuteRuntimeCommand: (
     commandId: "project.save" | "project.exportJson" | "project.importJson",
     payload?: unknown
   ) => Promise<RuntimeFeatureCommandOperationResult>;
+  onRequestProjectImport: (
+    onResult: (result: RuntimeFeatureCommandOperationResult) => void
+  ) => void;
 };
 
 const formatDate = (value: string) => {
@@ -85,10 +76,9 @@ export function ProjectManager({
   onCurrentSelectionChange,
   onLoadRevision,
   onSavedRevision,
-  onRuntimeControllerChange,
-  onExecuteRuntimeCommand
+  onExecuteRuntimeCommand,
+  onRequestProjectImport
 }: ProjectManagerProps) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId ?? projects[0]?.projectId ?? "");
   const selectedProject = projects.find((project) => project.projectId === selectedProjectId) ?? projects[0] ?? null;
   const [selectedLayoutId, setSelectedLayoutId] = useState(
@@ -109,8 +99,6 @@ export function ProjectManager({
   const [newDescription, setNewDescription] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-
-  const nextCode = useMemo(() => (selectedLayout ? nextRevisionCode(selectedLayout) : "R00"), [selectedLayout]);
 
   const refreshProjects = async () => {
     const nextProjects = await listProjects();
@@ -152,6 +140,48 @@ export function ProjectManager({
     await runRuntimeAction(action, message);
   };
 
+  const applyRuntimeCommandResult = (
+    result: RuntimeFeatureCommandOperationResult,
+    successMessage: string
+  ) => {
+    if (result.handled) {
+      setStatus(successMessage);
+      setError("");
+    } else {
+      setError(result.reason ?? "Project action failed.");
+    }
+    return result;
+  };
+
+  const executeRuntimeCommand = async (
+    commandId: "project.save" | "project.exportJson",
+    payload: ProjectExportCommandPayload | undefined,
+    successMessage: string
+  ) => {
+    try {
+      const result = await onExecuteRuntimeCommand(commandId, payload);
+      return applyRuntimeCommandResult(result, successMessage);
+    } catch (caught) {
+      return applyRuntimeCommandResult({
+        handled: false,
+        status: "failed",
+        reason: caught instanceof Error ? caught.message : "Project action failed."
+      }, successMessage);
+    }
+  };
+
+  useEffect(() => {
+    if (currentProjectId) {
+      setSelectedProjectId(currentProjectId);
+    }
+    if (currentLayoutId) {
+      setSelectedLayoutId(currentLayoutId);
+    }
+    if (currentRevisionId) {
+      setSelectedRevisionId(currentRevisionId);
+    }
+  }, [currentLayoutId, currentProjectId, currentRevisionId]);
+
   const createNewProject = () => {
     void runAction(async () => {
       const project = await createProject(
@@ -172,30 +202,6 @@ export function ProjectManager({
       setNewCustomerLocation("");
       setNewDescription("");
     }, "Project created.");
-  };
-
-  const saveCurrentRevision = async (): Promise<RuntimeFeatureCommandOperationResult> => {
-    if (!selectedProject || !selectedLayout) {
-      const reason = "Select a project and layout first.";
-      setError(reason);
-      return { handled: false, status: "unavailable", reason };
-    }
-
-    const revisionCode = window.prompt("Revision code", nextCode)?.trim() || nextCode;
-    const notes = window.prompt("Revision notes", "") ?? "";
-
-    return runRuntimeAction(async () => {
-      const updated = await createRevision(selectedProject.projectId, selectedLayout.layoutId, currentSnapshot, revisionCode, notes);
-      const layout = updated.layouts.find((item) => item.layoutId === selectedLayout.layoutId);
-      const revision = layout?.revisions[0];
-      await refreshProjects();
-      setSelectedProjectId(updated.projectId);
-      setSelectedLayoutId(layout?.layoutId ?? "");
-      setSelectedRevisionId(revision?.revisionId ?? "");
-      if (layout && revision) {
-        onSavedRevision(updated.projectId, layout.layoutId, revision.revisionId);
-      }
-    }, "Current scene saved as a new revision.");
   };
 
   const loadSelectedRevision = () => {
@@ -228,71 +234,6 @@ export function ProjectManager({
       onLoadRevision(project.projectId, layoutId, revisionId, snapshot);
     }, "Revision loaded.");
   };
-
-  const exportSelectedProject = async (): Promise<RuntimeFeatureCommandOperationResult> => {
-    if (!selectedProject) {
-      const reason = "Select a project first.";
-      setError(reason);
-      return { handled: false, status: "unavailable", reason };
-    }
-    return runRuntimeAction(async () => {
-      const project = await exportProject(selectedProject.projectId);
-      const blob = new Blob([JSON.stringify(project, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${project.projectName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "atrvisu-project"}.project.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    }, "Project exported.");
-  };
-
-  const importProjectFile = async (
-    file?: File
-  ): Promise<RuntimeFeatureCommandOperationResult> => {
-    if (!file) {
-      const reason = "Choose a project JSON file.";
-      setError(reason);
-      return { handled: false, status: "unavailable", reason };
-    }
-    try {
-      const parsed = JSON.parse(await file.text()) as unknown;
-      const imported = await importProject(parsed);
-      const nextProjects = await refreshProjects();
-      selectProject(nextProjects.find((project) => project.projectId === imported.projectId) ?? imported);
-      setStatus("Project imported.");
-      setError("");
-      return { handled: true, status: "executed" };
-    } catch (caught) {
-      const reason = caught instanceof Error ? caught.message : "Could not import project JSON.";
-      setError(reason);
-      return { handled: false, status: "failed", reason };
-    } finally {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
-  useLayoutEffect(() => {
-    if (!onRuntimeControllerChange) {
-      return;
-    }
-    onRuntimeControllerChange({
-      saveCurrentRevision,
-      exportSelectedProject,
-      importProjectFile: (file) => {
-        return importProjectFile(file);
-      },
-      canSaveCurrentRevision: Boolean(selectedProject && selectedLayout),
-      canExportSelectedProject: Boolean(selectedProject)
-    });
-    return () => {
-      onRuntimeControllerChange(null);
-    };
-  });
 
   const modal = (
     <div className="manager-backdrop" role="presentation">
@@ -370,27 +311,13 @@ export function ProjectManager({
             {status ? <p className="manager-status">{status}</p> : null}
             {error ? <p className="manager-validation">{error}</p> : null}
             <div className="project-action-grid">
-              <button type="button" onClick={() => fileInputRef.current?.click()}>
+              <button type="button" onClick={() => {
+                onRequestProjectImport((result) => {
+                  applyRuntimeCommandResult(result, "Project imported.");
+                });
+              }}>
                 Import Project JSON
               </button>
-              <input
-                ref={fileInputRef}
-                className="file-input"
-                data-testid="import-project-file"
-                type="file"
-                accept="application/json,.json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) {
-                    return;
-                  }
-                  if (onExecuteRuntimeCommand) {
-                    void onExecuteRuntimeCommand("project.importJson", file);
-                    return;
-                  }
-                  void importProjectFile(file);
-                }}
-              />
             </div>
             {selectedProject ? (
               <div className="project-action-grid">
@@ -448,11 +375,11 @@ export function ProjectManager({
                 <button
                   type="button"
                   onClick={() => {
-                  if (onExecuteRuntimeCommand) {
-                      void onExecuteRuntimeCommand("project.exportJson");
-                  } else {
-                      void exportSelectedProject();
-                    }
+                    void executeRuntimeCommand(
+                      "project.exportJson",
+                      { projectId: selectedProject.projectId },
+                      "Project exported."
+                    );
                   }}
                 >
                   Export Project JSON
@@ -495,11 +422,11 @@ export function ProjectManager({
                   data-testid="save-scene-revision"
                   type="button"
                   onClick={() => {
-                    if (onExecuteRuntimeCommand) {
-                      void onExecuteRuntimeCommand("project.save");
-                    } else {
-                      void saveCurrentRevision();
-                    }
+                    void executeRuntimeCommand(
+                      "project.save",
+                      undefined,
+                      "Current scene saved as a new revision."
+                    );
                   }}
                 >
                   Save Current Scene as New Revision

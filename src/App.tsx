@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { EditorHost } from "./components/EditorHost";
@@ -21,10 +22,7 @@ import { MultiSelectionProperties } from "./components/MultiSelectionProperties"
 import { PanelSection } from "./components/PanelSection";
 import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
 import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModal";
-import {
-  ProjectManager,
-  type ProjectManagerRuntimeController
-} from "./components/ProjectManager";
+import { ProjectManager } from "./components/ProjectManager";
 import { SimulationControls } from "./components/SimulationControls";
 import { ViewpointsPanel } from "./components/ViewpointsPanel";
 import type { AtrVisuLayout, MachineDefinition, PlacedMachine } from "./types/machine";
@@ -133,6 +131,14 @@ import {
   executeConfirmedRuntimeCommandOperation,
   type RuntimeCommandOperationResult
 } from "./platform/runtimeCommands/runtimeCommandOperation";
+import {
+  createProjectImportRequestLifecycle,
+  createProjectRuntimeCommandBindings,
+  executeProjectImportRequest,
+  PROJECT_RUNTIME_COMMAND_IDS,
+  type ProjectRuntimeCommandE2EBridge,
+  type ProjectImportCommandPayload
+} from "./platform/runtimeCommands/projectRuntimeCommandAuthority";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
 import {
   applyRuntimeSelectionRequest,
@@ -474,7 +480,8 @@ export function App() {
   );
   const annotationEditHistoryRecordedRef = useRef(false);
   const libraryManagerRuntimeControllerRef = useRef<LibraryManagerRuntimeController | null>(null);
-  const projectManagerRuntimeControllerRef = useRef<ProjectManagerRuntimeController | null>(null);
+  const projectImportFileInputRef = useRef<HTMLInputElement | null>(null);
+  const projectImportRequestLifecycleRef = useRef(createProjectImportRequestLifecycle());
   const runtimeCommandBindingsRef = useRef<CoreEditorRuntimeCommandBindings>({});
   const runtimeCommandBridge = useMemo(
     () => createCoreEditorRuntimeCommandBridge(() => runtimeCommandBindingsRef.current),
@@ -2777,43 +2784,30 @@ export function App() {
     setAutosaveReady(true);
   }, []);
 
+  const projectRuntimeCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() =>
+    createProjectRuntimeCommandBindings({
+      projects,
+      currentProjectId,
+      currentLayoutId,
+      currentSnapshot: createLayoutSnapshot(),
+      refreshProjects,
+      onRevisionSaved: (projectId, layoutId, revisionId) => {
+        setCurrentProjectId(projectId);
+        setCurrentLayoutId(layoutId);
+        setCurrentRevisionId(revisionId);
+        setHasUnsavedProjectChanges(false);
+      },
+      prompt: (message, defaultValue) => window.prompt(message, defaultValue)
+    }), [
+      createLayoutSnapshot,
+      currentLayoutId,
+      currentProjectId,
+      projects,
+      refreshProjects
+    ]);
+
   const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
-    [RUNTIME_FEATURE_COMMAND_IDS.projectSave]: {
-      getEnableState: () => projectManagerRuntimeControllerRef.current?.canSaveCurrentRevision
-        ? { enabled: true }
-        : { enabled: false, reason: "Open Project Manager and select a project and layout." },
-      execute: () => {
-        const controller = projectManagerRuntimeControllerRef.current;
-        if (!controller?.canSaveCurrentRevision) {
-          throw new Error("Project save runtime controller is unavailable.");
-        }
-        return controller.saveCurrentRevision();
-      }
-    },
-    [RUNTIME_FEATURE_COMMAND_IDS.projectExportJson]: {
-      getEnableState: () => projectManagerRuntimeControllerRef.current?.canExportSelectedProject
-        ? { enabled: true }
-        : { enabled: false, reason: "Open Project Manager and select a project." },
-      execute: () => {
-        const controller = projectManagerRuntimeControllerRef.current;
-        if (!controller?.canExportSelectedProject) {
-          throw new Error("Project export runtime controller is unavailable.");
-        }
-        return controller.exportSelectedProject();
-      }
-    },
-    [RUNTIME_FEATURE_COMMAND_IDS.projectImportJson]: {
-      getEnableState: (context) => projectManagerRuntimeControllerRef.current && context.payload instanceof File
-        ? { enabled: true }
-        : { enabled: false, reason: "Open Project Manager and choose a project JSON file." },
-      execute: (context) => {
-        const controller = projectManagerRuntimeControllerRef.current;
-        if (!controller || !(context.payload instanceof File)) {
-          throw new Error("Project import runtime controller or file is unavailable.");
-        }
-        return controller.importProjectFile(context.payload);
-      }
-    },
+    ...projectRuntimeCommandBindings,
     [RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt]: {
       getEnableState: () => recoveryLayout
         ? { enabled: true }
@@ -3027,6 +3021,7 @@ export function App() {
     applyPairAnchorSnap,
     connectionPointSnapContext.available,
     connectionPointSnapReason,
+    projectRuntimeCommandBindings,
     recoveryLayout,
     restoreAutosavedLayout,
     runtimePanelBridge,
@@ -3432,6 +3427,97 @@ export function App() {
     hasUnsavedProjectChanges,
     recordRuntimeCommandExecution,
     runtimeFeatureCommandBridge
+  ]);
+
+  const requestProjectImportFile = useCallback((
+    onResult: (result: RuntimeFeatureCommandOperationResult) => void
+  ) => {
+    const request = projectImportRequestLifecycleRef.current.begin(onResult);
+    const input = projectImportFileInputRef.current;
+    if (!input) {
+      projectImportRequestLifecycleRef.current.cancel(request.requestId);
+      return;
+    }
+    input.value = "";
+    input.click();
+  }, []);
+
+  const handleProjectImportFileChange = useCallback(async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    const currentRequest = projectImportRequestLifecycleRef.current.getCurrent();
+    const request = currentRequest
+      ? projectImportRequestLifecycleRef.current.capture(currentRequest.requestId)
+      : null;
+    input.value = "";
+    await executeProjectImportRequest(
+      request,
+      file,
+      (payload: ProjectImportCommandPayload) => executeRuntimeFeatureCommand(
+        RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
+        payload
+      )
+    );
+  }, [executeRuntimeFeatureCommand]);
+
+  const handleProjectImportFileCancel = useCallback(() => {
+    const currentRequest = projectImportRequestLifecycleRef.current.getCurrent();
+    if (currentRequest) {
+      projectImportRequestLifecycleRef.current.cancel(currentRequest.requestId);
+    }
+    if (projectImportFileInputRef.current) {
+      projectImportFileInputRef.current.value = "";
+    }
+  }, []);
+
+  useEffect(() => {
+    const input = projectImportFileInputRef.current;
+    if (!input) {
+      return;
+    }
+    input.addEventListener("cancel", handleProjectImportFileCancel);
+    return () => {
+      input.removeEventListener("cancel", handleProjectImportFileCancel);
+    };
+  }, [handleProjectImportFileCancel]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+
+    const diagnosticsBridge: ProjectRuntimeCommandE2EBridge = {
+      execute: (commandId, payload) => {
+        if (!PROJECT_RUNTIME_COMMAND_IDS.includes(commandId)) {
+          return Promise.resolve(createUnavailableRuntimeCommandResult(
+            `Project runtime command "${commandId}" is unsupported.`
+          ));
+        }
+        return executeRuntimeFeatureCommand(commandId, payload);
+      },
+      getActiveContext: () => ({
+        projectId: currentProjectId,
+        layoutId: currentLayoutId,
+        revisionId: currentRevisionId,
+        hasUnsavedChanges: hasUnsavedProjectChanges
+      })
+    };
+    window.__atrvisuProjectCommands = diagnosticsBridge;
+
+    return () => {
+      if (window.__atrvisuProjectCommands === diagnosticsBridge) {
+        delete window.__atrvisuProjectCommands;
+      }
+    };
+  }, [
+    currentLayoutId,
+    currentProjectId,
+    currentRevisionId,
+    enableE2EDiagnostics,
+    executeRuntimeFeatureCommand,
+    hasUnsavedProjectChanges
   ]);
 
   const canExecuteUndoCommand = canExecuteCoreEditorCommand(CORE_EDITOR_COMMAND_IDS.undo).enabled;
@@ -4164,6 +4250,14 @@ export function App() {
       )}
       overlayLayer={(
         <>
+          <input
+            ref={projectImportFileInputRef}
+            className="file-input"
+            data-testid="import-project-file"
+            type="file"
+            accept="application/json,.json"
+            onChange={handleProjectImportFileChange}
+          />
           {isProjectManagerOpen ? (
             <ProjectManager
               projects={projects}
@@ -4188,12 +4282,10 @@ export function App() {
                 void refreshProjects();
                 setHasUnsavedProjectChanges(false);
               }}
-              onRuntimeControllerChange={(controller) => {
-                projectManagerRuntimeControllerRef.current = controller;
-              }}
               onExecuteRuntimeCommand={(commandId, payload) => {
                 return executeRuntimeFeatureCommand(commandId, payload);
               }}
+              onRequestProjectImport={requestProjectImportFile}
             />
           ) : null}
           {isPerformanceBenchmarkOpen ? (
