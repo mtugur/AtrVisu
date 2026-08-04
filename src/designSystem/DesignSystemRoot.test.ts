@@ -73,6 +73,7 @@ describe("semantic token contract", () => {
     expect(themeSource).toContain('data-av-theme="light"');
     expect(themeSource).toContain('data-av-theme="system"');
     expect(themeSource).toContain("@media (prefers-color-scheme: light)");
+    expect(themeSource).toContain("@media (prefers-color-scheme: dark)");
     expect(themeSource).not.toContain("matchMedia");
 
     const requiredTokens = [
