@@ -138,9 +138,25 @@ select:disabled {
 }
 
 .workbench-product-name {
+  flex: 0 0 auto;
   color: var(--av-text-accent);
   font-size: var(--av-font-size-md);
   font-weight: var(--av-font-weight-bold);
+}
+
+.workbench-project-session {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: var(--av-spacing-sm);
+}
+
+.workbench-save-cluster {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--av-spacing-xs);
 }
 
 .workbench-save-state {
@@ -158,7 +174,7 @@ select:disabled {
 .workbench-project-context {
   display: flex;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 620px;
   gap: var(--av-spacing-xs);
   overflow: hidden;
   color: var(--av-text-muted);
