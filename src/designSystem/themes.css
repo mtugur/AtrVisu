@@ -1,3 +1,5 @@
+:root:has(.av-design-system-root[data-av-theme="dark"]),
+:root:has(.av-design-system-root[data-av-theme="system"]),
 .av-design-system-root[data-av-theme="dark"],
 .av-design-system-root[data-av-theme="system"] {
   color-scheme: dark;
@@ -81,6 +83,7 @@
   --av-shadow-modal: rgba(0, 0, 0, 0.5);
 }
 
+:root:has(.av-design-system-root[data-av-theme="light"]),
 .av-design-system-root[data-av-theme="light"] {
   color-scheme: light;
   --av-surface-canvas: #e7ecea;
@@ -164,6 +167,7 @@
 }
 
 @media (prefers-color-scheme: light) {
+  :root:has(.av-design-system-root[data-av-theme="system"]),
   .av-design-system-root[data-av-theme="system"] {
   color-scheme: light;
   --av-surface-canvas: #e7ecea;

@@ -30,6 +30,7 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const menuButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const itemButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const focusItemOnOpenRef = useRef(false);
 
   const closeMenu = (restoreFocus: boolean) => {
     const previousIndex = activeMenuIndex;
@@ -47,11 +48,17 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
     const firstItemIndex = menu.items.length > 0 ? 0 : -1;
     setFocusedMenuIndex(index);
     setFocusedItemIndex(firstItemIndex);
+    focusItemOnOpenRef.current = focusItem && firstItemIndex >= 0;
     setActiveMenuIndex(index);
-    if (focusItem && firstItemIndex >= 0) {
-      queueMicrotask(() => itemButtonRefs.current[firstItemIndex]?.focus());
-    }
   };
+
+  useEffect(() => {
+    if (activeMenuIndex === null || !focusItemOnOpenRef.current || focusedItemIndex < 0) {
+      return;
+    }
+    focusItemOnOpenRef.current = false;
+    itemButtonRefs.current[focusedItemIndex]?.focus();
+  }, [activeMenuIndex, focusedItemIndex]);
 
   useEffect(() => {
     if (activeMenuIndex === null) {

@@ -44,16 +44,22 @@ describe("design token governance", () => {
   });
 
   it("rejects direct Color3, Color4, and FromHexString construction", async () => {
-    const violationTypes = (scanDesignTokenSource(
+    const violations = scanDesignTokenSource(
       "src/example.ts",
       await readFixture("raw-babylon-colors.ts"),
       []
-    ) as DesignTokenViolation[]).map((violation) => violation.type);
+    ) as DesignTokenViolation[];
+    const violationTypes = violations.map((violation) => violation.type);
 
     expect(violationTypes).toEqual(expect.arrayContaining([
       "color3-constructor",
       "color4-constructor",
       "from-hex-string"
+    ]));
+    expect(violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "color3-constructor", value: "new BABYLON.Color3(" }),
+      expect.objectContaining({ type: "color4-constructor", value: "new BABYLON.Color4(" }),
+      expect.objectContaining({ type: "from-hex-string", value: "BABYLON.Color4.FromHexString(" })
     ]));
   });
 
@@ -73,10 +79,12 @@ describe("design token governance", () => {
   });
 
   it("passes the maintained production source tree", async () => {
-    await expect(runDesignTokenGovernance()).resolves.toMatchObject({
+    const result = await runDesignTokenGovernance();
+    expect(result).toMatchObject({
       passed: true,
       allowlistErrors: [],
       violations: []
     });
+    expect(result.scannedFileCount).toBeGreaterThan(0);
   });
 });

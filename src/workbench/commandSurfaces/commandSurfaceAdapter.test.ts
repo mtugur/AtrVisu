@@ -65,7 +65,16 @@ describe("command surface adapter", () => {
   it("projects exact authoritative menus and command-bar order", () => {
     const { adapter } = createHarness();
 
-    expect(adapter.getMenus().map((menu) => menu.id)).toEqual(["file", "edit", "view", "tools"]);
+    expect(adapter.getMenus().map(({ id, labelKey, fallbackLabel }) => ({
+      id,
+      labelKey,
+      fallbackLabel
+    }))).toEqual([
+      { id: "file", labelKey: "menu.file", fallbackLabel: "File" },
+      { id: "edit", labelKey: "menu.edit", fallbackLabel: "Edit" },
+      { id: "view", labelKey: "menu.view", fallbackLabel: "View" },
+      { id: "tools", labelKey: "menu.tools", fallbackLabel: "Tools" }
+    ]);
     expect(adapter.getMenus().map((menu) => menu.items.map((item) => item.commandId)))
       .toEqual(COMMAND_SURFACE_MENU_DEFINITIONS.map((menu) => [...menu.commandIds]));
     expect(adapter.getCommandBarItems().map((item) => item.commandId)).toEqual(COMMAND_BAR_COMMAND_IDS);

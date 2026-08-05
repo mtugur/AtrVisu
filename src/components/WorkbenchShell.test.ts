@@ -76,8 +76,9 @@ describe("WorkbenchShell", () => {
       editorRightInset: -100
     }));
 
-    expect(positive).toContain('style="top:var(--av-workbench-top-inset);right:min(420px, calc(100vw - 28px))"');
-    expect(negative).toContain('style="top:var(--av-workbench-top-inset);right:min(0px, calc(100vw - 28px))"');
+    expect(positive).toContain('style="--av-shell-top-inset:var(--av-workbench-top-inset)"');
+    expect(positive).toContain('style="right:min(420px, calc(100vw - 28px))"');
+    expect(negative).toContain('style="right:min(0px, calc(100vw - 28px))"');
   });
 
   it("does not remount the editor when secondary dock content changes", async () => {
