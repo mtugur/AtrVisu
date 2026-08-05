@@ -1342,7 +1342,7 @@ select:disabled {
   display: grid;
   place-items: center;
   padding: clamp(12px, 3vw, 28px);
-  background: color-mix(in srgb, var(--av-text-inverse) 62%, transparent);
+  background: var(--av-surface-scrim);
 }
 
 .manager-dialog {
@@ -1735,7 +1735,7 @@ select:disabled {
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 14%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--av-text-inverse) 12%, transparent);
+  background: var(--av-surface-control);
 }
 
 .manager-visual-model summary {
@@ -1782,7 +1782,7 @@ select:disabled {
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 12%, transparent);
   border-radius: 8px;
   color: color-mix(in srgb, var(--av-text-primary) 78%, transparent);
-  background: color-mix(in srgb, var(--av-text-inverse) 12%, transparent);
+  background: var(--av-surface-control);
 }
 
 .taxonomy-row.is-selected {

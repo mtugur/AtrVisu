@@ -1,7 +1,12 @@
 export type TechnicalRgb = readonly [red: number, green: number, blue: number];
 export type TechnicalRgba = readonly [red: number, green: number, blue: number, alpha: number];
 
-export const TECHNICAL_COLOR_RGB = Object.freeze({
+const freezeRecordValues = <const T extends Record<string, object>>(record: T) => {
+  Object.values(record).forEach((value) => Object.freeze(value));
+  return Object.freeze(record);
+};
+
+export const TECHNICAL_COLOR_RGB = freezeRecordValues({
   black: [0, 0, 0],
   white: [1, 1, 1],
   nearWhite: [0.92, 0.92, 0.92],
@@ -49,7 +54,7 @@ export const TECHNICAL_COLOR_RGB = Object.freeze({
   diagnosticsInfo: [0.25, 0.78, 1]
 } as const satisfies Record<string, TechnicalRgb>);
 
-export const TECHNICAL_COLOR_RGBA = Object.freeze({
+export const TECHNICAL_COLOR_RGBA = freezeRecordValues({
   sceneClear: [0.035, 0.045, 0.055, 1]
 } as const satisfies Record<string, TechnicalRgba>);
 
@@ -77,7 +82,7 @@ export const CIVIL_TECHNICAL_COLORS = Object.freeze({
   "reference-zone": "#75b99d"
 } as const);
 
-export const ANNOTATION_TECHNICAL_STYLES = Object.freeze({
+export const ANNOTATION_TECHNICAL_STYLES = freezeRecordValues({
   note: { textColor: "#f6fbf5", backgroundColor: "rgba(18, 24, 23, 0.86)", borderColor: "#6e8178", accentColor: "#aab8ae" },
   info: { textColor: "#e9f7ff", backgroundColor: "rgba(12, 42, 59, 0.9)", borderColor: "#56b5df", accentColor: "#7ed8ff" },
   warning: { textColor: "#fff3d2", backgroundColor: "rgba(67, 38, 9, 0.92)", borderColor: "#ffb547", accentColor: "#ffd166" },

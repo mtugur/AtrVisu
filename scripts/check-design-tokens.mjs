@@ -15,9 +15,9 @@ const matchers = Object.freeze([
   { type: "hex", expression: /#[0-9a-fA-F]{3,8}\b/g },
   { type: "rgb", expression: /\brgba?\s*\(/gi },
   { type: "hsl", expression: /\bhsla?\s*\(/gi },
-  { type: "color3-constructor", expression: /\bnew\s+Color3\s*\(/g },
-  { type: "color4-constructor", expression: /\bnew\s+Color4\s*\(/g },
-  { type: "from-hex-string", expression: /\b(?:Color3|Color4)\.FromHexString\s*\(/g }
+  { type: "color3-constructor", expression: /\bnew\s+(?:BABYLON\.)?Color3\s*\(/g },
+  { type: "color4-constructor", expression: /\bnew\s+(?:BABYLON\.)?Color4\s*\(/g },
+  { type: "from-hex-string", expression: /\b(?:BABYLON\.)?(?:Color3|Color4)\.FromHexString\s*\(/g }
 ]);
 
 export const DESIGN_TOKEN_ALLOWLIST = Object.freeze([
