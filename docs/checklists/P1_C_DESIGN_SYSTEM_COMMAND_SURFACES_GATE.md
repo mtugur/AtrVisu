@@ -41,10 +41,10 @@
 | Application Save placement corrected | One canonical Save control is grouped with state/context and still routes through `project.save` | PASS | Yes | Application Bar component test; project-save E2E |
 | Audit/build/unit/E2E passed | 0 vulnerabilities; scanner/build; 1058 unit; 43 E2E | PASS | Yes | Audit section 19 |
 | Corrected exact-head Quality Gate | Correction code head `e45c9efefeab430e1ed6b09ca8bddf51a3f4d6e4`; Quality Gate run `30984288422` passed dependency audit, design-token governance, build, unit, and E2E steps | PASS | Yes | PR #103 checks; audit section 19 |
-| Visual-correction exact-head Quality Gate | GitHub gate must pass on the new three-commit visual-correction head | PENDING | Yes | PR #103 checks |
+| Visual-correction exact-head Quality Gate | Exact head `ab330bb5263487490dfad9c3bc651e1e037f97e2`; Quality Gate run `31013964812` passed dependency audit, design-token governance, build, 111 / 1058 unit tests, and 43 / 43 E2E tests | PASS | Yes | PR #103 checks; audit section 19 |
 | Manual visual re-acceptance required | Initial round failed; corrected dark/light/system and chrome review remains pending | PENDING | Yes | Audit sections 19-20 |
 
-Decision: **PENDING EXACT-HEAD REVIEW AND MANUAL RE-ACCEPTANCE**. The bounded
-visual corrections and local automatic gates pass. The initial manual round
-remains failed until the new head passes GitHub Quality Gate, independent
-review, and manual visual re-acceptance. P1-C is incomplete and cannot merge.
+Decision: **READY FOR MANUAL RE-ACCEPTANCE**. The bounded visual corrections,
+independent code review, and all automatic gates pass. The initial manual round
+remains failed until manual visual re-acceptance passes. P1-C is incomplete and
+PR #103 cannot merge.

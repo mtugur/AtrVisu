@@ -209,20 +209,27 @@ The bounded change covers:
   production-ready.
 - Visual corrections: implemented and covered by deterministic component and
   Chromium geometry/lifecycle regressions.
-- Manual visual re-acceptance: required and pending after the new exact-head
-  GitHub gate and independent review.
-- The new visual-correction exact head requires external PR-check verification
-  after push; this committed evidence records the passing local gate and the
-  previously verified correction-code GitHub gate without pre-claiming the new
-  workflow result.
+- Visual-correction exact head:
+  `ab330bb5263487490dfad9c3bc651e1e037f97e2`.
+- Visual-correction Quality Gate run `31013964812`: passed.
+- GitHub Dependency security audit: passed.
+- GitHub Design token governance: passed.
+- GitHub Build: passed.
+- GitHub Unit tests: 111 files, 1058 tests passed.
+- GitHub Chromium E2E: 43 of 43 tests passed.
+- Independent review: visual corrections accepted; no code-level blocker
+  remains.
+- `package-lock.json`: unchanged for the visual-correction range.
+- New dependencies in the visual-correction range: none.
+- Manual visual re-acceptance: required and pending.
 
 ## 20. Manual Visual Acceptance Status
 
 **REQUIRED AND PENDING RE-ACCEPTANCE.** The initial manual round failed on the
-three chrome-layout findings recorded in section 19. Automated evidence now
-covers those corrections but does not claim visual acceptance. After the new
-exact-head GitHub gate and independent review, a reviewer must repeat the
-compact industrial workbench inspection before merge.
+three chrome-layout findings recorded in section 19. Automated evidence and
+independent review now cover those corrections but do not claim visual
+acceptance. A reviewer must repeat the compact industrial workbench inspection
+before merge.
 
 ## 21. Explicit Non-Goals
 
@@ -235,7 +242,7 @@ tool is included.
 ## 22. Residual Risks
 
 - The corrected Edit menu, right-panel utility strip, and Save placement still
-  need human re-acceptance after exact-head CI and independent review.
+  need human re-acceptance.
 - Dark, light, and system visual quality still needs human acceptance.
 - System theme infrastructure is not user-selectable until P1-D owns UI
   preferences.
@@ -245,8 +252,7 @@ tool is included.
 
 ## 23. Decision
 
-**PENDING EXACT-HEAD REVIEW AND MANUAL RE-ACCEPTANCE.** The bounded visual
-corrections and local automatic gates pass. The initial manual round remains a
-failed result until the new three-commit head passes GitHub Quality Gate,
-independent review, and manual visual re-acceptance. PR #103 remains Draft,
-P1-C is not complete, and merge is prohibited.
+**READY FOR MANUAL RE-ACCEPTANCE.** The bounded visual corrections, automatic
+gates, and independent review pass. Manual visual re-acceptance is the only
+remaining blocker. PR #103 remains Draft, P1-C is not complete, and merge is
+prohibited until manual visual re-acceptance passes.
