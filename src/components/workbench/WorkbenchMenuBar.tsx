@@ -208,8 +208,17 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
                   onClick={() => activateItem(menuIndex, itemIndex)}
                   onKeyDown={(event) => handleItemKeyDown(event, menuIndex, itemIndex)}
                 >
-                  <span>{item.pending ? `${item.label}...` : item.label}</span>
-                  {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
+                  <span className="workbench-menu-item-label">
+                    {item.pending ? `${item.label}...` : item.label}
+                  </span>
+                  {item.shortcut ? (
+                    <kbd
+                      className="workbench-menu-item-shortcut"
+                      data-multiline={item.shortcut.includes(" or ") ? "true" : undefined}
+                    >
+                      {item.shortcut}
+                    </kbd>
+                  ) : null}
                 </button>
               ))}
             </div>

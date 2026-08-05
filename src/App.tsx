@@ -6,6 +6,7 @@ import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene
 import { EditorHost } from "./components/EditorHost";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import {
+  RightPanelUtilityStrip,
   WorkbenchApplicationBar,
   WorkbenchCommandBar,
   WorkbenchMenuBar
@@ -3910,23 +3911,13 @@ export function App() {
             aria-label="Resize right panel"
             onPointerDown={startPanelResize}
           />
-          <div className="panel-toolbar" data-app-shell-zone="top-toolbar">
-            <span>AtrVisu Tools</span>
-            <div className="toolbar-button-group" aria-label="Undo and redo">
-              <button type="button" disabled={!canExecuteUndoCommand} onClick={executeUndoCommand}>
-                Undo
-              </button>
-              <button type="button" disabled={!canExecuteRedoCommand} onClick={executeRedoCommand}>
-                Redo
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
-            >
-              Collapse
-            </button>
-          </div>
+          <RightPanelUtilityStrip
+            canUndo={canExecuteUndoCommand}
+            canRedo={canExecuteRedoCommand}
+            onUndo={executeUndoCommand}
+            onRedo={executeRedoCommand}
+            onCollapse={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
+          />
           {recoveryLayout ? (
             <section className="recovery-prompt" aria-label="Autosave recovery">
               <p>A previous unsaved layout was found. Restore it?</p>
