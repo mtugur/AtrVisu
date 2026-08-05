@@ -184,12 +184,21 @@ The bounded change covers:
 - Build: passed; existing large-chunk warning remains non-blocking.
 - Full unit: 111 files, 1056 tests passed.
 - E2E: 42 Chromium tests passed with no console/page errors.
-- Reviewed head `45202ea55d0de779a90337d5278d30ed4d36e037` had a successful
-  Quality Gate before these corrections. The corrected exact-head Quality Gate
-  must be captured on PR #103 after the required five commits are pushed; this
-  audit does not pre-claim that future result.
-- Diff check, package-lock invariance, final port, and worktree checks are
-  required again after this documentation commit.
+- Correction code head: `e45c9efefeab430e1ed6b09ca8bddf51a3f4d6e4`.
+- Quality Gate run `30984288422`: passed.
+- GitHub Dependency security audit: passed.
+- GitHub Design token governance: passed.
+- GitHub Build: passed.
+- GitHub Unit tests: 111 files, 1056 tests passed.
+- GitHub Chromium E2E: 42 of 42 tests passed.
+- Independent code review: code corrections accepted; the only identified
+  follow-up was this committed documentation-state correction.
+- `package-lock.json`: unchanged.
+- New dependencies: none.
+- Manual visual acceptance: required and pending.
+- This documentation-only head requires external PR-check verification after
+  push; the committed evidence intentionally records the verified correction
+  code head and does not create a self-referential pending gate.
 
 ## 20. Manual Visual Acceptance Status
 
@@ -209,8 +218,6 @@ tool is included.
 ## 22. Residual Risks
 
 - Dark, light, and system visual quality still needs human acceptance.
-- Corrected exact-head GitHub Quality Gate and another independent review are
-  required before requesting that acceptance.
 - System theme infrastructure is not user-selectable until P1-D owns UI
   preferences.
 - The existing Vite large-chunk warning remains outside this package.
@@ -219,7 +226,7 @@ tool is included.
 
 ## 23. Decision
 
-**PENDING CORRECTED EXACT-HEAD QUALITY GATE.** All local automatic gates pass.
-P1-C remains Draft, is not ready for manual acceptance or merge, and requires
-the corrected GitHub gate plus another independent review before the decision
-can return to ready for manual acceptance.
+**READY FOR MANUAL ACCEPTANCE.** All automatic gates passed, and independent
+code review accepted the corrections. Manual visual acceptance is the only
+remaining blocker. PR #103 remains Draft, P1-C is not complete, and merge is
+prohibited until manual acceptance passes.
