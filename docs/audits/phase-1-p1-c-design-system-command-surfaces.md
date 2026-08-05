@@ -38,29 +38,39 @@ The `--av-` token set covers all accepted P1-A families: surface, elevation,
 text, border, interaction, focus, selection, spacing, typography, control size,
 density, icon size, semantic status, viewport overlay, technical palette, and
 z-index. Component CSS consumes responsibility names instead of literal color
-names.
+names. The exact contract now asserts required surface, text, border,
+interaction, focus, selection, spacing, typography, control, density, icon,
+status, viewport-overlay, and z-index names. The canonical normal weight is
+`--av-font-weight-normal: 400`; the existing regular alias remains compatible.
 
 ## 6. Theme Behavior
 
 Dark preserves AtrVisu's restrained green-accent baseline. Light defines a
 complete readable palette. System uses CSS `prefers-color-scheme` light and
 dark paths without `matchMedia`. Forced-colors focus behavior is retained.
-There is no visible theme/density control and no persisted preference.
+Theme selectors also project the same semantic variables to `:root`, so
+body-level modal portals inherit the governed palette. Dark and light Chromium
+assertions prove the modal scrim and readable content colors. There is no
+visible theme/density control and no persisted preference.
 
 ## 7. Technical-Palette Migration
 
 Collision, warning, primary/secondary selection, connection point, clearance,
 measurement, annotation, neutral frame, selected collision, axes, diagnostics,
-civil, layer, library, and benchmark meanings are centralized. Generic values
-are immutable; Babylon factories return independent `Color3`/`Color4`
-instances. Current numeric meanings are retained.
+civil, layer, library, and benchmark meanings are centralized. Generic value
+records, every RGB/RGBA tuple, and every nested annotation style are frozen at
+runtime. Mutation attempts fail without changing governed values. Babylon
+factories return independent `Color3`/`Color4` instances, and mutating one
+instance cannot affect another or the palette. Current numeric meanings are
+retained.
 
 ## 8. Raw-Color Governance
 
 `check-design-tokens.mjs` scans maintained production CSS, TS, and TSX. It
 rejects raw hex/rgb/hsl and direct Babylon constructors outside three exact,
 reasoned authorities. Match types are explicit, stale allowances fail, broad
-paths fail, and scanner fixtures are outside production scan roots. CI runs the
+paths fail, and scanner fixtures cover both direct and `BABYLON.`-qualified
+constructors/`FromHexString` calls outside production scan roots. CI runs the
 gate between dependency audit and build.
 
 ## 9. Application Bar
@@ -72,15 +82,25 @@ command. Disabled and pending states come from the adapter.
 ## 10. Menu Bar
 
 Only File, Edit, View, and Tools render, with the exact accepted commands.
-Labels, shortcuts, descriptions, enablement, and disabled reasons come from
-authoritative metadata/live bindings. Keyboard open, directional switching,
-Tab closure, outside closure, and Escape restoration are covered.
+Each menu has a stable localization key and English fallback. Command labels,
+shortcuts, descriptions, enablement, and disabled reasons still come from
+authoritative metadata/live bindings. The ARIA model now uses menubar,
+top-level menuitems, stable trigger/popup IDs, labelled menus, and
+menuitemcheckbox for projected toggles. Contextually disabled menu commands use
+focusable `aria-disabled`, expose their reason, traverse with every menu item,
+and guard click/Enter/Space activation. An all-disabled Edit menu opens on its
+first item and preserves switching, Tab, and Escape behavior.
 
 ## 11. Command Bar
 
 The command toolbar uses the accepted eight-command order, one-row horizontal
 overflow, roving focus, disabled skipping, semantic pressed state, and adapter
-execution. It adds no icons or local mutation callbacks.
+execution. Arrow/Home/End handling stops before the editor shortcut layer.
+Roving focus retains a still-enabled command, chooses the next nearest enabled
+command when disabled, chooses the first enabled command after removal, exposes
+no tab stop when all commands are disabled, and restores keyboard entry when an
+enabled command returns. Execution does not move focus. It adds no icons or
+local mutation callbacks.
 
 ## 12. Project-Import Acquisition Path
 
@@ -100,18 +120,24 @@ execution is impossible through the adapter.
 
 ## 14. Accessibility Behavior
 
-Bars use semantic landmarks, labels, real disabled controls, disabled reasons,
-pending state, `aria-pressed`, strong focus styling, roving tabindex,
-directional/Home/End traversal, and predictable focus restoration. State is
-not communicated by color alone.
+Bars use semantic landmarks and labels. Toolbar controls remain native disabled
+buttons; menu commands remain focusable `aria-disabled` menuitems with explicit
+activation guards. Toggle menu state uses `aria-checked`; toolbar toggle state
+continues to use `aria-pressed`. Disabled reasons, pending state, strong focus
+styling, roving tabindex, directional/Home/End traversal, and predictable focus
+restoration are covered. State is not communicated by color alone.
 
 ## 15. Workbench Geometry
 
 WorkbenchShell slots own all three chrome rows. One tokenized top inset combines
-36px Application, 32px Menu, and 44px Command rows. AppShell applies that inset
-to both viewport and right panel. E2E proves non-overlap, positive dimensions,
-and no horizontal body overflow at 1280x720 and 1024x768. Menu popovers use the
-governed popover layer and do not sit beneath the Command Bar.
+36px Application, 32px Menu, and 44px Command rows. WorkbenchShell supplies one
+canonical `--av-shell-top-inset`; desktop CSS applies it to viewport and right
+panel without inline panel top/height. The <=720px rule restores the right panel
+as a bottom sheet with `top: auto`, `bottom: 0`, and `min(44vh, 360px)` height.
+E2E proves non-overlap, positive dimensions, no horizontal body overflow at
+1280x720 and 1024x768, and correct bottom-panel geometry/collapse/reopen with a
+stable EditorHost, canvas, and scene generation at 640x800. Menu popovers use
+the governed popover layer and do not sit beneath the Command Bar.
 
 ## 16. Preserved Phase 0/P1-B Authorities
 
@@ -144,18 +170,26 @@ The bounded change covers:
 
 ## 19. Validation Evidence
 
-- Focused design system: 3 files, 17 tests passed.
-- Focused command surfaces: 3 files, 17 tests passed.
-- Focused project-import authority: 2 files, 16 tests passed.
+- Independent review identified and this package corrects menubar semantics,
+  all-disabled discovery, toolbar isolation/reconciliation, palette depth,
+  scrim inheritance, exact token names, mobile geometry, and scanner namespace
+  coverage.
+- Focused review set: 9 files, 63 tests passed, including the two focused
+  project-import authority files.
+- Focused Chromium regressions: 3 tests passed.
 - `npm.cmd ci`: passed, 101 packages installed from lockfile.
 - `npm.cmd audit`: passed, 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: passed, 0 vulnerabilities.
 - Design-token scanner: passed, 189 maintained files.
 - Build: passed; existing large-chunk warning remains non-blocking.
-- Full unit: 111 files, 1047 tests passed.
-- E2E: 39 Chromium tests passed with no console/page errors.
-- Diff check and final port/worktree checks are required again after the final
-  documentation commit.
+- Full unit: 111 files, 1056 tests passed.
+- E2E: 42 Chromium tests passed with no console/page errors.
+- Reviewed head `45202ea55d0de779a90337d5278d30ed4d36e037` had a successful
+  Quality Gate before these corrections. The corrected exact-head Quality Gate
+  must be captured on PR #103 after the required five commits are pushed; this
+  audit does not pre-claim that future result.
+- Diff check, package-lock invariance, final port, and worktree checks are
+  required again after this documentation commit.
 
 ## 20. Manual Visual Acceptance Status
 
@@ -175,6 +209,8 @@ tool is included.
 ## 22. Residual Risks
 
 - Dark, light, and system visual quality still needs human acceptance.
+- Corrected exact-head GitHub Quality Gate and another independent review are
+  required before requesting that acceptance.
 - System theme infrastructure is not user-selectable until P1-D owns UI
   preferences.
 - The existing Vite large-chunk warning remains outside this package.
@@ -183,5 +219,7 @@ tool is included.
 
 ## 23. Decision
 
-**READY FOR MANUAL ACCEPTANCE.** P1-C is not complete, not ready to merge, and
-must remain Draft until independent review and manual visual acceptance pass.
+**PENDING CORRECTED EXACT-HEAD QUALITY GATE.** All local automatic gates pass.
+P1-C remains Draft, is not ready for manual acceptance or merge, and requires
+the corrected GitHub gate plus another independent review before the decision
+can return to ready for manual acceptance.
