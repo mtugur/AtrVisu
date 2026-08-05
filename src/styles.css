@@ -185,7 +185,7 @@ select:disabled {
 
 .workbench-save-command:hover,
 .workbench-menu-trigger:hover,
-.workbench-menu-item:hover,
+.workbench-menu-item:not([aria-disabled="true"]):hover,
 .workbench-command-button:hover {
   border-color: var(--av-border-accent);
   background: var(--av-interaction-hover);
@@ -200,7 +200,7 @@ select:disabled {
 }
 
 .workbench-save-command:disabled,
-.workbench-menu-item:disabled,
+.workbench-menu-item[aria-disabled="true"],
 .workbench-command-button:disabled {
   border-color: var(--av-border-subtle);
   color: var(--av-text-disabled);

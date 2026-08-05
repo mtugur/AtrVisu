@@ -14,7 +14,8 @@ export const APPLICATION_BAR_COMMAND_IDS = [
 export const COMMAND_SURFACE_MENU_DEFINITIONS = [
   {
     id: "file",
-    label: "File",
+    labelKey: "menu.file",
+    fallbackLabel: "File",
     commandIds: [
       RUNTIME_FEATURE_COMMAND_IDS.projectSave,
       RUNTIME_FEATURE_COMMAND_IDS.projectExportJson,
@@ -24,7 +25,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
   },
   {
     id: "edit",
-    label: "Edit",
+    labelKey: "menu.edit",
+    fallbackLabel: "Edit",
     commandIds: [
       CORE_EDITOR_COMMAND_IDS.undo,
       CORE_EDITOR_COMMAND_IDS.redo,
@@ -34,7 +36,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
   },
   {
     id: "view",
-    label: "View",
+    labelKey: "menu.view",
+    fallbackLabel: "View",
     commandIds: [
       RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
       RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
@@ -44,7 +47,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
   },
   {
     id: "tools",
-    label: "Tools",
+    labelKey: "menu.tools",
+    fallbackLabel: "Tools",
     commandIds: [
       RUNTIME_FEATURE_COMMAND_IDS.libraryManager,
       RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager,

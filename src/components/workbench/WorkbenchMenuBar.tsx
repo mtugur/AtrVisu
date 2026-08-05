@@ -12,25 +12,22 @@ export type WorkbenchMenuBarProps = {
   onExecute: (commandId: string) => void;
 };
 
-const findEnabledItem = (
+const findAdjacentItem = (
   menu: CommandSurfaceMenu,
   startIndex: number,
   direction: 1 | -1
 ) => {
-  for (let offset = 1; offset <= menu.items.length; offset += 1) {
-    const index = (startIndex + direction * offset + menu.items.length) % menu.items.length;
-    if (!menu.items[index]?.disabled) {
-      return index;
-    }
+  if (menu.items.length === 0) {
+    return -1;
   }
-  return startIndex;
+  return (startIndex + direction + menu.items.length) % menu.items.length;
 };
 
 export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
   const [activeMenuIndex, setActiveMenuIndex] = useState<number | null>(null);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   const [focusedItemIndex, setFocusedItemIndex] = useState(0);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
   const menuButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const itemButtonRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -47,12 +44,12 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
     if (!menu) {
       return;
     }
-    const firstEnabled = Math.max(0, menu.items.findIndex((item) => !item.disabled));
+    const firstItemIndex = menu.items.length > 0 ? 0 : -1;
     setFocusedMenuIndex(index);
-    setFocusedItemIndex(firstEnabled);
+    setFocusedItemIndex(firstItemIndex);
     setActiveMenuIndex(index);
-    if (focusItem) {
-      queueMicrotask(() => itemButtonRefs.current[firstEnabled]?.focus());
+    if (focusItem && firstItemIndex >= 0) {
+      queueMicrotask(() => itemButtonRefs.current[firstItemIndex]?.focus());
     }
   };
 
@@ -92,6 +89,7 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
       moveMenuFocus(event.key === "ArrowRight" ? 1 : -1, activeMenuIndex !== null);
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
+      event.stopPropagation();
       const nextIndex = event.key === "Home" ? 0 : menus.length - 1;
       setFocusedMenuIndex(nextIndex);
       menuButtonRefs.current[nextIndex]?.focus();
@@ -114,15 +112,15 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
     event.stopPropagation();
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      const nextIndex = findEnabledItem(menu, itemIndex, event.key === "ArrowDown" ? 1 : -1);
-      setFocusedItemIndex(nextIndex);
-      itemButtonRefs.current[nextIndex]?.focus();
+      const nextIndex = findAdjacentItem(menu, itemIndex, event.key === "ArrowDown" ? 1 : -1);
+      if (nextIndex >= 0) {
+        setFocusedItemIndex(nextIndex);
+        itemButtonRefs.current[nextIndex]?.focus();
+      }
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
-      const scan = event.key === "Home" ? menu.items : [...menu.items].reverse();
-      const offset = scan.findIndex((item) => !item.disabled);
-      if (offset >= 0) {
-        const nextIndex = event.key === "Home" ? offset : menu.items.length - 1 - offset;
+      if (menu.items.length > 0) {
+        const nextIndex = event.key === "Home" ? 0 : menu.items.length - 1;
         setFocusedItemIndex(nextIndex);
         itemButtonRefs.current[nextIndex]?.focus();
       }
@@ -134,7 +132,18 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
       closeMenu(true);
     } else if (event.key === "Tab") {
       closeMenu(false);
+    } else if ((event.key === "Enter" || event.key === " ") && menu.items[itemIndex]?.disabled) {
+      event.preventDefault();
     }
+  };
+
+  const activateItem = (menuIndex: number, itemIndex: number) => {
+    const item = menus[menuIndex]?.items[itemIndex];
+    if (!item || item.disabled) {
+      return;
+    }
+    closeMenu(true);
+    onExecute(item.commandId);
   };
 
   const handleMenuPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -145,6 +154,7 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
     <nav
       ref={rootRef}
       className="workbench-menu-bar"
+      role="menubar"
       aria-label="Application menus"
       data-testid="workbench-menu-bar"
       onPointerDown={handleMenuPointerDown}
@@ -154,36 +164,41 @@ export function WorkbenchMenuBar({ menus, onExecute }: WorkbenchMenuBarProps) {
           <button
             ref={(node) => { menuButtonRefs.current[menuIndex] = node; }}
             type="button"
+            id={`workbench-menu-trigger-${menu.id}`}
             className="workbench-menu-trigger"
+            role="menuitem"
             aria-haspopup="menu"
             aria-expanded={activeMenuIndex === menuIndex}
+            aria-controls={`workbench-menu-popup-${menu.id}`}
             tabIndex={focusedMenuIndex === menuIndex ? 0 : -1}
             onFocus={() => setFocusedMenuIndex(menuIndex)}
             onClick={() => activeMenuIndex === menuIndex ? closeMenu(false) : openMenu(menuIndex)}
             onKeyDown={(event) => handleMenuKeyDown(event, menuIndex)}
           >
-            {menu.label}
+            {menu.fallbackLabel}
           </button>
           {activeMenuIndex === menuIndex ? (
-            <div className="workbench-menu-popup" role="menu" aria-label={`${menu.label} menu`}>
+            <div
+              id={`workbench-menu-popup-${menu.id}`}
+              className="workbench-menu-popup"
+              role="menu"
+              aria-labelledby={`workbench-menu-trigger-${menu.id}`}
+            >
               {menu.items.map((item, itemIndex) => (
                 <button
                   key={item.commandId}
                   ref={(node) => { itemButtonRefs.current[itemIndex] = node; }}
                   type="button"
-                  role="menuitem"
+                  role={item.pressed === undefined ? "menuitem" : "menuitemcheckbox"}
                   className="workbench-menu-item"
                   data-command-id={item.commandId}
-                  disabled={item.disabled}
+                  aria-disabled={item.disabled || undefined}
                   title={item.disabledReason ?? item.tooltip}
                   aria-label={item.disabledReason ? `${item.label}: ${item.disabledReason}` : item.label}
-                  aria-pressed={item.pressed}
+                  aria-checked={item.pressed === undefined ? undefined : item.pressed}
                   aria-busy={item.pending || undefined}
                   tabIndex={focusedItemIndex === itemIndex ? 0 : -1}
-                  onClick={() => {
-                    closeMenu(true);
-                    onExecute(item.commandId);
-                  }}
+                  onClick={() => activateItem(menuIndex, itemIndex)}
                   onKeyDown={(event) => handleItemKeyDown(event, menuIndex, itemIndex)}
                 >
                   <span>{item.pending ? `${item.label}...` : item.label}</span>

@@ -204,7 +204,8 @@ export const createCommandSurfaceAdapter = (
     getApplicationSaveItem: () => getItem(APPLICATION_BAR_COMMAND_IDS[0], "application-bar"),
     getMenus: () => COMMAND_SURFACE_MENU_DEFINITIONS.map((menu) => ({
       id: menu.id,
-      label: menu.label,
+      labelKey: menu.labelKey,
+      fallbackLabel: menu.fallbackLabel,
       items: menu.commandIds
         .map((commandId) => getItem(commandId, "menu-bar"))
         .filter((item): item is CommandSurfaceItem => Boolean(item))
