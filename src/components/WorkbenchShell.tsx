@@ -82,7 +82,7 @@ export function WorkbenchShell({
         </>
       )}
       viewport={editorHost}
-      viewportTopInset={WORKBENCH_CHROME_TOP_INSET}
+      shellTopInset={WORKBENCH_CHROME_TOP_INSET}
       viewportRightInset={editorRightInset}
       viewportWorkbenchRegion={WORKBENCH_SHELL_REGION_BY_SLOT.editorHost}
       rightPanel={secondaryDock}

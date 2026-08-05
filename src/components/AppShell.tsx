@@ -9,7 +9,7 @@ type AppShellProps = {
   beforeViewport?: ReactNode;
   viewport?: ReactNode;
   viewportRightInset?: number;
-  viewportTopInset?: string;
+  shellTopInset?: string;
   viewportWorkbenchRegion?: EditorHostRegionId;
   rightPanel?: ReactNode;
   rightPanelWorkbenchRegion?: SecondaryDockRegionId;
@@ -23,14 +23,16 @@ type AppShellProps = {
 type ShellAnchorProps = {
   "data-app-shell-zone"?: string;
   "data-workbench-region"?: WorkbenchRegionId;
-  style?: CSSProperties;
+};
+
+type AppShellStyle = CSSProperties & {
+  "--av-shell-top-inset": string;
 };
 
 const withZoneAnchor = (
   node: ReactNode,
   zone: string,
-  workbenchRegion?: WorkbenchRegionId,
-  style?: CSSProperties
+  workbenchRegion?: WorkbenchRegionId
 ): ReactNode => {
   if (!isValidElement<ShellAnchorProps>(node) || node.type === Fragment) {
     return node;
@@ -38,8 +40,7 @@ const withZoneAnchor = (
 
   return cloneElement(node, {
     "data-app-shell-zone": zone,
-    ...(workbenchRegion ? { "data-workbench-region": workbenchRegion } : {}),
-    ...(style ? { style: { ...node.props.style, ...style } } : {})
+    ...(workbenchRegion ? { "data-workbench-region": workbenchRegion } : {})
   });
 };
 
@@ -47,7 +48,7 @@ export function AppShell({
   beforeViewport,
   viewport,
   viewportRightInset = 0,
-  viewportTopInset = "0px",
+  shellTopInset = "0px",
   viewportWorkbenchRegion,
   rightPanel,
   rightPanelWorkbenchRegion,
@@ -59,7 +60,12 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <>
-      <main className="app-shell" data-testid="app-root" data-app-shell-zone="app-root">
+      <main
+        className="app-shell"
+        data-testid="app-root"
+        data-app-shell-zone="app-root"
+        style={{ "--av-shell-top-inset": shellTopInset } as AppShellStyle}
+      >
         {beforeViewport}
         <div
           className="scene-viewport-host"
@@ -68,16 +74,12 @@ export function AppShell({
             ? { "data-workbench-region": viewportWorkbenchRegion }
             : {})}
           style={{
-            top: viewportTopInset,
             right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))`
           }}
         >
           {viewport}
         </div>
-        {withZoneAnchor(rightPanel, "machine-properties", rightPanelWorkbenchRegion, {
-          top: viewportTopInset,
-          height: `calc(100% - ${viewportTopInset})`
-        })}
+        {withZoneAnchor(rightPanel, "machine-properties", rightPanelWorkbenchRegion)}
         {afterRightPanel}
         {children}
       </main>

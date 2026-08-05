@@ -92,6 +92,7 @@ select:disabled {
 }
 
 .app-shell {
+  --av-shell-top-inset: 0px;
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -103,6 +104,7 @@ select:disabled {
 .scene-viewport-host {
   position: absolute;
   inset: 0;
+  top: var(--av-shell-top-inset);
   min-width: 0;
   overflow: hidden;
 }
@@ -305,14 +307,14 @@ select:disabled {
 
 .machine-panel {
   position: absolute;
-  top: 0;
+  top: var(--av-shell-top-inset);
   right: 0;
   z-index: 2;
   display: flex;
   width: var(--panel-width, 360px);
   min-width: 280px;
   max-width: min(600px, calc(100vw - 28px));
-  height: 100%;
+  height: calc(100% - var(--av-shell-top-inset));
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
