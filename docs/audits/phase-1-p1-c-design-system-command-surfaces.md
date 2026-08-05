@@ -77,7 +77,10 @@ gate between dependency audit and build.
 
 The named Application landmark shows AtrVisu identity, real Saved/Unsaved
 state, read-only active project/layout/revision context, and the canonical Save
-command. Disabled and pending states come from the adapter.
+command. Save now sits beside Saved/Unsaved inside one project-session group,
+with active project context immediately adjacent instead of leaving the action
+detached at the far edge. Disabled and pending states come from the adapter;
+there is still exactly one `project.save` control and no local mutation path.
 
 ## 10. Menu Bar
 
@@ -89,7 +92,10 @@ top-level menuitems, stable trigger/popup IDs, labelled menus, and
 menuitemcheckbox for projected toggles. Contextually disabled menu commands use
 focusable `aria-disabled`, expose their reason, traverse with every menu item,
 and guard click/Enter/Space activation. An all-disabled Edit menu opens on its
-first item and preserves switching, Tab, and Escape behavior.
+first item and preserves switching, Tab, and Escape behavior. Menu rows now
+have explicit label and shortcut regions, a bounded 360px popup width, and
+content-driven minimum height so the complete Redo shortcut remains readable
+without colliding with its command label.
 
 ## 11. Command Bar
 
@@ -137,7 +143,9 @@ as a bottom sheet with `top: auto`, `bottom: 0`, and `min(44vh, 360px)` height.
 E2E proves non-overlap, positive dimensions, no horizontal body overflow at
 1280x720 and 1024x768, and correct bottom-panel geometry/collapse/reopen with a
 stable EditorHost, canvas, and scene generation at 640x800. Menu popovers use
-the governed popover layer and do not sit beneath the Command Bar.
+the governed popover layer and do not sit beneath the Command Bar. The right
+panel utility strip now reserves separate title and action rows; Undo, Redo,
+and Collapse remain distinct existing controls with no overlap or clipping.
 
 ## 16. Preserved Phase 0/P1-B Authorities
 
@@ -174,16 +182,17 @@ The bounded change covers:
   all-disabled discovery, toolbar isolation/reconciliation, palette depth,
   scrim inheritance, exact token names, mobile geometry, and scanner namespace
   coverage.
-- Focused review set: 9 files, 63 tests passed, including the two focused
-  project-import authority files.
-- Focused Chromium regressions: 3 tests passed.
+- Previous focused review set: 9 files, 63 tests passed, including the two
+  focused project-import authority files.
+- Visual-correction component set: 1 file, 12 tests passed.
+- Visual-correction focused Chromium regression: 1 test passed.
 - `npm.cmd ci`: passed, 101 packages installed from lockfile.
 - `npm.cmd audit`: passed, 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: passed, 0 vulnerabilities.
-- Design-token scanner: passed, 189 maintained files.
+- Design-token scanner: passed, 190 maintained files.
 - Build: passed; existing large-chunk warning remains non-blocking.
-- Full unit: 111 files, 1056 tests passed.
-- E2E: 42 Chromium tests passed with no console/page errors.
+- Full unit: 111 files, 1058 tests passed.
+- E2E: 43 Chromium tests passed with no console/page errors.
 - Correction code head: `e45c9efefeab430e1ed6b09ca8bddf51a3f4d6e4`.
 - Quality Gate run `30984288422`: passed.
 - GitHub Dependency security audit: passed.
@@ -195,17 +204,25 @@ The bounded change covers:
   follow-up was this committed documentation-state correction.
 - `package-lock.json`: unchanged.
 - New dependencies: none.
-- Manual visual acceptance: required and pending.
-- This documentation-only head requires external PR-check verification after
-  push; the committed evidence intentionally records the verified correction
-  code head and does not create a self-referential pending gate.
+- Initial manual visual acceptance: failed because the Edit/Redo shortcut,
+  right-panel title/actions, and Application Bar Save placement were not
+  production-ready.
+- Visual corrections: implemented and covered by deterministic component and
+  Chromium geometry/lifecycle regressions.
+- Manual visual re-acceptance: required and pending after the new exact-head
+  GitHub gate and independent review.
+- The new visual-correction exact head requires external PR-check verification
+  after push; this committed evidence records the passing local gate and the
+  previously verified correction-code GitHub gate without pre-claiming the new
+  workflow result.
 
 ## 20. Manual Visual Acceptance Status
 
-**REQUIRED AND PENDING.** Automatic tests do not claim visual acceptance. A
-reviewer must inspect the compact industrial workbench, dark baseline, light
-and system readability, focus, disabled states, popovers, responsive geometry,
-and scene dominance before merge.
+**REQUIRED AND PENDING RE-ACCEPTANCE.** The initial manual round failed on the
+three chrome-layout findings recorded in section 19. Automated evidence now
+covers those corrections but does not claim visual acceptance. After the new
+exact-head GitHub gate and independent review, a reviewer must repeat the
+compact industrial workbench inspection before merge.
 
 ## 21. Explicit Non-Goals
 
@@ -217,6 +234,8 @@ tool is included.
 
 ## 22. Residual Risks
 
+- The corrected Edit menu, right-panel utility strip, and Save placement still
+  need human re-acceptance after exact-head CI and independent review.
 - Dark, light, and system visual quality still needs human acceptance.
 - System theme infrastructure is not user-selectable until P1-D owns UI
   preferences.
@@ -226,7 +245,8 @@ tool is included.
 
 ## 23. Decision
 
-**READY FOR MANUAL ACCEPTANCE.** All automatic gates passed, and independent
-code review accepted the corrections. Manual visual acceptance is the only
-remaining blocker. PR #103 remains Draft, P1-C is not complete, and merge is
-prohibited until manual acceptance passes.
+**PENDING EXACT-HEAD REVIEW AND MANUAL RE-ACCEPTANCE.** The bounded visual
+corrections and local automatic gates pass. The initial manual round remains a
+failed result until the new three-commit head passes GitHub Quality Gate,
+independent review, and manual visual re-acceptance. PR #103 remains Draft,
+P1-C is not complete, and merge is prohibited.

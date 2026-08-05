@@ -1052,6 +1052,112 @@ test("workbench chrome keyboard and responsive geometry preserve the editor life
   expect(errors).toEqual([]);
 });
 
+test("visual acceptance chrome remains readable and lifecycle-stable", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
+
+  const editMenu = await openWorkbenchMenu(page, "Edit");
+  const redo = editMenu.locator('[data-command-id="edit.redo"]');
+  const redoLabel = redo.locator(".workbench-menu-item-label");
+  const redoShortcut = redo.locator(".workbench-menu-item-shortcut");
+  await expect(redoLabel).toHaveText("Redo");
+  await expect(redoShortcut).toHaveText("Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z");
+  await expect(redoShortcut).toHaveAttribute("data-multiline", "true");
+  const menuGeometry = await redo.evaluate((element) => {
+    const row = element.getBoundingClientRect();
+    const label = element.querySelector(".workbench-menu-item-label")?.getBoundingClientRect();
+    const shortcut = element.querySelector(".workbench-menu-item-shortcut")?.getBoundingClientRect();
+    if (!label || !shortcut) throw new Error("Redo layout regions are missing.");
+    return {
+      row: { left: row.left, right: row.right, top: row.top, bottom: row.bottom },
+      label: { left: label.left, right: label.right, top: label.top, bottom: label.bottom },
+      shortcut: {
+        left: shortcut.left,
+        right: shortcut.right,
+        top: shortcut.top,
+        bottom: shortcut.bottom,
+        scrollWidth: (element.querySelector(".workbench-menu-item-shortcut") as HTMLElement).scrollWidth,
+        clientWidth: (element.querySelector(".workbench-menu-item-shortcut") as HTMLElement).clientWidth
+      }
+    };
+  });
+  expect(menuGeometry.label.right).toBeLessThanOrEqual(menuGeometry.shortcut.left + 1);
+  expect(menuGeometry.label.left).toBeGreaterThanOrEqual(menuGeometry.row.left);
+  expect(menuGeometry.shortcut.right).toBeLessThanOrEqual(menuGeometry.row.right);
+  expect(menuGeometry.label.top).toBeGreaterThanOrEqual(menuGeometry.row.top);
+  expect(menuGeometry.shortcut.bottom).toBeLessThanOrEqual(menuGeometry.row.bottom + 1);
+  expect(menuGeometry.shortcut.scrollWidth).toBeLessThanOrEqual(menuGeometry.shortcut.clientWidth + 1);
+  await page.keyboard.press("Escape");
+
+  const utilityStrip = page.getByTestId("right-panel-utility-strip");
+  const utilityActions = page.getByTestId("right-panel-utility-actions");
+  await expect(utilityStrip.getByText("AtrVisu Tools", { exact: true })).toBeVisible();
+  await expect(utilityActions.getByRole("button", { name: "Undo", exact: true })).toHaveCount(1);
+  await expect(utilityActions.getByRole("button", { name: "Redo", exact: true })).toHaveCount(1);
+  await expect(utilityActions.getByRole("button", { name: "Collapse", exact: true })).toHaveCount(1);
+  const panelGeometry = await utilityStrip.evaluate((element) => {
+    const rect = (selector: string) => {
+      const target = element.querySelector(selector) as HTMLElement | null;
+      if (!target) throw new Error(`Missing panel utility region: ${selector}`);
+      const box = target.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        top: box.top,
+        bottom: box.bottom,
+        scrollWidth: target.scrollWidth,
+        clientWidth: target.clientWidth
+      };
+    };
+    return {
+      title: rect(".panel-toolbar-title"),
+      actions: rect(".panel-toolbar-actions"),
+      buttons: [...element.querySelectorAll<HTMLButtonElement>(".panel-toolbar-actions button")]
+        .map((button) => {
+          const box = button.getBoundingClientRect();
+          return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+        })
+    };
+  });
+  expect(panelGeometry.title.bottom).toBeLessThanOrEqual(panelGeometry.actions.top + 1);
+  expect(panelGeometry.title.scrollWidth).toBeLessThanOrEqual(panelGeometry.title.clientWidth + 1);
+  expect(panelGeometry.buttons).toHaveLength(3);
+  for (let index = 1; index < panelGeometry.buttons.length; index += 1) {
+    expect(panelGeometry.buttons[index - 1].right)
+      .toBeLessThanOrEqual(panelGeometry.buttons[index].left + 1);
+  }
+
+  const applicationBar = page.getByTestId("workbench-application-bar");
+  const save = applicationBar.locator('[data-command-id="project.save"]');
+  await expect(save).toBeVisible();
+  await expect(applicationBar.locator('[data-command-id="project.save"]')).toHaveCount(1);
+  await expect(applicationBar.locator(".workbench-save-state")).toBeVisible();
+  await expect(applicationBar.locator(".workbench-project-context")).toBeVisible();
+  const applicationGeometry = await applicationBar.evaluate((element) => {
+    const box = (selector: string) => {
+      const target = element.querySelector(selector);
+      if (!target) throw new Error(`Missing application-bar region: ${selector}`);
+      const rect = target.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    return {
+      state: box(".workbench-save-state"),
+      save: box(".workbench-save-command"),
+      context: box(".workbench-project-context")
+    };
+  });
+  expect(applicationGeometry.state.right).toBeLessThanOrEqual(applicationGeometry.save.left + 1);
+  expect(applicationGeometry.save.right).toBeLessThanOrEqual(applicationGeometry.context.left + 1);
+
+  const after = await waitForRuntimeViewport(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 test("command bar arrow navigation is isolated from editor nudge state", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

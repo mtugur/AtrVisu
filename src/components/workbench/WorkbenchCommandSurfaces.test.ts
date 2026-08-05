@@ -8,6 +8,7 @@ import type { CommandSurfaceItem, CommandSurfaceMenu } from "../../workbench/com
 import { WorkbenchApplicationBar } from "./WorkbenchApplicationBar";
 import { WorkbenchCommandBar } from "./WorkbenchCommandBar";
 import { WorkbenchMenuBar } from "./WorkbenchMenuBar";
+import { RightPanelUtilityStrip } from "./RightPanelUtilityStrip";
 
 const actEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -65,7 +66,15 @@ describe("WorkbenchApplicationBar", () => {
     expect(container.textContent).toContain("AtrVisu");
     expect(container.textContent).toContain("Unsaved");
     expect(container.textContent).toContain("Factory");
-    await act(async () => (container.querySelector("button") as HTMLButtonElement).click());
+    const projectSession = container.querySelector(".workbench-project-session") as HTMLElement;
+    const saveCluster = projectSession.querySelector(".workbench-save-cluster") as HTMLElement;
+    const saveButton = saveCluster.querySelector('[data-command-id="project.save"]') as HTMLButtonElement;
+    expect(projectSession.getAttribute("aria-label")).toBe("Project session");
+    expect(saveCluster.querySelector(".workbench-save-state")?.textContent).toBe("Unsaved");
+    expect(container.querySelectorAll('[data-command-id="project.save"]')).toHaveLength(1);
+    expect(projectSession.querySelector(".workbench-project-context")?.textContent)
+      .toContain("Factory");
+    await act(async () => saveButton.click());
     expect(onExecute).toHaveBeenCalledWith("project.save");
     expect(container.textContent).not.toContain("Theme");
   });
@@ -96,7 +105,18 @@ describe("WorkbenchApplicationBar", () => {
 describe("WorkbenchMenuBar", () => {
   const menus: readonly CommandSurfaceMenu[] = [
     { id: "file", labelKey: "menu.file", fallbackLabel: "File", items: [item("project.save", "menu-bar", { label: "Save Project" })] },
-    { id: "edit", labelKey: "menu.edit", fallbackLabel: "Edit", items: [item("edit.undo", "menu-bar", { label: "Undo", shortcut: "Ctrl/Cmd+Z" })] },
+    {
+      id: "edit",
+      labelKey: "menu.edit",
+      fallbackLabel: "Edit",
+      items: [
+        item("edit.undo", "menu-bar", { label: "Undo", shortcut: "Ctrl/Cmd+Z" }),
+        item("edit.redo", "menu-bar", {
+          label: "Redo",
+          shortcut: "Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z"
+        })
+      ]
+    },
     { id: "view", labelKey: "menu.view", fallbackLabel: "View", items: [item("view.toggleLabels", "menu-bar", { label: "Toggle Labels", pressed: true })] },
     { id: "tools", labelKey: "menu.tools", fallbackLabel: "Tools", items: [item("collision.check", "menu-bar", { label: "Collision Check", disabled: true, disabledReason: "Unavailable." })] }
   ];
@@ -152,6 +172,20 @@ describe("WorkbenchMenuBar", () => {
     expect(onExecute).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the full Redo shortcut in a dedicated multiline-safe layout region", async () => {
+    const container = await mount(createElement(WorkbenchMenuBar, { menus, onExecute: vi.fn() }));
+    const editTrigger = container.querySelectorAll<HTMLButtonElement>(".workbench-menu-trigger")[1];
+    await act(async () => editTrigger.click());
+    const redo = container.querySelector('[data-command-id="edit.redo"]') as HTMLButtonElement;
+    const label = redo.querySelector(".workbench-menu-item-label") as HTMLElement;
+    const shortcut = redo.querySelector(".workbench-menu-item-shortcut") as HTMLElement;
+
+    expect(label.textContent).toBe("Redo");
+    expect(shortcut.textContent).toBe("Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z");
+    expect(shortcut.getAttribute("data-multiline")).toBe("true");
+    expect([...redo.children]).toEqual([label, shortcut]);
+  });
+
   it("keeps an all-disabled Edit menu discoverable without permitting activation", async () => {
     const disabledReason = "No selected object is available.";
     const allDisabledMenus: readonly CommandSurfaceMenu[] = [{
@@ -201,6 +235,37 @@ describe("WorkbenchMenuBar", () => {
 
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     expect(toggle.hasAttribute("aria-pressed")).toBe(false);
+  });
+});
+
+describe("RightPanelUtilityStrip", () => {
+  it("separates its title and actions while preserving one wired control of each kind", async () => {
+    const onUndo = vi.fn();
+    const onRedo = vi.fn();
+    const onCollapse = vi.fn();
+    const container = await mount(createElement(RightPanelUtilityStrip, {
+      canUndo: true,
+      canRedo: false,
+      onUndo,
+      onRedo,
+      onCollapse
+    }));
+    const strip = container.querySelector('[data-testid="right-panel-utility-strip"]') as HTMLElement;
+    const title = strip.querySelector(".panel-toolbar-title") as HTMLElement;
+    const actions = strip.querySelector('[data-testid="right-panel-utility-actions"]') as HTMLElement;
+    const buttons = [...actions.querySelectorAll<HTMLButtonElement>("button")];
+
+    expect(title.textContent).toBe("AtrVisu Tools");
+    expect(actions.getAttribute("aria-label")).toBe("Panel actions");
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual(["Undo", "Redo", "Collapse"]);
+    expect(buttons[0].disabled).toBe(false);
+    expect(buttons[1].disabled).toBe(true);
+    await act(async () => buttons[0].click());
+    await act(async () => buttons[1].click());
+    await act(async () => buttons[2].click());
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(onRedo).not.toHaveBeenCalled();
+    expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 });
 

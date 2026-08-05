@@ -36,11 +36,15 @@
 | Viewport lifecycle preserved | One EditorHost/canvas and stable lifecycle generation | PASS | Yes | 42-test Chromium suite |
 | Right-panel geometry preserved | Runtime panel starts below the canonical inset | PASS | Yes | Responsive E2E geometry test |
 | Responsive geometry proven | 1280x720, 1024x768, and 640x800 preserve chrome and mobile bottom-panel rules | PASS | Yes | Workbench chrome E2E tests |
-| Audit/build/unit/E2E passed | 0 vulnerabilities; scanner/build; 1056 unit; 42 E2E | PASS | Yes | Audit section 19 |
+| Menu shortcut layout corrected | Label and shortcut regions preserve the full Redo shortcut without overlap or clipping | PASS | Yes | Component structure test; Chromium geometry regression |
+| Right-panel utility layout corrected | Title and Undo/Redo/Collapse actions occupy distinct non-overlapping regions | PASS | Yes | Utility-strip component test; Chromium geometry regression |
+| Application Save placement corrected | One canonical Save control is grouped with state/context and still routes through `project.save` | PASS | Yes | Application Bar component test; project-save E2E |
+| Audit/build/unit/E2E passed | 0 vulnerabilities; scanner/build; 1058 unit; 43 E2E | PASS | Yes | Audit section 19 |
 | Corrected exact-head Quality Gate | Correction code head `e45c9efefeab430e1ed6b09ca8bddf51a3f4d6e4`; Quality Gate run `30984288422` passed dependency audit, design-token governance, build, unit, and E2E steps | PASS | Yes | PR #103 checks; audit section 19 |
-| Manual visual acceptance required | Human review of dark/light/system and chrome remains pending | PENDING | Yes | Audit section 20 |
+| Visual-correction exact-head Quality Gate | GitHub gate must pass on the new three-commit visual-correction head | PENDING | Yes | PR #103 checks |
+| Manual visual re-acceptance required | Initial round failed; corrected dark/light/system and chrome review remains pending | PENDING | Yes | Audit sections 19-20 |
 
-Decision: **READY FOR MANUAL ACCEPTANCE**. All automatic implementation gates
-passed, and independent code review accepted the corrections. Manual visual
-acceptance is still required and pending. P1-C is not complete and is not ready
-to merge until manual acceptance passes.
+Decision: **PENDING EXACT-HEAD REVIEW AND MANUAL RE-ACCEPTANCE**. The bounded
+visual corrections and local automatic gates pass. The initial manual round
+remains failed until the new head passes GitHub Quality Gate, independent
+review, and manual visual re-acceptance. P1-C is incomplete and cannot merge.
