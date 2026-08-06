@@ -1,9 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { WorkbenchUiPreferences } from "../../platform/contracts";
 import type { AtrVisuProject } from "../../types/project";
 
 export const ATRVISU_DB_NAME = "atrvisu-db";
-export const ATRVISU_DB_VERSION = 1;
+export const ATRVISU_DB_VERSION = 2;
 export const PROJECTS_STORE_NAME = "projects";
+export const UI_PREFERENCES_STORE_NAME = "uiPreferences";
+export const UI_PREFERENCES_RECORD_KEY = "workbench";
 
 export interface AtrVisuDatabaseSchema extends DBSchema {
   projects: {
@@ -14,6 +17,10 @@ export interface AtrVisuDatabaseSchema extends DBSchema {
       projectName: string;
       updatedAt: string;
     };
+  };
+  uiPreferences: {
+    key: string;
+    value: WorkbenchUiPreferences;
   };
 }
 
@@ -31,6 +38,9 @@ export const openAtrVisuDatabase = () => {
           projectsStore.createIndex("updatedAt", "updatedAt");
           projectsStore.createIndex("customerName", "customerName");
           projectsStore.createIndex("projectName", "projectName");
+        }
+        if (!database.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)) {
+          database.createObjectStore(UI_PREFERENCES_STORE_NAME);
         }
       }
     }).then((database) => {
