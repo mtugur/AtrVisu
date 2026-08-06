@@ -32,6 +32,7 @@ import {
   type NumericFieldRule
 } from "../utils/numericFieldRules";
 import { NumericInput } from "./common/NumericInput";
+import { TECHNICAL_CSS_COLORS } from "../designSystem";
 
 type LibraryManagerProps = {
   libraries: LoadedMachineLibrary[];
@@ -319,7 +320,7 @@ const toEditorState = (
     widthMm: dimensionsMm ? String(dimensionsMm.widthMm) : "1000",
     depthMm: dimensionsMm ? String(dimensionsMm.depthMm) : "1000",
     heightMm: dimensionsMm ? String(dimensionsMm.heightMm) : "1000",
-    defaultColor: item?.defaultColor ?? "#7fc8ff",
+    defaultColor: item?.defaultColor ?? TECHNICAL_CSS_COLORS.libraryDefault,
     canConvey: item?.capabilities?.canConvey ?? false,
     canPalletize: item?.capabilities?.canPalletize ?? false,
     canWrap: item?.capabilities?.canWrap ?? false,
@@ -1621,7 +1622,7 @@ export function LibraryManager({
       width: mmToMeters(widthMm),
       depth: mmToMeters(depthMm),
       height: mmToMeters(heightMm),
-      defaultColor: itemEditor.defaultColor || "#7fc8ff",
+      defaultColor: itemEditor.defaultColor || TECHNICAL_CSS_COLORS.libraryDefault,
       modelPath: visualModelPath || null,
       visualModel: {
         modelPath: visualModelPath || null,

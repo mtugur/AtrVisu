@@ -6,6 +6,7 @@ AtrVisu has an automated quality gate for pull requests and pushes to `main`.
 
 ```text
 npm.cmd audit
+npm.cmd run check:design-tokens
 npm.cmd run build
 npm.cmd run test
 npm.cmd run test:e2e
@@ -18,6 +19,7 @@ In environments where `npm.cmd` is not on `PATH`, use the installed npm executab
 The v0.1 gate covers:
 
 - Production and development dependency security through `npm audit`.
+- Semantic UI and technical rendering color governance through the dependency-free design-token scanner.
 - TypeScript and Vite production build.
 - Unit conversion helpers.
 - Coordinate conversion helpers.
@@ -50,10 +52,12 @@ It runs on `pull_request` and pushes to `main`:
 
 1. `npm ci`
 2. `npm audit --audit-level=low`
-3. `npm run build`
-4. `npm run test`
-5. `npx playwright install --with-deps chromium`
-6. `npm run test:e2e`
+3. `npm run check:design-tokens`
+4. `npm run build`
+5. `npm run test`
+6. `npx playwright install --with-deps chromium`
+7. `npm run test:e2e`
 
-Dependency audit findings block the pull request. Unsafe PRs should also be
-blocked when build, unit tests, or the smoke test fail.
+Dependency audit findings and unauthorized raw presentation colors block the
+pull request. Unsafe PRs should also be blocked when build, unit tests, or the
+smoke test fail.

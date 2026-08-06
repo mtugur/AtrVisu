@@ -1,0 +1,111 @@
+:root {
+  /* Spacing */
+  --av-space-0: 0;
+  --av-space-1: 4px;
+  --av-space-2: 8px;
+  --av-space-3: 12px;
+  --av-space-4: 16px;
+  --av-space-5: 20px;
+  --av-space-6: 24px;
+  --av-space-8: 32px;
+  --av-space-10: 40px;
+  --av-spacing-2xs: var(--av-space-1);
+  --av-spacing-xs: var(--av-space-2);
+  --av-spacing-sm: var(--av-space-3);
+  --av-spacing-md: var(--av-space-4);
+  --av-spacing-lg: var(--av-space-5);
+  --av-spacing-xl: var(--av-space-6);
+  --av-spacing-2xl: var(--av-space-8);
+
+  /* Typography */
+  --av-font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --av-font-family-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --av-font-size-xs: 0.72rem;
+  --av-font-size-sm: 0.78rem;
+  --av-font-size-md: 0.86rem;
+  --av-font-size-lg: 1rem;
+  --av-font-size-xl: 1.2rem;
+  --av-font-weight-normal: 400;
+  --av-font-weight-regular: 400;
+  --av-font-weight-medium: 600;
+  --av-font-weight-semibold: 700;
+  --av-font-weight-strong: 800;
+  --av-font-weight-bold: var(--av-font-weight-strong);
+  --av-line-height-compact: var(--av-line-height-tight);
+  --av-line-height-tight: 1.2;
+  --av-line-height-normal: 1.45;
+
+  /* Control and icon sizes */
+  --av-control-height-sm: 28px;
+  --av-control-height-xs: 24px;
+  --av-control-height-md: 34px;
+  --av-control-height-lg: 40px;
+  --av-control-min-pointer-target: 32px;
+  --av-control-radius-sm: 4px;
+  --av-control-radius-md: 6px;
+  --av-control-radius-lg: 8px;
+  --av-icon-size-sm: 14px;
+  --av-icon-size-md: 18px;
+  --av-icon-size-lg: 22px;
+
+  /* Shell elevation and z-index */
+  --av-elevation-panel: 0 12px 32px var(--av-shadow-panel);
+  --av-elevation-modal: 0 22px 70px var(--av-shadow-modal);
+  --av-z-viewport: 0;
+  --av-z-chrome: 10;
+  --av-z-dock: 20;
+  --av-z-panel: var(--av-z-dock);
+  --av-z-command-surface: var(--av-z-chrome);
+  --av-z-popover: 40;
+  --av-z-overlay: 80;
+  --av-z-modal: 100;
+  --av-z-diagnostics: 120;
+
+  --av-workbench-application-bar-height: 36px;
+  --av-workbench-menu-bar-height: 32px;
+  --av-workbench-command-bar-height: 44px;
+  --av-workbench-top-inset: calc(
+    var(--av-workbench-application-bar-height)
+    + var(--av-workbench-menu-bar-height)
+    + var(--av-workbench-command-bar-height)
+  );
+}
+
+.av-design-system-root {
+  width: 100%;
+  height: 100%;
+  color: var(--av-text-primary);
+  background: var(--av-surface-canvas);
+  font-family: var(--av-font-family-sans);
+  font-size: var(--av-font-size-md);
+  line-height: var(--av-line-height-normal);
+}
+
+.av-design-system-root[data-av-density="comfortable"] {
+  --av-density-control-height: var(--av-control-height-md);
+  --av-density-panel-gap: var(--av-space-3);
+  --av-density-panel-padding: var(--av-space-4);
+  --av-density-horizontal-padding: var(--av-space-3);
+  --av-density-vertical-padding: var(--av-space-2);
+  --av-density-gap: var(--av-space-2);
+  --av-density-row-height: var(--av-control-height-md);
+}
+
+.av-design-system-root[data-av-density="compact"] {
+  --av-density-control-height: var(--av-control-height-sm);
+  --av-density-panel-gap: var(--av-space-2);
+  --av-density-panel-padding: var(--av-space-3);
+  --av-density-horizontal-padding: var(--av-space-2);
+  --av-density-vertical-padding: var(--av-space-1);
+  --av-density-gap: var(--av-space-1);
+  --av-density-row-height: var(--av-control-height-sm);
+}
+
+@media (forced-colors: active) {
+  .av-design-system-root {
+    --av-focus-ring: Highlight;
+    --av-border-interactive: ButtonText;
+    --av-border-accent: Highlight;
+  }
+}

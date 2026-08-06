@@ -1,5 +1,8 @@
-import { createElement } from "react";
+import { createElement, type CSSProperties } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+// Node is available to Vitest; the app intentionally does not depend on @types/node.
+// @ts-expect-error The test-only built-in import is outside the browser type surface.
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AppShell } from "./AppShell";
 
@@ -78,6 +81,31 @@ describe("AppShell render contract", () => {
     );
 
     expect(markup).toContain('class="scene-viewport-host"');
+    expect(markup).toContain('style="--av-shell-top-inset:0px"');
     expect(markup).toContain('style="right:min(420px, calc(100vw - 28px))"');
+  });
+
+  it("owns one shell inset property without injecting right-panel geometry", () => {
+    const markup = renderToStaticMarkup(createElement(AppShell, {
+      viewport: createSlot("viewport-slot", "viewport-slot"),
+      shellTopInset: "var(--canonical-inset)",
+      rightPanel: createElement("aside", {
+        style: { "--panel-width": "360px" } as CSSProperties
+      }, "right-panel")
+    }));
+    const rightPanelMarkup = markup.match(/<aside[^>]*>right-panel<\/aside>/)?.[0] ?? "";
+
+    expect(markup).toContain('style="--av-shell-top-inset:var(--canonical-inset)"');
+    expect(rightPanelMarkup).toContain("--panel-width:360px");
+    expect(rightPanelMarkup).not.toMatch(/(?:^|;)top:/);
+    expect(rightPanelMarkup).not.toMatch(/(?:^|;)height:/);
+  });
+
+  it("keeps desktop inset geometry in CSS and restores the mobile bottom sheet", () => {
+    const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+    expect(styles).toMatch(/\.scene-viewport-host\s*{[^}]*top:\s*var\(--av-shell-top-inset\)/s);
+    expect(styles).toMatch(/\.machine-panel\s*{[^}]*top:\s*var\(--av-shell-top-inset\)[^}]*height:\s*calc\(100% - var\(--av-shell-top-inset\)\)/s);
+    expect(styles).toMatch(/@media \(max-width: 720px\)\s*{[\s\S]*?\.machine-panel\s*{[^}]*top:\s*auto;[^}]*bottom:\s*0;[^}]*height:\s*min\(44vh, 360px\)/);
   });
 });

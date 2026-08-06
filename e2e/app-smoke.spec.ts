@@ -31,6 +31,19 @@ const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
 };
 
+const getCommandBarCommand = (page: Page, commandId: string) =>
+  page.getByTestId("workbench-command-bar").locator(`[data-command-id="${commandId}"]`);
+
+const openWorkbenchMenu = async (page: Page, menuLabel: string) => {
+  const trigger = page.getByTestId("workbench-menu-bar").getByRole("menuitem", {
+    name: menuLabel,
+    exact: true
+  });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  return page.getByRole("menu", { name: menuLabel, exact: true });
+};
+
 type RuntimePanelOperation = "open" | "close" | "toggle";
 
 const invokeRuntimePanel = async (
@@ -108,16 +121,14 @@ const getRuntimeCommandExecution = async (page: Page, commandId: string) =>
     return bridge.getCommandExecution(id);
   }, commandId);
 
-const executeProjectRuntimeCommand = async (
-  page: Page,
-  commandId: "project.save" | "project.exportJson"
-) => page.evaluate((id) => {
-  const bridge = window.__atrvisuProjectCommands;
-  if (!bridge) {
-    throw new Error("AtrVisu project runtime command E2E bridge is unavailable.");
-  }
-  return bridge.execute(id);
-}, commandId);
+const getRuntimeCommandExecutionSnapshot = async (page: Page) =>
+  page.evaluate(() => {
+    const bridge = window.__atrvisuRuntimeFeatureAccess;
+    if (!bridge) {
+      throw new Error("AtrVisu runtime feature access E2E bridge is unavailable.");
+    }
+    return bridge.listCommandExecutions();
+  });
 
 const getActiveProjectRuntimeContext = async (page: Page) => page.evaluate(() => {
   const bridge = window.__atrvisuProjectCommands;
@@ -177,6 +188,22 @@ const expectOneRuntimeCommandExecution = async (
     observation.token
   );
   return { ...completion, token: observation.token };
+};
+
+const expectRuntimeCommandExecutionOnce = async (
+  page: Page,
+  commandId: string,
+  action: () => Promise<unknown>
+) => {
+  const before = await getRuntimeCommandExecution(page, commandId);
+  await action();
+  await expect.poll(async () =>
+    (await getRuntimeCommandExecution(page, commandId)).attemptCount
+  ).toBe(before.attemptCount + 1);
+  const after = await getRuntimeCommandExecution(page, commandId);
+  expect(after.executedCount).toBe(before.executedCount + 1);
+  expect(after.lastResult).toMatchObject({ handled: true, status: "executed" });
+  return { before, after };
 };
 
 const expectCancelledRuntimeCommandExecution = async (
@@ -545,11 +572,11 @@ test("runtime feature access complete gate is bound to observed visible command 
   );
   await waitForMachineDiagnostics(page, 3);
   await observe("edit.undo", () =>
-    page.getByRole("button", { name: "Undo", exact: true }).click()
+    getCommandBarCommand(page, "edit.undo").click()
   );
   await waitForMachineDiagnostics(page, 4);
   await observe("edit.redo", () =>
-    page.getByRole("button", { name: "Redo", exact: true }).click()
+    getCommandBarCommand(page, "edit.redo").click()
   );
   await waitForMachineDiagnostics(page, 3);
 
@@ -949,6 +976,365 @@ test("app shell zone anchors are rendered without red console errors", async ({ 
   expect(errors).toEqual([]);
 });
 
+test("workbench chrome keyboard and responsive geometry preserve the editor lifecycle", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
+
+  const applicationBar = page.getByTestId("workbench-application-bar");
+  const menuBar = page.getByTestId("workbench-menu-bar");
+  const commandBar = page.getByTestId("workbench-command-bar");
+  await expect(applicationBar).toBeVisible();
+  await expect(menuBar).toBeVisible();
+  await expect(commandBar).toBeVisible();
+  await expect(page.locator('[data-workbench-region="editor-host"]')).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await expect(page.getByTestId("right-panel")).toHaveCount(1);
+
+  const assertGeometry = async (width: number, height: number) => {
+    await page.setViewportSize({ width, height });
+    await expect.poll(async () => (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? 0)
+      .toBeGreaterThan(0);
+    const geometry = await page.evaluate(() => {
+      const rect = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing geometry element: ${selector}`);
+        const box = element.getBoundingClientRect();
+        return { top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+      };
+      return {
+        application: rect('[data-testid="workbench-application-bar"]'),
+        menu: rect('[data-testid="workbench-menu-bar"]'),
+        command: rect('[data-testid="workbench-command-bar"]'),
+        viewport: rect('[data-app-shell-zone="scene-viewport"]'),
+        panel: rect('[data-testid="right-panel"]'),
+        noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth
+      };
+    });
+    expect(geometry.application.bottom).toBeLessThanOrEqual(geometry.menu.top + 1);
+    expect(geometry.menu.bottom).toBeLessThanOrEqual(geometry.command.top + 1);
+    expect(geometry.command.bottom).toBeLessThanOrEqual(geometry.viewport.top + 1);
+    expect(geometry.command.bottom).toBeLessThanOrEqual(geometry.panel.top + 1);
+    expect(geometry.viewport.width).toBeGreaterThan(0);
+    expect(geometry.viewport.height).toBeGreaterThan(0);
+    expect(geometry.noHorizontalOverflow).toBe(true);
+  };
+
+  await assertGeometry(1280, 720);
+  await assertGeometry(1024, 768);
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+
+  const fileTrigger = menuBar.getByRole("menuitem", { name: "File", exact: true });
+  await fileTrigger.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu", { name: "File", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(fileTrigger).toBeFocused();
+
+  const undoBefore = await getRuntimeCommandExecution(page, "edit.undo");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ArrowRight");
+  const editTrigger = menuBar.getByRole("menuitem", { name: "Edit", exact: true });
+  await expect(editTrigger).toHaveAttribute("aria-expanded", "true");
+  const editMenu = page.getByRole("menu", { name: "Edit", exact: true });
+  await expect(editMenu).toBeVisible();
+  await expect(editMenu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("Control+z");
+  expect((await getRuntimeCommandExecution(page, "edit.undo")).attemptCount)
+    .toBe(undoBefore.attemptCount);
+  await page.keyboard.press("Escape");
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("visual acceptance chrome remains readable and lifecycle-stable", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
+
+  const editMenu = await openWorkbenchMenu(page, "Edit");
+  const redo = editMenu.locator('[data-command-id="edit.redo"]');
+  const redoLabel = redo.locator(".workbench-menu-item-label");
+  const redoShortcut = redo.locator(".workbench-menu-item-shortcut");
+  await expect(redoLabel).toHaveText("Redo");
+  await expect(redoShortcut).toHaveText("Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z");
+  await expect(redoShortcut).toHaveAttribute("data-multiline", "true");
+  const menuGeometry = await redo.evaluate((element) => {
+    const row = element.getBoundingClientRect();
+    const label = element.querySelector(".workbench-menu-item-label")?.getBoundingClientRect();
+    const shortcut = element.querySelector(".workbench-menu-item-shortcut")?.getBoundingClientRect();
+    if (!label || !shortcut) throw new Error("Redo layout regions are missing.");
+    return {
+      row: { left: row.left, right: row.right, top: row.top, bottom: row.bottom },
+      label: { left: label.left, right: label.right, top: label.top, bottom: label.bottom },
+      shortcut: {
+        left: shortcut.left,
+        right: shortcut.right,
+        top: shortcut.top,
+        bottom: shortcut.bottom,
+        scrollWidth: (element.querySelector(".workbench-menu-item-shortcut") as HTMLElement).scrollWidth,
+        clientWidth: (element.querySelector(".workbench-menu-item-shortcut") as HTMLElement).clientWidth
+      }
+    };
+  });
+  expect(menuGeometry.label.right).toBeLessThanOrEqual(menuGeometry.shortcut.left + 1);
+  expect(menuGeometry.label.left).toBeGreaterThanOrEqual(menuGeometry.row.left);
+  expect(menuGeometry.shortcut.right).toBeLessThanOrEqual(menuGeometry.row.right);
+  expect(menuGeometry.label.top).toBeGreaterThanOrEqual(menuGeometry.row.top);
+  expect(menuGeometry.shortcut.bottom).toBeLessThanOrEqual(menuGeometry.row.bottom + 1);
+  expect(menuGeometry.shortcut.scrollWidth).toBeLessThanOrEqual(menuGeometry.shortcut.clientWidth + 1);
+  await page.keyboard.press("Escape");
+
+  const utilityStrip = page.getByTestId("right-panel-utility-strip");
+  const utilityActions = page.getByTestId("right-panel-utility-actions");
+  await expect(utilityStrip.getByText("AtrVisu Tools", { exact: true })).toBeVisible();
+  await expect(utilityActions.getByRole("button", { name: "Undo", exact: true })).toHaveCount(1);
+  await expect(utilityActions.getByRole("button", { name: "Redo", exact: true })).toHaveCount(1);
+  await expect(utilityActions.getByRole("button", { name: "Collapse", exact: true })).toHaveCount(1);
+  const panelGeometry = await utilityStrip.evaluate((element) => {
+    const rect = (selector: string) => {
+      const target = element.querySelector(selector) as HTMLElement | null;
+      if (!target) throw new Error(`Missing panel utility region: ${selector}`);
+      const box = target.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        top: box.top,
+        bottom: box.bottom,
+        scrollWidth: target.scrollWidth,
+        clientWidth: target.clientWidth
+      };
+    };
+    return {
+      title: rect(".panel-toolbar-title"),
+      actions: rect(".panel-toolbar-actions"),
+      buttons: [...element.querySelectorAll<HTMLButtonElement>(".panel-toolbar-actions button")]
+        .map((button) => {
+          const box = button.getBoundingClientRect();
+          return { left: box.left, right: box.right, top: box.top, bottom: box.bottom };
+        })
+    };
+  });
+  expect(panelGeometry.title.bottom).toBeLessThanOrEqual(panelGeometry.actions.top + 1);
+  expect(panelGeometry.title.scrollWidth).toBeLessThanOrEqual(panelGeometry.title.clientWidth + 1);
+  expect(panelGeometry.buttons).toHaveLength(3);
+  for (let index = 1; index < panelGeometry.buttons.length; index += 1) {
+    expect(panelGeometry.buttons[index - 1].right)
+      .toBeLessThanOrEqual(panelGeometry.buttons[index].left + 1);
+  }
+
+  const applicationBar = page.getByTestId("workbench-application-bar");
+  const save = applicationBar.locator('[data-command-id="project.save"]');
+  await expect(save).toBeVisible();
+  await expect(applicationBar.locator('[data-command-id="project.save"]')).toHaveCount(1);
+  await expect(applicationBar.locator(".workbench-save-state")).toBeVisible();
+  await expect(applicationBar.locator(".workbench-project-context")).toBeVisible();
+  const applicationGeometry = await applicationBar.evaluate((element) => {
+    const box = (selector: string) => {
+      const target = element.querySelector(selector);
+      if (!target) throw new Error(`Missing application-bar region: ${selector}`);
+      const rect = target.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+    };
+    return {
+      state: box(".workbench-save-state"),
+      save: box(".workbench-save-command"),
+      context: box(".workbench-project-context")
+    };
+  });
+  expect(applicationGeometry.state.right).toBeLessThanOrEqual(applicationGeometry.save.left + 1);
+  expect(applicationGeometry.save.right).toBeLessThanOrEqual(applicationGeometry.context.left + 1);
+
+  const after = await waitForRuntimeViewport(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("command bar arrow navigation is isolated from editor nudge state", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+
+  const [machineId] = await getMachineIds(page);
+  const beforePosition = (await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  ))[machineId];
+  const before = await getRuntimeViewportSnapshot(page);
+  const beforeExecutions = await getRuntimeCommandExecutionSnapshot(page);
+  const commandBar = page.getByTestId("workbench-command-bar");
+  const firstButton = commandBar.locator("button:not(:disabled)").first();
+  await firstButton.focus();
+  const firstCommandId = await firstButton.getAttribute("data-command-id");
+
+  await page.keyboard.press("ArrowRight");
+  const secondCommandId = await page.evaluate(() =>
+    (document.activeElement as HTMLElement | null)?.dataset.commandId ?? null
+  );
+  expect(secondCommandId).not.toBe(firstCommandId);
+  await page.keyboard.press("ArrowLeft");
+  await expect(firstButton).toBeFocused();
+
+  const after = await getRuntimeViewportSnapshot(page);
+  const afterPosition = (await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  ))[machineId];
+  expect(after.invariants.selectionIds).toEqual(before.invariants.selectionIds);
+  expect(after.invariants.primarySelectionId).toBe(before.invariants.primarySelectionId);
+  expect(afterPosition).toEqual(beforePosition);
+  expect(after.invariants.undoDepth).toBe(before.invariants.undoDepth);
+  expect(after.invariants.redoDepth).toBe(before.invariants.redoDepth);
+  expect(after.invariants.projectDirty).toBe(before.invariants.projectDirty);
+  expect(await getRuntimeCommandExecutionSnapshot(page)).toEqual(beforeExecutions);
+  expect(errors).toEqual([]);
+});
+
+test("640x800 workbench preserves chrome and mobile bottom-panel geometry", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 640, height: 800 });
+  await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
+  const geometry = await page.evaluate(() => {
+    const rect = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error(`Missing geometry element: ${selector}`);
+      const box = element.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom, width: box.width, height: box.height };
+    };
+    return {
+      application: rect('[data-testid="workbench-application-bar"]'),
+      menu: rect('[data-testid="workbench-menu-bar"]'),
+      command: rect('[data-testid="workbench-command-bar"]'),
+      viewport: rect('[data-app-shell-zone="scene-viewport"]'),
+      panel: rect('[data-testid="right-panel"]'),
+      viewportHeight: window.innerHeight,
+      noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    };
+  });
+
+  expect(geometry.application.bottom).toBeLessThanOrEqual(geometry.menu.top + 1);
+  expect(geometry.menu.bottom).toBeLessThanOrEqual(geometry.command.top + 1);
+  expect(geometry.command.bottom).toBeLessThanOrEqual(geometry.viewport.top + 1);
+  expect(geometry.viewport.width).toBeGreaterThan(0);
+  expect(geometry.viewport.height).toBeGreaterThan(0);
+  expect(Math.abs(geometry.panel.bottom - geometry.viewportHeight)).toBeLessThanOrEqual(1);
+  expect(geometry.panel.top).not.toBeCloseTo(geometry.command.bottom, 0);
+  expect(geometry.panel.height).toBeLessThanOrEqual(361);
+  expect(geometry.panel.height).toBeCloseTo(Math.min(800 * 0.44, 360), 0);
+  expect(geometry.panel.height).toBeLessThan(geometry.viewport.height);
+  expect(geometry.noHorizontalOverflow).toBe(true);
+
+  const rightPanel = page.getByTestId("right-panel");
+  await rightPanel.getByRole("button", { name: "Collapse", exact: true }).click();
+  await expect(rightPanel).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open right panel" })).toBeVisible();
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await page.getByRole("button", { name: "Open right panel" }).click();
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  const after = await waitForRuntimeViewport(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("dark and light modal backdrops resolve from the semantic scrim", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await page.locator(".av-design-system-root").evaluate((element) => {
+    element.setAttribute("data-av-theme", "light");
+  });
+  const toolsMenu = await openWorkbenchMenu(page, "Tools");
+  await toolsMenu.locator('[data-command-id="library.manager"]').click();
+  const backdrop = page.locator(".manager-backdrop");
+  const dialog = page.getByTestId("library-manager-modal");
+  await expect(dialog).toBeVisible();
+  const lightScrim = await backdrop.evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    token: getComputedStyle(element).getPropertyValue("--av-surface-scrim").trim()
+  }));
+  expect(lightScrim).toEqual({
+    background: "rgba(18, 27, 24, 0.42)",
+    token: "rgba(18, 27, 24, 0.42)"
+  });
+  expect(await dialog.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(255, 255, 255)");
+  expect(await dialog.evaluate((element) => getComputedStyle(element).color))
+    .toBe("rgb(23, 33, 30)");
+
+  await page.locator(".av-design-system-root").evaluate((element) => {
+    element.setAttribute("data-av-theme", "dark");
+  });
+  const darkScrim = await backdrop.evaluate((element) => ({
+    background: getComputedStyle(element).backgroundColor,
+    token: getComputedStyle(element).getPropertyValue("--av-surface-scrim").trim()
+  }));
+  expect(darkScrim).toEqual({
+    background: "rgba(0, 0, 0, 0.7)",
+    token: "rgba(0, 0, 0, 0.7)"
+  });
+  expect(await dialog.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(17, 24, 26)");
+  expect(await dialog.evaluate((element) => getComputedStyle(element).color))
+    .toBe("rgb(244, 247, 242)");
+  await page.getByTestId("close-library-manager-header").click();
+  await expect(dialog).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("command bar toggles and tool commands use live runtime surfaces", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const before = await waitForRuntimeViewport(page);
+
+  for (const commandId of [
+    "view.toggleLabels",
+    "view.showMeasurements",
+    "view.toggleConnectionPoints"
+  ]) {
+    const button = getCommandBarCommand(page, commandId);
+    const pressedBefore = await button.getAttribute("aria-pressed");
+    await expectOneRuntimeCommandExecution(page, commandId, () => button.click());
+    await expect(button).toHaveAttribute("aria-pressed", pressedBefore === "true" ? "false" : "true");
+  }
+
+  await expectRuntimeCommandExecutionOnce(page, "view.viewpoints", () =>
+    getCommandBarCommand(page, "view.viewpoints").click()
+  );
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.viewpoints"))?.open).toBe(true);
+
+  let toolsMenu = await openWorkbenchMenu(page, "Tools");
+  await expectOneRuntimeCommandExecution(page, "library.manager", () =>
+    toolsMenu.locator('[data-command-id="library.manager"]').click()
+  );
+  await expect(page.getByTestId("library-manager-modal")).toBeVisible();
+  await page.getByTestId("close-library-manager-header").click();
+  await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
+
+  toolsMenu = await openWorkbenchMenu(page, "Tools");
+  await expectOneRuntimeCommandExecution(page, "performance.benchmark", () =>
+    toolsMenu.locator('[data-command-id="performance.benchmark"]').click()
+  );
+  await expect(page.getByTestId("performance-benchmark-modal")).toBeVisible();
+  await page.getByTestId("close-performance-benchmark").click();
+  await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(errors).toEqual([]);
+});
+
 test("runtime panel registry opens and closes the actual Machine Library section", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -1137,9 +1523,12 @@ test("orthographic framing survives panel and browser aspect-ratio changes after
   expect(reopened.invariants).toEqual(before.invariants);
 
   await page.setViewportSize({ width: 1100, height: 850 });
-  await expect.poll(async () =>
-    (await getRuntimeViewportSnapshot(page)).viewport?.cssHeight
-  ).toBe(850);
+  await expect.poll(async () => {
+    const runtimeHeight = (await getRuntimeViewportSnapshot(page)).viewport?.cssHeight;
+    const renderedHeight = await page.locator('[data-app-shell-zone="scene-viewport"]')
+      .evaluate((element) => Math.round(element.getBoundingClientRect().height));
+    return runtimeHeight === renderedHeight;
+  }).toBe(true);
   await expect.poll(async () =>
     (await getRuntimeViewportSnapshot(page)).viewport?.lastResizeReason
   ).toBe("window");
@@ -1202,9 +1591,11 @@ test("browser resize reconciles viewport backing size without scene reconstructi
   await page.setViewportSize({ width: 1180, height: 760 });
 
   await expect.poll(async () => {
-    const viewport = (await getRuntimeViewportSnapshot(page)).viewport;
-    return viewport?.cssHeight;
-  }).toBe(760);
+    const runtimeHeight = (await getRuntimeViewportSnapshot(page)).viewport?.cssHeight;
+    const renderedHeight = await page.locator('[data-app-shell-zone="scene-viewport"]')
+      .evaluate((element) => Math.round(element.getBoundingClientRect().height));
+    return runtimeHeight === renderedHeight;
+  }).toBe(true);
   await expect.poll(async () => {
     const viewport = (await getRuntimeViewportSnapshot(page)).viewport;
     return Boolean(
@@ -1515,7 +1906,7 @@ test("core editor visible controls execute canonical commands once", async ({ pa
   }
   const machineProperties = page.getByLabel("Selected machine properties");
   await expectOneRuntimeCommandExecution(page, "edit.duplicateSelected", () =>
-    machineProperties.getByRole("button", { name: "Duplicate Selected" }).click()
+    getCommandBarCommand(page, "edit.duplicateSelected").click()
   );
   await waitForMachineDiagnostics(page, 2);
 
@@ -1523,20 +1914,17 @@ test("core editor visible controls execute canonical commands once", async ({ pa
     page,
     "data-machine-plan-positions"
   );
-  const undoEnabledBeforeCancellation = await page.getByRole(
-    "button",
-    { name: "Undo", exact: true }
-  ).isEnabled();
+  const undoEnabledBeforeCancellation = await getCommandBarCommand(page, "edit.undo").isEnabled();
   page.once("dialog", (dialog) => dialog.dismiss());
   await expectCancelledRuntimeCommandExecution(page, "edit.deleteSelected", () =>
-    page.getByRole("button", { name: "Delete Selected" }).first().click()
+    getCommandBarCommand(page, "edit.deleteSelected").click()
   );
   expect(await readCanvasRecord<PlanPosition>(
     page,
     "data-machine-plan-positions"
   )).toEqual(machinesBeforeCancellation);
   await expect(machineProperties).toBeVisible();
-  expect(await page.getByRole("button", { name: "Undo", exact: true }).isEnabled())
+  expect(await getCommandBarCommand(page, "edit.undo").isEnabled())
     .toBe(undoEnabledBeforeCancellation);
 
   const selectedMachineId = (await getMachineIds(page)).at(-1);
@@ -1556,16 +1944,16 @@ test("core editor visible controls execute canonical commands once", async ({ pa
 
   page.once("dialog", (dialog) => dialog.accept());
   await expectOneRuntimeCommandExecution(page, "edit.deleteSelected", () =>
-    page.getByRole("button", { name: "Delete Selected" }).first().click()
+    getCommandBarCommand(page, "edit.deleteSelected").click()
   );
   await waitForMachineDiagnostics(page, 1);
 
   await expectOneRuntimeCommandExecution(page, "edit.undo", () =>
-    page.getByRole("button", { name: "Undo", exact: true }).click()
+    getCommandBarCommand(page, "edit.undo").click()
   );
   await waitForMachineDiagnostics(page, 2);
   await expectOneRuntimeCommandExecution(page, "edit.redo", () =>
-    page.getByRole("button", { name: "Redo", exact: true }).click()
+    getCommandBarCommand(page, "edit.redo").click()
   );
   await waitForMachineDiagnostics(page, 1);
 
@@ -1646,7 +2034,8 @@ test("locked member blocks atomic multi-selection movement without red console e
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
-  const layersSection = page.getByRole("button", { name: /Layers/i });
+  const layersSection = page.getByTestId("right-panel")
+    .getByRole("button", { name: "Layers", exact: true });
   if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
     await layersSection.click();
   }
@@ -1840,7 +2229,8 @@ test("scene member click selects and rigidly moves the complete assembly", async
 test("locked assembly member blocks pointer drag and keyboard nudge atomically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
-  const layersSection = page.getByRole("button", { name: /Layers/i });
+  const layersSection = page.getByTestId("right-panel")
+    .getByRole("button", { name: "Layers", exact: true });
   if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
     await layersSection.click();
   }
@@ -1981,10 +2371,11 @@ test("project save clears a real dirty scene and updates its active revision whi
       await dialog.accept(promptCount++ === 0 ? "R01" : "Saved with modal closed");
     }
   });
-  await expect(executeProjectRuntimeCommand(page, "project.save")).resolves.toMatchObject({
-    handled: true,
-    status: "executed"
-  });
+  await expectRuntimeCommandExecutionOnce(page, "project.save", () =>
+    page.getByTestId("workbench-application-bar")
+      .locator('[data-command-id="project.save"]')
+      .click()
+  );
   await expect.poll(() => getActiveProjectRuntimeContext(page)).toMatchObject({
     projectId: cleanContext.projectId,
     layoutId: cleanContext.layoutId,
@@ -1997,11 +2388,13 @@ test("project save clears a real dirty scene and updates its active revision whi
   await expect(page.getByRole("button", { name: /Layout-1 2 revisions/ })).toBeVisible();
   await page.getByTestId("close-project-manager").click();
 
-  const [download, exportResult] = await Promise.all([
+  const fileMenu = await openWorkbenchMenu(page, "File");
+  const [download] = await Promise.all([
     page.waitForEvent("download"),
-    executeProjectRuntimeCommand(page, "project.exportJson")
+    expectRuntimeCommandExecutionOnce(page, "project.exportJson", () =>
+      fileMenu.locator('[data-command-id="project.exportJson"]').click()
+    )
   ]);
-  expect(exportResult).toMatchObject({ handled: true, status: "executed" });
   expect(download.suggestedFilename()).toBe("Closed-Command-Project.project.json");
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   await expect(page.locator("canvas")).toHaveCount(1);
@@ -2054,12 +2447,32 @@ test("persistent project import input survives Project Manager close without sce
   const activeContextBeforeImport = await getActiveProjectRuntimeContext(page);
   const before = await getRuntimeViewportSnapshot(page);
 
-  const chooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Import Project JSON" }).click();
-  const chooser = await chooserPromise;
-  await chooser.setFiles(downloadPath ?? "");
+  await page.getByTestId("close-project-manager").click();
+  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
 
-  await expect(page.getByText("Project imported.")).toBeVisible();
+  const importExecutionBeforeCancel = await getRuntimeCommandExecution(
+    page,
+    "project.importJson"
+  );
+  let fileMenu = await openWorkbenchMenu(page, "File");
+  const cancelledChooserPromise = page.waitForEvent("filechooser");
+  await fileMenu.locator('[data-command-id="project.importJson"]').click();
+  const cancelledChooser = await cancelledChooserPromise;
+  await cancelledChooser.setFiles([]);
+  await expect.poll(async () =>
+    (await getRuntimeCommandExecution(page, "project.importJson")).attemptCount
+  ).toBe(importExecutionBeforeCancel.attemptCount);
+  await expect(page.getByTestId("import-project-file")).toHaveValue("");
+
+  fileMenu = await openWorkbenchMenu(page, "File");
+  const chooserPromise = page.waitForEvent("filechooser");
+  await fileMenu.locator('[data-command-id="project.importJson"]').click();
+  const chooser = await chooserPromise;
+  await expectRuntimeCommandExecutionOnce(page, "project.importJson", () =>
+    chooser.setFiles(downloadPath ?? "")
+  );
+
+  await page.getByTestId("open-project-manager").click();
   await expect(page.getByTestId("project-manager-project-list")).toContainText("Persistent Import Source Imported");
   await expect(page.getByTestId("import-project-file")).toHaveCount(1);
   await expect(page.getByTestId("import-project-file")).toHaveValue("");
@@ -2125,7 +2538,8 @@ test("orthographic viewpoint framing can be captured, updated, and applied", asy
     (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent?.verticalWorldSpan
   ).toBe(14);
 
-  const viewpointsSection = page.getByRole("button", { name: /Viewpoints/i });
+  const viewpointsSection = page.getByTestId("right-panel")
+    .getByRole("button", { name: "Viewpoints", exact: true });
   if ((await viewpointsSection.getAttribute("aria-expanded")) !== "true") {
     await viewpointsSection.click();
   }
@@ -2187,7 +2601,8 @@ test("layers can be created, assigned, hidden, and shown without red console err
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
-  const layersSection = page.getByRole("button", { name: /Layers/i });
+  const layersSection = page.getByTestId("right-panel")
+    .getByRole("button", { name: "Layers", exact: true });
   if ((await layersSection.getAttribute("aria-expanded")) !== "true") {
     await layersSection.click();
   }
@@ -2290,10 +2705,7 @@ test("assembly tree can create and select a group without red console errors", a
   );
   await expect(group).not.toContainText("Editing members");
 
-  const undoEnabledBeforeCancellation = await page.getByRole(
-    "button",
-    { name: "Undo", exact: true }
-  ).isEnabled();
+  const undoEnabledBeforeCancellation = await getCommandBarCommand(page, "edit.undo").isEnabled();
   page.once("dialog", (dialog) => dialog.dismiss());
   await expectCancelledRuntimeCommandExecution(page, "assembly.ungroup", () =>
     group.getByRole("button", { name: /Ungroup Packaging Line 1/i }).click()
@@ -2305,7 +2717,7 @@ test("assembly tree can create and select a group without red console errors", a
     page,
     "data-machine-plan-positions"
   )).toEqual(memberTransforms);
-  expect(await page.getByRole("button", { name: "Undo", exact: true }).isEnabled())
+  expect(await getCommandBarCommand(page, "edit.undo").isEnabled())
     .toBe(undoEnabledBeforeCancellation);
 
   page.once("dialog", (dialog) => dialog.accept());
@@ -2317,7 +2729,7 @@ test("assembly tree can create and select a group without red console errors", a
     page,
     "data-machine-plan-positions"
   )).toEqual(memberTransforms);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await getCommandBarCommand(page, "edit.undo").click();
   await expect(group).toBeVisible();
   await expect(group).toContainText("2 items");
   expect(await readCanvasRecord<PlanPosition>(

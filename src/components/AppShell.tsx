@@ -1,4 +1,4 @@
-import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
+import { Fragment, cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import type { WorkbenchRegionId } from "../platform/contracts";
 
 type EditorHostRegionId = Extract<WorkbenchRegionId, "editor-host">;
@@ -9,6 +9,7 @@ type AppShellProps = {
   beforeViewport?: ReactNode;
   viewport?: ReactNode;
   viewportRightInset?: number;
+  shellTopInset?: string;
   viewportWorkbenchRegion?: EditorHostRegionId;
   rightPanel?: ReactNode;
   rightPanelWorkbenchRegion?: SecondaryDockRegionId;
@@ -22,6 +23,10 @@ type AppShellProps = {
 type ShellAnchorProps = {
   "data-app-shell-zone"?: string;
   "data-workbench-region"?: WorkbenchRegionId;
+};
+
+type AppShellStyle = CSSProperties & {
+  "--av-shell-top-inset": string;
 };
 
 const withZoneAnchor = (
@@ -43,6 +48,7 @@ export function AppShell({
   beforeViewport,
   viewport,
   viewportRightInset = 0,
+  shellTopInset = "0px",
   viewportWorkbenchRegion,
   rightPanel,
   rightPanelWorkbenchRegion,
@@ -54,7 +60,12 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <>
-      <main className="app-shell" data-testid="app-root" data-app-shell-zone="app-root">
+      <main
+        className="app-shell"
+        data-testid="app-root"
+        data-app-shell-zone="app-root"
+        style={{ "--av-shell-top-inset": shellTopInset } as AppShellStyle}
+      >
         {beforeViewport}
         <div
           className="scene-viewport-host"
@@ -62,7 +73,9 @@ export function AppShell({
           {...(viewportWorkbenchRegion
             ? { "data-workbench-region": viewportWorkbenchRegion }
             : {})}
-          style={{ right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))` }}
+          style={{
+            right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))`
+          }}
         >
           {viewport}
         </div>

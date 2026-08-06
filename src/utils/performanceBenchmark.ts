@@ -7,6 +7,7 @@ import type {
   BenchmarkScenario,
   ScenePerformanceMetrics
 } from "../types/performance";
+import { TECHNICAL_CSS_COLORS } from "../designSystem";
 import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT } from "./coordinateReference";
 import { createLayoutSnapshotFromMachines } from "./layoutSerialization";
 import { mmToMeters } from "./units";
@@ -94,7 +95,7 @@ export const createBenchmarkMachines = (options: BenchmarkOptions): PlacedMachin
     width: 1.2,
     depth: 0.8,
     height: 1.2,
-    defaultColor: "#7fb7ff",
+    defaultColor: TECHNICAL_CSS_COLORS.benchmarkMachine,
     connectionPoints: [],
     collisionEnvelope: {
       widthMm: 1200,
