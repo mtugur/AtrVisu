@@ -1,4 +1,9 @@
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import {
+  openDB,
+  type DBSchema,
+  type IDBPDatabase,
+  type OpenDBCallbacks
+} from "idb";
 import type { WorkbenchUiPreferences } from "../../platform/contracts";
 import type { AtrVisuProject } from "../../types/project";
 
@@ -27,9 +32,16 @@ export interface AtrVisuDatabaseSchema extends DBSchema {
 let databasePromise: Promise<IDBPDatabase<AtrVisuDatabaseSchema>> | null = null;
 let databaseInstance: IDBPDatabase<AtrVisuDatabaseSchema> | null = null;
 
-export const openAtrVisuDatabase = () => {
+export type AtrVisuDatabaseOpener = (
+  name: string,
+  version: number,
+  callbacks: OpenDBCallbacks<AtrVisuDatabaseSchema>
+) => Promise<IDBPDatabase<AtrVisuDatabaseSchema>>;
+
+const openAtrVisuDatabaseWith = (openDatabase: AtrVisuDatabaseOpener) => {
   if (!databasePromise) {
-    databasePromise = openDB<AtrVisuDatabaseSchema>(ATRVISU_DB_NAME, ATRVISU_DB_VERSION, {
+    let openingPromise!: Promise<IDBPDatabase<AtrVisuDatabaseSchema>>;
+    openingPromise = openDatabase(ATRVISU_DB_NAME, ATRVISU_DB_VERSION, {
       upgrade(database) {
         if (!database.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
           const projectsStore = database.createObjectStore(PROJECTS_STORE_NAME, {
@@ -43,14 +55,34 @@ export const openAtrVisuDatabase = () => {
           database.createObjectStore(UI_PREFERENCES_STORE_NAME);
         }
       }
-    }).then((database) => {
-      databaseInstance = database;
-      return database;
-    });
+    })
+      .then((database) => {
+        if (databasePromise === openingPromise) {
+          databaseInstance = database;
+        } else {
+          database.close();
+        }
+        return database;
+      })
+      .catch((error: unknown) => {
+        if (databasePromise === openingPromise) {
+          databasePromise = null;
+          databaseInstance = null;
+        }
+        throw error;
+      });
+    databasePromise = openingPromise;
   }
 
   return databasePromise;
 };
+
+export const openAtrVisuDatabase = () => openAtrVisuDatabaseWith(
+  (name, version, callbacks) => openDB<AtrVisuDatabaseSchema>(name, version, callbacks)
+);
+
+export const openAtrVisuDatabaseWithOpenerForTests = (openDatabase: AtrVisuDatabaseOpener) =>
+  openAtrVisuDatabaseWith(openDatabase);
 
 export const resetAtrVisuDatabaseConnectionForTests = () => {
   databaseInstance?.close();
