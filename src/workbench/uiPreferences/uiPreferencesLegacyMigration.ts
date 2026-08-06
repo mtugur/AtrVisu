@@ -35,6 +35,11 @@ export type UiPreferencesInitializationResult = {
   warning?: string;
 };
 
+export type UiPreferencesInitializationPlan = UiPreferencesInitializationResult & {
+  requiresPersistence: boolean;
+  consumedLegacyKeys: readonly string[];
+};
+
 const readLegacyPreferences = (legacyStorage: LegacyStorageLike) => {
   const defaults = createDefaultWorkbenchUiPreferences();
   const byId = new Map(defaults.panels.map((panel) => [panel.panelId, { ...panel }]));
@@ -78,16 +83,18 @@ const readLegacyPreferences = (legacyStorage: LegacyStorageLike) => {
   };
 };
 
-export const initializeUiPreferences = async (
+export const prepareUiPreferencesInitialization = async (
   storage: UiPreferencesStorage,
   legacyStorage: LegacyStorageLike
-): Promise<UiPreferencesInitializationResult> => {
+): Promise<UiPreferencesInitializationPlan> => {
   const readResult = await storage.read();
   if (readResult.status === "valid") {
     return {
       readResult,
       preferences: cloneWorkbenchUiPreferences(readResult.preferences),
       migrated: false,
+      requiresPersistence: false,
+      consumedLegacyKeys: [],
       ...(readResult.warnings.length > 0 ? { warning: readResult.warnings.join(" ") } : {})
     };
   }
@@ -96,6 +103,8 @@ export const initializeUiPreferences = async (
       readResult,
       preferences: createDefaultWorkbenchUiPreferences(),
       migrated: false,
+      requiresPersistence: false,
+      consumedLegacyKeys: [],
       warning: readResult.warning
     };
   }
@@ -104,18 +113,37 @@ export const initializeUiPreferences = async (
       readResult,
       preferences: createDefaultWorkbenchUiPreferences(),
       migrated: false,
+      requiresPersistence: false,
+      consumedLegacyKeys: [],
       warning: readResult.warning
     };
   }
 
   const legacy = readLegacyPreferences(legacyStorage);
+  return {
+    readResult,
+    preferences: cloneWorkbenchUiPreferences(legacy.preferences),
+    migrated: false,
+    requiresPersistence: true,
+    consumedLegacyKeys: legacy.consumedKeys
+  };
+};
+
+export const initializeUiPreferences = async (
+  storage: UiPreferencesStorage,
+  legacyStorage: LegacyStorageLike
+): Promise<UiPreferencesInitializationResult> => {
+  const plan = await prepareUiPreferencesInitialization(storage, legacyStorage);
+  if (!plan.requiresPersistence) {
+    return plan;
+  }
   try {
-    await storage.put(legacy.preferences);
-    legacy.consumedKeys.forEach((key) => legacyStorage.removeItem(key));
+    await storage.put(plan.preferences);
+    plan.consumedLegacyKeys.forEach((key) => legacyStorage.removeItem(key));
     return {
-      readResult,
-      preferences: cloneWorkbenchUiPreferences(legacy.preferences),
-      migrated: legacy.consumedKeys.length > 0
+      readResult: plan.readResult,
+      preferences: cloneWorkbenchUiPreferences(plan.preferences),
+      migrated: plan.consumedLegacyKeys.length > 0
     };
   } catch {
     return {
@@ -124,7 +152,7 @@ export const initializeUiPreferences = async (
         error: new Error("Legacy UI preference migration write failed."),
         warning: "Legacy UI preferences could not be persisted; values remain available for a later retry."
       },
-      preferences: cloneWorkbenchUiPreferences(legacy.preferences),
+      preferences: cloneWorkbenchUiPreferences(plan.preferences),
       migrated: false,
       warning: "Legacy UI preferences could not be persisted; values remain available for a later retry."
     };
