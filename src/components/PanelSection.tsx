@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 type PanelSectionProps = {
-  storageKey: string;
+  storageKey?: string;
   title: string;
   defaultExpanded: boolean;
   children: ReactNode;
@@ -10,6 +10,7 @@ type PanelSectionProps = {
   expandSignal?: string | number | null;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
+  visible?: boolean;
 };
 
 export function PanelSection({
@@ -20,11 +21,15 @@ export function PanelSection({
   badge,
   expandSignal,
   expanded,
-  onExpandedChange
+  onExpandedChange,
+  visible = true
 }: PanelSectionProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const [internalExpanded, setInternalExpanded] = useState(() => {
     try {
+      if (expanded !== undefined || !storageKey) {
+        return defaultExpanded;
+      }
       const savedValue = window.localStorage.getItem(storageKey);
       return savedValue === null ? defaultExpanded : savedValue === "expanded";
     } catch {
@@ -40,12 +45,15 @@ export function PanelSection({
   };
 
   useEffect(() => {
+    if (expanded !== undefined || !storageKey) {
+      return;
+    }
     try {
       window.localStorage.setItem(storageKey, isExpanded ? "expanded" : "collapsed");
     } catch {
       // UI preferences are best-effort only.
     }
-  }, [isExpanded, storageKey]);
+  }, [expanded, isExpanded, storageKey]);
 
   useEffect(() => {
     if (expandSignal) {
@@ -57,6 +65,10 @@ export function PanelSection({
     // The signal is the event boundary; controlled state changes must not retrigger scrolling.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandSignal]);
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <section className="panel-section" ref={sectionRef}>

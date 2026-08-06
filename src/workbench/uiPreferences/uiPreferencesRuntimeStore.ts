@@ -54,6 +54,19 @@ export type UiPreferencesRuntimeStoreOptions = {
   warn?: (message: string) => void;
 };
 
+export type UiPreferencesE2EBridge = {
+  getSnapshot: () => UiPreferencesRuntimeSnapshot;
+  updateTheme: UiPreferencesRuntimeStore["updateTheme"];
+  updateDensity: UiPreferencesRuntimeStore["updateDensity"];
+  updatePanelPreference: UiPreferencesRuntimeStore["updatePanelPreference"];
+};
+
+declare global {
+  interface Window {
+    __atrvisuUiPreferences?: UiPreferencesE2EBridge;
+  }
+}
+
 const freezePreferences = (preferences: WorkbenchUiPreferences): WorkbenchUiPreferences => {
   const clone = cloneWorkbenchUiPreferences(preferences);
   clone.panels.forEach(Object.freeze);
