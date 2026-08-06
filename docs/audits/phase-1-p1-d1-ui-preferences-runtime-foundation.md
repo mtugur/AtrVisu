@@ -6,6 +6,8 @@
 - Base branch: `main`
 - Exact base SHA: `ea4a06586f5aa77063fa92d87d8b5c7f22535765`
 - Branch: `feat/phase-1-ui-preferences-runtime-foundation-v01`
+- Independent review comment: `5203394076`
+- Original reviewed head: `6dec96bfe1da9ba020b14c1d669bcbdb69c4650d`
 - P1-A, P1-B, P1-C, and PR #102 remain authoritative.
 
 ## 2. Scope
@@ -25,8 +27,9 @@ the existing Runtime Panel Registry bridge.
 
 `ATRVISU_DB_VERSION` is 2. Fresh installation creates `projects` and
 `uiPreferences`; version-1 upgrade creates only the missing preference store;
-version-2 reopen is idempotent. An aborted versionchange leaves version 1
-recoverable and a later production opener completes the upgrade.
+version-2 reopen is idempotent. A rejected production opener clears only its
+own cached attempt; a second call in the same application lifecycle completes
+the upgrade and subsequent calls reuse the live connection.
 
 ## 5. Projects-Store Preservation
 
@@ -60,25 +63,37 @@ non-negative order values with supported docks only.
 IndexedDB wins when valid or future-version. An absent record translates both
 shell keys and all 16 maintained section keys, including assembly/groups,
 project/status, performance launcher, overlay controls, and Inspector aliases.
-One complete record is written and only consumed keys are then removed.
+Initialization prepares the migration without writing independently. The
+runtime persistence authority writes the migrated base and any updates accepted
+during hydration in order; only consumed keys are removed after a successful
+ordered write.
 
 ## 10. Future-Version Policy
 
 A schema version above 1 is not normalized, downgraded, or overwritten.
 Runtime uses safe defaults with `future-readonly`, exposes a stable warning,
-and rejects persistent updates.
+rejects later persistent updates, and resolves updates accepted while loading
+as not persisted without touching the future record.
 
 ## 11. Corruption And Degraded-Mode Policy
 
 Invalid current-version data remains stored untouched while defaults run in
-memory. Storage/read/write failures produce degraded status and `console.warn`,
-retain current memory, and permit later retry without red console output.
+memory unless an explicit update is accepted during hydration. Such an update
+is replayed over safe defaults and persisted as the user's replacement.
+Storage/read/write failures produce degraded status and `console.warn`, retain
+the complete latest memory, and permit a later update to retry without red
+console output.
 
 ## 12. Runtime Store
 
 The framework-independent external store owns an immutable snapshot, hydration
 status, warning, and monotonic revision. Concurrent hydration shares one
-promise. Update operations normalize before commit and serialize persistence.
+promise. Updates accepted while loading commit immediately to memory and are
+replayed in their original order over the hydrated base. Unchanged hydrated
+fields survive, last accepted changes win, and hydration/migration plus runtime
+writes use one ordered queue. Deferred valid, absent, legacy, corrupt, failure,
+retry, and future-version tests close the races identified by independent
+review comment `5203394076`.
 
 ## 13. React Provider
 
@@ -115,26 +130,29 @@ generation remains stable; only expected viewport geometry/resize may change.
 
 ## 18. Storage Tests
 
-Three focused files provide 12 tests for installation, indexes, v1 records,
-abort recovery, absence, save/reload/delete, clone safety, invalid values,
-domain rejection, future/corrupt preservation, all legacy mappings, cleanup,
-idempotence, precedence, and failed-write retry.
+The focused storage and migration set proves installation, indexes, v1 record
+preservation, rejected production-opener retry without module reset,
+same-connection reuse, absence, save/reload/delete, clone safety, invalid
+values, domain rejection, future/corrupt preservation, every legacy mapping,
+ordered cleanup, idempotence, precedence, and failed-write retry.
 
 ## 19. Component And Architecture Tests
 
-Four focused files provide 12 tests for defaults, hydration transitions,
-shared operations, immutability, revisions, serialized writes, degraded retry,
-future-readonly, domain rejection, provider binding, one design-system root,
-legacy-access removal, and forbidden dependency boundaries.
+Seven focused files provide 31 tests for defaults, hydration transitions,
+ordered update replay, valid/absent/legacy/corrupt/future races, degraded retry,
+production opener recovery, immutability, revisions, provider binding, one
+design-system root, legacy-access removal, and forbidden dependency boundaries.
 
 ## 20. E2E Evidence
 
-Five preference scenarios cover first-run defaults, full legacy persistence,
+Six preference scenarios cover first-run defaults, full legacy persistence,
 reload, theme/density hydration, identity, domain/camera/lifecycle invariance,
-corrupt-storage degradation, and diagnostics-only bridge exposure. The updated
-runtime-panel test asserts the new authority instead of removed localStorage.
-Focused preference Chromium passed 5/5 and the corrected panel test passed 1/1.
-The full suite passes 48/48 after that focused correction.
+corrupt-storage degradation, diagnostics-only bridge exposure, and a real panel
+section plus shell-collapse interaction while hydration is deliberately held.
+The race scenario proves persisted theme/density/width and accepted interactions
+merge into one IndexedDB record, survive reload, and do not remount App,
+EditorHost, or the scene canvas. The new focused Chromium test passes 1/1; the
+full suite passes 49/49 with no `console.error` or `pageerror`.
 
 ## 21. Changed Files
 
@@ -142,6 +160,10 @@ Changes are limited to IndexedDB schema, the bounded
 `workbench/uiPreferences` area, root composition, minimal App/PanelSection
 delegation, focused storage/component/E2E tests, and these three documents.
 `package.json` and `package-lock.json` are unchanged.
+
+The correction package addresses only hydration/update ordering and production
+database-open retry. It adds no visible control and leaves the original P1-D1
+scope intact.
 
 ## 22. Explicit Non-Goals
 
@@ -165,6 +187,6 @@ identity, camera, and scene lifecycle evidence passes.
 
 ## 25. Decision
 
-**READY FOR INDEPENDENT REVIEW.** P1-D1 automatic local gates pass and the
-package remains Draft-only pending independent review and exact-head GitHub
-Quality Gate. This does not mark P1-D or Phase 1 complete.
+**READY FOR INDEPENDENT RE-REVIEW.** P1-D1 correction gates pass and the package
+remains Draft-only pending corrected-head independent review and GitHub Quality
+Gate. This does not mark P1-D1 closed, P1-D complete, or Phase 1 complete.

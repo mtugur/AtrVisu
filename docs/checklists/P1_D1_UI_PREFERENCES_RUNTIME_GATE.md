@@ -7,7 +7,7 @@
 | Existing projects store and indexes preserved | PASS | Real v1-to-v2 upgrade test |
 | Separate `uiPreferences` store and fixed out-of-line key | PASS | Storage constants and repository tests |
 | Version-1 project records preserved without rewrite | PASS | Upgrade equality assertion |
-| Failed versionchange recovery and retry | PASS | Aborted-upgrade test |
+| Rejected production opener recovery and same-lifecycle retry | PASS | Injected opener failure, normal retry, and live-connection reuse test |
 | Fresh canonical defaults | PASS | Defaults and runtime tests |
 | Strict validation and deterministic normalization | PASS | Storage/normalizer tests |
 | Domain-shaped payload rejection | PASS | Normalizer/runtime negative tests |
@@ -17,7 +17,11 @@
 | Legacy cleanup only after successful write | PASS | Success/failure migration tests |
 | Unrelated localStorage values preserved | PASS | Migration unit and Chromium tests |
 | One runtime authority and shared hydration operation | PASS | Runtime concurrency tests |
-| Serialized persistence and retry | PASS | Deferred-write and degraded-retry tests |
+| Updates during hydration replay over the hydrated base | PASS | Deferred valid-read and ordered same-field update tests |
+| Migration/default and runtime writes share one ordering authority | PASS | Deferred absent-record and legacy-write race tests |
+| Corrupt record plus explicit pending update recovers safely | PASS | Corrupt-record deferred runtime test |
+| Future record plus pending update remains untouched | PASS | Future-readonly deferred runtime test |
+| Serialized persistence and retry | PASS | Deferred-write, failed-final-write, and complete-state retry tests |
 | Provider uses stable external-store subscription | PASS | Provider implementation/tests |
 | DesignSystemRoot consumes runtime theme/density | PASS | Provider and Chromium tests |
 | App contains no migrated localStorage access | PASS | Architecture test |
@@ -32,11 +36,15 @@
 | Audit and low-level audit | PASS | 0 vulnerabilities |
 | Design-token scanner | PASS | 197 maintained files |
 | Build | PASS | TypeScript and Vite build |
-| Unit suite | PASS | 117 files / 1081 tests |
-| Chromium suite | PASS | 48 tests after focused assertion correction |
+| Unit suite | PASS | 117 files / 1088 tests |
+| Chromium suite | PASS | 49 tests including real delayed-hydration interaction |
 | No red console or page errors | PASS | Chromium collectors |
 | Manual visual acceptance | NOT REQUIRED | Zero intentional visible delta and geometry/lifecycle evidence |
 
-Decision: **READY FOR INDEPENDENT REVIEW**. P1-D1 is bounded to persistence
-and runtime ownership. P1-D and Phase 1 remain incomplete; P1-D2 is required
-for workspaces and visible preference controls.
+Independent review comment `5203394076` at original head
+`6dec96bfe1da9ba020b14c1d669bcbdb69c4650d` identified the hydration/update
+and production-opener retry blockers now covered above.
+
+Decision: **READY FOR INDEPENDENT RE-REVIEW**. P1-D1 remains bounded to
+persistence and runtime ownership and is not closed. P1-D and Phase 1 remain
+incomplete; P1-D2 is required for workspaces and visible preference controls.

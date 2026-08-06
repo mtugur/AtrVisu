@@ -34,6 +34,11 @@ idempotence follow from record existence.
 
 One framework-independent runtime store owns the in-memory snapshot,
 hydration status, warning, revision, immutable updates, and serialized writes.
+Updates may arrive while hydration is pending. They remain immediately visible,
+are recorded as ordered mutations, and are replayed deterministically over the
+hydrated or migrated base. Hydration/default/migration writes and subsequent
+runtime writes share the same persistence ordering authority, so a stale
+initialization completion cannot overwrite a newer accepted state.
 One React provider subscribes through `useSyncExternalStore`. It sits above a
 preference-bound `DesignSystemRoot`, while App consumes the same authority for
 right-panel size/collapse and section state. Defaults render synchronously as
@@ -54,7 +59,11 @@ store. Project import/export and persistence schemas are unchanged.
 Storage failures retain the latest in-memory state, expose degraded status,
 warn without a red console error, and permit later retry. Persistent updates
 are rejected in future-readonly mode. Serialized writes prevent an older
-completion from overwriting a newer preference state.
+completion from overwriting a newer preference state. A rejected production
+database open or upgrade clears only its own cached promise and unusable
+instance, rethrows the original error, and allows a later call in the same
+application lifecycle to retry. Promise identity checks prevent an older
+attempt from clearing or replacing a newer connection.
 
 ## Consequences
 
