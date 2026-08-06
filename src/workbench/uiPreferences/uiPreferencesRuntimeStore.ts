@@ -68,6 +68,10 @@ export type UiPreferencesE2EBridge = {
 declare global {
   interface Window {
     __atrvisuUiPreferences?: UiPreferencesE2EBridge;
+    __atrvisuUiPreferencesHydrationTestGate?: {
+      wait: Promise<void>;
+      release: () => void;
+    };
   }
 }
 

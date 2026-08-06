@@ -12,6 +12,7 @@ import {
   type UiPreferencesRuntimeStore,
   type UiPreferencesRuntimeSnapshot
 } from "./uiPreferencesRuntimeStore";
+import { createIndexedDbUiPreferencesStorage } from "./uiPreferencesStorage";
 
 const UiPreferencesContext = createContext<UiPreferencesRuntimeStore | null>(null);
 
@@ -20,8 +21,29 @@ export type UiPreferencesProviderProps = {
   store?: UiPreferencesRuntimeStore;
 };
 
+const createDefaultRuntimeStore = () => {
+  const isDiagnosticsSession = new URLSearchParams(window.location.search).get("e2eDiagnostics") === "1";
+  const hydrationGate = isDiagnosticsSession
+    ? window.__atrvisuUiPreferencesHydrationTestGate
+    : undefined;
+  if (!hydrationGate) {
+    return createUiPreferencesRuntimeStore();
+  }
+
+  const storage = createIndexedDbUiPreferencesStorage();
+  return createUiPreferencesRuntimeStore({
+    storage: {
+      ...storage,
+      read: async () => {
+        await hydrationGate.wait;
+        return storage.read();
+      }
+    }
+  });
+};
+
 export function UiPreferencesProvider({ children, store: suppliedStore }: UiPreferencesProviderProps) {
-  const [store] = useState(() => suppliedStore ?? createUiPreferencesRuntimeStore());
+  const [store] = useState(() => suppliedStore ?? createDefaultRuntimeStore());
 
   useEffect(() => {
     void store.hydrate();

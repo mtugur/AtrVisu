@@ -71,6 +71,30 @@ const waitForUiPreferences = async (page: Page, status = "ready") => {
   )).toBe(status);
 };
 
+const delayUiPreferencesHydration = async (page: Page) => {
+  await page.addInitScript(() => {
+    const releasedKey = "atrvisu.e2e.uiPreferencesHydrationReleased";
+    if (window.sessionStorage.getItem(releasedKey) === "true") {
+      window.__atrvisuUiPreferencesHydrationTestGate = {
+        wait: Promise.resolve(),
+        release: () => undefined
+      };
+      return;
+    }
+    let releaseWait!: () => void;
+    const wait = new Promise<void>((resolve) => {
+      releaseWait = resolve;
+    });
+    window.__atrvisuUiPreferencesHydrationTestGate = {
+      wait,
+      release: () => {
+        window.sessionStorage.setItem(releasedKey, "true");
+        releaseWait();
+      }
+    };
+  });
+};
+
 const createE2EUiPreferences = (overrides: {
   theme?: "light" | "dark" | "system";
   density?: "compact" | "comfortable";
@@ -2989,6 +3013,72 @@ test("persisted theme density and panel updates hydrate without remounting the s
   )).toBe("470px");
   await expect(page.getByTestId("right-panel").getByRole("button", { name: "Layers", exact: true }))
     .toHaveAttribute("aria-expanded", "true");
+  expect(errors).toEqual([]);
+});
+
+test("visible panel updates survive a deliberately pending preference hydration", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  const persistedSeed = createE2EUiPreferences({ theme: "light", density: "compact", width: 420 });
+  await seedUiPreferences(page, persistedSeed);
+  await delayUiPreferencesHydration(page);
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    window.__atrvisuUiPreferences?.getSnapshot().hydrationStatus
+  )).toBe("loading");
+
+  const canvas = page.locator("canvas.scene-canvas");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const layersButton = page.getByTestId("right-panel")
+    .getByRole("button", { name: "Layers", exact: true });
+  await expect(layersButton).toHaveAttribute("aria-expanded", "false");
+  await layersButton.click();
+  await expect(layersButton).toHaveAttribute("aria-expanded", "true");
+  await page.getByTestId("right-panel-utility-actions")
+    .getByRole("button", { name: "Collapse", exact: true })
+    .click();
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+
+  await page.evaluate(() => window.__atrvisuUiPreferencesHydrationTestGate?.release());
+  await waitForUiPreferences(page);
+  const finalSnapshot = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  expect(finalSnapshot?.preferences).toMatchObject({ theme: "light", density: "compact" });
+  expect(finalSnapshot?.preferences.panels.find((panel) => panel.panelId === "panel.rightPanelShell"))
+    .toMatchObject({ size: 420, collapsed: true });
+  expect(finalSnapshot?.preferences.panels.find((panel) => panel.panelId === "panel.layers"))
+    .toMatchObject({ collapsed: false });
+  const persisted = await page.evaluate(() => new Promise<unknown>((resolve, reject) => {
+    const request = indexedDB.open("atrvisu-db", 2);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const getRequest = database.transaction("uiPreferences").objectStore("uiPreferences").get("workbench");
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        resolve(getRequest.result);
+        database.close();
+      };
+    };
+  }));
+  expect(persisted).toEqual(finalSnapshot?.preferences);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(canvas).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "light");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  const restored = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot().preferences);
+  expect(restored).toEqual(finalSnapshot?.preferences);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 

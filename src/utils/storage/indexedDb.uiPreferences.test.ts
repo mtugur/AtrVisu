@@ -6,6 +6,7 @@ import {
   PROJECTS_STORE_NAME,
   UI_PREFERENCES_STORE_NAME,
   openAtrVisuDatabase,
+  openAtrVisuDatabaseWithOpenerForTests,
   resetAtrVisuDatabaseConnectionForTests
 } from "./indexedDb";
 
@@ -69,39 +70,27 @@ describe("AtrVisu IndexedDB version 2", () => {
     expect(persisted).toEqual(project);
   });
 
-  it("recovers after an aborted versionchange transaction and retries normally", async () => {
-    await createVersionOneDatabase({
+  it("clears a rejected production opener cache and retries the same version-1 upgrade", async () => {
+    const project = {
       projectId: "project-abort-proof",
       projectName: "Abort Proof",
       customerName: "Atara",
-      updatedAt: "2026-08-06T00:00:00.000Z"
-    });
+      updatedAt: "2026-08-06T00:00:00.000Z",
+      untouched: { nested: ["same"] }
+    };
+    await createVersionOneDatabase(project);
 
-    await expect(new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open(ATRVISU_DB_NAME, 2);
-      request.onupgradeneeded = () => {
-        request.result.createObjectStore(UI_PREFERENCES_STORE_NAME);
-        request.transaction?.abort();
-      };
-      request.onsuccess = () => {
-        request.result.close();
-        resolve();
-      };
-      request.onerror = () => reject(request.error);
-    })).rejects.toBeTruthy();
-
-    const versionOne = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(ATRVISU_DB_NAME, 1);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    expect(versionOne.objectStoreNames.contains(PROJECTS_STORE_NAME)).toBe(true);
-    expect(versionOne.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)).toBe(false);
-    versionOne.close();
+    await expect(openAtrVisuDatabaseWithOpenerForTests(async () => {
+      throw new Error("injected production open failure");
+    })).rejects.toThrow("injected production open failure");
 
     const recovered = await openAtrVisuDatabase();
     expect(recovered.version).toBe(2);
+    expect([...recovered.objectStoreNames]).toEqual([PROJECTS_STORE_NAME, UI_PREFERENCES_STORE_NAME]);
+    expect([...recovered.transaction(PROJECTS_STORE_NAME).objectStore(PROJECTS_STORE_NAME).indexNames])
+      .toEqual(["customerName", "projectName", "updatedAt"]);
     expect(recovered.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)).toBe(true);
-    expect(await recovered.get(PROJECTS_STORE_NAME, "project-abort-proof")).toBeTruthy();
+    expect(await recovered.get(PROJECTS_STORE_NAME, "project-abort-proof")).toEqual(project);
+    expect(await openAtrVisuDatabase()).toBe(recovered);
   });
 });
