@@ -27,6 +27,89 @@ const openCleanApp = async (page: Page) => {
   await expect(page.getByTestId("machine-library-panel")).toBeVisible();
 };
 
+const seedUiPreferences = async (page: Page, preferences: unknown) => {
+  await page.addInitScript((seed) => new Promise<void>((resolve, reject) => {
+    if (window.sessionStorage.getItem("atrvisu.e2e.uiPreferencesSeeded") === "true") {
+      resolve();
+      return;
+    }
+    const deleteRequest = indexedDB.deleteDatabase("atrvisu-db");
+    deleteRequest.onerror = () => reject(deleteRequest.error);
+    deleteRequest.onsuccess = () => {
+      const openRequest = indexedDB.open("atrvisu-db", 2);
+      openRequest.onupgradeneeded = () => {
+        const database = openRequest.result;
+        if (!database.objectStoreNames.contains("projects")) {
+          const projects = database.createObjectStore("projects", { keyPath: "projectId" });
+          projects.createIndex("updatedAt", "updatedAt");
+          projects.createIndex("customerName", "customerName");
+          projects.createIndex("projectName", "projectName");
+        }
+        if (!database.objectStoreNames.contains("uiPreferences")) {
+          database.createObjectStore("uiPreferences");
+        }
+      };
+      openRequest.onerror = () => reject(openRequest.error);
+      openRequest.onsuccess = () => {
+        const database = openRequest.result;
+        const transaction = database.transaction("uiPreferences", "readwrite");
+        transaction.objectStore("uiPreferences").put(seed, "workbench");
+        transaction.oncomplete = () => {
+          window.sessionStorage.setItem("atrvisu.e2e.uiPreferencesSeeded", "true");
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+    };
+  }), preferences);
+};
+
+const waitForUiPreferences = async (page: Page, status = "ready") => {
+  await expect.poll(() => page.evaluate(() =>
+    window.__atrvisuUiPreferences?.getSnapshot().hydrationStatus
+  )).toBe(status);
+};
+
+const createE2EUiPreferences = (overrides: {
+  theme?: "light" | "dark" | "system";
+  density?: "compact" | "comfortable";
+  width?: number;
+} = {}) => {
+  const panels = [
+    ["panel.rightPanelShell", false],
+    ["panel.machineLibrary", false],
+    ["panel.layoutControls", false],
+    ["panel.viewpoints", true],
+    ["panel.layers", true],
+    ["panel.civilReferences", true],
+    ["panel.groups", true],
+    ["panel.projectStatus", false],
+    ["panel.performanceBenchmarkLauncher", true],
+    ["panel.simulationControls", true],
+    ["panel.annotations", true],
+    ["panel.precisionPlacement", false],
+    ["panel.alignmentTools", true],
+    ["panel.connectionPointSnap", false],
+    ["panel.displayOverlayControls", true],
+    ["panel.collisionCheck", false],
+    ["panel.inspector", true]
+  ] as const;
+  return {
+    schemaVersion: 1,
+    theme: overrides.theme ?? "dark",
+    density: overrides.density ?? "comfortable",
+    panels: panels.map(([panelId, collapsed], order) => ({
+      panelId,
+      visible: true,
+      collapsed,
+      ...(panelId === "panel.rightPanelShell" ? { size: overrides.width ?? 360 } : {}),
+      order,
+      dock: "secondary-dock"
+    }))
+  };
+};
+
 const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
 };
@@ -1347,8 +1430,10 @@ test("runtime panel registry opens and closes the actual Machine Library section
   await expect(page.getByTestId("machine-library-panel")).toHaveCount(0);
   await expect.poll(async () => (await getRuntimePanel(page, "panel.machineLibrary"))?.open).toBe(false);
   await expect.poll(() => page.evaluate(() =>
-    window.localStorage.getItem("atrvisu.panelSection.machineLibrary.v1")
-  )).toBe("collapsed");
+    window.__atrvisuUiPreferences?.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === "panel.machineLibrary"
+    )?.collapsed
+  )).toBe(true);
 
   expect(await invokeRuntimePanel(page, "open", "panel.machineLibrary")).toMatchObject({
     handled: true,
@@ -1357,8 +1442,10 @@ test("runtime panel registry opens and closes the actual Machine Library section
   await expect(page.getByTestId("machine-library-panel")).toBeVisible();
   await expect.poll(async () => (await getRuntimePanel(page, "panel.machineLibrary"))?.open).toBe(true);
   await expect.poll(() => page.evaluate(() =>
-    window.localStorage.getItem("atrvisu.panelSection.machineLibrary.v1")
-  )).toBe("expanded");
+    window.__atrvisuUiPreferences?.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === "panel.machineLibrary"
+    )?.collapsed
+  )).toBe(false);
 
   expect(await invokeRuntimePanel(page, "close", "panel.machineLibrary")).toMatchObject({
     handled: true,
@@ -2795,5 +2882,161 @@ test("Taxonomy Manager opens and closes with stable header control", async ({ pa
   await expectNoModalBackdrop(page);
 
   expect(errors).toEqual([]);
+});
+
+test("UI preferences default shell renders without red console errors", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "dark");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "comfortable");
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await expect(page.getByTestId("right-panel").getByRole("button", { name: "Machine Library", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("right-panel").getByRole("button", { name: "Layers", exact: true }))
+    .toHaveAttribute("aria-expanded", "false");
+  expect(await page.getByTestId("right-panel").evaluate((element) =>
+    getComputedStyle(element).getPropertyValue("--panel-width").trim()
+  )).toBe("360px");
+  expect(errors).toEqual([]);
+});
+
+test("legacy panel preferences migrate once to IndexedDB and preserve unrelated storage", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem("atrvisu.rightPanelWidth.v1", "430");
+    window.localStorage.setItem("atrvisu.panelSection.layers.v1", "expanded");
+    window.localStorage.setItem("atrvisu.unrelated", "keep");
+  });
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page);
+
+  expect(await page.getByTestId("right-panel").evaluate((element) =>
+    getComputedStyle(element).getPropertyValue("--panel-width").trim()
+  )).toBe("430px");
+  await expect(page.getByTestId("right-panel").getByRole("button", { name: "Layers", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  const persisted = await page.evaluate(() => new Promise<{ width?: number }>((resolve, reject) => {
+    const request = indexedDB.open("atrvisu-db", 2);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const getRequest = database.transaction("uiPreferences").objectStore("uiPreferences").get("workbench");
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        const value = getRequest.result as { panels: Array<{ panelId: string; size?: number }> };
+        resolve({ width: value.panels.find((panel) => panel.panelId === "panel.rightPanelShell")?.size });
+        database.close();
+      };
+    };
+  }));
+  expect(persisted.width).toBe(430);
+  expect(await page.evaluate(() => window.localStorage.getItem("atrvisu.rightPanelWidth.v1"))).toBeNull();
+  expect(await page.evaluate(() => window.localStorage.getItem("atrvisu.panelSection.layers.v1"))).toBeNull();
+  expect(await page.evaluate(() => window.localStorage.getItem("atrvisu.unrelated"))).toBe("keep");
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("persisted theme density and panel updates hydrate without remounting the scene", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await seedUiPreferences(page, createE2EUiPreferences({ theme: "light", density: "compact", width: 420 }));
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page);
+
+  const designRoot = page.getByTestId("design-system-root");
+  const canvas = page.locator("canvas.scene-canvas");
+  await expect(designRoot).toHaveAttribute("data-av-theme", "light");
+  await expect(designRoot).toHaveAttribute("data-av-density", "compact");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+  const lifecycle = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await page.evaluate(() => {
+    const runtimeWindow = window as Window & { __p1d1Identity?: Element[] };
+    runtimeWindow.__p1d1Identity = [
+      document.querySelector('[data-testid="app-root"]')!,
+      document.querySelector('[data-testid="editor-host"]')!,
+      document.querySelector("canvas.scene-canvas")!
+    ];
+  });
+  await page.evaluate(async () => {
+    const bridge = window.__atrvisuUiPreferences;
+    if (!bridge) throw new Error("UI preference bridge unavailable");
+    await bridge.updateTheme("dark").persisted;
+    await bridge.updatePanelPreference("panel.rightPanelShell", { size: 470 }).persisted;
+    await bridge.updatePanelPreference("panel.layers", { collapsed: false }).persisted;
+  });
+  await expect(designRoot).toHaveAttribute("data-av-theme", "dark");
+  expect(await page.evaluate(() => {
+    const runtimeWindow = window as Window & { __p1d1Identity?: Element[] };
+    const identity = runtimeWindow.__p1d1Identity ?? [];
+    return identity[0] === document.querySelector('[data-testid="app-root"]')
+      && identity[1] === document.querySelector('[data-testid="editor-host"]')
+      && identity[2] === document.querySelector("canvas.scene-canvas");
+  })).toBe(true);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycle ?? "");
+
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "dark");
+  expect(await page.getByTestId("right-panel").evaluate((element) =>
+    getComputedStyle(element).getPropertyValue("--panel-width").trim()
+  )).toBe("470px");
+  await expect(page.getByTestId("right-panel").getByRole("button", { name: "Layers", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  expect(errors).toEqual([]);
+});
+
+test("panel preference changes preserve domain and scene lifecycle invariants", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const before = await getRuntimeViewportSnapshot(page);
+
+  await page.evaluate(async () => {
+    const bridge = window.__atrvisuUiPreferences;
+    if (!bridge) throw new Error("UI preference bridge unavailable");
+    await bridge.updatePanelPreference("panel.rightPanelShell", { size: 410 }).persisted;
+    await bridge.updatePanelPreference("panel.layers", { collapsed: false }).persisted;
+  });
+  await expect(page.getByTestId("right-panel").getByRole("button", { name: "Layers", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  const after = await getRuntimeViewportSnapshot(page);
+
+  expect(after.invariants).toEqual(before.invariants);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("corrupt preference storage degrades safely and diagnostics remain guarded", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await seedUiPreferences(page, {
+    schemaVersion: 1,
+    theme: "dark",
+    density: "comfortable",
+    panels: "corrupt"
+  });
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page, "degraded");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "dark");
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+
+  const normalPage = await page.context().newPage();
+  const normalErrors = collectPageErrors(normalPage);
+  await normalPage.goto("/");
+  await expect(normalPage.getByTestId("app-root")).toBeVisible();
+  expect(await normalPage.evaluate(() => window.__atrvisuUiPreferences)).toBeUndefined();
+  expect(normalErrors).toEqual([]);
+  await normalPage.close();
 });
 

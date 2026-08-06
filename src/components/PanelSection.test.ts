@@ -27,4 +27,17 @@ describe("PanelSection controlled expansion", () => {
     expect(expanded).toContain('aria-expanded="true"');
     expect(expanded).toContain("panel-content");
   });
+
+  it("does not require or access legacy localStorage in controlled mode", () => {
+    const markup = renderToStaticMarkup(createElement(PanelSection, {
+      title: "Controlled Panel",
+      defaultExpanded: false,
+      expanded: true,
+      onExpandedChange: vi.fn(),
+      children: createElement("div", null, "controlled-content")
+    }));
+
+    expect(markup).toContain("controlled-content");
+    expect(markup).toContain('aria-expanded="true"');
+  });
 });
