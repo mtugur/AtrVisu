@@ -221,15 +221,27 @@ The bounded change covers:
   remains.
 - `package-lock.json`: unchanged for the visual-correction range.
 - New dependencies in the visual-correction range: none.
-- Manual visual re-acceptance: required and pending.
+- Documentation-closure exact head:
+  `1fc5127ebb08df43a5b44521027f77c07b1dd2e0`.
+- Documentation-closure Quality Gate run `31017014362`: passed Dependency
+  security audit, Design token governance, Build, Unit tests, and E2E smoke
+  tests.
+- Manual visual re-acceptance PR comment: `5201197099`.
+- Manual visual re-acceptance result: passed on exact head
+  `1fc5127ebb08df43a5b44521027f77c07b1dd2e0`.
+- Accepted manual items: Edit/Redo menu label and shortcut layout, the temporary
+  right-panel utility strip, and Save Project placement in the Application Bar
+  project-session group.
+- The manual result applies only to the bounded P1-C workbench-chrome scope. It
+  does not accept the future left dock, final right Inspector, workspace
+  layouts, panel docking, or complete application-shell design.
 
 ## 20. Manual Visual Acceptance Status
 
-**REQUIRED AND PENDING RE-ACCEPTANCE.** The initial manual round failed on the
-three chrome-layout findings recorded in section 19. Automated evidence and
-independent review now cover those corrections but do not claim visual
-acceptance. A reviewer must repeat the compact industrial workbench inspection
-before merge.
+**PASSED.** The initial manual round failed on the three chrome-layout findings
+recorded in section 19. Those defects were corrected, automatic evidence and
+independent review passed, and PR comment `5201197099` records the bounded
+re-acceptance round as passed. No P1-C manual visual blocker remains.
 
 ## 21. Explicit Non-Goals
 
@@ -241,18 +253,18 @@ tool is included.
 
 ## 22. Residual Risks
 
-- The corrected Edit menu, right-panel utility strip, and Save placement still
-  need human re-acceptance.
-- Dark, light, and system visual quality still needs human acceptance.
 - System theme infrastructure is not user-selectable until P1-D owns UI
   preferences.
 - The existing Vite large-chunk warning remains outside this package.
 - The command-surface adapter intentionally renders only configured commands;
   future placements require explicit governance and tests.
+- The final left dock, right Inspector, workspace layouts, panel docking, and
+  complete application-shell design remain future work outside this acceptance.
 
 ## 23. Decision
 
-**READY FOR MANUAL RE-ACCEPTANCE.** The bounded visual corrections, automatic
-gates, and independent review pass. Manual visual re-acceptance is the only
-remaining blocker. PR #103 remains Draft, P1-C is not complete, and merge is
-prohibited until manual visual re-acceptance passes.
+**READY FOR MERGE.** Automatic validation, independent reviews, and bounded
+manual visual re-acceptance pass, completing the P1-C acceptance gates. PR #103
+must remain Draft until this final documentation-only exact-head Quality Gate
+and independent two-file scope verification pass. This decision does not claim
+Phase 1, the full AtrVisu UI, or future application-shell work complete.
