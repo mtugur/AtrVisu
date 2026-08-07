@@ -15,4 +15,6 @@ export type {
   WorkspacePreferenceOption,
   WorkspacePreferencesControlProps
 } from "./WorkspacePreferencesControl";
+export { PreferenceDisclosureRow } from "./PreferenceDisclosureRow";
+export type { PreferenceDisclosureRowProps } from "./PreferenceDisclosureRow";
 export * from "./cascading";

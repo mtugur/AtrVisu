@@ -15,6 +15,7 @@ import {
   type CascadingFlyoutGeometry,
   type CascadingFlyoutRect
 } from "./cascading";
+import { PreferenceDisclosureRow } from "./PreferenceDisclosureRow";
 
 export type WorkspacePreferenceOption = Readonly<{
   id: WorkspaceId;
@@ -46,14 +47,76 @@ export type WorkspacePreferencesControlProps = Readonly<{
   onTogglePanel: (panelId: PanelId, visible: boolean) => void;
 }>;
 
+type PreferenceBranchId = "workspace" | "theme" | "density" | "visible-panels";
+
+type PreferenceBranchDefinition = Readonly<{
+  id: PreferenceBranchId;
+  label: string;
+  surfaceId: string;
+  titleId: string;
+  testId: string;
+  flyoutTestId: string;
+  drillInTestId: string;
+  requestedWidth: number;
+  requestedHeight: number;
+}>;
+
 const POPOVER_ID = "workspace-preferences-popover";
 const READ_ONLY_DESCRIPTION_ID = "workspace-preferences-read-only-description";
-const VISIBLE_PANELS_BRANCH_ID = "visible-panels";
-const VISIBLE_PANELS_SURFACE_ID = "workspace-visible-panels-surface";
-const VISIBLE_PANELS_TITLE_ID = "workspace-visible-panels-title";
-const FLYOUT_WIDTH = 340;
 const FLYOUT_VIEWPORT_MARGIN = 12;
 const FLYOUT_GAP = 8;
+
+const PREFERENCE_BRANCHES: readonly PreferenceBranchDefinition[] = Object.freeze([
+  Object.freeze({
+    id: "workspace",
+    label: "Workspace",
+    surfaceId: "workspace-preferences-workspace-surface",
+    titleId: "workspace-preferences-workspace-title",
+    testId: "workspace-preferences-workspace-trigger",
+    flyoutTestId: "workspace-preferences-workspace-flyout",
+    drillInTestId: "workspace-preferences-workspace-drill-in",
+    requestedWidth: 300,
+    requestedHeight: 190
+  }),
+  Object.freeze({
+    id: "theme",
+    label: "Theme",
+    surfaceId: "workspace-preferences-theme-surface",
+    titleId: "workspace-preferences-theme-title",
+    testId: "workspace-preferences-theme-trigger",
+    flyoutTestId: "workspace-preferences-theme-flyout",
+    drillInTestId: "workspace-preferences-theme-drill-in",
+    requestedWidth: 240,
+    requestedHeight: 170
+  }),
+  Object.freeze({
+    id: "density",
+    label: "Density",
+    surfaceId: "workspace-preferences-density-surface",
+    titleId: "workspace-preferences-density-title",
+    testId: "workspace-preferences-density-trigger",
+    flyoutTestId: "workspace-preferences-density-flyout",
+    drillInTestId: "workspace-preferences-density-drill-in",
+    requestedWidth: 240,
+    requestedHeight: 145
+  }),
+  Object.freeze({
+    id: "visible-panels",
+    label: "Visible Panels",
+    surfaceId: "workspace-visible-panels-surface",
+    titleId: "workspace-visible-panels-title",
+    testId: "workspace-visible-panels-trigger",
+    flyoutTestId: "workspace-visible-panels-flyout",
+    drillInTestId: "workspace-visible-panels-drill-in",
+    requestedWidth: 340,
+    requestedHeight: 0
+  })
+]);
+
+const getBranchDefinition = (branchId: PreferenceBranchId) =>
+  PREFERENCE_BRANCHES.find(({ id }) => id === branchId)!;
+
+const titleCase = (value: string) => value[0].toUpperCase() + value.slice(1);
 
 const getPanelAvailabilityDescriptionId = (panelId: PanelId) =>
   `workspace-panel-availability-${panelId.replace(/[^a-z0-9]+/gi, "-")}`;
@@ -88,41 +151,55 @@ export function WorkspacePreferencesControl({
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const visiblePanelsTriggerRef = useRef<HTMLButtonElement>(null);
+  const branchTriggerRefs = useRef<Partial<Record<PreferenceBranchId, HTMLButtonElement>>>({});
   const focusChildOnOpenRef = useRef(false);
-  const focusBranchOnCloseRef = useRef(false);
+  const focusBranchOnCloseRef = useRef<PreferenceBranchId>();
   const {
     state: cascadeState,
     open: openCascade,
     close: closeCascade,
     closeRoot: closeCascadeRoot
   } = useCascadingFlyoutState();
-  const isVisiblePanelsOpen = cascadeState.openPath[0] === VISIBLE_PANELS_BRANCH_ID;
+  const activeBranchId = cascadeState.openPath[0] as PreferenceBranchId | undefined;
+  const activeBranch = activeBranchId ? getBranchDefinition(activeBranchId) : undefined;
   const visiblePanelCount = panelOptions.filter((option) => option.visible).length;
+  const branchSummaries: Readonly<Record<PreferenceBranchId, string>> = {
+    workspace: activeWorkspaceLabel,
+    theme: titleCase(theme),
+    density: titleCase(density),
+    "visible-panels": `${visiblePanelCount}/${panelOptions.length}`
+  };
 
   const closeRoot = useCallback((restoreFocus = false) => {
     setIsOpen(false);
     closeCascadeRoot();
     setFlyoutGeometry(undefined);
+    focusBranchOnCloseRef.current = undefined;
     if (restoreFocus) {
       triggerRef.current?.focus();
     }
   }, [closeCascadeRoot]);
 
-  const closeVisiblePanels = useCallback((restoreFocus = true) => {
-    focusBranchOnCloseRef.current = restoreFocus;
+  const closeActiveBranch = useCallback((restoreFocus = true) => {
+    if (activeBranchId && restoreFocus) {
+      focusBranchOnCloseRef.current = activeBranchId;
+    }
     closeCascade(1);
     setFlyoutGeometry(undefined);
-  }, [closeCascade]);
+  }, [activeBranchId, closeCascade]);
 
-  const resolveVisiblePanelsPresentation = useCallback(() => {
+  const resolveBranchPresentation = useCallback((branchId: PreferenceBranchId) => {
     const popover = popoverRef.current;
-    const branchTrigger = visiblePanelsTriggerRef.current;
+    const branchTrigger = branchTriggerRefs.current[branchId];
     if (!popover || !branchTrigger) {
       return;
     }
+    const branch = getBranchDefinition(branchId);
     const popoverRect = popover.getBoundingClientRect();
     const branchRect = branchTrigger.getBoundingClientRect();
+    const requestedHeight = branchId === "visible-panels"
+      ? 96 + (panelOptions.length * 42)
+      : branch.requestedHeight + (readOnly ? 84 : 0);
     const geometry = resolveCascadingFlyoutGeometry({
       anchorRect: {
         ...toFlyoutRect(branchRect),
@@ -130,8 +207,8 @@ export function WorkspacePreferencesControl({
         right: popoverRect.right,
         width: popoverRect.width
       },
-      requestedWidth: FLYOUT_WIDTH,
-      requestedHeight: 96 + (panelOptions.length * 42),
+      requestedWidth: branch.requestedWidth,
+      requestedHeight,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
       viewportMargin: FLYOUT_VIEWPORT_MARGIN,
@@ -139,13 +216,13 @@ export function WorkspacePreferencesControl({
     });
     setFlyoutGeometry(geometry);
     setPresentation(geometry.sideBySideViable ? "flyout" : "drill-in");
-  }, [panelOptions.length]);
+  }, [panelOptions.length, readOnly]);
 
-  const openVisiblePanels = useCallback((moveFocus = false) => {
-    resolveVisiblePanelsPresentation();
+  const openBranch = useCallback((branchId: PreferenceBranchId, moveFocus = false) => {
+    resolveBranchPresentation(branchId);
     focusChildOnOpenRef.current = moveFocus;
-    openCascade(1, VISIBLE_PANELS_BRANCH_ID);
-  }, [openCascade, resolveVisiblePanelsPresentation]);
+    openCascade(1, branchId);
+  }, [openCascade, resolveBranchPresentation]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -161,31 +238,32 @@ export function WorkspacePreferencesControl({
   }, [closeRoot, isOpen]);
 
   useEffect(() => {
-    if (!isVisiblePanelsOpen) {
+    if (!activeBranchId) {
       return;
     }
-    const handleResize = () => resolveVisiblePanelsPresentation();
+    const handleResize = () => resolveBranchPresentation(activeBranchId);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isVisiblePanelsOpen, resolveVisiblePanelsPresentation]);
+  }, [activeBranchId, resolveBranchPresentation]);
 
   useLayoutEffect(() => {
-    if (!isVisiblePanelsOpen || !focusChildOnOpenRef.current) {
+    if (!activeBranch || !focusChildOnOpenRef.current) {
       return;
     }
     focusChildOnOpenRef.current = false;
-    const childSurface = rootRef.current?.querySelector<HTMLElement>(`#${VISIBLE_PANELS_SURFACE_ID}`);
+    const childSurface = rootRef.current?.querySelector<HTMLElement>(`#${activeBranch.surfaceId}`);
     const firstEnabledControl = childSurface?.querySelector<HTMLInputElement>('input:not(:disabled)');
     (firstEnabledControl ?? childSurface)?.focus();
-  }, [isVisiblePanelsOpen, presentation]);
+  }, [activeBranch, presentation]);
 
   useLayoutEffect(() => {
-    if (isVisiblePanelsOpen || !isOpen || !focusBranchOnCloseRef.current) {
+    const branchId = focusBranchOnCloseRef.current;
+    if (activeBranchId || !isOpen || !branchId) {
       return;
     }
-    focusBranchOnCloseRef.current = false;
-    visiblePanelsTriggerRef.current?.focus();
-  }, [isOpen, isVisiblePanelsOpen]);
+    focusBranchOnCloseRef.current = undefined;
+    branchTriggerRefs.current[branchId]?.focus();
+  }, [activeBranchId, isOpen]);
 
   const handlePopoverKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     event.stopPropagation();
@@ -193,25 +271,28 @@ export function WorkspacePreferencesControl({
       return;
     }
     event.preventDefault();
-    if (isVisiblePanelsOpen) {
-      closeVisiblePanels();
+    if (activeBranchId) {
+      closeActiveBranch();
       return;
     }
     closeRoot(true);
   };
 
-  const handleVisiblePanelsTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+  const handleBranchKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    branchId: PreferenceBranchId
+  ) => {
     if (event.key === "ArrowRight") {
       event.preventDefault();
-      openVisiblePanels(true);
+      openBranch(branchId, true);
     }
   };
 
-  const handleVisiblePanelsKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const handleChildKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     event.stopPropagation();
     if (event.key === "Escape" || event.key === "ArrowLeft") {
       event.preventDefault();
-      closeVisiblePanels();
+      closeActiveBranch();
     }
   };
 
@@ -219,11 +300,95 @@ export function WorkspacePreferencesControl({
     event.stopPropagation();
   };
 
-  const renderVisiblePanelsControls = () => (
-    <fieldset
-      className="workspace-preferences-group workspace-visible-panels-list"
-      aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
+  const renderReadOnlyMessage = () => readOnly ? (
+    <p
+      id={READ_ONLY_DESCRIPTION_ID}
+      className="workspace-preferences-read-only-message"
+      role="status"
+      data-testid="workspace-preferences-read-only-message"
     >
+      {readOnlyReason}
+    </p>
+  ) : null;
+
+  const renderWorkspaceControls = () => (
+    <fieldset className="workspace-preferences-group" disabled={readOnly} aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}>
+      <legend>Workspace options</legend>
+      <label>
+        <input
+          type="radio"
+          name="workspace-preference"
+          value="current-arrangement"
+          checked={!activeWorkspaceId}
+          disabled={readOnly}
+          onChange={() => {
+            if (!readOnly) onSelectCurrentArrangement();
+          }}
+        />
+        <span>Current arrangement</span>
+      </label>
+      {workspaceOptions.map((option) => (
+        <label key={option.id} title={option.tooltip}>
+          <input
+            type="radio"
+            name="workspace-preference"
+            value={option.id}
+            checked={activeWorkspaceId === option.id}
+            disabled={readOnly}
+            onChange={() => {
+              if (!readOnly) onSelectWorkspace(option.id);
+            }}
+          />
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+
+  const renderThemeControls = () => (
+    <fieldset className="workspace-preferences-group" disabled={readOnly} aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}>
+      <legend>Theme options</legend>
+      {(["system", "dark", "light"] as const).map((option) => (
+        <label key={option}>
+          <input
+            type="radio"
+            name="theme-preference"
+            value={option}
+            checked={theme === option}
+            disabled={readOnly}
+            onChange={() => {
+              if (!readOnly) onSelectTheme(option);
+            }}
+          />
+          <span>{titleCase(option)}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+
+  const renderDensityControls = () => (
+    <fieldset className="workspace-preferences-group" disabled={readOnly} aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}>
+      <legend>Density options</legend>
+      {(["comfortable", "compact"] as const).map((option) => (
+        <label key={option}>
+          <input
+            type="radio"
+            name="density-preference"
+            value={option}
+            checked={density === option}
+            disabled={readOnly}
+            onChange={() => {
+              if (!readOnly) onSelectDensity(option);
+            }}
+          />
+          <span>{titleCase(option)}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+
+  const renderVisiblePanelsControls = () => (
+    <fieldset className="workspace-preferences-group workspace-visible-panels-list" aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}>
       <legend>Panel visibility</legend>
       {panelOptions.map((option) => {
         const descriptionId = getPanelAvailabilityDescriptionId(option.id);
@@ -233,25 +398,14 @@ export function WorkspacePreferencesControl({
               type="checkbox"
               checked={option.visible}
               disabled={readOnly || !option.available}
-              aria-describedby={readOnly
-                ? READ_ONLY_DESCRIPTION_ID
-                : !option.available && option.unavailableReason
-                  ? descriptionId
-                  : undefined}
+              aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : !option.available && option.unavailableReason ? descriptionId : undefined}
               onChange={(event) => {
-                if (!readOnly && option.available) {
-                  onTogglePanel(option.id, event.currentTarget.checked);
-                }
+                if (!readOnly && option.available) onTogglePanel(option.id, event.currentTarget.checked);
               }}
             />
             <span>{option.label}</span>
             {!option.available && option.unavailableReason ? (
-              <small
-                id={descriptionId}
-                className="workspace-preference-unavailable-reason"
-              >
-                {option.unavailableReason}
-              </small>
+              <small id={descriptionId} className="workspace-preference-unavailable-reason">{option.unavailableReason}</small>
             ) : null}
           </label>
         );
@@ -259,165 +413,66 @@ export function WorkspacePreferencesControl({
     </fieldset>
   );
 
+  const renderBranchControls = (branchId: PreferenceBranchId) => {
+    switch (branchId) {
+      case "workspace": return renderWorkspaceControls();
+      case "theme": return renderThemeControls();
+      case "density": return renderDensityControls();
+      case "visible-panels": return renderVisiblePanelsControls();
+    }
+  };
+
   const renderRootPreferences = () => (
     <>
       <header className="workspace-preferences-heading">
         <strong id="workspace-preferences-title">Workspace &amp; View</strong>
       </header>
-      {readOnly ? (
-        <p
-          id={READ_ONLY_DESCRIPTION_ID}
-          className="workspace-preferences-read-only-message"
-          role="status"
-          data-testid="workspace-preferences-read-only-message"
-        >
-          {readOnlyReason}
-        </p>
-      ) : null}
-      <fieldset
-        className="workspace-preferences-group"
-        disabled={readOnly}
-        aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
-      >
-        <legend>Workspace</legend>
-        <label>
-          <input
-            type="radio"
-            name="workspace-preference"
-            value="current-arrangement"
-            checked={!activeWorkspaceId}
-            disabled={readOnly}
-            onChange={() => {
-              if (!readOnly) {
-                onSelectCurrentArrangement();
-              }
+      {renderReadOnlyMessage()}
+      <div className="workspace-preference-disclosure-list">
+        {PREFERENCE_BRANCHES.map((branch) => (
+          <PreferenceDisclosureRow
+            key={branch.id}
+            ref={(element) => {
+              branchTriggerRefs.current[branch.id] = element ?? undefined;
             }}
+            label={branch.label}
+            summary={branchSummaries[branch.id]}
+            expanded={activeBranchId === branch.id}
+            controlsId={branch.surfaceId}
+            testId={branch.testId}
+            onClick={() => activeBranchId === branch.id
+              ? closeActiveBranch(false)
+              : openBranch(branch.id, false)}
+            onKeyDown={(event) => handleBranchKeyDown(event, branch.id)}
           />
-          <span>Current arrangement</span>
-        </label>
-        {workspaceOptions.map((option) => (
-          <label key={option.id} title={option.tooltip}>
-            <input
-              type="radio"
-              name="workspace-preference"
-              value={option.id}
-              checked={activeWorkspaceId === option.id}
-              disabled={readOnly}
-              onChange={() => {
-                if (!readOnly) {
-                  onSelectWorkspace(option.id);
-                }
-              }}
-            />
-            <span>{option.label}</span>
-          </label>
         ))}
-      </fieldset>
-      <fieldset
-        className="workspace-preferences-group"
-        disabled={readOnly}
-        aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
-      >
-        <legend>Theme</legend>
-        {(["system", "dark", "light"] as const).map((option) => (
-          <label key={option}>
-            <input
-              type="radio"
-              name="theme-preference"
-              value={option}
-              checked={theme === option}
-              disabled={readOnly}
-              onChange={() => {
-                if (!readOnly) {
-                  onSelectTheme(option);
-                }
-              }}
-            />
-            <span>{option[0].toUpperCase() + option.slice(1)}</span>
-          </label>
-        ))}
-      </fieldset>
-      <fieldset
-        className="workspace-preferences-group"
-        disabled={readOnly}
-        aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
-      >
-        <legend>Density</legend>
-        {(["comfortable", "compact"] as const).map((option) => (
-          <label key={option}>
-            <input
-              type="radio"
-              name="density-preference"
-              value={option}
-              checked={density === option}
-              disabled={readOnly}
-              onChange={() => {
-                if (!readOnly) {
-                  onSelectDensity(option);
-                }
-              }}
-            />
-            <span>{option[0].toUpperCase() + option.slice(1)}</span>
-          </label>
-        ))}
-      </fieldset>
-      <button
-        ref={visiblePanelsTriggerRef}
-        type="button"
-        className="workspace-visible-panels-trigger"
-        aria-expanded={isVisiblePanelsOpen}
-        aria-controls={VISIBLE_PANELS_SURFACE_ID}
-        data-testid="workspace-visible-panels-trigger"
-        onClick={() => {
-          if (isVisiblePanelsOpen) {
-            closeVisiblePanels(false);
-          } else {
-            openVisiblePanels(false);
-          }
-        }}
-        onKeyDown={handleVisiblePanelsTriggerKeyDown}
-      >
-        <span>Visible Panels</span>
-        <small>{visiblePanelCount}/{panelOptions.length}</small>
-        <span className="workspace-visible-panels-chevron" aria-hidden="true">{`\u203A`}</span>
-      </button>
+      </div>
     </>
   );
 
-  const renderDrillIn = () => (
+  const renderDrillIn = (branch: PreferenceBranchDefinition) => (
     <div
-      id={VISIBLE_PANELS_SURFACE_ID}
-      className="workspace-visible-panels-drill-in"
+      id={branch.surfaceId}
+      className="workspace-preference-drill-in"
       role="group"
-      aria-labelledby={VISIBLE_PANELS_TITLE_ID}
+      aria-labelledby={branch.titleId}
+      aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
       tabIndex={-1}
-      data-testid="workspace-visible-panels-drill-in"
+      data-testid={branch.drillInTestId}
+      data-preference-branch={branch.id}
       data-cascading-depth="1"
       data-cascading-side="right"
-      onKeyDown={handleVisiblePanelsKeyDown}
+      onKeyDown={handleChildKeyDown}
     >
-      <header className="workspace-preferences-heading workspace-visible-panels-drill-in-heading">
-        <button
-          type="button"
-          className="workspace-visible-panels-back"
-          onClick={() => closeVisiblePanels()}
-        >
+      <header className="workspace-preferences-heading workspace-preference-drill-in-heading">
+        <button type="button" className="workspace-preference-back" onClick={() => closeActiveBranch()}>
           <span aria-hidden="true">{`\u2039`}</span>
           Workspace &amp; View
         </button>
-        <strong id={VISIBLE_PANELS_TITLE_ID}>Visible Panels</strong>
+        <strong id={branch.titleId}>{branch.label}</strong>
       </header>
-      {readOnly ? (
-        <p
-          id={READ_ONLY_DESCRIPTION_ID}
-          className="workspace-preferences-read-only-message"
-          role="status"
-          data-testid="workspace-preferences-read-only-message"
-        >
-          {readOnlyReason}
-        </p>
-      ) : null}
-      {renderVisiblePanelsControls()}
+      {renderReadOnlyMessage()}
+      {renderBranchControls(branch.id)}
     </div>
   );
 
@@ -432,13 +487,7 @@ export function WorkspacePreferencesControl({
         aria-controls={POPOVER_ID}
         aria-haspopup="dialog"
         data-testid="workspace-preferences-trigger"
-        onClick={() => {
-          if (isOpen) {
-            closeRoot(false);
-          } else {
-            setIsOpen(true);
-          }
-        }}
+        onClick={() => isOpen ? closeRoot(false) : setIsOpen(true)}
       >
         <span>Workspace</span>
         <strong>{activeWorkspaceLabel}</strong>
@@ -447,41 +496,38 @@ export function WorkspacePreferencesControl({
         <div
           ref={popoverRef}
           id={POPOVER_ID}
-          className={`workspace-preferences-popover${presentation === "drill-in" && isVisiblePanelsOpen ? " is-drill-in" : ""}`}
+          className={`workspace-preferences-popover${presentation === "drill-in" && activeBranch ? " is-drill-in" : ""}`}
           role="dialog"
-          aria-labelledby={presentation === "drill-in" && isVisiblePanelsOpen
-            ? VISIBLE_PANELS_TITLE_ID
-            : "workspace-preferences-title"}
+          aria-labelledby={presentation === "drill-in" && activeBranch ? activeBranch.titleId : "workspace-preferences-title"}
           aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
           data-testid="workspace-preferences-popover"
-          data-cascading-presentation={presentation === "drill-in" && isVisiblePanelsOpen ? "drill-in" : "root"}
+          data-cascading-presentation={presentation === "drill-in" && activeBranch ? "drill-in" : "root"}
           onKeyDown={handlePopoverKeyDown}
           onPointerDown={stopPointerPropagation}
         >
-          {presentation === "drill-in" && isVisiblePanelsOpen
-            ? renderDrillIn()
-            : renderRootPreferences()}
+          {presentation === "drill-in" && activeBranch ? renderDrillIn(activeBranch) : renderRootPreferences()}
         </div>
       ) : null}
-      {isOpen && isVisiblePanelsOpen && presentation === "flyout" && flyoutGeometry ? (
+      {isOpen && activeBranch && presentation === "flyout" && flyoutGeometry ? (
         <CascadingFlyoutSurface
-          id={VISIBLE_PANELS_SURFACE_ID}
+          id={activeBranch.surfaceId}
           depth={1}
           geometry={flyoutGeometry}
-          className="workspace-visible-panels-flyout"
+          className="workspace-preference-flyout"
           role="group"
-          aria-labelledby={VISIBLE_PANELS_TITLE_ID}
+          aria-labelledby={activeBranch.titleId}
           aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
           tabIndex={-1}
-          data-testid="workspace-visible-panels-flyout"
-          onKeyDown={handleVisiblePanelsKeyDown}
+          data-testid={activeBranch.flyoutTestId}
+          data-preference-branch={activeBranch.id}
+          onKeyDown={handleChildKeyDown}
           onPointerDown={stopPointerPropagation}
         >
-          <header className="workspace-visible-panels-flyout-heading">
-            <strong id={VISIBLE_PANELS_TITLE_ID}>Visible Panels</strong>
-            <small>{visiblePanelCount}/{panelOptions.length}</small>
+          <header className="workspace-preference-flyout-heading">
+            <strong id={activeBranch.titleId}>{activeBranch.label}</strong>
+            <small>{branchSummaries[activeBranch.id]}</small>
           </header>
-          {renderVisiblePanelsControls()}
+          {renderBranchControls(activeBranch.id)}
         </CascadingFlyoutSurface>
       ) : null}
     </div>
