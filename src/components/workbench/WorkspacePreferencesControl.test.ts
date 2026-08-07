@@ -60,6 +60,8 @@ describe("WorkspacePreferencesControl", () => {
       .toEqual(["Workspace", "Theme", "Density", "Visible Panels"]);
     expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(8);
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
+    expect([...container.querySelectorAll<HTMLInputElement>("input")]
+      .every((input) => !input.disabled)).toBe(true);
     expect(container.textContent).not.toContain("Diagnostics");
     expect(container.textContent).not.toContain("Right Panel Shell");
   });
@@ -116,5 +118,91 @@ describe("WorkspacePreferencesControl", () => {
       bubbles: true
     })));
     expect(editorShortcut).not.toHaveBeenCalled();
+  });
+
+  it("tracks live panel availability without allowing unavailable preference mutations", async () => {
+    const props = createProps();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const unavailableReason = "Select exactly two explicit machines.";
+
+    await act(async () => root.render(createElement(WorkspacePreferencesControl, {
+      ...props,
+      activeWorkspaceId: "workspace.layout-engineering",
+      activeWorkspaceLabel: "Layout Engineering",
+      panelOptions: [
+        {
+          id: "panel.connectionPointSnap",
+          label: "Connection Point Snap",
+          visible: true,
+          available: false,
+          unavailableReason
+        },
+        { id: "panel.inspector", label: "Inspector", visible: true, available: true }
+      ]
+    })));
+    await act(async () => (container.querySelector("button") as HTMLButtonElement).click());
+    let checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    const snap = checkboxes[0];
+    expect(snap.disabled).toBe(true);
+    expect(snap.checked).toBe(true);
+    expect(container.querySelector(`#${snap.getAttribute("aria-describedby")}`)?.textContent)
+      .toBe(unavailableReason);
+    await act(async () => snap.click());
+    expect(props.onTogglePanel).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Layout Engineering");
+
+    await act(async () => root.render(createElement(WorkspacePreferencesControl, {
+      ...props,
+      activeWorkspaceId: "workspace.layout-engineering",
+      activeWorkspaceLabel: "Layout Engineering",
+      panelOptions: [
+        { id: "panel.connectionPointSnap", label: "Connection Point Snap", visible: true, available: true },
+        {
+          id: "panel.inspector",
+          label: "Inspector",
+          visible: true,
+          available: false,
+          unavailableReason: "Annotation properties are shown in the Annotations panel."
+        }
+      ]
+    })));
+    checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(checkboxes[0].disabled).toBe(false);
+    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[1].disabled).toBe(true);
+    await act(async () => checkboxes[0].click());
+    await act(async () => checkboxes[1].click());
+    expect(props.onTogglePanel).toHaveBeenCalledOnce();
+    expect(props.onTogglePanel).toHaveBeenCalledWith("panel.connectionPointSnap", false);
+  });
+
+  it("keeps the popover inspectable while future-readonly disables every mutation callback", async () => {
+    const props = createProps();
+    const reason = "UI preferences use unsupported schema version 3; defaults are active in read-only mode.";
+    const container = await mount(createElement(WorkspacePreferencesControl, {
+      ...props,
+      readOnly: true,
+      readOnlyReason: reason
+    }));
+    const trigger = container.querySelector("button") as HTMLButtonElement;
+    expect(trigger.disabled).toBe(false);
+    await act(async () => trigger.click());
+
+    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
+    const messageId = dialog.getAttribute("aria-describedby");
+    expect(messageId).toBeTruthy();
+    expect(container.querySelector(`#${messageId}`)?.textContent).toBe(reason);
+    const inputs = [...container.querySelectorAll<HTMLInputElement>("input")];
+    expect(inputs).toHaveLength(10);
+    expect(inputs.every((input) => input.disabled)).toBe(true);
+    await act(async () => inputs.forEach((input) => input.click()));
+    expect(props.onSelectCurrentArrangement).not.toHaveBeenCalled();
+    expect(props.onSelectWorkspace).not.toHaveBeenCalled();
+    expect(props.onSelectTheme).not.toHaveBeenCalled();
+    expect(props.onSelectDensity).not.toHaveBeenCalled();
+    expect(props.onTogglePanel).not.toHaveBeenCalled();
   });
 });

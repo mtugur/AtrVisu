@@ -71,6 +71,22 @@ const waitForUiPreferences = async (page: Page, status = "ready") => {
   )).toBe(status);
 };
 
+const readRawUiPreferencesJson = async (page: Page) => page.evaluate(() =>
+  new Promise<string>((resolve, reject) => {
+    const request = indexedDB.open("atrvisu-db", 2);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const getRequest = database.transaction("uiPreferences").objectStore("uiPreferences").get("workbench");
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        resolve(JSON.stringify(getRequest.result));
+        database.close();
+      };
+    };
+  })
+);
+
 const delayUiPreferencesHydration = async (page: Page) => {
   await page.addInitScript(() => {
     const releasedKey = "atrvisu.e2e.uiPreferencesHydrationReleased";
@@ -3287,6 +3303,143 @@ test("a hidden live panel is restored through Workspace and View and survives re
   await page.reload();
   await waitForUiPreferences(page);
   await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("workspace panel controls follow live Connection Point Snap and Inspector availability", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const canvas = page.locator("canvas.scene-canvas");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  let control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
+  control = await openWorkspacePreferences(page);
+  let snapLabel = control.popover.locator("label").filter({ hasText: "Connection Point Snap" });
+  let snapToggle = snapLabel.locator('input[type="checkbox"]');
+  await expect(snapToggle).toBeDisabled();
+  await expect(snapToggle).toBeChecked();
+  await expect(snapLabel).toContainText("Select exactly two explicit machines.");
+  const unavailableSnapshot = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  await snapLabel.evaluate((element) => (element as HTMLLabelElement).click());
+  await snapToggle.dispatchEvent("keydown", { key: " ", code: "Space" });
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
+    .toEqual(unavailableSnapshot);
+  await expect(control.trigger).toContainText("Layout Engineering");
+  await page.keyboard.press("Escape");
+
+  const machineCard = page.locator(".machine-card").first();
+  await machineCard.click();
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 2);
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available)
+    .toBe(true);
+
+  control = await openWorkspacePreferences(page);
+  snapLabel = control.popover.locator("label").filter({ hasText: "Connection Point Snap" });
+  snapToggle = snapLabel.locator('input[type="checkbox"]');
+  await expect(snapToggle).toBeEnabled();
+  await expect(snapToggle).toBeChecked();
+  await snapToggle.uncheck();
+  await expect(control.trigger).toContainText("Current arrangement");
+  await page.keyboard.press("Escape");
+
+  control = await openWorkspacePreferences(page);
+  let inspectorLabel = control.popover.locator("label").filter({ hasText: "Inspector" });
+  let inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
+  await expect(inspectorToggle).toBeEnabled();
+  await page.keyboard.press("Escape");
+  const annotationsSection = page.getByRole("button", { name: /Annotations/i });
+  if ((await annotationsSection.getAttribute("aria-expanded")) !== "true") {
+    await annotationsSection.click();
+  }
+  await page.getByTestId("add-note-annotation").click();
+  await expect(page.getByTestId("annotation-properties")).toBeVisible();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
+    .toBe(false);
+
+  control = await openWorkspacePreferences(page);
+  inspectorLabel = control.popover.locator("label").filter({ hasText: "Inspector" });
+  inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
+  await expect(inspectorToggle).toBeDisabled();
+  await expect(inspectorLabel).toContainText("Annotation properties are shown in the Annotations panel.");
+  const annotationSnapshot = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  await inspectorLabel.evaluate((element) => (element as HTMLLabelElement).click());
+  await inspectorToggle.dispatchEvent("keydown", { key: " ", code: "Space" });
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
+    .toEqual(annotationSnapshot);
+  await page.keyboard.press("Escape");
+
+  await clickSceneMachine(page, machineIds[0]);
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
+    .toBe(true);
+  control = await openWorkspacePreferences(page);
+  inspectorToggle = control.popover.locator("label")
+    .filter({ hasText: "Inspector" })
+    .locator('input[type="checkbox"]');
+  await expect(inspectorToggle).toBeEnabled();
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(canvas).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("future-version preferences expose an inspectable read-only Workspace and View surface", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  const futureRecord = {
+    ...createE2EUiPreferences({
+      theme: "light",
+      density: "compact",
+      activeWorkspaceId: "workspace.layout-engineering"
+    }),
+    schemaVersion: 3,
+    futurePreference: { preserve: "byte-for-byte" }
+  };
+  await seedUiPreferences(page, futureRecord);
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page, "future-readonly");
+  const rawBefore = await readRawUiPreferencesJson(page);
+  const snapshotBefore = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  const canvas = page.locator("canvas.scene-canvas");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  const control = await openWorkspacePreferences(page);
+  const message = page.getByTestId("workspace-preferences-read-only-message");
+  await expect(message).toBeVisible();
+  await expect(message).toContainText("unsupported schema version 3");
+  await expect(control.popover).toHaveAttribute("aria-describedby", await message.getAttribute("id") ?? "");
+  const radios = control.popover.locator('input[type="radio"]');
+  const checkboxes = control.popover.locator('input[type="checkbox"]');
+  await expect(radios).toHaveCount(8);
+  await expect(checkboxes).toHaveCount(16);
+  for (let index = 0; index < await radios.count(); index += 1) {
+    await expect(radios.nth(index)).toBeDisabled();
+    await radios.nth(index).evaluate((element) => (element as HTMLInputElement).click());
+  }
+  for (let index = 0; index < await checkboxes.count(); index += 1) {
+    await expect(checkboxes.nth(index)).toBeDisabled();
+    await checkboxes.nth(index).evaluate((element) => (element as HTMLInputElement).click());
+  }
+  await control.popover.press("Tab");
+  await control.popover.press("Space");
+
+  expect(await readRawUiPreferencesJson(page)).toBe(rawBefore);
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
+    .toEqual(snapshotBefore);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(canvas).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
 

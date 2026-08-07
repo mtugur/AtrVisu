@@ -133,6 +133,7 @@ export function WorkspacePreferencesControl({
                 name="workspace-preference"
                 value="current-arrangement"
                 checked={!activeWorkspaceId}
+                disabled={readOnly}
                 onChange={() => {
                   if (!readOnly) {
                     onSelectCurrentArrangement();
@@ -148,6 +149,7 @@ export function WorkspacePreferencesControl({
                   name="workspace-preference"
                   value={option.id}
                   checked={activeWorkspaceId === option.id}
+                  disabled={readOnly}
                   onChange={() => {
                     if (!readOnly) {
                       onSelectWorkspace(option.id);
@@ -171,6 +173,7 @@ export function WorkspacePreferencesControl({
                   name="theme-preference"
                   value={option}
                   checked={theme === option}
+                  disabled={readOnly}
                   onChange={() => {
                     if (!readOnly) {
                       onSelectTheme(option);
@@ -194,6 +197,7 @@ export function WorkspacePreferencesControl({
                   name="density-preference"
                   value={option}
                   checked={density === option}
+                  disabled={readOnly}
                   onChange={() => {
                     if (!readOnly) {
                       onSelectDensity(option);
