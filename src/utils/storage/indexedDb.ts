@@ -1,9 +1,17 @@
-import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import {
+  openDB,
+  type DBSchema,
+  type IDBPDatabase,
+  type OpenDBCallbacks
+} from "idb";
+import type { WorkbenchUiPreferences } from "../../platform/contracts";
 import type { AtrVisuProject } from "../../types/project";
 
 export const ATRVISU_DB_NAME = "atrvisu-db";
-export const ATRVISU_DB_VERSION = 1;
+export const ATRVISU_DB_VERSION = 2;
 export const PROJECTS_STORE_NAME = "projects";
+export const UI_PREFERENCES_STORE_NAME = "uiPreferences";
+export const UI_PREFERENCES_RECORD_KEY = "workbench";
 
 export interface AtrVisuDatabaseSchema extends DBSchema {
   projects: {
@@ -15,14 +23,25 @@ export interface AtrVisuDatabaseSchema extends DBSchema {
       updatedAt: string;
     };
   };
+  uiPreferences: {
+    key: string;
+    value: WorkbenchUiPreferences;
+  };
 }
 
 let databasePromise: Promise<IDBPDatabase<AtrVisuDatabaseSchema>> | null = null;
 let databaseInstance: IDBPDatabase<AtrVisuDatabaseSchema> | null = null;
 
-export const openAtrVisuDatabase = () => {
+export type AtrVisuDatabaseOpener = (
+  name: string,
+  version: number,
+  callbacks: OpenDBCallbacks<AtrVisuDatabaseSchema>
+) => Promise<IDBPDatabase<AtrVisuDatabaseSchema>>;
+
+const openAtrVisuDatabaseWith = (openDatabase: AtrVisuDatabaseOpener) => {
   if (!databasePromise) {
-    databasePromise = openDB<AtrVisuDatabaseSchema>(ATRVISU_DB_NAME, ATRVISU_DB_VERSION, {
+    let openingPromise!: Promise<IDBPDatabase<AtrVisuDatabaseSchema>>;
+    openingPromise = openDatabase(ATRVISU_DB_NAME, ATRVISU_DB_VERSION, {
       upgrade(database) {
         if (!database.objectStoreNames.contains(PROJECTS_STORE_NAME)) {
           const projectsStore = database.createObjectStore(PROJECTS_STORE_NAME, {
@@ -32,15 +51,38 @@ export const openAtrVisuDatabase = () => {
           projectsStore.createIndex("customerName", "customerName");
           projectsStore.createIndex("projectName", "projectName");
         }
+        if (!database.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)) {
+          database.createObjectStore(UI_PREFERENCES_STORE_NAME);
+        }
       }
-    }).then((database) => {
-      databaseInstance = database;
-      return database;
-    });
+    })
+      .then((database) => {
+        if (databasePromise === openingPromise) {
+          databaseInstance = database;
+        } else {
+          database.close();
+        }
+        return database;
+      })
+      .catch((error: unknown) => {
+        if (databasePromise === openingPromise) {
+          databasePromise = null;
+          databaseInstance = null;
+        }
+        throw error;
+      });
+    databasePromise = openingPromise;
   }
 
   return databasePromise;
 };
+
+export const openAtrVisuDatabase = () => openAtrVisuDatabaseWith(
+  (name, version, callbacks) => openDB<AtrVisuDatabaseSchema>(name, version, callbacks)
+);
+
+export const openAtrVisuDatabaseWithOpenerForTests = (openDatabase: AtrVisuDatabaseOpener) =>
+  openAtrVisuDatabaseWith(openDatabase);
 
 export const resetAtrVisuDatabaseConnectionForTests = () => {
   databaseInstance?.close();

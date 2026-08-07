@@ -232,6 +232,13 @@ import { getPlatformCommandSeedById } from "./platform/registrySeeds";
 import { createEditorDefinitionRegistry } from "./platform/editorDefinitionRegistry";
 import { createEditorRuntimeRegistry } from "./workbench/editorRuntimeRegistry";
 import {
+  MAX_RIGHT_PANEL_WIDTH,
+  MIN_RIGHT_PANEL_WIDTH,
+  type CompatibilityPanelId,
+  useUiPreferences,
+  useUiPreferencesStore
+} from "./workbench/uiPreferences";
+import {
   LAYOUT_3D_EDITOR_DEFINITION,
   LAYOUT_3D_EDITOR_ID
 } from "./workbench/layout3dEditorDefinition";
@@ -241,12 +248,7 @@ const PLACEMENT_SPACING = 7;
 const PLACEMENT_ORIGIN = { x: -8, z: -6 };
 const AUTOSAVE_KEY = "atrvisu.autosavedLayout.v1";
 const AUTOSAVE_DELAY_MS = 500;
-const PANEL_WIDTH_KEY = "atrvisu.rightPanelWidth.v1";
-const PANEL_COLLAPSED_KEY = "atrvisu.rightPanelCollapsed.v1";
 const NUDGE_SETTINGS_KEY = "atrvisu.nudgeSettings.v1";
-const MIN_PANEL_WIDTH = 280;
-const MAX_PANEL_WIDTH = 600;
-const DEFAULT_PANEL_WIDTH = 360;
 const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   nudgeStepMm: 100,
   largeNudgeStepMm: 1000,
@@ -335,41 +337,8 @@ const featureRuntimeCommandIds = new Set<string>(Object.values(RUNTIME_FEATURE_C
 
 const DUPLICATE_MACHINE_OFFSET_MM = 250;
 
-const PANEL_SECTION_CONFIGS = [
-  { id: RUNTIME_PANEL_IDS.machineLibrary, storageKey: "atrvisu.panelSection.machineLibrary.v1", defaultExpanded: true },
-  { id: RUNTIME_PANEL_IDS.layoutControls, storageKey: "atrvisu.panelSection.layoutControls.v1", defaultExpanded: true },
-  { id: RUNTIME_PANEL_IDS.viewpoints, storageKey: "atrvisu.panelSection.viewpoints.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.layers, storageKey: "atrvisu.panelSection.layers.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.civilReferences, storageKey: "atrvisu.panelSection.civilReferences.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.groups, storageKey: "atrvisu.panelSection.assemblyTree.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.projectStatus, storageKey: "atrvisu.panelSection.projectManager.v1", defaultExpanded: true },
-  { id: RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, storageKey: "atrvisu.panelSection.performanceBenchmark.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.simulationControls, storageKey: "atrvisu.panelSection.simulationControls.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.annotations, storageKey: "atrvisu.panelSection.annotations.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.precisionPlacement, storageKey: "atrvisu.panelSection.precisionPlacement.v1", defaultExpanded: true },
-  { id: RUNTIME_PANEL_IDS.alignmentTools, storageKey: "atrvisu.panelSection.alignmentTools.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.connectionPointSnap, storageKey: "atrvisu.panelSection.connectionPointSnap.v1", defaultExpanded: true },
-  { id: RUNTIME_PANEL_IDS.displayOverlayControls, storageKey: "atrvisu.panelSection.overlayControls.v1", defaultExpanded: false },
-  { id: RUNTIME_PANEL_IDS.collisionCheck, storageKey: "atrvisu.panelSection.collisionCheck.v1", defaultExpanded: true },
-  { id: RUNTIME_PANEL_IDS.inspector, storageKey: "atrvisu.panelSection.properties.v1", defaultExpanded: false }
-] as const;
-
-type PanelSectionId = typeof PANEL_SECTION_CONFIGS[number]["id"];
+type PanelSectionId = CompatibilityPanelId;
 type PanelSectionExpansionState = Record<PanelSectionId, boolean>;
-
-const loadPanelSectionExpansionState = (): PanelSectionExpansionState => PANEL_SECTION_CONFIGS.reduce(
-  (state, config) => {
-    let expanded = config.defaultExpanded;
-    try {
-      const savedValue = window.localStorage.getItem(config.storageKey);
-      expanded = savedValue === null ? config.defaultExpanded : savedValue === "expanded";
-    } catch {
-      // Panel preferences are best-effort only.
-    }
-    return { ...state, [config.id]: expanded };
-  },
-  {} as PanelSectionExpansionState
-);
 
 const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined): NudgeSettings => ({
   nudgeStepMm:
@@ -387,6 +356,46 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 });
 
 export function App() {
+  const uiPreferencesStore = useUiPreferencesStore();
+  const { preferences: uiPreferences } = useUiPreferences();
+  const panelPreferences = useMemo(
+    () => new Map(uiPreferences.panels.map((panel) => [panel.panelId, panel])),
+    [uiPreferences.panels]
+  );
+  const shellPreference = panelPreferences.get(RUNTIME_PANEL_IDS.rightPanelShell);
+  const panelWidth = shellPreference?.size ?? 360;
+  const isPanelCollapsed = !shellPreference?.visible || Boolean(shellPreference.collapsed);
+  const panelSectionExpansion = useMemo(() => Object.fromEntries(
+    uiPreferences.panels
+      .filter((panel) => panel.panelId !== RUNTIME_PANEL_IDS.rightPanelShell)
+      .map((panel) => [panel.panelId, !panel.collapsed])
+  ) as PanelSectionExpansionState, [uiPreferences.panels]);
+  const panelSectionVisibility = useMemo(() => Object.fromEntries(
+    uiPreferences.panels
+      .filter((panel) => panel.panelId !== RUNTIME_PANEL_IDS.rightPanelShell)
+      .map((panel) => [panel.panelId, panel.visible])
+  ) as Record<PanelSectionId, boolean>, [uiPreferences.panels]);
+  const setIsPanelCollapsed = useCallback((next: boolean | ((current: boolean) => boolean)) => {
+    const currentShell = uiPreferencesStore.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
+    );
+    const current = !currentShell?.visible || Boolean(currentShell.collapsed);
+    const collapsed = typeof next === "function" ? next(current) : next;
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.rightPanelShell, {
+      visible: true,
+      collapsed
+    });
+  }, [uiPreferencesStore]);
+  const setPanelWidth = useCallback((next: number | ((current: number) => number)) => {
+    const currentShell = uiPreferencesStore.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
+    );
+    const current = currentShell?.size ?? 360;
+    const requested = typeof next === "function" ? next(current) : next;
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.rightPanelShell, {
+      size: Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, requested))
+    });
+  }, [uiPreferencesStore]);
   const [enableE2EDiagnostics] = useState(() =>
     new URLSearchParams(window.location.search).get("e2eDiagnostics") === "1"
   );
@@ -426,7 +435,6 @@ export function App() {
   const [isPerformanceBenchmarkOpen, setIsPerformanceBenchmarkOpen] = useState(false);
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
   const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
-  const [panelSectionExpansion, setPanelSectionExpansion] = useState(loadPanelSectionExpansionState);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
   const [latestPerformanceMetrics, setLatestPerformanceMetrics] = useState<ScenePerformanceMetrics | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -434,24 +442,6 @@ export function App() {
   const [currentRevisionId, setCurrentRevisionId] = useState<string | null>(null);
   const [hasUnsavedProjectChanges, setHasUnsavedProjectChanges] = useState(false);
   const [layoutHistory, setLayoutHistory] = useState(() => createLayoutHistory());
-  const [panelWidth, setPanelWidth] = useState(() => {
-    try {
-      const rawSavedWidth = window.localStorage.getItem(PANEL_WIDTH_KEY);
-      const savedWidth = rawSavedWidth === null ? Number.NaN : Number(rawSavedWidth);
-      return Number.isFinite(savedWidth)
-        ? Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, savedWidth))
-        : DEFAULT_PANEL_WIDTH;
-    } catch {
-      return DEFAULT_PANEL_WIDTH;
-    }
-  });
-  const [isPanelCollapsed, setIsPanelCollapsed] = useState(() => {
-    try {
-      return window.localStorage.getItem(PANEL_COLLAPSED_KEY) === "collapsed";
-    } catch {
-      return false;
-    }
-  });
   const resizeStartRef = useRef<{ pointerX: number; width: number } | null>(null);
   const placementSettingsRef = useRef(placementSettings);
   const overlaySettingsRef = useRef(overlaySettings);
@@ -538,6 +528,7 @@ export function App() {
   const previousViewportShellStateRef = useRef({ isPanelCollapsed, panelWidth });
   const runtimePanelStateRef = useRef({
     panelSectionExpansion,
+    panelSectionVisibility,
     isPanelCollapsed,
     panelWidth,
     isProjectManagerOpen,
@@ -1100,10 +1091,11 @@ export function App() {
   }, []);
 
   const setPanelSectionExpanded = useCallback((panelId: PanelSectionId, expanded: boolean) => {
-    setPanelSectionExpansion((current) => current[panelId] === expanded
-      ? current
-      : { ...current, [panelId]: expanded });
-  }, []);
+    uiPreferencesStore.updatePanelPreference(panelId, {
+      visible: true,
+      collapsed: !expanded
+    });
+  }, [uiPreferencesStore]);
 
   const setLibraryManagerRuntimeController = useCallback(
     (controller: LibraryManagerRuntimeController | null) => {
@@ -1170,9 +1162,10 @@ export function App() {
         const state = runtimePanelStateRef.current;
         const availability = getAvailability();
         const expanded = state.panelSectionExpansion[panelId];
+        const visible = state.panelSectionVisibility[panelId];
         return {
-          isVisible: !state.isPanelCollapsed && availability.available,
-          isOpen: !state.isPanelCollapsed && expanded && availability.available,
+          isVisible: !state.isPanelCollapsed && visible && availability.available,
+          isOpen: !state.isPanelCollapsed && visible && expanded && availability.available,
           available: availability.available,
           isExpanded: expanded,
           ...(availability.context ? { context: availability.context } : {}),
@@ -1192,11 +1185,12 @@ export function App() {
       },
       toggle: () => {
         const state = runtimePanelStateRef.current;
-        if (state.panelSectionExpansion[panelId] && beforeClose && !beforeClose()) {
+        const isOpen = state.panelSectionVisibility[panelId] && state.panelSectionExpansion[panelId];
+        if (isOpen && beforeClose && !beforeClose()) {
           return false;
         }
         setIsPanelCollapsed(false);
-        setPanelSectionExpanded(panelId, !state.panelSectionExpansion[panelId]);
+        setPanelSectionExpanded(panelId, !isOpen);
         return true;
       }
     });
@@ -1327,6 +1321,7 @@ export function App() {
   useLayoutEffect(() => {
     runtimePanelStateRef.current = {
       panelSectionExpansion,
+      panelSectionVisibility,
       isPanelCollapsed,
       panelWidth,
       isProjectManagerOpen,
@@ -1348,6 +1343,7 @@ export function App() {
     isProjectManagerOpen,
     isTaxonomyManagerOpen,
     panelSectionExpansion,
+    panelSectionVisibility,
     panelWidth,
     propertiesPanelContext
   ]);
@@ -1396,6 +1392,21 @@ export function App() {
       delete window.__atrvisuRuntimePanels;
     };
   }, [enableE2EDiagnostics, runtimePanelBridge]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+    window.__atrvisuUiPreferences = {
+      getSnapshot: uiPreferencesStore.getSnapshot,
+      updateTheme: uiPreferencesStore.updateTheme,
+      updateDensity: uiPreferencesStore.updateDensity,
+      updatePanelPreference: uiPreferencesStore.updatePanelPreference
+    };
+    return () => {
+      delete window.__atrvisuUiPreferences;
+    };
+  }, [enableE2EDiagnostics, uiPreferencesStore]);
 
   useEffect(() => {
     if (!enableE2EDiagnostics) {
@@ -1454,22 +1465,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth));
-    } catch {
-      // UI preferences are best-effort only.
-    }
-  }, [panelWidth]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(PANEL_COLLAPSED_KEY, isPanelCollapsed ? "collapsed" : "open");
-    } catch {
-      // UI preferences are best-effort only.
-    }
-  }, [isPanelCollapsed]);
-
-  useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
       const resizeStart = resizeStartRef.current;
       if (!resizeStart) {
@@ -1477,7 +1472,7 @@ export function App() {
       }
 
       const nextWidth = resizeStart.width + resizeStart.pointerX - event.clientX;
-      setPanelWidth(Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(nextWidth))));
+      setPanelWidth(Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, Math.round(nextWidth))));
     };
 
     const handlePointerUp = () => {
@@ -1492,7 +1487,7 @@ export function App() {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, []);
+  }, [setPanelWidth]);
 
   const startPanelResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -3803,6 +3798,7 @@ export function App() {
 
   const getPanelSectionRuntimeProps = (panelId: PanelSectionId) => ({
     expanded: panelSectionExpansion[panelId],
+    visible: panelSectionVisibility[panelId],
     onExpandedChange: (expanded: boolean) => {
       if (expanded) {
         runtimePanelBridge.openPanel(panelId);
@@ -3936,7 +3932,6 @@ export function App() {
           ) : null}
           <PanelSection
             title="Machine Library"
-            storageKey="atrvisu.panelSection.machineLibrary.v1"
             defaultExpanded
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.machineLibrary)}
           >
@@ -3956,7 +3951,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Layout Controls"
-            storageKey="atrvisu.panelSection.layoutControls.v1"
             defaultExpanded
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.layoutControls)}
           >
@@ -3964,7 +3958,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Viewpoints"
-            storageKey="atrvisu.panelSection.viewpoints.v1"
             defaultExpanded={false}
             badge={viewpoints.length > 0 ? `${viewpoints.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.viewpoints)}
@@ -3983,7 +3976,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Layers"
-            storageKey="atrvisu.panelSection.layers.v1"
             defaultExpanded={false}
             badge={layers.length > 1 ? `${layers.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.layers)}
@@ -4006,7 +3998,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Building / Civil"
-            storageKey="atrvisu.panelSection.civilReferences.v1"
             defaultExpanded={false}
             badge={civilReferences.length > 0 ? `${civilReferences.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.civilReferences)}
@@ -4032,7 +4023,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Assembly Tree"
-            storageKey="atrvisu.panelSection.assemblyTree.v1"
             defaultExpanded={false}
             badge={groups.length > 0 ? `${groups.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.groups)}
@@ -4061,7 +4051,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Project Manager"
-            storageKey="atrvisu.panelSection.projectManager.v1"
             defaultExpanded
             badge={hasUnsavedProjectChanges ? "Unsaved" : currentRevision?.revisionCode ?? "None"}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.projectStatus)}
@@ -4102,7 +4091,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Performance Benchmark"
-            storageKey="atrvisu.panelSection.performanceBenchmark.v1"
             defaultExpanded={false}
             badge={isBenchmarkMode ? "Benchmark" : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher)}
@@ -4124,7 +4112,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Simulation Controls"
-            storageKey="atrvisu.panelSection.simulationControls.v1"
             defaultExpanded={false}
             badge={isSimulationRunning ? "Running" : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.simulationControls)}
@@ -4138,7 +4125,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Annotations"
-            storageKey="atrvisu.panelSection.annotations.v1"
             defaultExpanded={false}
             badge={annotations.length > 0 ? `${annotations.length}` : undefined}
             expandSignal={editingAnnotationId ? annotationSelectionSignal : null}
@@ -4161,7 +4147,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Precision Placement"
-            storageKey="atrvisu.panelSection.precisionPlacement.v1"
             defaultExpanded
             badge={placementSettings.gridSnapEnabled ? `${placementSettings.gridSnapStepMm} mm` : "Free"}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.precisionPlacement)}
@@ -4189,7 +4174,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Alignment Tools"
-            storageKey="atrvisu.panelSection.alignmentTools.v1"
             defaultExpanded={false}
             badge={selectedAlignableEntities.length >= 2 ? `${selectedAlignableEntities.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)}
@@ -4224,7 +4208,6 @@ export function App() {
           {connectionPointSnapAvailable ? (
             <PanelSection
               title="Connection Point Snap"
-              storageKey="atrvisu.panelSection.connectionPointSnap.v1"
               defaultExpanded
               badge="2"
               {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.connectionPointSnap)}
@@ -4242,7 +4225,6 @@ export function App() {
           ) : null}
           <PanelSection
             title="Display / Overlay Controls"
-            storageKey="atrvisu.panelSection.overlayControls.v1"
             defaultExpanded={false}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.displayOverlayControls)}
           >
@@ -4264,7 +4246,6 @@ export function App() {
           </PanelSection>
           <PanelSection
             title="Collision Check"
-            storageKey="atrvisu.panelSection.collisionCheck.v1"
             defaultExpanded
             badge={collisionSettings.enabled ? `${collisionResult.pairs.length}` : "Off"}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.collisionCheck)}
@@ -4278,7 +4259,6 @@ export function App() {
           {!editingAnnotationId ? (
             <PanelSection
               title={selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
-              storageKey="atrvisu.panelSection.properties.v1"
               defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference) || Boolean(selectedGroup)}
               badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
               {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
