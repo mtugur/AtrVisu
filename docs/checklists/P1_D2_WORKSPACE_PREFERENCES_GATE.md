@@ -16,7 +16,10 @@
 | Unknown workspace recovery | PASS | Normalizer warning and runtime rejection tests |
 | Theme control and workspace identity retention | PASS | Component and Chromium tests |
 | Density control and override semantics | PASS | Runtime and Chromium tests |
-| Live panel visibility control | PASS | Descriptor-derived options and Chromium tests |
+| Live panel visibility control | PASS | Descriptor eligibility plus Runtime Panel Registry `bound`/`available`/`reason` projection |
+| Contextually unavailable panel controls | PASS | Connection Point Snap and Inspector disable dynamically with accessible reasons and no preference/workspace mutation |
+| Future-readonly preference surface | PASS | Existing P1-D1 status/warning disables every mutating control while the popover remains inspectable |
+| Future-version record preservation | PASS | Real Chromium IndexedDB record remains byte-for-byte unchanged after pointer/keyboard attempts |
 | Hidden panel restoration | PASS | Same popover restores and reload preserves the panel |
 | Modal, shell, and unbound panels excluded | PASS | Registry/component assertions |
 | Panel geometry and collapse values preserved | PASS | Workspace application tests |
@@ -34,12 +37,19 @@
 | Dependency audit | PASS | 0 vulnerabilities at default and low threshold |
 | Design-token governance | PASS | 203 maintained files |
 | Build | PASS | TypeScript and Vite; known chunk warning only |
-| Unit suite | PASS | 122 files / 1112 tests |
-| Chromium suite | PASS | 54/54 tests |
+| Unit suite | PASS | 122 files / 1115 tests |
+| Chromium suite | PASS | 56/56 tests |
 | Package lock and dependencies | PASS | `package-lock.json` unchanged; no dependency added |
 | Project and preference schemas | PASS | Project schema and UI preference DB version unchanged |
 | Manual visual acceptance | PENDING | Required after independent review and exact-head CI |
 
-Decision: **READY FOR INDEPENDENT REVIEW**. Automatic gates pass. The Draft PR
-must remain Draft and unmerged until the user explicitly passes manual visual
-acceptance for the visible P1-D2 controls.
+Independent review comment `5215805384` at reviewed head
+`5b1b1085f2ebe5ffba5524f553bff7dd85669089` identified live panel availability
+and future-readonly control blockers. Both are covered by the corrected runtime,
+component, and Chromium evidence above.
+
+Decision: **READY FOR INDEPENDENT RE-REVIEW**. Automatic gates pass. Manual
+visual acceptance remains **REQUIRED AND PENDING**. The Draft PR must remain
+Draft and unmerged until corrected exact-head CI, independent re-review, and
+explicit user visual acceptance pass. This is not READY FOR MERGE and does not
+mark P1-D complete.

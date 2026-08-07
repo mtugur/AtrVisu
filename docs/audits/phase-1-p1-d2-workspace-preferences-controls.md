@@ -70,6 +70,20 @@ for workspace, theme, density, and current live panels. Panel labels derive
 from runtime descriptors; no parallel title table exists. Every hidden live
 panel remains discoverable and restorable.
 
+The independent review at exact head
+`5b1b1085f2ebe5ffba5524f553bff7dd85669089` (comment `5215805384`)
+identified two correctness blockers. The corrected projection now uses static
+descriptors only for eligibility and maintained labels, then reads `bound`,
+`available`, and `reason` from the existing Runtime Panel Registry bridge.
+Connection Point Snap and Inspector therefore update in place as their real
+selection/property contexts change. Unavailable controls are disabled,
+described accessibly, and guarded before any workspace preference mutation.
+
+P1-D1 `future-readonly` is now explicit on the same popover. Its existing
+hydration warning describes the surface while every workspace, theme, density,
+and visible-panel mutation control is disabled. A real future-version IndexedDB
+record remains byte-for-byte unchanged after pointer and keyboard attempts.
+
 ## 10. Command and Inspector Projection
 
 Save and canonical Command Bar buttons receive
@@ -117,15 +131,17 @@ right-panel shell as the compatibility host.
 
 - Focused workspace registry/application/runtime/persistence: 4 files / 19
   current tests after final test refinement.
-- Focused workspace and preference-control tests: 6 files / 35 tests, passed.
-- Focused P1-D2 Chromium: 5/5 passed.
+- Focused correction unit tests: 3 files / 30 tests, passed.
+- Focused workspace and preference-control tests: passed with live availability
+  and future-readonly callback guards.
+- Focused correction Chromium: 2/2 passed; focused P1-D2 Chromium: 7/7 passed.
 - `npm.cmd ci`: passed.
 - `npm.cmd audit`: 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: 0 vulnerabilities.
 - Design-token governance: 203 maintained files, passed.
 - Build: passed; existing large-chunk warning remains non-blocking.
-- Full unit: 122 files / 1112 tests, passed.
-- Full E2E: 54/54, passed.
+- Full unit: 122 files / 1115 tests, passed.
+- Full E2E: 56/56, passed.
 - Console/page error collectors: passed. The corrupt-record scenario emits only
   its expected bounded warning.
 
@@ -151,7 +167,8 @@ choices, both density choices, hidden-panel restoration, command emphasis, and
 
 ## 19. Decision
 
-**READY FOR INDEPENDENT REVIEW.** All local automatic gates pass and the
-implementation is ready for Draft PR review. This is not READY FOR MERGE. P1-D
-remains open until exact-head GitHub Quality Gate and explicit manual visual
-acceptance pass.
+**READY FOR INDEPENDENT RE-REVIEW.** The two blockers from independent review
+comment `5215805384` are corrected and all local automatic gates pass. Manual
+visual acceptance remains REQUIRED AND PENDING. This is not READY FOR MERGE;
+P1-D remains open until corrected exact-head GitHub Quality Gate, independent
+re-review, and explicit manual visual acceptance pass.

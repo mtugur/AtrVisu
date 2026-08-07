@@ -49,6 +49,20 @@ Workspace & View popover exposes native workspace, theme, density, and current
 live content-panel controls. Panel labels come from the runtime panel
 descriptors. Modal, planned/unbound, and shell entries are excluded.
 
+Static workspace panel descriptors define only which compatibility content
+panels are eligible for this surface and provide maintained labels. The
+existing Runtime Panel Registry bridge remains authoritative for each eligible
+panel's current binding, availability, and unavailable reason. Contextually
+unavailable panels remain discoverable as disabled controls with an accessible
+reason. Their persisted visibility, collapse, order, and dock values remain
+unchanged until the live runtime context makes them available again.
+
+ADR-007's `future-readonly` hydration status also governs this surface. The
+Workspace & View trigger and popover remain inspectable, but every workspace,
+theme, density, and panel preference control is disabled and described by the
+existing P1-D1 warning. No second read-only state is introduced and the stored
+future-version record is never rewritten, downgraded, or reset.
+
 ## Authority Boundary
 
 ADR-007 remains authoritative for persistence, hydration, normalization,
@@ -75,6 +89,8 @@ commitment.
 - Existing users start in Current arrangement without a reset.
 - Workspace switching is explicit, deterministic, persisted, and reversible.
 - Every hidden live panel remains recoverable from the same popover.
+- Contextually unavailable panel options cannot create preference overrides.
+- Future-version preference records produce an explicit read-only surface.
 - Theme and density continue updating the single DesignSystemRoot in place.
 - The compatibility right-panel shell remains the real current host.
 - Manual visual acceptance is required because P1-D2 adds visible controls.
