@@ -99,6 +99,11 @@ const createE2EUiPreferences = (overrides: {
   theme?: "light" | "dark" | "system";
   density?: "compact" | "comfortable";
   width?: number;
+  activeWorkspaceId?: "workspace.sales-layout" | "workspace.layout-engineering";
+  panelOverrides?: Readonly<Record<string, Readonly<{
+    visible?: boolean;
+    collapsed?: boolean;
+  }>>>;
 } = {}) => {
   const panels = [
     ["panel.rightPanelShell", false],
@@ -123,15 +128,27 @@ const createE2EUiPreferences = (overrides: {
     schemaVersion: 1,
     theme: overrides.theme ?? "dark",
     density: overrides.density ?? "comfortable",
+    ...(overrides.activeWorkspaceId ? { activeWorkspaceId: overrides.activeWorkspaceId } : {}),
     panels: panels.map(([panelId, collapsed], order) => ({
       panelId,
-      visible: true,
-      collapsed,
+      visible: overrides.panelOverrides?.[panelId]?.visible ?? true,
+      collapsed: overrides.panelOverrides?.[panelId]?.collapsed ?? collapsed,
       ...(panelId === "panel.rightPanelShell" ? { size: overrides.width ?? 360 } : {}),
       order,
       dock: "secondary-dock"
     }))
   };
+};
+
+const openWorkspacePreferences = async (page: Page) => {
+  const trigger = page.getByTestId("workspace-preferences-trigger");
+  if (await trigger.getAttribute("aria-expanded") !== "true") {
+    await trigger.click();
+  }
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const popover = page.getByTestId("workspace-preferences-popover");
+  await expect(popover).toBeVisible();
+  return { trigger, popover };
 };
 
 const expectNoModalBackdrop = async (page: Page) => {
@@ -3126,7 +3143,192 @@ test("corrupt preference storage degrades safely and diagnostics remain guarded"
   await normalPage.goto("/");
   await expect(normalPage.getByTestId("app-root")).toBeVisible();
   expect(await normalPage.evaluate(() => window.__atrvisuUiPreferences)).toBeUndefined();
+  expect(await normalPage.evaluate(() => window.__atrvisuWorkspace)).toBeUndefined();
   expect(normalErrors).toEqual([]);
   await normalPage.close();
+});
+
+test("P1-D1 preferences start as Current arrangement without an implicit Sales reset", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  const seed = createE2EUiPreferences({
+    theme: "light",
+    density: "compact",
+    width: 420,
+    panelOverrides: {
+      "panel.layers": { visible: false, collapsed: true },
+      "panel.annotations": { visible: true, collapsed: false }
+    }
+  });
+  await seedUiPreferences(page, seed);
+  await page.goto("/?e2eDiagnostics=1");
+  await waitForUiPreferences(page);
+
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "light");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  await expect(page.getByTestId("right-panel")).toHaveCSS("width", "420px");
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Annotations", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  const snapshot = await page.evaluate(() => window.__atrvisuWorkspace?.getSnapshot());
+  expect(snapshot?.activeWorkspaceId).toBeUndefined();
+  expect(snapshot?.inspectorMode).toBe("contextual");
+  expect(errors).toEqual([]);
+});
+
+test("Sales and Engineering workspaces persist while domain and scene invariants stay fixed", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const beforeViewport = await getRuntimeViewportSnapshot(page);
+  const beforeProject = await getActiveProjectRuntimeContext(page);
+
+  let control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Sales Layout", { exact: true }).check();
+  await expect(control.trigger).toContainText("Sales Layout");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "comfortable");
+  await expect(page.getByRole("button", { name: "Machine Library", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Collision Check", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-workspace-inspector-mode", "summary");
+  await expect(page.locator('[data-command-id="project.save"]')).toHaveAttribute(
+    "data-workspace-emphasized",
+    "true"
+  );
+
+  control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
+  await expect(control.trigger).toContainText("Layout Engineering");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Collision Check/ })).toBeVisible();
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-workspace-inspector-mode", "engineering");
+  await expect(getCommandBarCommand(page, "edit.undo")).toHaveAttribute(
+    "data-workspace-emphasized",
+    "true"
+  );
+  await expect(getCommandBarCommand(page, "view.toggleLabels")).not.toHaveAttribute(
+    "data-workspace-emphasized",
+    "true"
+  );
+
+  control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Sales Layout", { exact: true }).check();
+  const afterViewport = await getRuntimeViewportSnapshot(page);
+  const afterProject = await getActiveProjectRuntimeContext(page);
+  expect(afterViewport.invariants).toEqual(beforeViewport.invariants);
+  expect(afterViewport.camera).toEqual(beforeViewport.camera);
+  expect(afterViewport.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeViewport.viewport?.sceneLifecycleGeneration);
+  expect(afterProject).toEqual(beforeProject);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  expect(errors).toEqual([]);
+});
+
+test("theme retains workspace identity and density override returns to Current arrangement", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  let control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Sales Layout", { exact: true }).check();
+  const before = await getRuntimeViewportSnapshot(page);
+
+  for (const theme of ["Dark", "Light", "System"] as const) {
+    control = await openWorkspacePreferences(page);
+    await control.popover.getByLabel(theme, { exact: true }).check();
+    await expect(page.getByTestId("design-system-root")).toHaveAttribute(
+      "data-av-theme",
+      theme.toLowerCase()
+    );
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  }
+  control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Compact", { exact: true }).check();
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  expect(errors).toEqual([]);
+});
+
+test("a hidden live panel is restored through Workspace and View and survives reload", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  let control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
+
+  control = await openWorkspacePreferences(page);
+  await control.popover.getByLabel("Layers", { exact: true }).uncheck();
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
+
+  control = await openWorkspacePreferences(page);
+  const layersToggle = control.popover.getByLabel("Layers", { exact: true });
+  await expect(layersToggle).not.toBeChecked();
+  await layersToggle.check();
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("workspace preferences are keyboard complete and stay inside responsive application geometry", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const before = await getRuntimeViewportSnapshot(page);
+  const trigger = page.getByTestId("workspace-preferences-trigger");
+  await trigger.focus();
+  await trigger.press("Enter");
+  const popover = page.getByTestId("workspace-preferences-popover");
+  await expect(popover).toBeVisible();
+  const sales = popover.getByLabel("Sales Layout", { exact: true });
+  await sales.focus();
+  await sales.press("Space");
+  await sales.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(before.invariants);
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 640, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    const current = await openWorkspacePreferences(page);
+    const box = await current.popover.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    expect(box!.height).toBeLessThan(viewport.height * 0.8);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.keyboard.press("Escape");
+  }
+  await expect(page.getByTestId("workbench-application-bar")).toBeVisible();
+  await expect(page.locator('[data-command-id="project.save"]')).toBeVisible();
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
 });
 

@@ -57,6 +57,18 @@ describe("AppShell render contract", () => {
     expect(markup).toContain('data-app-shell-zone="app-root"');
   });
 
+  it("exposes derived workspace Inspector mode without changing shell composition", () => {
+    const markup = renderToStaticMarkup(
+      createElement(AppShell, {
+        viewport: createSlot("viewport-slot", "viewport-slot"),
+        workspaceInspectorMode: "engineering"
+      })
+    );
+
+    expect(markup).toContain('data-workspace-inspector-mode="engineering"');
+    expect(markup.match(/data-workspace-inspector-mode=/g)).toHaveLength(1);
+  });
+
   it("renders zone anchors for root slot wrapper elements", () => {
     const markup = renderToStaticMarkup(
       createElement(AppShell, {
