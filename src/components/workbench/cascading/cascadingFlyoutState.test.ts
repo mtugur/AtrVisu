@@ -32,6 +32,17 @@ describe("cascading flyout state", () => {
     expect(openCascadingFlyout(state, 1, "viewpoints").openPath).toEqual(["viewpoints"]);
   });
 
+  it("replaces sibling preference branches at depth one without changing the depth policy", () => {
+    const workspace = openCascadingFlyout(createCascadingFlyoutState(), 1, "workspace");
+    const workspaceChild = openCascadingFlyout(workspace, 2, "workspace-detail");
+    const theme = openCascadingFlyout(workspaceChild, 1, "theme");
+    const density = openCascadingFlyout(theme, 1, "density");
+
+    expect(theme.openPath).toEqual(["theme"]);
+    expect(density.openPath).toEqual(["density"]);
+    expect(closeCascadingFlyout(density, 1).openPath).toEqual([]);
+  });
+
   it("closing depth one and root clear every descendant", () => {
     const state = openCascadingFlyout(
       openCascadingFlyout(createCascadingFlyoutState(), 1, "panels"),
