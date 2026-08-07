@@ -154,6 +154,10 @@ select:disabled {
   align-items: center;
 }
 
+.workbench-application-bar:has(.workspace-preferences-popover) {
+  z-index: calc(var(--av-z-popover) + 1);
+}
+
 .workspace-preferences-trigger {
   display: grid;
   width: 100%;
@@ -191,7 +195,10 @@ select:disabled {
 }
 
 .workspace-preferences-trigger:focus-visible,
-.workspace-preferences-group input:focus-visible {
+.workspace-preferences-group input:focus-visible,
+.workspace-visible-panels-trigger:focus-visible,
+.workspace-visible-panels-back:focus-visible,
+.cascading-flyout-surface:focus-visible {
   outline: var(--av-focus-ring-width) solid var(--av-focus-ring);
   outline-offset: 1px;
 }
@@ -283,10 +290,98 @@ select:disabled {
   font-size: var(--av-font-size-xs);
 }
 
-.workspace-panel-preferences {
-  max-height: 220px;
+.workspace-visible-panels-trigger {
+  display: grid;
+  min-height: var(--av-density-row-height);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--av-spacing-xs);
+  padding: 0 var(--av-spacing-xs);
+  border: 1px solid var(--av-border-subtle);
+  border-radius: var(--av-control-radius-sm);
+  color: var(--av-text-primary);
+  background: var(--av-surface-raised);
+  cursor: pointer;
+  text-align: left;
+}
+
+.workspace-visible-panels-trigger:hover,
+.workspace-visible-panels-trigger[aria-expanded="true"] {
+  border-color: var(--av-border-interactive);
+  background: var(--av-interaction-hover);
+}
+
+.workspace-visible-panels-trigger small,
+.workspace-visible-panels-flyout-heading small {
+  color: var(--av-text-muted);
+  font-size: var(--av-font-size-xs);
+}
+
+.workspace-visible-panels-chevron {
+  color: var(--av-text-muted);
+  font-size: var(--av-font-size-lg);
+  line-height: 1;
+}
+
+.cascading-flyout-surface {
+  z-index: var(--av-z-popover);
+  display: grid;
+  gap: var(--av-spacing-sm);
   overflow-y: auto;
-  padding-right: var(--av-spacing-2xs);
+  padding: var(--av-spacing-md);
+  border: 1px solid var(--av-border-default);
+  border-radius: var(--av-control-radius-md);
+  color: var(--av-text-primary);
+  background: var(--av-surface-overlay);
+  box-shadow: var(--av-elevation-panel);
+}
+
+.workspace-visible-panels-flyout-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--av-spacing-sm);
+  padding-bottom: var(--av-spacing-xs);
+  border-bottom: 1px solid var(--av-border-subtle);
+  font-size: var(--av-font-size-md);
+}
+
+.workspace-visible-panels-list label {
+  flex-wrap: wrap;
+}
+
+.workspace-visible-panels-list legend {
+  margin-bottom: var(--av-spacing-xs);
+}
+
+.workspace-visible-panels-drill-in-heading {
+  display: grid;
+  gap: var(--av-spacing-sm);
+}
+
+.workspace-visible-panels-drill-in {
+  display: grid;
+  min-width: 0;
+  gap: var(--av-spacing-sm);
+}
+
+.workspace-visible-panels-back {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: var(--av-spacing-xs);
+  padding: var(--av-spacing-2xs) var(--av-spacing-xs);
+  border: 0;
+  border-radius: var(--av-control-radius-sm);
+  color: var(--av-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.workspace-visible-panels-back:hover {
+  color: var(--av-text-primary);
+  background: var(--av-interaction-hover);
 }
 
 .workbench-project-session {
