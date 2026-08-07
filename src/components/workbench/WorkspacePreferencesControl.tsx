@@ -11,6 +11,8 @@ export type WorkspacePanelPreferenceOption = Readonly<{
   id: PanelId;
   label: string;
   visible: boolean;
+  available: boolean;
+  unavailableReason?: string;
 }>;
 
 export type WorkspacePreferencesControlProps = Readonly<{
@@ -28,6 +30,8 @@ export type WorkspacePreferencesControlProps = Readonly<{
 }>;
 
 const POPOVER_ID = "workspace-preferences-popover";
+const getPanelAvailabilityDescriptionId = (panelId: PanelId) =>
+  `workspace-panel-availability-${panelId.replace(/[^a-z0-9]+/gi, "-")}`;
 
 export function WorkspacePreferencesControl({
   activeWorkspaceId,
@@ -158,16 +162,35 @@ export function WorkspacePreferencesControl({
           </fieldset>
           <fieldset className="workspace-preferences-group workspace-panel-preferences">
             <legend>Visible Panels</legend>
-            {panelOptions.map((option) => (
-              <label key={option.id}>
-                <input
-                  type="checkbox"
-                  checked={option.visible}
-                  onChange={(event) => onTogglePanel(option.id, event.currentTarget.checked)}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
+            {panelOptions.map((option) => {
+              const descriptionId = getPanelAvailabilityDescriptionId(option.id);
+              return (
+                <label key={option.id} title={option.unavailableReason}>
+                  <input
+                    type="checkbox"
+                    checked={option.visible}
+                    disabled={!option.available}
+                    aria-describedby={!option.available && option.unavailableReason
+                      ? descriptionId
+                      : undefined}
+                    onChange={(event) => {
+                      if (option.available) {
+                        onTogglePanel(option.id, event.currentTarget.checked);
+                      }
+                    }}
+                  />
+                  <span>{option.label}</span>
+                  {!option.available && option.unavailableReason ? (
+                    <small
+                      id={descriptionId}
+                      className="workspace-preference-unavailable-reason"
+                    >
+                      {option.unavailableReason}
+                    </small>
+                  ) : null}
+                </label>
+              );
+            })}
           </fieldset>
         </div>
       ) : null}

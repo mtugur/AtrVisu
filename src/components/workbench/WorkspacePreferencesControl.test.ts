@@ -35,8 +35,8 @@ const createProps = () => ({
   theme: "system" as const,
   density: "comfortable" as const,
   panelOptions: [
-    { id: "panel.machineLibrary", label: "Machine Library", visible: true },
-    { id: "panel.layers", label: "Layers", visible: false }
+    { id: "panel.machineLibrary", label: "Machine Library", visible: true, available: true },
+    { id: "panel.layers", label: "Layers", visible: false, available: true }
   ],
   onSelectCurrentArrangement: vi.fn(),
   onSelectWorkspace: vi.fn(),

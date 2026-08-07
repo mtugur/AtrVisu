@@ -252,9 +252,25 @@ select:disabled {
   background: var(--av-interaction-hover);
 }
 
+.workspace-preferences-group label:has(input:disabled) {
+  color: var(--av-text-disabled);
+  cursor: not-allowed;
+}
+
+.workspace-preferences-group label:has(input:disabled):hover {
+  background: transparent;
+}
+
 .workspace-preferences-group input {
   flex: 0 0 auto;
   accent-color: var(--av-interaction-accent);
+}
+
+.workspace-preference-unavailable-reason {
+  display: block;
+  flex: 1 1 100%;
+  color: var(--av-text-muted);
+  font-size: var(--av-font-size-xs);
 }
 
 .workspace-panel-preferences {

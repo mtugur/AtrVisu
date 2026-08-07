@@ -196,6 +196,7 @@ import {
   type RuntimePanelBinding,
   type RuntimePanelBindings,
   type RuntimePanelOperationResult,
+  type RuntimePanelReachability,
   type RuntimePanelState
 } from "./platform/runtimePanels";
 import {
@@ -382,14 +383,6 @@ export function App() {
     () => new Map(uiPreferences.panels.map((panel) => [panel.panelId, panel])),
     [uiPreferences.panels]
   );
-  const workspacePanelOptions = useMemo(
-    () => liveWorkspacePanelDescriptors.map(({ definition }) => ({
-      id: definition.id,
-      label: definition.title,
-      visible: panelPreferences.get(definition.id)?.visible ?? definition.defaultVisible
-    })),
-    [panelPreferences]
-  );
   const shellPreference = panelPreferences.get(RUNTIME_PANEL_IDS.rightPanelShell);
   const panelWidth = shellPreference?.size ?? 360;
   const isPanelCollapsed = !shellPreference?.visible || Boolean(shellPreference.collapsed);
@@ -531,6 +524,9 @@ export function App() {
     () => createRuntimePanelRegistryBridge(() => runtimePanelBindingsRef.current),
     []
   );
+  const [workspacePanelReachability, setWorkspacePanelReachability] = useState<
+    readonly RuntimePanelReachability[]
+  >([]);
   const runtimeViewportBindingsRef = useRef<RuntimeViewportBindings>({});
   const runtimeViewportBridge = useMemo(
     () => createRuntimeViewportBridge(() => runtimeViewportBindingsRef.current),
@@ -1378,7 +1374,19 @@ export function App() {
 
   useLayoutEffect(() => {
     runtimePanelBindingsRef.current = runtimePanelBindings;
-  }, [runtimePanelBindings]);
+    setWorkspacePanelReachability(liveWorkspacePanelDescriptors.flatMap(({ definition }) => {
+      const panel = runtimePanelBridge.getRuntimePanel(definition.id);
+      return panel?.bound ? [panel] : [];
+    }));
+  }, [
+    connectionPointSnapAvailable,
+    editingAnnotationId,
+    panelSectionExpansion,
+    panelSectionVisibility,
+    propertiesPanelContext,
+    runtimePanelBindings,
+    runtimePanelBridge
+  ]);
 
   useLayoutEffect(() => {
     runtimeViewportBindingsRef.current = runtimeViewportBindings;
@@ -3903,6 +3911,24 @@ export function App() {
   const activeWorkspaceLabel = workspaceProjection.activeWorkspaceId
     ? workspaceFallbackLabels[workspaceProjection.activeWorkspaceId]
     : "Current arrangement";
+  const workspacePanelOptions = useMemo(() => {
+    const reachabilityById = new Map(
+      workspacePanelReachability.map((panel) => [panel.panelId, panel])
+    );
+    return liveWorkspacePanelDescriptors.flatMap(({ definition }) => {
+      const panel = reachabilityById.get(definition.id);
+      if (!panel?.bound) {
+        return [];
+      }
+      return [{
+        id: definition.id,
+        label: panel.title,
+        visible: panelPreferences.get(definition.id)?.visible ?? definition.defaultVisible,
+        available: panel.available,
+        ...(panel.reason ? { unavailableReason: panel.reason } : {})
+      }];
+    });
+  }, [panelPreferences, workspacePanelReachability]);
   const workspaceOptions = workspacePresetRegistry.presets.map((preset) => ({
     id: preset.id as WorkspaceId,
     label: workspaceFallbackLabels[preset.id],
@@ -3937,7 +3963,10 @@ export function App() {
                 workspaceRuntime.updateDensity(density);
               }}
               onTogglePanel={(panelId, visible) => {
-                workspaceRuntime.updatePanelVisibility(panelId, visible);
+                const panel = runtimePanelBridge.getRuntimePanel(panelId);
+                if (panel?.bound && panel.available) {
+                  workspaceRuntime.updatePanelVisibility(panelId, visible);
+                }
               }}
             />
           )}
