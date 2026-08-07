@@ -117,14 +117,14 @@ right-panel shell as the compatibility host.
 
 - Focused workspace registry/application/runtime/persistence: 4 files / 19
   current tests after final test refinement.
-- Focused preference-control and command-surface component tests: passed.
+- Focused workspace and preference-control tests: 6 files / 35 tests, passed.
 - Focused P1-D2 Chromium: 5/5 passed.
 - `npm.cmd ci`: passed.
 - `npm.cmd audit`: 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: 0 vulnerabilities.
 - Design-token governance: 203 maintained files, passed.
 - Build: passed; existing large-chunk warning remains non-blocking.
-- Full unit: 121 files / 1108 tests, passed.
+- Full unit: 122 files / 1112 tests, passed.
 - Full E2E: 54/54, passed.
 - Console/page error collectors: passed. The corrupt-record scenario emits only
   its expected bounded warning.

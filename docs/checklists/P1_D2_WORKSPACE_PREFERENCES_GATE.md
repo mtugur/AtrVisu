@@ -34,7 +34,7 @@
 | Dependency audit | PASS | 0 vulnerabilities at default and low threshold |
 | Design-token governance | PASS | 203 maintained files |
 | Build | PASS | TypeScript and Vite; known chunk warning only |
-| Unit suite | PASS | 121 files / 1108 tests |
+| Unit suite | PASS | 122 files / 1112 tests |
 | Chromium suite | PASS | 54/54 tests |
 | Package lock and dependencies | PASS | `package-lock.json` unchanged; no dependency added |
 | Project and preference schemas | PASS | Project schema and UI preference DB version unchanged |

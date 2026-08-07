@@ -58,7 +58,7 @@ describe("WorkspacePreferencesControl", () => {
       .toBe("workspace-preferences-title");
     expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent))
       .toEqual(["Workspace", "Theme", "Density", "Visible Panels"]);
-    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(6);
+    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(8);
     expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
     expect(container.textContent).not.toContain("Diagnostics");
     expect(container.textContent).not.toContain("Right Panel Shell");
