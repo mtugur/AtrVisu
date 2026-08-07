@@ -45,72 +45,109 @@ const createProps = () => ({
   onTogglePanel: vi.fn()
 });
 
-describe("WorkspacePreferencesControl", () => {
-  it("exposes an accessible current-arrangement trigger and labelled native groups", async () => {
-    const container = await mount(createElement(WorkspacePreferencesControl, createProps()));
-    const trigger = container.querySelector("button") as HTMLButtonElement;
-    expect(trigger.getAttribute("aria-label")).toContain("Current arrangement");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+const openRoot = async (container: HTMLElement) => {
+  const trigger = container.querySelector('[data-testid="workspace-preferences-trigger"]') as HTMLButtonElement;
+  await act(async () => trigger.click());
+  return trigger;
+};
 
-    await act(async () => trigger.click());
+const openVisiblePanels = async (container: HTMLElement) => {
+  const branchTrigger = container.querySelector('[data-testid="workspace-visible-panels-trigger"]') as HTMLButtonElement;
+  await act(async () => branchTrigger.click());
+  const child = container.querySelector('#workspace-visible-panels-surface') as HTMLElement;
+  return { branchTrigger, child };
+};
+
+describe("WorkspacePreferencesControl", () => {
+  it("renders only root groups until the counted Visible Panels branch opens", async () => {
+    const container = await mount(createElement(WorkspacePreferencesControl, createProps()));
+    const trigger = await openRoot(container);
+
+    expect(trigger.getAttribute("aria-label")).toContain("Current arrangement");
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-labelledby"))
       .toBe("workspace-preferences-title");
     expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent))
-      .toEqual(["Workspace", "Theme", "Density", "Visible Panels"]);
+      .toEqual(["Workspace", "Theme", "Density"]);
     expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(8);
-    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
-    expect([...container.querySelectorAll<HTMLInputElement>("input")]
-      .every((input) => !input.disabled)).toBe(true);
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(0);
+    const branchTrigger = container.querySelector('[data-testid="workspace-visible-panels-trigger"]') as HTMLButtonElement;
+    expect(branchTrigger.textContent).toContain("Visible Panels");
+    expect(branchTrigger.textContent).toContain("1/2");
+    expect(branchTrigger.getAttribute("aria-expanded")).toBe("false");
     expect(container.textContent).not.toContain("Diagnostics");
     expect(container.textContent).not.toContain("Right Panel Shell");
+
+    const { child } = await openVisiblePanels(container);
+    expect(child).not.toBeNull();
+    expect(branchTrigger.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
   });
 
-  it("routes workspace, theme, density, and panel choices through its callbacks", async () => {
+  it("routes choices through callbacks while panel changes keep the child open", async () => {
     const props = createProps();
     const container = await mount(createElement(WorkspacePreferencesControl, props));
-    await act(async () => (container.querySelector("button") as HTMLButtonElement).click());
-    const inputs = [...container.querySelectorAll<HTMLInputElement>("input")];
+    await openRoot(container);
 
-    await act(async () => inputs.find(({ value }) => value === "workspace.sales-layout")?.click());
-    await act(async () => inputs.find(({ value }) => value === "dark")?.click());
-    await act(async () => inputs.find(({ value }) => value === "compact")?.click());
-    const layers = inputs.find((input) => input.type === "checkbox" && input.parentElement?.textContent === "Layers")!;
+    await act(async () => (container.querySelector('input[value="workspace.sales-layout"]') as HTMLInputElement).click());
+    await act(async () => (container.querySelector('input[value="dark"]') as HTMLInputElement).click());
+    await act(async () => (container.querySelector('input[value="compact"]') as HTMLInputElement).click());
+    const { child } = await openVisiblePanels(container);
+    const layers = [...child.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .find((input) => input.parentElement?.textContent === "Layers")!;
     await act(async () => layers.click());
 
     expect(props.onSelectWorkspace).toHaveBeenCalledWith("workspace.sales-layout");
     expect(props.onSelectTheme).toHaveBeenCalledWith("dark");
     expect(props.onSelectDensity).toHaveBeenCalledWith("compact");
     expect(props.onTogglePanel).toHaveBeenCalledWith("panel.layers", true);
+    expect(container.querySelector('#workspace-visible-panels-surface')).toBe(child);
   });
 
-  it("closes on Escape and outside pointer while restoring focus only for Escape", async () => {
+  it("closes child before root on Escape and restores each branch focus", async () => {
     const container = await mount(createElement(WorkspacePreferencesControl, createProps()));
-    const trigger = container.querySelector("button") as HTMLButtonElement;
-    await act(async () => trigger.click());
-    const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
-    const workspaceRadio = dialog.querySelector("input") as HTMLInputElement;
-    workspaceRadio.focus();
+    const rootTrigger = await openRoot(container);
+    const branchTrigger = container.querySelector('[data-testid="workspace-visible-panels-trigger"]') as HTMLButtonElement;
 
-    await act(async () => workspaceRadio.dispatchEvent(new KeyboardEvent("keydown", {
+    await act(async () => branchTrigger.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      bubbles: true
+    })));
+    const child = container.querySelector('#workspace-visible-panels-surface') as HTMLElement;
+    expect(child).not.toBeNull();
+    expect(document.activeElement?.tagName).toBe("INPUT");
+
+    await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true
+    })));
+    expect(container.querySelector('#workspace-visible-panels-surface')).toBeNull();
+    expect(document.activeElement).toBe(branchTrigger);
+
+    await act(async () => branchTrigger.dispatchEvent(new KeyboardEvent("keydown", {
       key: "Escape",
       bubbles: true
     })));
     expect(container.querySelector('[role="dialog"]')).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(document.activeElement).toBe(rootTrigger);
+  });
 
-    await act(async () => trigger.click());
+  it("outside pointer closes the whole cascade without orphaning the child", async () => {
+    const container = await mount(createElement(WorkspacePreferencesControl, createProps()));
+    await openRoot(container);
+    await openVisiblePanels(container);
+
     await act(async () => document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })));
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('#workspace-visible-panels-surface')).toBeNull();
   });
 
   it("prevents editor shortcut propagation while controls retain normal keyboard input", async () => {
     const editorShortcut = vi.fn();
-    const props = createProps();
     const container = await mount(createElement("div", { onKeyDown: editorShortcut },
-      createElement(WorkspacePreferencesControl, props)
+      createElement(WorkspacePreferencesControl, createProps())
     ));
-    await act(async () => (container.querySelector("button") as HTMLButtonElement).click());
+    await openRoot(container);
     const themeRadio = container.querySelector('input[value="dark"]') as HTMLInputElement;
 
     await act(async () => themeRadio.dispatchEvent(new KeyboardEvent("keydown", {
@@ -143,7 +180,8 @@ describe("WorkspacePreferencesControl", () => {
         { id: "panel.inspector", label: "Inspector", visible: true, available: true }
       ]
     })));
-    await act(async () => (container.querySelector("button") as HTMLButtonElement).click());
+    await openRoot(container);
+    await openVisiblePanels(container);
     let checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
     const snap = checkboxes[0];
     expect(snap.disabled).toBe(true);
@@ -152,7 +190,6 @@ describe("WorkspacePreferencesControl", () => {
       .toBe(unavailableReason);
     await act(async () => snap.click());
     expect(props.onTogglePanel).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Layout Engineering");
 
     await act(async () => root.render(createElement(WorkspacePreferencesControl, {
       ...props,
@@ -170,8 +207,8 @@ describe("WorkspacePreferencesControl", () => {
       ]
     })));
     checkboxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(container.querySelector('#workspace-visible-panels-surface')).not.toBeNull();
     expect(checkboxes[0].disabled).toBe(false);
-    expect(checkboxes[0].checked).toBe(true);
     expect(checkboxes[1].disabled).toBe(true);
     await act(async () => checkboxes[0].click());
     await act(async () => checkboxes[1].click());
@@ -179,7 +216,7 @@ describe("WorkspacePreferencesControl", () => {
     expect(props.onTogglePanel).toHaveBeenCalledWith("panel.connectionPointSnap", false);
   });
 
-  it("keeps the popover inspectable while future-readonly disables every mutation callback", async () => {
+  it("keeps future-readonly panel controls inspectable and immutable", async () => {
     const props = createProps();
     const reason = "UI preferences use unsupported schema version 3; defaults are active in read-only mode.";
     const container = await mount(createElement(WorkspacePreferencesControl, {
@@ -187,14 +224,21 @@ describe("WorkspacePreferencesControl", () => {
       readOnly: true,
       readOnlyReason: reason
     }));
-    const trigger = container.querySelector("button") as HTMLButtonElement;
-    expect(trigger.disabled).toBe(false);
-    await act(async () => trigger.click());
-
+    const rootTrigger = await openRoot(container);
+    expect(rootTrigger.disabled).toBe(false);
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
     const messageId = dialog.getAttribute("aria-describedby");
-    expect(messageId).toBeTruthy();
     expect(container.querySelector(`#${messageId}`)?.textContent).toBe(reason);
+    expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(8);
+
+    const branchTrigger = container.querySelector('[data-testid="workspace-visible-panels-trigger"]') as HTMLButtonElement;
+    await act(async () => branchTrigger.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      bubbles: true
+    })));
+    const child = container.querySelector('#workspace-visible-panels-surface') as HTMLElement;
+    expect(child).not.toBeNull();
+    expect(document.activeElement).toBe(child);
     const inputs = [...container.querySelectorAll<HTMLInputElement>("input")];
     expect(inputs).toHaveLength(10);
     expect(inputs.every((input) => input.disabled)).toBe(true);

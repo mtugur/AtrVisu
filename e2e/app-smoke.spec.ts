@@ -167,6 +167,20 @@ const openWorkspacePreferences = async (page: Page) => {
   return { trigger, popover };
 };
 
+const openVisiblePanels = async (page: Page) => {
+  const control = await openWorkspacePreferences(page);
+  const branchTrigger = control.popover.getByTestId("workspace-visible-panels-trigger");
+  if (await branchTrigger.getAttribute("aria-expanded") !== "true") {
+    await branchTrigger.click();
+  }
+  const surface = page.locator("#workspace-visible-panels-surface");
+  await expect(surface).toBeVisible();
+  if (await branchTrigger.count()) {
+    await expect(branchTrigger).toHaveAttribute("aria-expanded", "true");
+  }
+  return { ...control, branchTrigger, surface };
+};
+
 const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
 };
@@ -3290,15 +3304,16 @@ test("a hidden live panel is restored through Workspace and View and survives re
   let control = await openWorkspacePreferences(page);
   await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
 
-  control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Layers", { exact: true }).uncheck();
+  let panels = await openVisiblePanels(page);
+  await panels.surface.getByLabel("Layers", { exact: true }).uncheck();
   await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
   await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
 
-  control = await openWorkspacePreferences(page);
-  const layersToggle = control.popover.getByLabel("Layers", { exact: true });
+  panels = await openVisiblePanels(page);
+  const layersToggle = panels.surface.getByLabel("Layers", { exact: true });
   await expect(layersToggle).not.toBeChecked();
   await layersToggle.check();
+  await expect(panels.surface).toBeVisible();
   await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
   await page.reload();
   await waitForUiPreferences(page);
@@ -3315,8 +3330,8 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
 
   let control = await openWorkspacePreferences(page);
   await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
-  control = await openWorkspacePreferences(page);
-  let snapLabel = control.popover.locator("label").filter({ hasText: "Connection Point Snap" });
+  let panels = await openVisiblePanels(page);
+  let snapLabel = panels.surface.locator("label").filter({ hasText: "Connection Point Snap" });
   let snapToggle = snapLabel.locator('input[type="checkbox"]');
   await expect(snapToggle).toBeDisabled();
   await expect(snapToggle).toBeChecked();
@@ -3327,6 +3342,7 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
     .toEqual(unavailableSnapshot);
   await expect(control.trigger).toContainText("Layout Engineering");
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
 
   const machineCard = page.locator(".machine-card").first();
@@ -3341,19 +3357,21 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available)
     .toBe(true);
 
-  control = await openWorkspacePreferences(page);
-  snapLabel = control.popover.locator("label").filter({ hasText: "Connection Point Snap" });
+  panels = await openVisiblePanels(page);
+  snapLabel = panels.surface.locator("label").filter({ hasText: "Connection Point Snap" });
   snapToggle = snapLabel.locator('input[type="checkbox"]');
   await expect(snapToggle).toBeEnabled();
   await expect(snapToggle).toBeChecked();
   await snapToggle.uncheck();
   await expect(control.trigger).toContainText("Current arrangement");
   await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
 
-  control = await openWorkspacePreferences(page);
-  let inspectorLabel = control.popover.locator("label").filter({ hasText: "Inspector" });
+  panels = await openVisiblePanels(page);
+  let inspectorLabel = panels.surface.locator("label").filter({ hasText: "Inspector" });
   let inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
   await expect(inspectorToggle).toBeEnabled();
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   const annotationsSection = page.getByRole("button", { name: /Annotations/i });
   if ((await annotationsSection.getAttribute("aria-expanded")) !== "true") {
@@ -3364,8 +3382,8 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
     .toBe(false);
 
-  control = await openWorkspacePreferences(page);
-  inspectorLabel = control.popover.locator("label").filter({ hasText: "Inspector" });
+  panels = await openVisiblePanels(page);
+  inspectorLabel = panels.surface.locator("label").filter({ hasText: "Inspector" });
   inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
   await expect(inspectorToggle).toBeDisabled();
   await expect(inspectorLabel).toContainText("Annotation properties are shown in the Annotations panel.");
@@ -3375,12 +3393,13 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
     .toEqual(annotationSnapshot);
   await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
 
   await clickSceneMachine(page, machineIds[0]);
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
     .toBe(true);
-  control = await openWorkspacePreferences(page);
-  inspectorToggle = control.popover.locator("label")
+  panels = await openVisiblePanels(page);
+  inspectorToggle = panels.surface.locator("label")
     .filter({ hasText: "Inspector" })
     .locator('input[type="checkbox"]');
   await expect(inspectorToggle).toBeEnabled();
@@ -3418,7 +3437,8 @@ test("future-version preferences expose an inspectable read-only Workspace and V
   await expect(message).toContainText("unsupported schema version 3");
   await expect(control.popover).toHaveAttribute("aria-describedby", await message.getAttribute("id") ?? "");
   const radios = control.popover.locator('input[type="radio"]');
-  const checkboxes = control.popover.locator('input[type="checkbox"]');
+  const panels = await openVisiblePanels(page);
+  const checkboxes = panels.surface.locator('input[type="checkbox"]');
   await expect(radios).toHaveCount(8);
   await expect(checkboxes).toHaveCount(16);
   for (let index = 0; index < await radios.count(); index += 1) {
@@ -3443,6 +3463,50 @@ test("future-version preferences expose an inspectable read-only Workspace and V
   expect(errors).toEqual([]);
 });
 
+test("Visible Panels stays open for multiple desktop changes without nested root scrolling", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const before = await getRuntimeViewportSnapshot(page);
+  const root = await openWorkspacePreferences(page);
+  await root.popover.getByLabel("Layout Engineering", { exact: true }).check();
+  const panels = await openVisiblePanels(page);
+  const flyout = page.getByTestId("workspace-visible-panels-flyout");
+  await expect(flyout).toBeVisible();
+  await expect(flyout).toHaveAttribute("data-cascading-depth", "1");
+  await expect(flyout).toHaveAttribute("data-cascading-side", /right|left/);
+  await expect(root.popover.locator('input[type="checkbox"]')).toHaveCount(0);
+  await expect(root.popover.locator(".workspace-panel-preferences")).toHaveCount(0);
+
+  const rootBox = await root.popover.boundingBox();
+  const flyoutBox = await flyout.boundingBox();
+  expect(rootBox).not.toBeNull();
+  expect(flyoutBox).not.toBeNull();
+  expect(flyoutBox!.x >= rootBox!.x + rootBox!.width || rootBox!.x >= flyoutBox!.x + flyoutBox!.width)
+    .toBe(true);
+  expect(flyoutBox!.x).toBeGreaterThanOrEqual(0);
+  expect(flyoutBox!.x + flyoutBox!.width).toBeLessThanOrEqual(1440);
+  expect(flyoutBox!.y).toBeGreaterThanOrEqual(0);
+  expect(flyoutBox!.y + flyoutBox!.height).toBeLessThanOrEqual(900);
+  expect(await root.popover.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+
+  const layers = panels.surface.getByLabel("Layers", { exact: true });
+  const groups = panels.surface.getByLabel("Groups", { exact: true });
+  const layersInitiallyChecked = await layers.isChecked();
+  const groupsInitiallyChecked = await groups.isChecked();
+  await layers.setChecked(!layersInitiallyChecked);
+  await groups.setChecked(!groupsInitiallyChecked);
+  await expect(panels.surface).toBeVisible();
+  await layers.setChecked(layersInitiallyChecked);
+  await groups.setChecked(groupsInitiallyChecked);
+  await expect(panels.surface).toBeVisible();
+
+  expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(before.invariants);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test("workspace preferences are keyboard complete and stay inside responsive application geometry", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -3461,6 +3525,20 @@ test("workspace preferences are keyboard complete and stay inside responsive app
   await expect(trigger).toBeFocused();
   expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(before.invariants);
 
+  await trigger.press("Enter");
+  const visiblePanelsTrigger = popover.getByTestId("workspace-visible-panels-trigger");
+  await visiblePanelsTrigger.focus();
+  await visiblePanelsTrigger.press("ArrowRight");
+  const keyboardSurface = page.locator("#workspace-visible-panels-surface");
+  await expect(keyboardSurface).toBeVisible();
+  await expect(keyboardSurface.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("ArrowLeft");
+  await expect(keyboardSurface).toHaveCount(0);
+  await expect(visiblePanelsTrigger).toBeFocused();
+  await visiblePanelsTrigger.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },
@@ -3475,6 +3553,35 @@ test("workspace preferences are keyboard complete and stay inside responsive app
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     expect(box!.height).toBeLessThan(viewport.height * 0.8);
+    const panels = await openVisiblePanels(page);
+    const isDrillIn = await current.popover.getAttribute("data-cascading-presentation") === "drill-in";
+    if (viewport.width === 640 || isDrillIn) {
+      await expect(page.getByTestId("workspace-visible-panels-flyout")).toHaveCount(0);
+      await expect(current.popover).toHaveAttribute("data-cascading-presentation", "drill-in");
+      await expect(current.popover.getByTestId("workspace-visible-panels-drill-in")).toBeVisible();
+      await expect(current.popover.getByRole("button", { name: /Workspace & View/ })).toBeVisible();
+      expect(await current.popover.evaluate((element) => {
+        const nestedScrollers = [...element.querySelectorAll("*")].filter((candidate) => {
+          const style = getComputedStyle(candidate);
+          return (style.overflowY === "auto" || style.overflowY === "scroll")
+            && candidate.scrollHeight > candidate.clientHeight;
+        });
+        return nestedScrollers.length;
+      })).toBe(0);
+      await current.popover.getByRole("button", { name: /Workspace & View/ }).click();
+      await expect(current.popover.getByTestId("workspace-visible-panels-trigger")).toBeFocused();
+    } else {
+      const child = page.getByTestId("workspace-visible-panels-flyout");
+      await expect(child).toBeVisible();
+      await expect(panels.surface).toHaveCount(1);
+      const childBox = await child.boundingBox();
+      expect(childBox).not.toBeNull();
+      expect(childBox!.x).toBeGreaterThanOrEqual(0);
+      expect(childBox!.x + childBox!.width).toBeLessThanOrEqual(viewport.width);
+      expect(childBox!.y).toBeGreaterThanOrEqual(0);
+      expect(childBox!.y + childBox!.height).toBeLessThanOrEqual(viewport.height);
+      await page.keyboard.press("Escape");
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.keyboard.press("Escape");
   }
