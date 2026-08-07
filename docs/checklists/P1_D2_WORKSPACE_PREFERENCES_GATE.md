@@ -21,6 +21,13 @@
 | Future-readonly preference surface | PASS | Existing P1-D1 status/warning disables every mutating control while the popover remains inspectable |
 | Future-version record preservation | PASS | Real Chromium IndexedDB record remains byte-for-byte unchanged after pointer/keyboard attempts |
 | Hidden panel restoration | PASS | Same popover restores and reload preserves the panel |
+| Visible Panels root summary | PASS | Dynamic visible/eligible count and accessible disclosure contract |
+| Reusable cascading primitive | PASS | Semantic-agnostic geometry, state, and caller-owned surface semantics |
+| Root + depth 1 + depth 2 contract | PASS | Deterministic primitive state tests; only depth 1 is rendered in P1-D2 |
+| Desktop sibling flyout | PASS | Viewport-contained adjacent flyout with right preference and tested left fallback |
+| Narrow drill-in | PASS | 640x800 same-popover navigation with Back and focus return |
+| Nested Visible Panels scroll removal | PASS | Inline scrolling fieldset removed; responsive E2E verifies one scroll context maximum |
+| Cascade keyboard and outside pointer | PASS | ArrowRight, ArrowLeft, staged Escape, focus return, and full outside close coverage |
 | Modal, shell, and unbound panels excluded | PASS | Registry/component assertions |
 | Panel geometry and collapse values preserved | PASS | Workspace application tests |
 | Command emphasis is presentation-only | PASS | Attribute tests and unchanged command routing suite |
@@ -31,25 +38,25 @@
 | History and dirty state preserved | PASS | Runtime invariant snapshot equality |
 | Camera and scene lifecycle preserved | PASS | Camera equality and lifecycle generation checks |
 | One App, EditorHost, DesignSystemRoot, and canvas | PASS | Chromium identity assertions |
-| Keyboard accessibility | PASS | Native controls, Escape focus restoration, shortcut isolation |
-| Responsive 1440x900, 1024x768, 640x800 | PASS | Popover bounds and overflow Chromium checks |
+| Keyboard accessibility | PASS | Native controls, child/root Escape hierarchy, focus restoration, shortcut isolation |
+| Responsive 1440x900, 1024x768, 640x800 | PASS | Sibling/drill-in geometry, bounds, scroll, and overflow Chromium checks |
 | No red console or page errors | PASS | All new and full Chromium collectors |
 | Dependency audit | PASS | 0 vulnerabilities at default and low threshold |
-| Design-token governance | PASS | 203 maintained files |
+| Design-token governance | PASS | 207 maintained files |
 | Build | PASS | TypeScript and Vite; known chunk warning only |
-| Unit suite | PASS | 122 files / 1115 tests |
-| Chromium suite | PASS | 56/56 tests |
+| Unit suite | PASS | 125 files / 1128 tests |
+| Chromium suite | PASS | 57/57 tests |
 | Package lock and dependencies | PASS | `package-lock.json` unchanged; no dependency added |
 | Project and preference schemas | PASS | Project schema and UI preference DB version unchanged |
-| Manual visual acceptance | PENDING | Required after independent review and exact-head CI |
+| Overall manual visual direction | PASS | Review comment `5216944024` |
+| Bounded flyout manual re-acceptance | PENDING | Visible Panels row, desktop flyout, no nested scrollbar, and narrow drill-in only |
 
 Independent review comment `5215805384` at reviewed head
 `5b1b1085f2ebe5ffba5524f553bff7dd85669089` identified live panel availability
 and future-readonly control blockers. Both are covered by the corrected runtime,
 component, and Chromium evidence above.
 
-Decision: **READY FOR INDEPENDENT RE-REVIEW**. Automatic gates pass. Manual
-visual acceptance remains **REQUIRED AND PENDING**. The Draft PR must remain
-Draft and unmerged until corrected exact-head CI, independent re-review, and
-explicit user visual acceptance pass. This is not READY FOR MERGE and does not
-mark P1-D complete.
+Decision: **READY FOR BOUNDED MANUAL RE-ACCEPTANCE**. Automatic gates pass and
+the accepted overall direction is preserved. The Draft PR must remain Draft and
+unmerged until exact-head CI and explicit bounded flyout re-acceptance pass.
+This is not READY FOR MERGE and does not mark P1-D complete.

@@ -45,9 +45,25 @@ or execution. Inspector mode is exposed as shell metadata only; P1-E owns its
 future semantic behavior.
 
 The Application Bar contains one compact workspace trigger. Its non-modal
-Workspace & View popover exposes native workspace, theme, density, and current
-live content-panel controls. Panel labels come from the runtime panel
-descriptors. Modal, planned/unbound, and shell entries are excluded.
+Workspace & View popover exposes native workspace, theme, and density controls.
+Visible Panels is a counted disclosure into a cascading child surface rather
+than an independently scrolling list inside the root popover. Panel labels come
+from the runtime panel descriptors. Modal, planned/unbound, and shell entries
+are excluded.
+
+The cascade infrastructure is semantic-agnostic. It owns ephemeral open-path
+state, depth, side selection, viewport collision handling, and clamped surface
+geometry, while callers retain their own roles, ARIA relationships, commands,
+and business semantics. It supports a root plus two future flyout levels, but
+P1-D2 renders only the Visible Panels depth-one child. Desktop presentation
+prefers a right sibling flyout and falls left when required; insufficient
+horizontal room uses drill-in navigation within the existing root popover.
+The cascade is not persisted and introduces no overlay root.
+
+File, Edit, View, and Tools remain on the existing WorkbenchMenuBar behavior.
+A future bounded migration may reuse the cascade geometry and state primitive,
+but those command menus are not migrated and no future menu content is invented
+by P1-D2.
 
 Static workspace panel descriptors define only which compatibility content
 panels are eligible for this surface and provide maintained labels. The
@@ -90,6 +106,9 @@ commitment.
 - Workspace switching is explicit, deterministic, persisted, and reversible.
 - Every hidden live panel remains recoverable from the same popover.
 - Contextually unavailable panel options cannot create preference overrides.
+- The root preference surface no longer contains a nested Visible Panels scroll
+  region; desktop and narrow layouts each expose at most one relevant scroll
+  context per surface.
 - Future-version preference records produce an explicit read-only surface.
 - Theme and density continue updating the single DesignSystemRoot in place.
 - The compatibility right-panel shell remains the real current host.

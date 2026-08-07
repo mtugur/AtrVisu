@@ -84,6 +84,22 @@ hydration warning describes the surface while every workspace, theme, density,
 and visible-panel mutation control is disabled. A real future-version IndexedDB
 record remains byte-for-byte unchanged after pointer and keyboard attempts.
 
+Manual review comment `5216944024` accepted the overall P1-D2 visual direction
+and requested one bounded polish: replace the nested Visible Panels list with a
+CAD-style cascade. The root now shows a dynamic `<visible>/<eligible>`
+disclosure row. At desktop geometry, the checkbox controls render in an adjacent
+depth-one sibling flyout; if neither horizontal side is viable, the same controls
+drill into the root popover with Back navigation. Checkbox changes leave the
+child open for multiple updates. The former `.workspace-panel-preferences`
+scroll region is removed.
+
+The reusable `workbench/cascading` primitive is business-neutral and supports
+root -> depth 1 -> depth 2 open-path state. Pure tests cover right placement,
+left fallback, viewport clamping, non-viable side-by-side geometry, and a
+hypothetical depth-two anchor. P1-D2 renders only depth 1. File, Edit, View, and
+Tools are explicitly unchanged; they may reuse the primitive only in a future
+bounded package.
+
 ## 10. Command and Inspector Projection
 
 Save and canonical Command Bar buttons receive
@@ -117,8 +133,14 @@ groups are labelled; Escape closes and restores trigger focus; outside pointer
 closes; normal Tab order is retained; and events inside the popover do not leak
 to editor shortcuts. At 1440x900, 1024x768, and 640x800 the popover remains
 inside the viewport, stays below 80 percent viewport height, and creates no
-horizontal document overflow. Save, project context, and the existing three
-workbench rows remain integrated.
+horizontal document overflow. Visible Panels opens by click or ArrowRight,
+ArrowLeft/Escape closes only the child and restores branch focus, a second
+Escape closes the root, and outside pointer closes the whole cascade. An
+all-disabled future-readonly child remains focusable and inspectable. At
+1440x900 the child is a viewport-contained sibling flyout with no overlapping
+root surface; 640x800 deterministically drills in with one scroll context and
+Back navigation. 1024x768 follows actual available geometry. Save, project
+context, and the existing three workbench rows remain integrated.
 
 ## 14. P1-E and P1-F Boundaries
 
@@ -132,16 +154,16 @@ right-panel shell as the compatibility host.
 - Focused workspace registry/application/runtime/persistence: 4 files / 19
   current tests after final test refinement.
 - Focused correction unit tests: 3 files / 30 tests, passed.
-- Focused workspace and preference-control tests: passed with live availability
-  and future-readonly callback guards.
-- Focused correction Chromium: 2/2 passed; focused P1-D2 Chromium: 7/7 passed.
+- Focused cascade geometry/state/surface and preference-control tests: 4 files /
+  19 tests, passed.
+- Focused flyout Chromium: 5/5 passed after the responsive geometry correction.
 - `npm.cmd ci`: passed.
 - `npm.cmd audit`: 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: 0 vulnerabilities.
-- Design-token governance: 203 maintained files, passed.
+- Design-token governance: 207 maintained files, passed.
 - Build: passed; existing large-chunk warning remains non-blocking.
-- Full unit: 122 files / 1115 tests, passed.
-- Full E2E: 56/56, passed.
+- Full unit: 125 files / 1128 tests, passed.
+- Full E2E: 57/57, passed.
 - Console/page error collectors: passed. The corrupt-record scenario emits only
   its expected bounded warning.
 
@@ -160,15 +182,13 @@ chunk warning remains outside this package.
 
 ## 18. Manual Visual Acceptance
 
-**REQUIRED AND PENDING.** After independent review and exact-head CI, the user
-must verify the Application Bar control, popover, both presets, all three theme
-choices, both density choices, hidden-panel restoration, command emphasis, and
-1440x900 plus 640x800 presentation.
+The overall P1-D2 visual direction is accepted in comment `5216944024`. Final
+manual re-acceptance remains bounded to the Visible Panels root row, desktop
+side flyout, absence of the nested scrollbar, and 640x800 drill-in behavior.
 
 ## 19. Decision
 
-**READY FOR INDEPENDENT RE-REVIEW.** The two blockers from independent review
-comment `5215805384` are corrected and all local automatic gates pass. Manual
-visual acceptance remains REQUIRED AND PENDING. This is not READY FOR MERGE;
-P1-D remains open until corrected exact-head GitHub Quality Gate, independent
-re-review, and explicit manual visual acceptance pass.
+**READY FOR BOUNDED MANUAL RE-ACCEPTANCE.** Automatic gates pass and the final
+polish is limited to the accepted review concern. This is not READY FOR MERGE;
+P1-D remains open until exact-head GitHub Quality Gate and explicit bounded
+manual visual re-acceptance pass.
