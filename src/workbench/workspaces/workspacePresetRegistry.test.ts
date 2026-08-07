@@ -107,7 +107,9 @@ describe("canonical workspace preset registry", () => {
       WORKSPACE_PRESET_REGISTRY_ERROR_CODES.duplicate
     );
     expectRegistryError(
-      () => createWorkspacePresetRegistry([{ ...sales, id: "workspace.unknown" }] as WorkspacePreset[]),
+      () => createWorkspacePresetRegistry([
+        { ...sales, id: "workspace.unknown" } as unknown as WorkspacePreset
+      ]),
       WORKSPACE_PRESET_REGISTRY_ERROR_CODES.unsupportedId
     );
     expectRegistryError(
