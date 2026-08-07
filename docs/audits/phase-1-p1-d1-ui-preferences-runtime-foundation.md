@@ -8,6 +8,9 @@
 - Branch: `feat/phase-1-ui-preferences-runtime-foundation-v01`
 - Independent review comment: `5203394076`
 - Original reviewed head: `6dec96bfe1da9ba020b14c1d669bcbdb69c4650d`
+- Corrected exact head: `5711b4f5f1018206db08f874bb497acf2cc7b5df`
+- Corrected Quality Gate: `31096265954` — **PASS**
+- Independent corrected-head re-review: comment `5204363538` — **PASS**
 - P1-A, P1-B, P1-C, and PR #102 remain authoritative.
 
 ## 2. Scope
@@ -154,6 +157,14 @@ merge into one IndexedDB record, survive reload, and do not remount App,
 EditorHost, or the scene canvas. The new focused Chromium test passes 1/1; the
 full suite passes 49/49 with no `console.error` or `pageerror`.
 
+Corrected-head validation is complete: dependency audit passed with 0
+vulnerabilities, design-token governance passed for 197 maintained files,
+build passed, 117 files / 1088 unit tests passed, and 49/49 Chromium E2E tests
+passed. `package-lock.json` is unchanged and no dependency was added.
+Independent re-review comment `5204363538` accepts the hydration/update race,
+migration/runtime write ordering, and production opener retry corrections and
+confirms that no implementation blocker remains.
+
 ## 21. Changed Files
 
 Changes are limited to IndexedDB schema, the bounded
@@ -187,6 +198,9 @@ identity, camera, and scene lifecycle evidence passes.
 
 ## 25. Decision
 
-**READY FOR INDEPENDENT RE-REVIEW.** P1-D1 correction gates pass and the package
-remains Draft-only pending corrected-head independent review and GitHub Quality
-Gate. This does not mark P1-D1 closed, P1-D complete, or Phase 1 complete.
+**READY FOR MERGE.** Both original review blockers are closed, all automatic
+validation passed, corrected-head independent re-review passed, and manual
+visual acceptance is not required. No P1-D1 blocker remains. PR #104 remains
+Draft and unmerged until the documentation-only exact-head Quality Gate and
+final two-file scope verification pass. This does not mark P1-D1 merged or
+closed, P1-D complete, or Phase 1 complete.
