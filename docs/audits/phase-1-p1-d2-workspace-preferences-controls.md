@@ -13,9 +13,10 @@
 ## 2. Scope
 
 P1-D2 adds the canonical workspace registry, bounded workspace application
-runtime, visible Application Bar preference control, theme/density/live-panel
-controls, command emphasis, derived Inspector-mode metadata, and automated
-accessibility, responsive, persistence, and invariance evidence.
+runtime, visible Application Bar preference control, compact cascading
+workspace/theme/density/live-panel controls, command emphasis, derived
+Inspector-mode metadata, and automated accessibility, responsive, persistence,
+and invariance evidence.
 
 ## 3. P1-D1 Authority Reuse
 
@@ -93,12 +94,24 @@ drill into the root popover with Back navigation. Checkbox changes leave the
 child open for multiple updates. The former `.workspace-panel-preferences`
 scroll region is removed.
 
+Manual decision comment `5217732957` records the resulting Visible Panels
+cascade as a general manual PASS and identifies the stacked Workspace, Theme,
+and Density radio groups as the final visual concern. The corrected root now
+contains exactly four compact disclosure rows with current summaries and no
+root radios or checkboxes. Workspace, Theme, Density, and Visible Panels use the
+same active-branch state, geometry resolver, sibling flyout, and narrow drill-in
+path. Native radios remain inside the first three child surfaces, stay open for
+successive choices, and continue calling only the existing preference/workspace
+runtime handlers. One depth-one branch is active at a time; branch replacement
+does not close the root.
+
 The reusable `workbench/cascading` primitive is business-neutral and supports
 root -> depth 1 -> depth 2 open-path state. Pure tests cover right placement,
-left fallback, viewport clamping, non-viable side-by-side geometry, and a
-hypothetical depth-two anchor. P1-D2 renders only depth 1. File, Edit, View, and
-Tools are explicitly unchanged; they may reuse the primitive only in a future
-bounded package.
+left fallback, viewport clamping, non-viable side-by-side geometry, a
+hypothetical depth-two anchor, and replacement of one depth-one preference
+branch by another. P1-D2 renders only depth 1 and adds no real depth-two content.
+File, Edit, View, and Tools are explicitly unchanged; they may reuse the
+primitive only in a future bounded package.
 
 ## 10. Command and Inspector Projection
 
@@ -128,19 +141,19 @@ survive reload.
 
 ## 13. Accessibility and Responsive Behavior
 
-The trigger is named and exposes expanded/control/dialog relationships. Native
-groups are labelled; Escape closes and restores trigger focus; outside pointer
-closes; normal Tab order is retained; and events inside the popover do not leak
-to editor shortcuts. At 1440x900, 1024x768, and 640x800 the popover remains
-inside the viewport, stays below 80 percent viewport height, and creates no
-horizontal document overflow. Visible Panels opens by click or ArrowRight,
-ArrowLeft/Escape closes only the child and restores branch focus, a second
-Escape closes the root, and outside pointer closes the whole cascade. An
-all-disabled future-readonly child remains focusable and inspectable. At
-1440x900 the child is a viewport-contained sibling flyout with no overlapping
-root surface; 640x800 deterministically drills in with one scroll context and
-Back navigation. 1024x768 follows actual available geometry. Save, project
-context, and the existing three workbench rows remain integrated.
+The trigger is named and exposes expanded/control/dialog relationships. The
+four root disclosures are native buttons with current-value accessible names,
+expanded/control relationships, and deterministic focus restoration. Native
+child groups are labelled; ArrowRight enters a child; ArrowLeft/Escape returns
+to its originating row; a second Escape closes the root; outside pointer closes
+the cascade; and events inside the popover do not leak to editor shortcuts. At
+1440x900, 1024x768, and 640x800 the popover remains inside the viewport and
+creates no horizontal document overflow. All four branches use a sibling
+flyout when geometry permits and deterministically drill into the same popover
+at 640x800 with Back navigation and one scroll context maximum. All four root
+rows remain navigable in future-readonly while every mutating child control is
+disabled and the warning remains discoverable. Save, project context, and the
+existing three workbench rows remain integrated.
 
 ## 14. P1-E and P1-F Boundaries
 
@@ -154,15 +167,14 @@ right-panel shell as the compatibility host.
 - Focused workspace registry/application/runtime/persistence: 4 files / 19
   current tests after final test refinement.
 - Focused correction unit tests: 3 files / 30 tests, passed.
-- Focused cascade geometry/state/surface and preference-control tests: 4 files /
-  19 tests, passed.
-- Focused flyout Chromium: 5/5 passed after the responsive geometry correction.
+- Focused compact-root/cascade component tests: 4 files / 21 tests, passed.
+- Focused compact-root Chromium: 6/6 passed.
 - `npm.cmd ci`: passed.
 - `npm.cmd audit`: 0 vulnerabilities.
 - `npm.cmd audit --audit-level=low`: 0 vulnerabilities.
-- Design-token governance: 207 maintained files, passed.
+- Design-token governance: 208 maintained files, passed.
 - Build: passed; existing large-chunk warning remains non-blocking.
-- Full unit: 125 files / 1128 tests, passed.
+- Full unit: 126 files / 1131 tests, passed.
 - Full E2E: 57/57, passed.
 - Console/page error collectors: passed. The corrupt-record scenario emits only
   its expected bounded warning.
@@ -175,20 +187,24 @@ or project/domain persistence behavior changed.
 
 ## 17. Residual Risks
 
-The final visual judgment for placement, theme presentation, compact density,
-command emphasis, and 640px behavior belongs to the user. Final P1-E Inspector
-and P1-F dock composition are intentionally deferred. The existing Vite large
-chunk warning remains outside this package.
+The final visual judgment is bounded to the compact four-row root, the
+Workspace, Theme, and Density sibling flyouts, and their narrow drill-in
+representation. The overall Application Bar, command emphasis, right panel,
+and accepted Visible Panels cascade do not require re-review unless regressed.
+Final P1-E Inspector and P1-F dock composition are intentionally deferred. The
+existing Vite large chunk warning remains outside this package.
 
 ## 18. Manual Visual Acceptance
 
-The overall P1-D2 visual direction is accepted in comment `5216944024`. Final
-manual re-acceptance remains bounded to the Visible Panels root row, desktop
-side flyout, absence of the nested scrollbar, and 640x800 drill-in behavior.
+The overall P1-D2 visual direction is accepted in comment `5216944024`.
+Comment `5217732957` accepts the Visible Panels cascade and requests the final
+compact root polish. Final manual re-acceptance is now bounded to the compact
+four-row root, Workspace sibling, Theme sibling, Density sibling, and narrow
+drill-in representation.
 
 ## 19. Decision
 
-**READY FOR BOUNDED MANUAL RE-ACCEPTANCE.** Automatic gates pass and the final
-polish is limited to the accepted review concern. This is not READY FOR MERGE;
-P1-D remains open until exact-head GitHub Quality Gate and explicit bounded
-manual visual re-acceptance pass.
+**READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE.** Automatic gates pass and the
+final polish is limited to the accepted review concern. This is not READY FOR
+MERGE; P1-D remains open until exact-head GitHub Quality Gate and explicit
+bounded manual visual re-acceptance pass.

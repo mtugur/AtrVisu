@@ -18,12 +18,17 @@
 | Density control and override semantics | PASS | Runtime and Chromium tests |
 | Live panel visibility control | PASS | Descriptor eligibility plus Runtime Panel Registry `bound`/`available`/`reason` projection |
 | Contextually unavailable panel controls | PASS | Connection Point Snap and Inspector disable dynamically with accessible reasons and no preference/workspace mutation |
-| Future-readonly preference surface | PASS | Existing P1-D1 status/warning disables every mutating control while the popover remains inspectable |
+| Future-readonly preference surface | PASS | All four root rows remain navigable; every mutating child control is disabled and described by the existing warning |
 | Future-version record preservation | PASS | Real Chromium IndexedDB record remains byte-for-byte unchanged after pointer/keyboard attempts |
 | Hidden panel restoration | PASS | Same popover restores and reload preserves the panel |
+| Compact root disclosure contract | PASS | Exactly four Workspace, Theme, Density, and Visible Panels buttons with current summaries; no root inputs or desktop scrollbar |
+| Workspace cascading child | PASS | Native radios, successive selection without closure, immediate summary, and persistence coverage |
+| Theme cascading child | PASS | Native radios, in-place DesignSystemRoot update, retained workspace identity, and immediate summary |
+| Density cascading child | PASS | Native radios, existing override policy, workspace-summary clearing, and immediate summary |
 | Visible Panels root summary | PASS | Dynamic visible/eligible count and accessible disclosure contract |
 | Reusable cascading primitive | PASS | Semantic-agnostic geometry, state, and caller-owned surface semantics |
 | Root + depth 1 + depth 2 contract | PASS | Deterministic primitive state tests; only depth 1 is rendered in P1-D2 |
+| Depth-one branch replacement | PASS | Workspace -> Theme -> Density -> Visible Panels replaces the child and clears stale deeper paths without closing the root |
 | Desktop sibling flyout | PASS | Viewport-contained adjacent flyout with right preference and tested left fallback |
 | Narrow drill-in | PASS | 640x800 same-popover navigation with Back and focus return |
 | Nested Visible Panels scroll removal | PASS | Inline scrolling fieldset removed; responsive E2E verifies one scroll context maximum |
@@ -42,21 +47,22 @@
 | Responsive 1440x900, 1024x768, 640x800 | PASS | Sibling/drill-in geometry, bounds, scroll, and overflow Chromium checks |
 | No red console or page errors | PASS | All new and full Chromium collectors |
 | Dependency audit | PASS | 0 vulnerabilities at default and low threshold |
-| Design-token governance | PASS | 207 maintained files |
+| Design-token governance | PASS | 208 maintained files |
 | Build | PASS | TypeScript and Vite; known chunk warning only |
-| Unit suite | PASS | 125 files / 1128 tests |
+| Unit suite | PASS | 126 files / 1131 tests |
 | Chromium suite | PASS | 57/57 tests |
 | Package lock and dependencies | PASS | `package-lock.json` unchanged; no dependency added |
 | Project and preference schemas | PASS | Project schema and UI preference DB version unchanged |
 | Overall manual visual direction | PASS | Review comment `5216944024` |
-| Bounded flyout manual re-acceptance | PENDING | Visible Panels row, desktop flyout, no nested scrollbar, and narrow drill-in only |
+| Visible Panels cascade manual acceptance | PASS | Final manual polish decision comment `5217732957` |
+| Final bounded root-cascade re-acceptance | PENDING | Compact four-row root, Workspace/Theme/Density sibling flyouts, and narrow drill-in only |
 
 Independent review comment `5215805384` at reviewed head
 `5b1b1085f2ebe5ffba5524f553bff7dd85669089` identified live panel availability
 and future-readonly control blockers. Both are covered by the corrected runtime,
 component, and Chromium evidence above.
 
-Decision: **READY FOR BOUNDED MANUAL RE-ACCEPTANCE**. Automatic gates pass and
-the accepted overall direction is preserved. The Draft PR must remain Draft and
-unmerged until exact-head CI and explicit bounded flyout re-acceptance pass.
-This is not READY FOR MERGE and does not mark P1-D complete.
+Decision: **READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE**. Automatic gates pass
+and the accepted overall direction is preserved. The Draft PR must remain Draft
+and unmerged until exact-head CI and explicit bounded root-cascade
+re-acceptance pass. This is not READY FOR MERGE and does not mark P1-D complete.

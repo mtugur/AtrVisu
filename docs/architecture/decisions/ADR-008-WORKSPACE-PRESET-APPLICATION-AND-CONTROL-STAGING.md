@@ -45,20 +45,24 @@ or execution. Inspector mode is exposed as shell metadata only; P1-E owns its
 future semantic behavior.
 
 The Application Bar contains one compact workspace trigger. Its non-modal
-Workspace & View popover exposes native workspace, theme, and density controls.
-Visible Panels is a counted disclosure into a cascading child surface rather
-than an independently scrolling list inside the root popover. Panel labels come
-from the runtime panel descriptors. Modal, planned/unbound, and shell entries
-are excluded.
+Workspace & View popover is a compact root of four disclosure rows: Workspace,
+Theme, Density, and Visible Panels. Each row exposes its current value or count
+without placing mutating controls in the root. Native workspace, theme, and
+density radios and the existing panel checkboxes live in their respective
+cascading child surfaces. Panel labels come from the runtime panel descriptors.
+Modal, planned/unbound, and shell entries are excluded.
 
 The cascade infrastructure is semantic-agnostic. It owns ephemeral open-path
 state, depth, side selection, viewport collision handling, and clamped surface
 geometry, while callers retain their own roles, ARIA relationships, commands,
 and business semantics. It supports a root plus two future flyout levels, but
-P1-D2 renders only the Visible Panels depth-one child. Desktop presentation
-prefers a right sibling flyout and falls left when required; insufficient
-horizontal room uses drill-in navigation within the existing root popover.
-The cascade is not persisted and introduces no overlay root.
+P1-D2 renders one of four depth-one children at a time. Opening another root
+row replaces the active child and clears any stale deeper path. Desktop
+presentation prefers a right sibling flyout and falls left when required;
+insufficient horizontal room uses drill-in navigation within the existing root
+popover. The shared root -> depth 1 -> depth 2 infrastructure remains capable
+of a future second child level, but P1-D2 adds no real depth-two content. The
+cascade is not persisted and introduces no overlay root.
 
 File, Edit, View, and Tools remain on the existing WorkbenchMenuBar behavior.
 A future bounded migration may reuse the cascade geometry and state primitive,
@@ -74,10 +78,11 @@ reason. Their persisted visibility, collapse, order, and dock values remain
 unchanged until the live runtime context makes them available again.
 
 ADR-007's `future-readonly` hydration status also governs this surface. The
-Workspace & View trigger and popover remain inspectable, but every workspace,
-theme, density, and panel preference control is disabled and described by the
-existing P1-D1 warning. No second read-only state is introduced and the stored
-future-version record is never rewritten, downgraded, or reset.
+Workspace & View trigger, compact root rows, and child surfaces remain
+inspectable, but every workspace, theme, density, and panel preference control
+inside those children is disabled and described by the existing P1-D1 warning.
+No second read-only state is introduced and the stored future-version record is
+never rewritten, downgraded, or reset.
 
 ## Authority Boundary
 
@@ -104,6 +109,10 @@ commitment.
 
 - Existing users start in Current arrangement without a reset.
 - Workspace switching is explicit, deterministic, persisted, and reversible.
+- The root is a compact four-row navigation surface with no radios or
+  checkboxes and no normal-desktop scroll requirement.
+- Workspace, Theme, Density, and Visible Panels share one cascade state and
+  geometry authority while retaining their existing runtime authorities.
 - Every hidden live panel remains recoverable from the same popover.
 - Contextually unavailable panel options cannot create preference overrides.
 - The root preference surface no longer contains a nested Visible Panels scroll
