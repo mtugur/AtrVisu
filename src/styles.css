@@ -220,6 +220,16 @@ select:disabled {
   font-size: var(--av-font-size-md);
 }
 
+.workspace-preferences-read-only-message {
+  margin: 0;
+  padding: var(--av-spacing-xs);
+  border: 1px solid var(--av-status-warning-border);
+  background: var(--av-status-warning-background);
+  color: var(--av-status-warning-text);
+  font-size: var(--av-font-size-xs);
+  line-height: 1.4;
+}
+
 .workspace-preferences-group {
   display: grid;
   min-width: 0;

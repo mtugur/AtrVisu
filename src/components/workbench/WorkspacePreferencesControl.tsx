@@ -22,6 +22,8 @@ export type WorkspacePreferencesControlProps = Readonly<{
   theme: ThemeId;
   density: DensityId;
   panelOptions: readonly WorkspacePanelPreferenceOption[];
+  readOnly?: boolean;
+  readOnlyReason?: string;
   onSelectCurrentArrangement: () => void;
   onSelectWorkspace: (workspaceId: WorkspaceId) => void;
   onSelectTheme: (theme: ThemeId) => void;
@@ -30,6 +32,7 @@ export type WorkspacePreferencesControlProps = Readonly<{
 }>;
 
 const POPOVER_ID = "workspace-preferences-popover";
+const READ_ONLY_DESCRIPTION_ID = "workspace-preferences-read-only-description";
 const getPanelAvailabilityDescriptionId = (panelId: PanelId) =>
   `workspace-panel-availability-${panelId.replace(/[^a-z0-9]+/gi, "-")}`;
 
@@ -40,6 +43,8 @@ export function WorkspacePreferencesControl({
   theme,
   density,
   panelOptions,
+  readOnly = false,
+  readOnlyReason,
   onSelectCurrentArrangement,
   onSelectWorkspace,
   onSelectTheme,
@@ -98,6 +103,7 @@ export function WorkspacePreferencesControl({
           className="workspace-preferences-popover"
           role="dialog"
           aria-labelledby="workspace-preferences-title"
+          aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
           data-testid="workspace-preferences-popover"
           onKeyDown={handlePopoverKeyDown}
           onPointerDown={stopPointerPropagation}
@@ -105,7 +111,21 @@ export function WorkspacePreferencesControl({
           <header className="workspace-preferences-heading">
             <strong id="workspace-preferences-title">Workspace &amp; View</strong>
           </header>
-          <fieldset className="workspace-preferences-group">
+          {readOnly ? (
+            <p
+              id={READ_ONLY_DESCRIPTION_ID}
+              className="workspace-preferences-read-only-message"
+              role="status"
+              data-testid="workspace-preferences-read-only-message"
+            >
+              {readOnlyReason}
+            </p>
+          ) : null}
+          <fieldset
+            className="workspace-preferences-group"
+            disabled={readOnly}
+            aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
+          >
             <legend>Workspace</legend>
             <label>
               <input
@@ -113,7 +133,11 @@ export function WorkspacePreferencesControl({
                 name="workspace-preference"
                 value="current-arrangement"
                 checked={!activeWorkspaceId}
-                onChange={onSelectCurrentArrangement}
+                onChange={() => {
+                  if (!readOnly) {
+                    onSelectCurrentArrangement();
+                  }
+                }}
               />
               <span>Current arrangement</span>
             </label>
@@ -124,13 +148,21 @@ export function WorkspacePreferencesControl({
                   name="workspace-preference"
                   value={option.id}
                   checked={activeWorkspaceId === option.id}
-                  onChange={() => onSelectWorkspace(option.id)}
+                  onChange={() => {
+                    if (!readOnly) {
+                      onSelectWorkspace(option.id);
+                    }
+                  }}
                 />
                 <span>{option.label}</span>
               </label>
             ))}
           </fieldset>
-          <fieldset className="workspace-preferences-group">
+          <fieldset
+            className="workspace-preferences-group"
+            disabled={readOnly}
+            aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
+          >
             <legend>Theme</legend>
             {(["system", "dark", "light"] as const).map((option) => (
               <label key={option}>
@@ -139,13 +171,21 @@ export function WorkspacePreferencesControl({
                   name="theme-preference"
                   value={option}
                   checked={theme === option}
-                  onChange={() => onSelectTheme(option)}
+                  onChange={() => {
+                    if (!readOnly) {
+                      onSelectTheme(option);
+                    }
+                  }}
                 />
                 <span>{option[0].toUpperCase() + option.slice(1)}</span>
               </label>
             ))}
           </fieldset>
-          <fieldset className="workspace-preferences-group">
+          <fieldset
+            className="workspace-preferences-group"
+            disabled={readOnly}
+            aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
+          >
             <legend>Density</legend>
             {(["comfortable", "compact"] as const).map((option) => (
               <label key={option}>
@@ -154,13 +194,20 @@ export function WorkspacePreferencesControl({
                   name="density-preference"
                   value={option}
                   checked={density === option}
-                  onChange={() => onSelectDensity(option)}
+                  onChange={() => {
+                    if (!readOnly) {
+                      onSelectDensity(option);
+                    }
+                  }}
                 />
                 <span>{option[0].toUpperCase() + option.slice(1)}</span>
               </label>
             ))}
           </fieldset>
-          <fieldset className="workspace-preferences-group workspace-panel-preferences">
+          <fieldset
+            className="workspace-preferences-group workspace-panel-preferences"
+            aria-describedby={readOnly ? READ_ONLY_DESCRIPTION_ID : undefined}
+          >
             <legend>Visible Panels</legend>
             {panelOptions.map((option) => {
               const descriptionId = getPanelAvailabilityDescriptionId(option.id);
@@ -169,12 +216,14 @@ export function WorkspacePreferencesControl({
                   <input
                     type="checkbox"
                     checked={option.visible}
-                    disabled={!option.available}
-                    aria-describedby={!option.available && option.unavailableReason
-                      ? descriptionId
-                      : undefined}
+                    disabled={readOnly || !option.available}
+                    aria-describedby={readOnly
+                      ? READ_ONLY_DESCRIPTION_ID
+                      : !option.available && option.unavailableReason
+                        ? descriptionId
+                        : undefined}
                     onChange={(event) => {
-                      if (option.available) {
+                      if (!readOnly && option.available) {
                         onTogglePanel(option.id, event.currentTarget.checked);
                       }
                     }}

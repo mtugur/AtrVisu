@@ -370,7 +370,14 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 
 export function App() {
   const uiPreferencesStore = useUiPreferencesStore();
-  const { preferences: uiPreferences } = useUiPreferences();
+  const {
+    preferences: uiPreferences,
+    hydrationStatus: uiPreferencesHydrationStatus,
+    warning: uiPreferencesWarning
+  } = useUiPreferences();
+  const workspacePreferencesReadOnly = uiPreferencesHydrationStatus === "future-readonly";
+  const workspacePreferencesReadOnlyReason = uiPreferencesWarning
+    ?? "UI preferences are from a newer version and are read-only.";
   const workspaceRuntime = useMemo(
     () => createWorkspaceRuntime(uiPreferencesStore),
     [uiPreferencesStore]
@@ -3950,21 +3957,31 @@ export function App() {
               theme={uiPreferences.theme}
               density={uiPreferences.density}
               panelOptions={workspacePanelOptions}
+              readOnly={workspacePreferencesReadOnly}
+              readOnlyReason={workspacePreferencesReadOnlyReason}
               onSelectCurrentArrangement={() => {
-                workspaceRuntime.useCurrentArrangement();
+                if (!workspacePreferencesReadOnly) {
+                  workspaceRuntime.useCurrentArrangement();
+                }
               }}
               onSelectWorkspace={(workspaceId) => {
-                workspaceRuntime.applyWorkspace(workspaceId);
+                if (!workspacePreferencesReadOnly) {
+                  workspaceRuntime.applyWorkspace(workspaceId);
+                }
               }}
               onSelectTheme={(theme) => {
-                workspaceRuntime.updateTheme(theme);
+                if (!workspacePreferencesReadOnly) {
+                  workspaceRuntime.updateTheme(theme);
+                }
               }}
               onSelectDensity={(density) => {
-                workspaceRuntime.updateDensity(density);
+                if (!workspacePreferencesReadOnly) {
+                  workspaceRuntime.updateDensity(density);
+                }
               }}
               onTogglePanel={(panelId, visible) => {
                 const panel = runtimePanelBridge.getRuntimePanel(panelId);
-                if (panel?.bound && panel.available) {
+                if (!workspacePreferencesReadOnly && panel?.bound && panel.available) {
                   workspaceRuntime.updatePanelVisibility(panelId, visible);
                 }
               }}
