@@ -10,6 +10,7 @@ export type WorkbenchProjectContext = Readonly<{
 export type WorkbenchApplicationBarProps = {
   saveItem?: CommandSurfaceItem;
   workspaceControl?: ReactNode;
+  emphasizedCommandIds?: readonly string[];
   hasUnsavedChanges: boolean;
   projectContext: WorkbenchProjectContext;
   onExecute: (commandId: string) => void;
@@ -18,6 +19,7 @@ export type WorkbenchApplicationBarProps = {
 export function WorkbenchApplicationBar({
   saveItem,
   workspaceControl,
+  emphasizedCommandIds = [],
   hasUnsavedChanges,
   projectContext,
   onExecute
@@ -44,6 +46,9 @@ export function WorkbenchApplicationBar({
               type="button"
               className="workbench-save-command"
               data-command-id={saveItem.commandId}
+              data-workspace-emphasized={emphasizedCommandIds.includes(saveItem.commandId)
+                ? "true"
+                : undefined}
               disabled={saveItem.disabled}
               aria-busy={saveItem.pending || undefined}
               aria-label={saveItem.disabledReason

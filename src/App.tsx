@@ -3915,6 +3915,7 @@ export function App() {
       applicationBar={(
         <WorkbenchApplicationBar
           saveItem={applicationSaveItem}
+          emphasizedCommandIds={workspaceProjection.emphasizedCommandIds}
           workspaceControl={(
             <WorkspacePreferencesControl
               activeWorkspaceId={workspaceProjection.activeWorkspaceId}
@@ -3958,6 +3959,7 @@ export function App() {
       commandBar={(
         <WorkbenchCommandBar
           items={commandBarItems}
+          emphasizedCommandIds={workspaceProjection.emphasizedCommandIds}
           onExecute={executeCommandSurfaceItem}
         />
       )}

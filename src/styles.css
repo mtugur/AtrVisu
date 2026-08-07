@@ -443,6 +443,12 @@ select:disabled {
   background: var(--av-interaction-selected);
 }
 
+.workbench-save-command[data-workspace-emphasized="true"],
+.workbench-command-button[data-workspace-emphasized="true"] {
+  border-color: var(--av-border-strong);
+  font-weight: var(--av-font-weight-semibold);
+}
+
 @media (forced-colors: active) {
   .workbench-save-command:focus-visible,
   .workbench-menu-trigger:focus-visible,
