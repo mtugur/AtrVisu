@@ -167,19 +167,44 @@ const openWorkspacePreferences = async (page: Page) => {
   return { trigger, popover };
 };
 
-const openVisiblePanels = async (page: Page) => {
+const preferenceBranchIds = {
+  workspace: {
+    trigger: "workspace-preferences-workspace-trigger",
+    surface: "workspace-preferences-workspace-surface"
+  },
+  theme: {
+    trigger: "workspace-preferences-theme-trigger",
+    surface: "workspace-preferences-theme-surface"
+  },
+  density: {
+    trigger: "workspace-preferences-density-trigger",
+    surface: "workspace-preferences-density-surface"
+  },
+  "visible-panels": {
+    trigger: "workspace-visible-panels-trigger",
+    surface: "workspace-visible-panels-surface"
+  }
+} as const;
+
+const openPreferenceBranch = async (
+  page: Page,
+  branchId: keyof typeof preferenceBranchIds
+) => {
   const control = await openWorkspacePreferences(page);
-  const branchTrigger = control.popover.getByTestId("workspace-visible-panels-trigger");
+  const branch = preferenceBranchIds[branchId];
+  const branchTrigger = control.popover.getByTestId(branch.trigger);
   if (await branchTrigger.getAttribute("aria-expanded") !== "true") {
     await branchTrigger.click();
   }
-  const surface = page.locator("#workspace-visible-panels-surface");
+  const surface = page.locator(`#${branch.surface}`);
   await expect(surface).toBeVisible();
   if (await branchTrigger.count()) {
     await expect(branchTrigger).toHaveAttribute("aria-expanded", "true");
   }
   return { ...control, branchTrigger, surface };
 };
+
+const openVisiblePanels = (page: Page) => openPreferenceBranch(page, "visible-panels");
 
 const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
@@ -3180,6 +3205,7 @@ test("corrupt preference storage degrades safely and diagnostics remain guarded"
 
 test("P1-D1 preferences start as Current arrangement without an implicit Sales reset", async ({ page }) => {
   const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   const seed = createE2EUiPreferences({
     theme: "light",
     density: "compact",
@@ -3200,6 +3226,20 @@ test("P1-D1 preferences start as Current arrangement without an implicit Sales r
   await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Annotations", exact: true }))
     .toHaveAttribute("aria-expanded", "true");
+  const control = await openWorkspacePreferences(page);
+  const disclosureRows = control.popover.locator(".workspace-preference-disclosure-row");
+  await expect(disclosureRows).toHaveCount(4);
+  await expect(control.popover.locator("input")).toHaveCount(0);
+  await expect(control.popover.getByTestId("workspace-preferences-workspace-trigger"))
+    .toContainText("Current arrangement");
+  await expect(control.popover.getByTestId("workspace-preferences-theme-trigger"))
+    .toContainText("Light");
+  await expect(control.popover.getByTestId("workspace-preferences-density-trigger"))
+    .toContainText("Compact");
+  await expect(control.popover.getByTestId("workspace-visible-panels-trigger"))
+    .toHaveAccessibleName(/^Visible Panels: \d+\/\d+$/);
+  expect(await control.popover.evaluate((element) => element.scrollHeight <= element.clientHeight))
+    .toBe(true);
   const snapshot = await page.evaluate(() => window.__atrvisuWorkspace?.getSnapshot());
   expect(snapshot?.activeWorkspaceId).toBeUndefined();
   expect(snapshot?.inspectorMode).toBe("contextual");
@@ -3213,9 +3253,15 @@ test("Sales and Engineering workspaces persist while domain and scene invariants
   const beforeViewport = await getRuntimeViewportSnapshot(page);
   const beforeProject = await getActiveProjectRuntimeContext(page);
 
-  let control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Sales Layout", { exact: true }).check();
-  await expect(control.trigger).toContainText("Sales Layout");
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await expect(page.getByTestId("workspace-preferences-workspace-flyout")).toBeVisible();
+  await expect(workspace.surface.getByRole("radio")).toHaveCount(3);
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+  await expect(workspace.surface).toBeVisible();
+  await expect(workspace.branchTrigger).toContainText("Sales Layout");
+  await expect(workspace.branchTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("workspace-preferences-popover")).toBeVisible();
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "comfortable");
   await expect(page.getByRole("button", { name: "Machine Library", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
@@ -3226,9 +3272,10 @@ test("Sales and Engineering workspaces persist while domain and scene invariants
     "true"
   );
 
-  control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
-  await expect(control.trigger).toContainText("Layout Engineering");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+  await expect(workspace.surface).toBeVisible();
+  await expect(workspace.branchTrigger).toContainText("Layout Engineering");
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Layout Engineering");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
   await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Collision Check/ })).toBeVisible();
@@ -3242,8 +3289,8 @@ test("Sales and Engineering workspaces persist while domain and scene invariants
     "true"
   );
 
-  control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Sales Layout", { exact: true }).check();
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+  await expect(workspace.surface).toBeVisible();
   const afterViewport = await getRuntimeViewportSnapshot(page);
   const afterProject = await getActiveProjectRuntimeContext(page);
   expect(afterViewport.invariants).toEqual(beforeViewport.invariants);
@@ -3265,28 +3312,43 @@ test("theme retains workspace identity and density override returns to Current a
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await waitForUiPreferences(page);
-  let control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Sales Layout", { exact: true }).check();
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
   const before = await getRuntimeViewportSnapshot(page);
+  const beforeProject = await getActiveProjectRuntimeContext(page);
 
+  const themeBranch = await openPreferenceBranch(page, "theme");
+  await expect(page.getByTestId("workspace-preferences-workspace-flyout")).toHaveCount(0);
+  await expect(themeBranch.surface.getByRole("radio")).toHaveCount(3);
   for (const theme of ["Dark", "Light", "System"] as const) {
-    control = await openWorkspacePreferences(page);
-    await control.popover.getByLabel(theme, { exact: true }).check();
+    await themeBranch.surface.getByLabel(theme, { exact: true }).check();
+    await expect(themeBranch.surface).toBeVisible();
+    await expect(themeBranch.branchTrigger).toContainText(theme);
     await expect(page.getByTestId("design-system-root")).toHaveAttribute(
       "data-av-theme",
       theme.toLowerCase()
     );
     await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
   }
-  control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Compact", { exact: true }).check();
-  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  const densityBranch = await openPreferenceBranch(page, "density");
+  await expect(page.getByTestId("workspace-preferences-workspace-flyout")).toHaveCount(0);
+  await expect(page.getByTestId("workspace-preferences-theme-flyout")).toHaveCount(0);
+  await expect(densityBranch.surface.getByRole("radio")).toHaveCount(2);
+  await densityBranch.surface.getByLabel("Compact", { exact: true }).check();
+  await expect(densityBranch.surface).toBeVisible();
+  await expect(densityBranch.branchTrigger).toContainText("Compact");
+  await expect(page.getByTestId("workspace-preferences-workspace-trigger"))
+    .toContainText("Current arrangement");
+  await expect(page.getByTestId("workspace-preferences-trigger"))
+    .toContainText("Current arrangement");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
 
   const after = await getRuntimeViewportSnapshot(page);
   expect(after.invariants).toEqual(before.invariants);
   expect(after.camera).toEqual(before.camera);
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.invariants.projectDirty).toBe(before.invariants.projectDirty);
+  expect(await getActiveProjectRuntimeContext(page)).toEqual(beforeProject);
   await expect(page.getByTestId("design-system-root")).toHaveCount(1);
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
@@ -3301,8 +3363,8 @@ test("a hidden live panel is restored through Workspace and View and survives re
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await waitForUiPreferences(page);
-  let control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
 
   let panels = await openVisiblePanels(page);
   await panels.surface.getByLabel("Layers", { exact: true }).uncheck();
@@ -3328,8 +3390,9 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   const canvas = page.locator("canvas.scene-canvas");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
 
-  let control = await openWorkspacePreferences(page);
-  await control.popover.getByLabel("Layout Engineering", { exact: true }).check();
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+  const control = await openWorkspacePreferences(page);
   let panels = await openVisiblePanels(page);
   let snapLabel = panels.surface.locator("label").filter({ hasText: "Connection Point Snap" });
   let snapToggle = snapLabel.locator('input[type="checkbox"]');
@@ -3436,21 +3499,23 @@ test("future-version preferences expose an inspectable read-only Workspace and V
   await expect(message).toBeVisible();
   await expect(message).toContainText("unsupported schema version 3");
   await expect(control.popover).toHaveAttribute("aria-describedby", await message.getAttribute("id") ?? "");
-  const radios = control.popover.locator('input[type="radio"]');
-  const panels = await openVisiblePanels(page);
-  const checkboxes = panels.surface.locator('input[type="checkbox"]');
-  await expect(radios).toHaveCount(8);
-  await expect(checkboxes).toHaveCount(16);
-  for (let index = 0; index < await radios.count(); index += 1) {
-    await expect(radios.nth(index)).toBeDisabled();
-    await radios.nth(index).evaluate((element) => (element as HTMLInputElement).click());
+  await expect(control.popover.locator(".workspace-preference-disclosure-row")).toHaveCount(4);
+  await expect(control.popover.locator("input")).toHaveCount(0);
+
+  for (const branchId of ["workspace", "theme", "density", "visible-panels"] as const) {
+    const branch = await openPreferenceBranch(page, branchId);
+    const controls = branch.surface.locator("input");
+    expect(await controls.count()).toBeGreaterThan(0);
+    await expect(branch.surface).toHaveAttribute(
+      "aria-describedby",
+      await message.getAttribute("id") ?? ""
+    );
+    for (let index = 0; index < await controls.count(); index += 1) {
+      await expect(controls.nth(index)).toBeDisabled();
+      await controls.nth(index).evaluate((element) => (element as HTMLInputElement).click());
+    }
+    await expect(message).toBeVisible();
   }
-  for (let index = 0; index < await checkboxes.count(); index += 1) {
-    await expect(checkboxes.nth(index)).toBeDisabled();
-    await checkboxes.nth(index).evaluate((element) => (element as HTMLInputElement).click());
-  }
-  await control.popover.press("Tab");
-  await control.popover.press("Space");
 
   expect(await readRawUiPreferencesJson(page)).toBe(rawBefore);
   expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
@@ -3469,8 +3534,9 @@ test("Visible Panels stays open for multiple desktop changes without nested root
   await openCleanApp(page);
   await waitForUiPreferences(page);
   const before = await getRuntimeViewportSnapshot(page);
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
   const root = await openWorkspacePreferences(page);
-  await root.popover.getByLabel("Layout Engineering", { exact: true }).check();
   const panels = await openVisiblePanels(page);
   const flyout = page.getByTestId("workspace-visible-panels-flyout");
   await expect(flyout).toBeVisible();
@@ -3517,27 +3583,29 @@ test("workspace preferences are keyboard complete and stay inside responsive app
   await trigger.press("Enter");
   const popover = page.getByTestId("workspace-preferences-popover");
   await expect(popover).toBeVisible();
-  const sales = popover.getByLabel("Sales Layout", { exact: true });
-  await sales.focus();
-  await sales.press("Space");
-  await sales.press("Escape");
+  const workspaceTrigger = popover.getByTestId("workspace-preferences-workspace-trigger");
+  await workspaceTrigger.focus();
+  await workspaceTrigger.press("ArrowRight");
+  const workspaceSurface = page.locator("#workspace-preferences-workspace-surface");
+  await expect(workspaceSurface).toBeVisible();
+  await expect(workspaceSurface.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("ArrowLeft");
+  await expect(workspaceSurface).toHaveCount(0);
+  await expect(workspaceTrigger).toBeFocused();
+
+  const themeTrigger = popover.getByTestId("workspace-preferences-theme-trigger");
+  await themeTrigger.focus();
+  await themeTrigger.press("ArrowRight");
+  const themeSurface = page.locator("#workspace-preferences-theme-surface");
+  await expect(themeSurface).toBeVisible();
+  await expect(themeSurface.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(themeSurface).toHaveCount(0);
+  await expect(themeTrigger).toBeFocused();
+  await themeTrigger.press("Escape");
   await expect(popover).toHaveCount(0);
   await expect(trigger).toBeFocused();
   expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(before.invariants);
-
-  await trigger.press("Enter");
-  const visiblePanelsTrigger = popover.getByTestId("workspace-visible-panels-trigger");
-  await visiblePanelsTrigger.focus();
-  await visiblePanelsTrigger.press("ArrowRight");
-  const keyboardSurface = page.locator("#workspace-visible-panels-surface");
-  await expect(keyboardSurface).toBeVisible();
-  await expect(keyboardSurface.locator(":focus")).toHaveCount(1);
-  await page.keyboard.press("ArrowLeft");
-  await expect(keyboardSurface).toHaveCount(0);
-  await expect(visiblePanelsTrigger).toBeFocused();
-  await visiblePanelsTrigger.press("Escape");
-  await expect(popover).toHaveCount(0);
-  await expect(trigger).toBeFocused();
 
   for (const viewport of [
     { width: 1440, height: 900 },
@@ -3553,36 +3621,47 @@ test("workspace preferences are keyboard complete and stay inside responsive app
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
     expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
     expect(box!.height).toBeLessThan(viewport.height * 0.8);
-    const panels = await openVisiblePanels(page);
-    const isDrillIn = await current.popover.getAttribute("data-cascading-presentation") === "drill-in";
-    if (viewport.width === 640 || isDrillIn) {
-      await expect(page.getByTestId("workspace-visible-panels-flyout")).toHaveCount(0);
-      await expect(current.popover).toHaveAttribute("data-cascading-presentation", "drill-in");
-      await expect(current.popover.getByTestId("workspace-visible-panels-drill-in")).toBeVisible();
-      await expect(current.popover.getByRole("button", { name: /Workspace & View/ })).toBeVisible();
-      expect(await current.popover.evaluate((element) => {
-        const nestedScrollers = [...element.querySelectorAll("*")].filter((candidate) => {
-          const style = getComputedStyle(candidate);
-          return (style.overflowY === "auto" || style.overflowY === "scroll")
-            && candidate.scrollHeight > candidate.clientHeight;
-        });
-        return nestedScrollers.length;
-      })).toBe(0);
-      await current.popover.getByRole("button", { name: /Workspace & View/ }).click();
-      await expect(current.popover.getByTestId("workspace-visible-panels-trigger")).toBeFocused();
-    } else {
-      const child = page.getByTestId("workspace-visible-panels-flyout");
-      await expect(child).toBeVisible();
-      await expect(panels.surface).toHaveCount(1);
-      const childBox = await child.boundingBox();
-      expect(childBox).not.toBeNull();
-      expect(childBox!.x).toBeGreaterThanOrEqual(0);
-      expect(childBox!.x + childBox!.width).toBeLessThanOrEqual(viewport.width);
-      expect(childBox!.y).toBeGreaterThanOrEqual(0);
-      expect(childBox!.y + childBox!.height).toBeLessThanOrEqual(viewport.height);
-      await page.keyboard.press("Escape");
+    const branchIds = viewport.width === 640
+      ? (["workspace", "theme", "density", "visible-panels"] as const)
+      : (["visible-panels"] as const);
+    for (const branchId of branchIds) {
+      const branch = await openPreferenceBranch(page, branchId);
+      const isDrillIn = await current.popover.getAttribute("data-cascading-presentation") === "drill-in";
+      if (viewport.width === 640 || isDrillIn) {
+        await expect(page.locator(".cascading-flyout-surface")).toHaveCount(0);
+        await expect(current.popover).toHaveAttribute("data-cascading-presentation", "drill-in");
+        await expect(branch.surface).toBeVisible();
+        const back = current.popover.getByRole("button", { name: /Workspace & View/ });
+        await expect(back).toBeVisible();
+        expect(await current.popover.evaluate((element) => {
+          const nestedScrollers = [...element.querySelectorAll("*")].filter((candidate) => {
+            const style = getComputedStyle(candidate);
+            return (style.overflowY === "auto" || style.overflowY === "scroll")
+              && candidate.scrollHeight > candidate.clientHeight;
+          });
+          return nestedScrollers.length;
+        })).toBe(0);
+        await back.click();
+        await expect(current.popover.getByTestId(preferenceBranchIds[branchId].trigger)).toBeFocused();
+      } else {
+        const child = page.getByTestId(
+          branchId === "visible-panels"
+            ? "workspace-visible-panels-flyout"
+            : `workspace-preferences-${branchId}-flyout`
+        );
+        await expect(child).toBeVisible();
+        await expect(branch.surface).toHaveCount(1);
+        const childBox = await child.boundingBox();
+        expect(childBox).not.toBeNull();
+        expect(childBox!.x).toBeGreaterThanOrEqual(0);
+        expect(childBox!.x + childBox!.width).toBeLessThanOrEqual(viewport.width);
+        expect(childBox!.y).toBeGreaterThanOrEqual(0);
+        expect(childBox!.y + childBox!.height).toBeLessThanOrEqual(viewport.height);
+        await page.keyboard.press("Escape");
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
     }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.keyboard.press("Escape");
   }
   await expect(page.getByTestId("workbench-application-bar")).toBeVisible();
