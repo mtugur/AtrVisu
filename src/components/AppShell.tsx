@@ -1,5 +1,6 @@
 import { Fragment, cloneElement, isValidElement, type CSSProperties, type ReactNode } from "react";
 import type { WorkbenchRegionId } from "../platform/contracts";
+import type { WorkspaceInspectorMode } from "../platform/contracts";
 
 type EditorHostRegionId = Extract<WorkbenchRegionId, "editor-host">;
 type SecondaryDockRegionId = Extract<WorkbenchRegionId, "secondary-dock">;
@@ -18,6 +19,7 @@ type AppShellProps = {
   modalLayerWorkbenchRegion?: OverlayLayerRegionId;
   diagnostics?: ReactNode;
   children?: ReactNode;
+  workspaceInspectorMode?: WorkspaceInspectorMode;
 };
 
 type ShellAnchorProps = {
@@ -56,7 +58,8 @@ export function AppShell({
   modalLayer,
   modalLayerWorkbenchRegion,
   diagnostics,
-  children
+  children,
+  workspaceInspectorMode
 }: AppShellProps) {
   return (
     <>
@@ -64,6 +67,7 @@ export function AppShell({
         className="app-shell"
         data-testid="app-root"
         data-app-shell-zone="app-root"
+        data-workspace-inspector-mode={workspaceInspectorMode}
         style={{ "--av-shell-top-inset": shellTopInset } as AppShellStyle}
       >
         {beforeViewport}

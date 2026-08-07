@@ -9,7 +9,8 @@ import {
   RightPanelUtilityStrip,
   WorkbenchApplicationBar,
   WorkbenchCommandBar,
-  WorkbenchMenuBar
+  WorkbenchMenuBar,
+  WorkspacePreferencesControl
 } from "./components/workbench";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
@@ -197,7 +198,11 @@ import {
   type RuntimePanelOperationResult,
   type RuntimePanelState
 } from "./platform/runtimePanels";
-import { createViewportResizeRequest, type CommandContext } from "./platform/contracts";
+import {
+  createViewportResizeRequest,
+  type CommandContext,
+  type WorkspaceId
+} from "./platform/contracts";
 import {
   RUNTIME_VIEWPORT_IDS,
   createRuntimeViewportInvariantSnapshot,
@@ -242,6 +247,13 @@ import {
   LAYOUT_3D_EDITOR_DEFINITION,
   LAYOUT_3D_EDITOR_ID
 } from "./workbench/layout3dEditorDefinition";
+import {
+  createWorkspaceRuntime,
+  liveWorkspacePanelDescriptors,
+  workspaceFallbackLabels,
+  workspaceFallbackTooltips,
+  workspacePresetRegistry
+} from "./workbench/workspaces";
 
 const PLACEMENT_COLUMNS = 3;
 const PLACEMENT_SPACING = 7;
@@ -358,9 +370,25 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 export function App() {
   const uiPreferencesStore = useUiPreferencesStore();
   const { preferences: uiPreferences } = useUiPreferences();
+  const workspaceRuntime = useMemo(
+    () => createWorkspaceRuntime(uiPreferencesStore),
+    [uiPreferencesStore]
+  );
+  const workspaceProjection = useMemo(
+    () => workspaceRuntime.getProjection(uiPreferences),
+    [uiPreferences, workspaceRuntime]
+  );
   const panelPreferences = useMemo(
     () => new Map(uiPreferences.panels.map((panel) => [panel.panelId, panel])),
     [uiPreferences.panels]
+  );
+  const workspacePanelOptions = useMemo(
+    () => liveWorkspacePanelDescriptors.map(({ definition }) => ({
+      id: definition.id,
+      label: definition.title,
+      visible: panelPreferences.get(definition.id)?.visible ?? definition.defaultVisible
+    })),
+    [panelPreferences]
   );
   const shellPreference = panelPreferences.get(RUNTIME_PANEL_IDS.rightPanelShell);
   const panelWidth = shellPreference?.size ?? 360;
@@ -1407,6 +1435,29 @@ export function App() {
       delete window.__atrvisuUiPreferences;
     };
   }, [enableE2EDiagnostics, uiPreferencesStore]);
+
+  useEffect(() => {
+    if (!enableE2EDiagnostics) {
+      return;
+    }
+    window.__atrvisuWorkspace = {
+      getSnapshot: () => {
+        const preferences = uiPreferencesStore.getSnapshot().preferences;
+        const projection = workspaceRuntime.getProjection(preferences);
+        return {
+          ...(projection.activeWorkspaceId
+            ? { activeWorkspaceId: projection.activeWorkspaceId }
+            : {}),
+          inspectorMode: projection.inspectorMode,
+          emphasizedCommandIds: [...projection.emphasizedCommandIds],
+          preferences
+        };
+      }
+    };
+    return () => {
+      delete window.__atrvisuWorkspace;
+    };
+  }, [enableE2EDiagnostics, uiPreferencesStore, workspaceRuntime]);
 
   useEffect(() => {
     if (!enableE2EDiagnostics) {
@@ -3849,11 +3900,46 @@ export function App() {
     }]
   );
 
+  const activeWorkspaceLabel = workspaceProjection.activeWorkspaceId
+    ? workspaceFallbackLabels[workspaceProjection.activeWorkspaceId]
+    : "Current arrangement";
+  const workspaceOptions = workspacePresetRegistry.presets.map((preset) => ({
+    id: preset.id as WorkspaceId,
+    label: workspaceFallbackLabels[preset.id],
+    tooltip: workspaceFallbackTooltips[preset.id]
+  }));
+
   return (
     <WorkbenchShell
+      workspaceInspectorMode={workspaceProjection.inspectorMode}
       applicationBar={(
         <WorkbenchApplicationBar
           saveItem={applicationSaveItem}
+          workspaceControl={(
+            <WorkspacePreferencesControl
+              activeWorkspaceId={workspaceProjection.activeWorkspaceId}
+              activeWorkspaceLabel={activeWorkspaceLabel}
+              workspaceOptions={workspaceOptions}
+              theme={uiPreferences.theme}
+              density={uiPreferences.density}
+              panelOptions={workspacePanelOptions}
+              onSelectCurrentArrangement={() => {
+                workspaceRuntime.useCurrentArrangement();
+              }}
+              onSelectWorkspace={(workspaceId) => {
+                workspaceRuntime.applyWorkspace(workspaceId);
+              }}
+              onSelectTheme={(theme) => {
+                workspaceRuntime.updateTheme(theme);
+              }}
+              onSelectDensity={(density) => {
+                workspaceRuntime.updateDensity(density);
+              }}
+              onTogglePanel={(panelId, visible) => {
+                workspaceRuntime.updatePanelVisibility(panelId, visible);
+              }}
+            />
+          )}
           hasUnsavedChanges={hasUnsavedProjectChanges}
           projectContext={{
             project: currentProject?.projectName ?? "No project",

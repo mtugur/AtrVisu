@@ -43,6 +43,23 @@ export type WorkspaceRuntime = Readonly<{
   updatePanelVisibility: (panelId: PanelId, visible: boolean) => WorkspaceRuntimeOperationResult;
 }>;
 
+export type WorkspaceRuntimeDiagnosticsSnapshot = Readonly<{
+  activeWorkspaceId?: WorkspaceId;
+  inspectorMode: WorkspaceInspectorMode;
+  emphasizedCommandIds: readonly CommandId[];
+  preferences: WorkbenchUiPreferences;
+}>;
+
+export type WorkspaceRuntimeE2EBridge = Readonly<{
+  getSnapshot: () => WorkspaceRuntimeDiagnosticsSnapshot;
+}>;
+
+declare global {
+  interface Window {
+    __atrvisuWorkspace?: WorkspaceRuntimeE2EBridge;
+  }
+}
+
 const rejected = (reason: string): WorkspaceRuntimeOperationResult => ({
   accepted: false,
   persisted: Promise.resolve(false),

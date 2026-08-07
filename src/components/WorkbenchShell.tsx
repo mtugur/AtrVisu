@@ -1,7 +1,8 @@
 import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
 import {
   WORKBENCH_REGION_IDS,
-  type WorkbenchRegionId
+  type WorkbenchRegionId,
+  type WorkspaceInspectorMode
 } from "../platform/contracts";
 import { AppShell } from "./AppShell";
 
@@ -17,13 +18,14 @@ export type WorkbenchShellProps = {
   overlayLayer?: ReactNode;
   diagnostics?: ReactNode;
   editorRightInset?: number;
+  workspaceInspectorMode?: WorkspaceInspectorMode;
 };
 
 export const WORKBENCH_CHROME_TOP_INSET = "var(--av-workbench-top-inset)";
 
 type WorkbenchShellRegionSlot = Exclude<
   keyof WorkbenchShellProps,
-  "diagnostics" | "editorRightInset"
+  "diagnostics" | "editorRightInset" | "workspaceInspectorMode"
 >;
 type CanonicalWorkbenchRegionId = (typeof WORKBENCH_REGION_IDS)[number];
 
@@ -69,7 +71,8 @@ export function WorkbenchShell({
   statusBar,
   overlayLayer,
   diagnostics,
-  editorRightInset = 0
+  editorRightInset = 0,
+  workspaceInspectorMode
 }: WorkbenchShellProps) {
   return (
     <AppShell
@@ -96,6 +99,7 @@ export function WorkbenchShell({
       modalLayer={overlayLayer}
       modalLayerWorkbenchRegion={WORKBENCH_SHELL_REGION_BY_SLOT.overlayLayer}
       diagnostics={diagnostics}
+      workspaceInspectorMode={workspaceInspectorMode}
     />
   );
 }
