@@ -2074,6 +2074,69 @@ test("selected object and numeric rotation smoke has no red console errors", asy
   expect(errors).toEqual([]);
 });
 
+test("schema-driven smart asset Inspector follows selection without remount or read-only mutation", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  const machineCard = page.locator(".machine-card").first();
+  await expect(machineCard).toBeVisible();
+  await machineCard.click();
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 2);
+
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  const inspector = page.getByTestId("schema-property-inspector");
+  const schemaRoot = page.getByTestId("atara-machine-data-diagnostics");
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(inspector).toBeVisible();
+  await expect(schemaRoot).toHaveAttribute("data-schema-id", "schema.atara.machine");
+  await expect(inspector.getByRole("heading", { name: "Identity" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: "Physical" })).toBeVisible();
+  await expect(inspector.locator('[data-property-id="atara.physical.width"]')).toContainText("mm");
+  await expect(inspector.locator('[data-property-id="atara.identity.manufacturer"]')).toHaveText(/.+/);
+  await expect(inspector.locator("input, select, textarea")).toHaveCount(0);
+
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const firstEntityId = await schemaRoot.getAttribute("data-entity-id");
+  const beforeReadOnlySelection = await getRuntimeViewportSnapshot(page);
+  await inspector.evaluate((element) => element.setAttribute("data-e2e-node-probe", "stable"));
+  await clickSceneMachine(page, machineIds[1]);
+  await expect(inspector).toHaveAttribute("data-e2e-node-probe", "stable");
+  await expect(schemaRoot).not.toHaveAttribute("data-entity-id", firstEntityId ?? "");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  const afterReadOnlySelection = await getRuntimeViewportSnapshot(page);
+  expect(afterReadOnlySelection.invariants.undoDepth).toBe(beforeReadOnlySelection.invariants.undoDepth);
+  expect(afterReadOnlySelection.invariants.redoDepth).toBe(beforeReadOnlySelection.invariants.redoDepth);
+  expect(afterReadOnlySelection.invariants.projectDirty).toBe(beforeReadOnlySelection.invariants.projectDirty);
+
+  const planX = page.getByLabel("Selected machine properties").getByLabel("Plan X");
+  const positionsBeforeInvalid = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const beforeInvalid = await getRuntimeViewportSnapshot(page);
+  await planX.fill("-");
+  await planX.blur();
+  expect(await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(positionsBeforeInvalid);
+  const afterInvalid = await getRuntimeViewportSnapshot(page);
+  expect(afterInvalid.invariants.undoDepth).toBe(beforeInvalid.invariants.undoDepth);
+  expect(afterInvalid.invariants.projectDirty).toBe(beforeInvalid.invariants.projectDirty);
+
+  await planX.fill("-250");
+  await planX.blur();
+  await expect.poll(async () => (
+    await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  )[machineIds[1]]?.xMm).not.toBe(positionsBeforeInvalid[machineIds[1]]?.xMm);
+  const afterValid = await getRuntimeViewportSnapshot(page);
+  expect(afterValid.invariants.undoDepth).toBeGreaterThan(beforeInvalid.invariants.undoDepth);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
 test("core editor visible controls execute canonical commands once", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

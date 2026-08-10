@@ -3113,3 +3113,22 @@ select:disabled {
     grid-template-columns: 1fr;
   }
 }
+.schema-property-description {
+  color: var(--av-text-secondary);
+  margin: var(--av-spacing-sm) 0;
+}
+
+.schema-property-group {
+  border-top: 1px solid var(--av-border-subtle);
+  padding-top: var(--av-spacing-sm);
+}
+
+.schema-property-group h4 {
+  font-size: var(--av-font-size-sm);
+  margin: 0 0 var(--av-spacing-sm);
+}
+
+.schema-property-validation {
+  color: var(--av-status-danger);
+  grid-column: 1 / -1;
+}
