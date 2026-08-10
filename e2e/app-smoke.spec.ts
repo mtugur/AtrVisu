@@ -71,6 +71,22 @@ const waitForUiPreferences = async (page: Page, status = "ready") => {
   )).toBe(status);
 };
 
+const readRawUiPreferencesJson = async (page: Page) => page.evaluate(() =>
+  new Promise<string>((resolve, reject) => {
+    const request = indexedDB.open("atrvisu-db", 2);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const getRequest = database.transaction("uiPreferences").objectStore("uiPreferences").get("workbench");
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        resolve(JSON.stringify(getRequest.result));
+        database.close();
+      };
+    };
+  })
+);
+
 const delayUiPreferencesHydration = async (page: Page) => {
   await page.addInitScript(() => {
     const releasedKey = "atrvisu.e2e.uiPreferencesHydrationReleased";
@@ -99,6 +115,11 @@ const createE2EUiPreferences = (overrides: {
   theme?: "light" | "dark" | "system";
   density?: "compact" | "comfortable";
   width?: number;
+  activeWorkspaceId?: "workspace.sales-layout" | "workspace.layout-engineering";
+  panelOverrides?: Readonly<Record<string, Readonly<{
+    visible?: boolean;
+    collapsed?: boolean;
+  }>>>;
 } = {}) => {
   const panels = [
     ["panel.rightPanelShell", false],
@@ -123,16 +144,67 @@ const createE2EUiPreferences = (overrides: {
     schemaVersion: 1,
     theme: overrides.theme ?? "dark",
     density: overrides.density ?? "comfortable",
+    ...(overrides.activeWorkspaceId ? { activeWorkspaceId: overrides.activeWorkspaceId } : {}),
     panels: panels.map(([panelId, collapsed], order) => ({
       panelId,
-      visible: true,
-      collapsed,
+      visible: overrides.panelOverrides?.[panelId]?.visible ?? true,
+      collapsed: overrides.panelOverrides?.[panelId]?.collapsed ?? collapsed,
       ...(panelId === "panel.rightPanelShell" ? { size: overrides.width ?? 360 } : {}),
       order,
       dock: "secondary-dock"
     }))
   };
 };
+
+const openWorkspacePreferences = async (page: Page) => {
+  const trigger = page.getByTestId("workspace-preferences-trigger");
+  if (await trigger.getAttribute("aria-expanded") !== "true") {
+    await trigger.click();
+  }
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const popover = page.getByTestId("workspace-preferences-popover");
+  await expect(popover).toBeVisible();
+  return { trigger, popover };
+};
+
+const preferenceBranchIds = {
+  workspace: {
+    trigger: "workspace-preferences-workspace-trigger",
+    surface: "workspace-preferences-workspace-surface"
+  },
+  theme: {
+    trigger: "workspace-preferences-theme-trigger",
+    surface: "workspace-preferences-theme-surface"
+  },
+  density: {
+    trigger: "workspace-preferences-density-trigger",
+    surface: "workspace-preferences-density-surface"
+  },
+  "visible-panels": {
+    trigger: "workspace-visible-panels-trigger",
+    surface: "workspace-visible-panels-surface"
+  }
+} as const;
+
+const openPreferenceBranch = async (
+  page: Page,
+  branchId: keyof typeof preferenceBranchIds
+) => {
+  const control = await openWorkspacePreferences(page);
+  const branch = preferenceBranchIds[branchId];
+  const branchTrigger = control.popover.getByTestId(branch.trigger);
+  if (await branchTrigger.getAttribute("aria-expanded") !== "true") {
+    await branchTrigger.click();
+  }
+  const surface = page.locator(`#${branch.surface}`);
+  await expect(surface).toBeVisible();
+  if (await branchTrigger.count()) {
+    await expect(branchTrigger).toHaveAttribute("aria-expanded", "true");
+  }
+  return { ...control, branchTrigger, surface };
+};
+
+const openVisiblePanels = (page: Page) => openPreferenceBranch(page, "visible-panels");
 
 const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
@@ -3126,7 +3198,476 @@ test("corrupt preference storage degrades safely and diagnostics remain guarded"
   await normalPage.goto("/");
   await expect(normalPage.getByTestId("app-root")).toBeVisible();
   expect(await normalPage.evaluate(() => window.__atrvisuUiPreferences)).toBeUndefined();
+  expect(await normalPage.evaluate(() => window.__atrvisuWorkspace)).toBeUndefined();
   expect(normalErrors).toEqual([]);
   await normalPage.close();
+});
+
+test("P1-D1 preferences start as Current arrangement without an implicit Sales reset", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const seed = createE2EUiPreferences({
+    theme: "light",
+    density: "compact",
+    width: 420,
+    panelOverrides: {
+      "panel.layers": { visible: false, collapsed: true },
+      "panel.annotations": { visible: true, collapsed: false }
+    }
+  });
+  await seedUiPreferences(page, seed);
+  await page.goto("/?e2eDiagnostics=1");
+  await waitForUiPreferences(page);
+
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "light");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  await expect(page.getByTestId("right-panel")).toHaveCSS("width", "420px");
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Annotations", exact: true }))
+    .toHaveAttribute("aria-expanded", "true");
+  const control = await openWorkspacePreferences(page);
+  const disclosureRows = control.popover.locator(".workspace-preference-disclosure-row");
+  await expect(disclosureRows).toHaveCount(4);
+  await expect(control.popover.locator("input")).toHaveCount(0);
+  await expect(control.popover.getByTestId("workspace-preferences-workspace-trigger"))
+    .toContainText("Current arrangement");
+  await expect(control.popover.getByTestId("workspace-preferences-theme-trigger"))
+    .toContainText("Light");
+  await expect(control.popover.getByTestId("workspace-preferences-density-trigger"))
+    .toContainText("Compact");
+  await expect(control.popover.getByTestId("workspace-visible-panels-trigger"))
+    .toHaveAccessibleName(/^Visible Panels: \d+\/\d+$/);
+  expect(await control.popover.evaluate((element) => element.scrollHeight <= element.clientHeight))
+    .toBe(true);
+  const snapshot = await page.evaluate(() => window.__atrvisuWorkspace?.getSnapshot());
+  expect(snapshot?.activeWorkspaceId).toBeUndefined();
+  expect(snapshot?.inspectorMode).toBe("contextual");
+  expect(errors).toEqual([]);
+});
+
+test("Sales and Engineering workspaces persist while domain and scene invariants stay fixed", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const beforeViewport = await getRuntimeViewportSnapshot(page);
+  const beforeProject = await getActiveProjectRuntimeContext(page);
+
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await expect(page.getByTestId("workspace-preferences-workspace-flyout")).toBeVisible();
+  await expect(workspace.surface.getByRole("radio")).toHaveCount(3);
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+  await expect(workspace.surface).toBeVisible();
+  await expect(workspace.branchTrigger).toContainText("Sales Layout");
+  await expect(workspace.branchTrigger).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("workspace-preferences-popover")).toBeVisible();
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "comfortable");
+  await expect(page.getByRole("button", { name: "Machine Library", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Collision Check", exact: true })).toHaveCount(0);
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-workspace-inspector-mode", "summary");
+  await expect(page.locator('[data-command-id="project.save"]')).toHaveAttribute(
+    "data-workspace-emphasized",
+    "true"
+  );
+
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+  await expect(workspace.surface).toBeVisible();
+  await expect(workspace.branchTrigger).toContainText("Layout Engineering");
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Layout Engineering");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Collision Check/ })).toBeVisible();
+  await expect(page.getByTestId("app-root")).toHaveAttribute("data-workspace-inspector-mode", "engineering");
+  await expect(getCommandBarCommand(page, "edit.undo")).toHaveAttribute(
+    "data-workspace-emphasized",
+    "true"
+  );
+  await expect(getCommandBarCommand(page, "view.toggleLabels")).not.toHaveAttribute(
+    "data-workspace-emphasized",
+    "true"
+  );
+
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+  await expect(workspace.surface).toBeVisible();
+  const afterViewport = await getRuntimeViewportSnapshot(page);
+  const afterProject = await getActiveProjectRuntimeContext(page);
+  expect(afterViewport.invariants).toEqual(beforeViewport.invariants);
+  expect(afterViewport.camera).toEqual(beforeViewport.camera);
+  expect(afterViewport.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeViewport.viewport?.sceneLifecycleGeneration);
+  expect(afterProject).toEqual(beforeProject);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  expect(errors).toEqual([]);
+});
+
+test("theme retains workspace identity and density override returns to Current arrangement", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+  const before = await getRuntimeViewportSnapshot(page);
+  const beforeProject = await getActiveProjectRuntimeContext(page);
+
+  const themeBranch = await openPreferenceBranch(page, "theme");
+  await expect(page.getByTestId("workspace-preferences-workspace-flyout")).toHaveCount(0);
+  await expect(themeBranch.surface.getByRole("radio")).toHaveCount(3);
+  for (const theme of ["Dark", "Light", "System"] as const) {
+    await themeBranch.surface.getByLabel(theme, { exact: true }).check();
+    await expect(themeBranch.surface).toBeVisible();
+    await expect(themeBranch.branchTrigger).toContainText(theme);
+    await expect(page.getByTestId("design-system-root")).toHaveAttribute(
+      "data-av-theme",
+      theme.toLowerCase()
+    );
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  }
+  const densityBranch = await openPreferenceBranch(page, "density");
+  await expect(page.getByTestId("workspace-preferences-workspace-flyout")).toHaveCount(0);
+  await expect(page.getByTestId("workspace-preferences-theme-flyout")).toHaveCount(0);
+  await expect(densityBranch.surface.getByRole("radio")).toHaveCount(2);
+  await densityBranch.surface.getByLabel("Compact", { exact: true }).check();
+  await expect(densityBranch.surface).toBeVisible();
+  await expect(densityBranch.branchTrigger).toContainText("Compact");
+  await expect(page.getByTestId("workspace-preferences-workspace-trigger"))
+    .toContainText("Current arrangement");
+  await expect(page.getByTestId("workspace-preferences-trigger"))
+    .toContainText("Current arrangement");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.invariants.projectDirty).toBe(before.invariants.projectDirty);
+  expect(await getActiveProjectRuntimeContext(page)).toEqual(beforeProject);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
+  expect(errors).toEqual([]);
+});
+
+test("a hidden live panel is restored through Workspace and View and survives reload", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+
+  let panels = await openVisiblePanels(page);
+  await panels.surface.getByLabel("Layers", { exact: true }).uncheck();
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toHaveCount(0);
+
+  panels = await openVisiblePanels(page);
+  const layersToggle = panels.surface.getByLabel("Layers", { exact: true });
+  await expect(layersToggle).not.toBeChecked();
+  await layersToggle.check();
+  await expect(panels.surface).toBeVisible();
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expect(page.getByRole("button", { name: "Layers", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("workspace panel controls follow live Connection Point Snap and Inspector availability", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const canvas = page.locator("canvas.scene-canvas");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+  const control = await openWorkspacePreferences(page);
+  let panels = await openVisiblePanels(page);
+  let snapLabel = panels.surface.locator("label").filter({ hasText: "Connection Point Snap" });
+  let snapToggle = snapLabel.locator('input[type="checkbox"]');
+  await expect(snapToggle).toBeDisabled();
+  await expect(snapToggle).toBeChecked();
+  await expect(snapLabel).toContainText("Select exactly two explicit machines.");
+  const unavailableSnapshot = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  await snapLabel.evaluate((element) => (element as HTMLLabelElement).click());
+  await snapToggle.dispatchEvent("keydown", { key: " ", code: "Space" });
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
+    .toEqual(unavailableSnapshot);
+  await expect(control.trigger).toContainText("Layout Engineering");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  const machineCard = page.locator(".machine-card").first();
+  await machineCard.click();
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 2);
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available)
+    .toBe(true);
+
+  panels = await openVisiblePanels(page);
+  snapLabel = panels.surface.locator("label").filter({ hasText: "Connection Point Snap" });
+  snapToggle = snapLabel.locator('input[type="checkbox"]');
+  await expect(snapToggle).toBeEnabled();
+  await expect(snapToggle).toBeChecked();
+  await snapToggle.uncheck();
+  await expect(control.trigger).toContainText("Current arrangement");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  panels = await openVisiblePanels(page);
+  let inspectorLabel = panels.surface.locator("label").filter({ hasText: "Inspector" });
+  let inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
+  await expect(inspectorToggle).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  const annotationsSection = page.getByRole("button", { name: /Annotations/i });
+  if ((await annotationsSection.getAttribute("aria-expanded")) !== "true") {
+    await annotationsSection.click();
+  }
+  await page.getByTestId("add-note-annotation").click();
+  await expect(page.getByTestId("annotation-properties")).toBeVisible();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
+    .toBe(false);
+
+  panels = await openVisiblePanels(page);
+  inspectorLabel = panels.surface.locator("label").filter({ hasText: "Inspector" });
+  inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
+  await expect(inspectorToggle).toBeDisabled();
+  await expect(inspectorLabel).toContainText("Annotation properties are shown in the Annotations panel.");
+  const annotationSnapshot = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  await inspectorLabel.evaluate((element) => (element as HTMLLabelElement).click());
+  await inspectorToggle.dispatchEvent("keydown", { key: " ", code: "Space" });
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
+    .toEqual(annotationSnapshot);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await clickSceneMachine(page, machineIds[0]);
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
+    .toBe(true);
+  panels = await openVisiblePanels(page);
+  inspectorToggle = panels.surface.locator("label")
+    .filter({ hasText: "Inspector" })
+    .locator('input[type="checkbox"]');
+  await expect(inspectorToggle).toBeEnabled();
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(canvas).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("future-version preferences expose an inspectable read-only Workspace and View surface", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  const futureRecord = {
+    ...createE2EUiPreferences({
+      theme: "light",
+      density: "compact",
+      activeWorkspaceId: "workspace.layout-engineering"
+    }),
+    schemaVersion: 3,
+    futurePreference: { preserve: "byte-for-byte" }
+  };
+  await seedUiPreferences(page, futureRecord);
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page, "future-readonly");
+  const rawBefore = await readRawUiPreferencesJson(page);
+  const snapshotBefore = await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot());
+  const canvas = page.locator("canvas.scene-canvas");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  const control = await openWorkspacePreferences(page);
+  const message = page.getByTestId("workspace-preferences-read-only-message");
+  await expect(message).toBeVisible();
+  await expect(message).toContainText("unsupported schema version 3");
+  await expect(control.popover).toHaveAttribute("aria-describedby", await message.getAttribute("id") ?? "");
+  await expect(control.popover.locator(".workspace-preference-disclosure-row")).toHaveCount(4);
+  await expect(control.popover.locator("input")).toHaveCount(0);
+
+  for (const branchId of ["workspace", "theme", "density", "visible-panels"] as const) {
+    const branch = await openPreferenceBranch(page, branchId);
+    const controls = branch.surface.locator("input");
+    expect(await controls.count()).toBeGreaterThan(0);
+    await expect(branch.surface).toHaveAttribute(
+      "aria-describedby",
+      await message.getAttribute("id") ?? ""
+    );
+    for (let index = 0; index < await controls.count(); index += 1) {
+      await expect(controls.nth(index)).toBeDisabled();
+      await controls.nth(index).evaluate((element) => (element as HTMLInputElement).click());
+    }
+    await expect(message).toBeVisible();
+  }
+
+  expect(await readRawUiPreferencesJson(page)).toBe(rawBefore);
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences?.getSnapshot()))
+    .toEqual(snapshotBefore);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.getByTestId("design-system-root")).toHaveCount(1);
+  await expect(canvas).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("Visible Panels stays open for multiple desktop changes without nested root scrolling", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const before = await getRuntimeViewportSnapshot(page);
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+  const root = await openWorkspacePreferences(page);
+  const panels = await openVisiblePanels(page);
+  const flyout = page.getByTestId("workspace-visible-panels-flyout");
+  await expect(flyout).toBeVisible();
+  await expect(flyout).toHaveAttribute("data-cascading-depth", "1");
+  await expect(flyout).toHaveAttribute("data-cascading-side", /right|left/);
+  await expect(root.popover.locator('input[type="checkbox"]')).toHaveCount(0);
+  await expect(root.popover.locator(".workspace-panel-preferences")).toHaveCount(0);
+
+  const rootBox = await root.popover.boundingBox();
+  const flyoutBox = await flyout.boundingBox();
+  expect(rootBox).not.toBeNull();
+  expect(flyoutBox).not.toBeNull();
+  expect(flyoutBox!.x >= rootBox!.x + rootBox!.width || rootBox!.x >= flyoutBox!.x + flyoutBox!.width)
+    .toBe(true);
+  expect(flyoutBox!.x).toBeGreaterThanOrEqual(0);
+  expect(flyoutBox!.x + flyoutBox!.width).toBeLessThanOrEqual(1440);
+  expect(flyoutBox!.y).toBeGreaterThanOrEqual(0);
+  expect(flyoutBox!.y + flyoutBox!.height).toBeLessThanOrEqual(900);
+  expect(await root.popover.evaluate((element) => element.scrollHeight <= element.clientHeight)).toBe(true);
+
+  const layers = panels.surface.getByLabel("Layers", { exact: true });
+  const groups = panels.surface.getByLabel("Groups", { exact: true });
+  const layersInitiallyChecked = await layers.isChecked();
+  const groupsInitiallyChecked = await groups.isChecked();
+  await layers.setChecked(!layersInitiallyChecked);
+  await groups.setChecked(!groupsInitiallyChecked);
+  await expect(panels.surface).toBeVisible();
+  await layers.setChecked(layersInitiallyChecked);
+  await groups.setChecked(groupsInitiallyChecked);
+  await expect(panels.surface).toBeVisible();
+
+  expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(before.invariants);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("workspace preferences are keyboard complete and stay inside responsive application geometry", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const before = await getRuntimeViewportSnapshot(page);
+  const trigger = page.getByTestId("workspace-preferences-trigger");
+  await trigger.focus();
+  await trigger.press("Enter");
+  const popover = page.getByTestId("workspace-preferences-popover");
+  await expect(popover).toBeVisible();
+  const workspaceTrigger = popover.getByTestId("workspace-preferences-workspace-trigger");
+  await workspaceTrigger.focus();
+  await workspaceTrigger.press("ArrowRight");
+  const workspaceSurface = page.locator("#workspace-preferences-workspace-surface");
+  await expect(workspaceSurface).toBeVisible();
+  await expect(workspaceSurface.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("ArrowLeft");
+  await expect(workspaceSurface).toHaveCount(0);
+  await expect(workspaceTrigger).toBeFocused();
+
+  const themeTrigger = popover.getByTestId("workspace-preferences-theme-trigger");
+  await themeTrigger.focus();
+  await themeTrigger.press("ArrowRight");
+  const themeSurface = page.locator("#workspace-preferences-theme-surface");
+  await expect(themeSurface).toBeVisible();
+  await expect(themeSurface.locator(":focus")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(themeSurface).toHaveCount(0);
+  await expect(themeTrigger).toBeFocused();
+  await themeTrigger.press("Escape");
+  await expect(popover).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(before.invariants);
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 640, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    const current = await openWorkspacePreferences(page);
+    const box = await current.popover.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    expect(box!.height).toBeLessThan(viewport.height * 0.8);
+    const branchIds = viewport.width === 640
+      ? (["workspace", "theme", "density", "visible-panels"] as const)
+      : (["visible-panels"] as const);
+    for (const branchId of branchIds) {
+      const branch = await openPreferenceBranch(page, branchId);
+      const isDrillIn = await current.popover.getAttribute("data-cascading-presentation") === "drill-in";
+      if (viewport.width === 640 || isDrillIn) {
+        await expect(page.locator(".cascading-flyout-surface")).toHaveCount(0);
+        await expect(current.popover).toHaveAttribute("data-cascading-presentation", "drill-in");
+        await expect(branch.surface).toBeVisible();
+        const back = current.popover.getByRole("button", { name: /Workspace & View/ });
+        await expect(back).toBeVisible();
+        expect(await current.popover.evaluate((element) => {
+          const nestedScrollers = [...element.querySelectorAll("*")].filter((candidate) => {
+            const style = getComputedStyle(candidate);
+            return (style.overflowY === "auto" || style.overflowY === "scroll")
+              && candidate.scrollHeight > candidate.clientHeight;
+          });
+          return nestedScrollers.length;
+        })).toBe(0);
+        await back.click();
+        await expect(current.popover.getByTestId(preferenceBranchIds[branchId].trigger)).toBeFocused();
+      } else {
+        const child = page.getByTestId(
+          branchId === "visible-panels"
+            ? "workspace-visible-panels-flyout"
+            : `workspace-preferences-${branchId}-flyout`
+        );
+        await expect(child).toBeVisible();
+        await expect(branch.surface).toHaveCount(1);
+        const childBox = await child.boundingBox();
+        expect(childBox).not.toBeNull();
+        expect(childBox!.x).toBeGreaterThanOrEqual(0);
+        expect(childBox!.x + childBox!.width).toBeLessThanOrEqual(viewport.width);
+        expect(childBox!.y).toBeGreaterThanOrEqual(0);
+        expect(childBox!.y + childBox!.height).toBeLessThanOrEqual(viewport.height);
+        await page.keyboard.press("Escape");
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+    }
+    await page.keyboard.press("Escape");
+  }
+  await expect(page.getByTestId("workbench-application-bar")).toBeVisible();
+  await expect(page.locator('[data-command-id="project.save"]')).toBeVisible();
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
 });
 

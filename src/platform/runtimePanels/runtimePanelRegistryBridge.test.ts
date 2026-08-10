@@ -151,6 +151,53 @@ describe("runtime panel registry bridge", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
+  it("projects changing contextual availability from one stable runtime registry", () => {
+    let snapAvailable = false;
+    let inspectorAvailable = true;
+    const bridge = createRuntimePanelRegistryBridge(() => ({
+      [RUNTIME_PANEL_IDS.connectionPointSnap]: {
+        getState: () => ({
+          isVisible: snapAvailable,
+          isOpen: snapAvailable,
+          available: snapAvailable,
+          ...(snapAvailable ? {} : { reason: "Select exactly two explicit machines." })
+        })
+      },
+      [RUNTIME_PANEL_IDS.inspector]: {
+        getState: () => ({
+          isVisible: inspectorAvailable,
+          isOpen: inspectorAvailable,
+          available: inspectorAvailable,
+          ...(inspectorAvailable
+            ? {}
+            : { reason: "Annotation properties are shown in the Annotations panel." })
+        })
+      }
+    }));
+    const registry = bridge.registry;
+
+    expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.connectionPointSnap)).toMatchObject({
+      bound: true,
+      available: false,
+      reason: "Select exactly two explicit machines."
+    });
+    expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.inspector)).toMatchObject({
+      bound: true,
+      available: true
+    });
+
+    snapAvailable = true;
+    inspectorAvailable = false;
+    expect(bridge.registry).toBe(registry);
+    expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.connectionPointSnap)).toMatchObject({
+      available: true
+    });
+    expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.inspector)).toMatchObject({
+      available: false,
+      reason: "Annotation properties are shown in the Annotations panel."
+    });
+  });
+
   it("routes section open, close, and toggle while reflecting user-driven state", () => {
     let machineLibraryOpen = true;
     let layersOpen = false;

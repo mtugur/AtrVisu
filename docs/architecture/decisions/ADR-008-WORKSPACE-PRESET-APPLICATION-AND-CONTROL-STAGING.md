@@ -1,0 +1,133 @@
+# ADR-008: Workspace Preset Application and Control Staging
+
+Status: **Accepted**
+
+## Context
+
+P1-D1 established one persisted `WorkbenchUiPreferences` authority for theme,
+density, optional workspace identity, and compatibility-panel presentation.
+P1-D2 must make real workspace and preference operations visible without
+committing AtrVisu to the final Phase 1 dock composition before P1-E and P1-F.
+
+## Decision
+
+AtrVisu ships exactly two canonical Phase 1 workspace presets:
+
+- `workspace.sales-layout`
+- `workspace.layout-engineering`
+
+Definitions are immutable, JSON-safe metadata in one registry. They reference
+the maintained editor, current live compatibility panels, and maintained
+command definitions. The registry rejects duplicate IDs, invalid schema data,
+unknown editors, unavailable panels, and unknown commands.
+
+`Current arrangement` is the compatibility state represented by an absent
+`activeWorkspaceId`. Missing workspace identity never implicitly applies Sales
+Layout. Existing P1-D1 users therefore retain their stored panel composition,
+theme, density, dimensions, collapse state, order, and dock metadata.
+
+Explicit workspace application uses one P1-D1 runtime transaction. It sets the
+active workspace ID and preset density, opens the compatibility shell, and
+changes only the `visible` flag of current live content panels. Theme and panel
+size, order, dock, and content-panel collapse state are preserved. Hydrating a
+valid workspace ID activates derived metadata without reapplying factory
+visibility.
+
+Theme changes retain workspace identity. A panel visibility override clears
+workspace identity. A density override clears workspace identity only when it
+differs from the active preset. Shell collapse and width changes do not clear
+workspace identity.
+
+Inspector mode, emphasized command IDs, and default editor ID are derived from
+the active preset. They are not separately persisted. Command emphasis is
+presentation-only and cannot change command ordering, availability, routing,
+or execution. Inspector mode is exposed as shell metadata only; P1-E owns its
+future semantic behavior.
+
+The Application Bar contains one compact workspace trigger. Its non-modal
+Workspace & View popover is a compact root of four disclosure rows: Workspace,
+Theme, Density, and Visible Panels. Each row exposes its current value or count
+without placing mutating controls in the root. Native workspace, theme, and
+density radios and the existing panel checkboxes live in their respective
+cascading child surfaces. Panel labels come from the runtime panel descriptors.
+Modal, planned/unbound, and shell entries are excluded.
+
+The cascade infrastructure is semantic-agnostic. It owns ephemeral open-path
+state, depth, side selection, viewport collision handling, and clamped surface
+geometry, while callers retain their own roles, ARIA relationships, commands,
+and business semantics. It supports a root plus two future flyout levels, but
+P1-D2 renders one of four depth-one children at a time. Opening another root
+row replaces the active child and clears any stale deeper path. Desktop
+presentation prefers a right sibling flyout and falls left when required;
+insufficient horizontal room uses drill-in navigation within the existing root
+popover. The shared root -> depth 1 -> depth 2 infrastructure remains capable
+of a future second child level, but P1-D2 adds no real depth-two content. The
+cascade is not persisted and introduces no overlay root.
+
+File, Edit, View, and Tools remain on the existing WorkbenchMenuBar behavior.
+A future bounded migration may reuse the cascade geometry and state primitive,
+but those command menus are not migrated and no future menu content is invented
+by P1-D2.
+
+Static workspace panel descriptors define only which compatibility content
+panels are eligible for this surface and provide maintained labels. The
+existing Runtime Panel Registry bridge remains authoritative for each eligible
+panel's current binding, availability, and unavailable reason. Contextually
+unavailable panels remain discoverable as disabled controls with an accessible
+reason. Their persisted visibility, collapse, order, and dock values remain
+unchanged until the live runtime context makes them available again.
+
+ADR-007's `future-readonly` hydration status also governs this surface. The
+Workspace & View trigger, compact root rows, and child surfaces remain
+inspectable, but every workspace, theme, density, and panel preference control
+inside those children is disabled and described by the existing P1-D1 warning.
+No second read-only state is introduced and the stored future-version record is
+never rewritten, downgraded, or reset.
+
+## Authority Boundary
+
+ADR-007 remains authoritative for persistence, hydration, normalization,
+failure policy, and the React provider. P1-D2 creates no second preference,
+command, panel, editor, project, selection, history, viewport, or design-system
+authority.
+
+Workspace application cannot mutate projects, layouts, revisions, entities,
+transforms, annotations, connections, groups, layers, viewpoints, Runtime
+Selection, history, dirty state, camera state, editor identity, or Babylon
+scene lifecycle.
+
+## Staged Dock Composition
+
+Persisted panel `order` and `dock` values remain valid future-facing metadata.
+P1-D2 does not expose arbitrary ordering or docking controls because final
+hosts do not yet exist. P1-F owns the Primary Dock, Secondary Dock, Bottom Dock,
+Layout Explorer, and panel composition. P1-E owns schema-driven Inspector
+semantics. Keeping these controls staged prevents dead UI and premature shell
+commitment.
+
+## Consequences
+
+- Existing users start in Current arrangement without a reset.
+- Workspace switching is explicit, deterministic, persisted, and reversible.
+- The root is a compact four-row navigation surface with no radios or
+  checkboxes and no normal-desktop scroll requirement.
+- Workspace, Theme, Density, and Visible Panels share one cascade state and
+  geometry authority while retaining their existing runtime authorities.
+- Every hidden live panel remains recoverable from the same popover.
+- Contextually unavailable panel options cannot create preference overrides.
+- The root preference surface no longer contains a nested Visible Panels scroll
+  region; desktop and narrow layouts each expose at most one relevant scroll
+  context per surface.
+- Future-version preference records produce an explicit read-only surface.
+- Theme and density continue updating the single DesignSystemRoot in place.
+- The compatibility right-panel shell remains the real current host.
+- Manual visual acceptance is required because P1-D2 adds visible controls.
+
+## Rejected Alternatives
+
+- Automatically applying Sales Layout when workspace identity is absent.
+- Storing workspace-derived Inspector or command metadata separately.
+- Direct App state or localStorage writes from the control.
+- A second panel-title or workspace persistence table.
+- Shipping final dock/order controls before P1-F.
+- Implementing the P1-E Inspector in this package.

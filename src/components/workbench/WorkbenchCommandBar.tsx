@@ -3,6 +3,7 @@ import type { CommandSurfaceItem } from "../../workbench/commandSurfaces";
 
 export type WorkbenchCommandBarProps = {
   items: readonly CommandSurfaceItem[];
+  emphasizedCommandIds?: readonly string[];
   onExecute: (commandId: string) => void;
 };
 
@@ -41,7 +42,11 @@ const getNearestEnabledIndex = (
   return -1;
 };
 
-export function WorkbenchCommandBar({ items, onExecute }: WorkbenchCommandBarProps) {
+export function WorkbenchCommandBar({
+  items,
+  emphasizedCommandIds = [],
+  onExecute
+}: WorkbenchCommandBarProps) {
   const firstEnabledIndex = items.findIndex((item) => !item.disabled);
   const [focusedCommandId, setFocusedCommandId] = useState<string | undefined>(
     firstEnabledIndex >= 0 ? items[firstEnabledIndex]?.commandId : undefined
@@ -107,6 +112,9 @@ export function WorkbenchCommandBar({ items, onExecute }: WorkbenchCommandBarPro
           type="button"
           className="workbench-command-button"
           data-command-id={item.commandId}
+          data-workspace-emphasized={emphasizedCommandIds.includes(item.commandId)
+            ? "true"
+            : undefined}
           disabled={item.disabled}
           title={[item.tooltip, item.shortcut, item.disabledReason].filter(Boolean).join(" | ")}
           aria-label={item.disabledReason ? `${item.label}: ${item.disabledReason}` : item.label}

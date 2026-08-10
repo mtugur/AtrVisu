@@ -57,6 +57,7 @@ describe("WorkbenchApplicationBar", () => {
     const container = await mount(
       createElement(WorkbenchApplicationBar, {
         saveItem: item("project.save", "application-bar", { label: "Save Project" }),
+        emphasizedCommandIds: ["project.save"],
         hasUnsavedChanges: true,
         projectContext: { project: "Factory", layout: "Line 1", revision: "R03" },
         onExecute
@@ -72,6 +73,7 @@ describe("WorkbenchApplicationBar", () => {
     expect(projectSession.getAttribute("aria-label")).toBe("Project session");
     expect(saveCluster.querySelector(".workbench-save-state")?.textContent).toBe("Unsaved");
     expect(container.querySelectorAll('[data-command-id="project.save"]')).toHaveLength(1);
+    expect(saveButton.dataset.workspaceEmphasized).toBe("true");
     expect(projectSession.querySelector(".workbench-project-context")?.textContent)
       .toContain("Factory");
     await act(async () => saveButton.click());
@@ -278,6 +280,7 @@ describe("WorkbenchCommandBar", () => {
     ];
     const container = await mount(createElement(WorkbenchCommandBar, {
       items,
+      emphasizedCommandIds: ["edit.undo"],
       onExecute: () => undefined
     }));
     const toolbar = container.querySelector('[role="toolbar"]') as HTMLElement;
@@ -289,6 +292,8 @@ describe("WorkbenchCommandBar", () => {
       "view.toggleLabels"
     ]);
     expect(buttons[2].getAttribute("aria-pressed")).toBe("true");
+    expect(buttons[0].dataset.workspaceEmphasized).toBe("true");
+    expect(buttons[2].dataset.workspaceEmphasized).toBeUndefined();
     buttons[0].focus();
     await press(toolbar, "ArrowRight");
     expect(document.activeElement).toBe(buttons[2]);

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { CommandSurfaceItem } from "../../workbench/commandSurfaces";
 
 export type WorkbenchProjectContext = Readonly<{
@@ -8,6 +9,8 @@ export type WorkbenchProjectContext = Readonly<{
 
 export type WorkbenchApplicationBarProps = {
   saveItem?: CommandSurfaceItem;
+  workspaceControl?: ReactNode;
+  emphasizedCommandIds?: readonly string[];
   hasUnsavedChanges: boolean;
   projectContext: WorkbenchProjectContext;
   onExecute: (commandId: string) => void;
@@ -15,6 +18,8 @@ export type WorkbenchApplicationBarProps = {
 
 export function WorkbenchApplicationBar({
   saveItem,
+  workspaceControl,
+  emphasizedCommandIds = [],
   hasUnsavedChanges,
   projectContext,
   onExecute
@@ -27,6 +32,7 @@ export function WorkbenchApplicationBar({
       data-testid="workbench-application-bar"
     >
       <strong className="workbench-product-name">AtrVisu</strong>
+      {workspaceControl}
       <div className="workbench-project-session" aria-label="Project session">
         <div className="workbench-save-cluster">
           <span
@@ -40,6 +46,9 @@ export function WorkbenchApplicationBar({
               type="button"
               className="workbench-save-command"
               data-command-id={saveItem.commandId}
+              data-workspace-emphasized={emphasizedCommandIds.includes(saveItem.commandId)
+                ? "true"
+                : undefined}
               disabled={saveItem.disabled}
               aria-busy={saveItem.pending || undefined}
               aria-label={saveItem.disabledReason

@@ -46,6 +46,7 @@ export {
 export type { EditorAvailabilityState, EditorDefinition, EditorId, EditorKind } from "./editor";
 export {
   PLANNED_WORKSPACE_IDS,
+  WORKSPACE_IDS,
   WORKSPACE_INSPECTOR_MODES,
   WORKSPACE_PRESET_SCHEMA_VERSION
 } from "./workspace";

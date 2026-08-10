@@ -2,6 +2,7 @@ import {
   DENSITY_IDS,
   THEME_IDS,
   UI_PREFERENCES_SCHEMA_VERSION,
+  WORKSPACE_IDS,
   type DensityId,
   type PanelPreference,
   type ThemeId,
@@ -25,6 +26,7 @@ const ALLOWED_DOCKS = new Set<WorkbenchDockRegionId>([
   "bottom-dock"
 ]);
 const ALLOWED_PANEL_IDS = new Set<string>(COMPATIBILITY_PANEL_IDS);
+const ALLOWED_WORKSPACE_IDS = new Set<string>(WORKSPACE_IDS);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -106,6 +108,14 @@ export const normalizeWorkbenchUiPreferences = (
     .sort((left, right) => left.order - right.order || left.panelId.localeCompare(right.panelId))
     .map((panel, order) => ({ ...panel, order }));
 
+  const requestedWorkspaceId = typeof input.activeWorkspaceId === "string"
+    && input.activeWorkspaceId.length > 0
+    ? input.activeWorkspaceId
+    : undefined;
+  if (requestedWorkspaceId && !ALLOWED_WORKSPACE_IDS.has(requestedWorkspaceId)) {
+    warnings.push(`Unknown workspace preference "${requestedWorkspaceId}" was removed.`);
+  }
+
   const normalized: WorkbenchUiPreferences = {
     schemaVersion: UI_PREFERENCES_SCHEMA_VERSION,
     theme: (THEME_IDS as readonly unknown[]).includes(input.theme)
@@ -114,8 +124,8 @@ export const normalizeWorkbenchUiPreferences = (
     density: (DENSITY_IDS as readonly unknown[]).includes(input.density)
       ? input.density as DensityId
       : defaults.density,
-    ...(typeof input.activeWorkspaceId === "string" && input.activeWorkspaceId.length > 0
-      ? { activeWorkspaceId: input.activeWorkspaceId as WorkspaceId }
+    ...(requestedWorkspaceId && ALLOWED_WORKSPACE_IDS.has(requestedWorkspaceId)
+      ? { activeWorkspaceId: requestedWorkspaceId as WorkspaceId }
       : {}),
     panels
   };
