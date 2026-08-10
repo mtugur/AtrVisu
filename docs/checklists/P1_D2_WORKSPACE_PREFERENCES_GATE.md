@@ -46,6 +46,7 @@
 | Keyboard accessibility | PASS | Native controls, child/root Escape hierarchy, focus restoration, shortcut isolation |
 | Responsive 1440x900, 1024x768, 640x800 | PASS | Sibling/drill-in geometry, bounds, scroll, and overflow Chromium checks |
 | No red console or page errors | PASS | All new and full Chromium collectors |
+| Automatic validation gates | PASS | Accepted implementation Quality Gate `31187020400` at `6ef00bb0f7fb05d98528f75df3d6d9e9eedb2841` |
 | Dependency audit | PASS | 0 vulnerabilities at default and low threshold |
 | Design-token governance | PASS | 208 maintained files |
 | Build | PASS | TypeScript and Vite; known chunk warning only |
@@ -55,14 +56,14 @@
 | Project and preference schemas | PASS | Project schema and UI preference DB version unchanged |
 | Overall manual visual direction | PASS | Review comment `5216944024` |
 | Visible Panels cascade manual acceptance | PASS | Final manual polish decision comment `5217732957` |
-| Final bounded root-cascade re-acceptance | PENDING | Compact four-row root, Workspace/Theme/Density sibling flyouts, and narrow drill-in only |
+| Final bounded root-cascade re-acceptance | PASS | Comment `5238297375` accepts the bounded scope at implementation head `6ef00bb0f7fb05d98528f75df3d6d9e9eedb2841` |
 
 Independent review comment `5215805384` at reviewed head
 `5b1b1085f2ebe5ffba5524f553bff7dd85669089` identified live panel availability
 and future-readonly control blockers. Both are covered by the corrected runtime,
 component, and Chromium evidence above.
 
-Decision: **READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE**. Automatic gates pass
-and the accepted overall direction is preserved. The Draft PR must remain Draft
-and unmerged until exact-head CI and explicit bounded root-cascade
-re-acceptance pass. This is not READY FOR MERGE and does not mark P1-D complete.
+Decision: **READY FOR MERGE**. Automatic gates and final bounded manual visual
+acceptance pass. PR #105 remains Draft and unmerged for independent final merge
+verification. P1-D2 is not merged or canonical yet, and P1-D overall does not
+close until merge and post-merge verification succeed.

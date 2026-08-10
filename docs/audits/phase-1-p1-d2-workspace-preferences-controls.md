@@ -7,6 +7,10 @@
 - Exact base SHA: `fb077121f2499c337e2e9d97cdd0459e6eb90272`
 - Branch: `feat/phase-1-workspace-preferences-controls-v01`
 - P1-D1 post-merge gate: `31163841334` - **PASS**
+- Accepted implementation head:
+  `6ef00bb0f7fb05d98528f75df3d6d9e9eedb2841`
+- Accepted implementation Quality Gate: `31187020400` - **PASS**
+- Final manual visual acceptance: comment `5238297375` - **PASS**
 - Baseline: 0 vulnerabilities, 197 scanner files, 117 unit files / 1088 tests,
   49/49 E2E tests.
 
@@ -187,24 +191,35 @@ or project/domain persistence behavior changed.
 
 ## 17. Residual Risks
 
-The final visual judgment is bounded to the compact four-row root, the
-Workspace, Theme, and Density sibling flyouts, and their narrow drill-in
-representation. The overall Application Bar, command emphasis, right panel,
-and accepted Visible Panels cascade do not require re-review unless regressed.
-Final P1-E Inspector and P1-F dock composition are intentionally deferred. The
-existing Vite large chunk warning remains outside this package.
+The existing Vite large-chunk warning remains outside P1-D2. Final Primary
+Dock, Secondary Dock, Inspector, and Bottom Dock composition remains
+intentionally deferred to the owning future packages. Future adoption of the
+shared cascade infrastructure by File, Edit, View, and Tools also remains
+future work and is not part of this acceptance.
 
 ## 18. Manual Visual Acceptance
 
-The overall P1-D2 visual direction is accepted in comment `5216944024`.
-Comment `5217732957` accepts the Visible Panels cascade and requests the final
-compact root polish. Final manual re-acceptance is now bounded to the compact
-four-row root, Workspace sibling, Theme sibling, Density sibling, and narrow
-drill-in representation.
+**PASSED.** PR comment `5238297375` records explicit final manual visual
+acceptance at implementation head
+`6ef00bb0f7fb05d98528f75df3d6d9e9eedb2841`.
+
+The accepted bounded visual scope is:
+
+- compact four-row Workspace & View root;
+- Workspace sibling flyout;
+- Theme sibling flyout;
+- Density sibling flyout;
+- narrow drill-in representation;
+- preservation of the previously accepted Visible Panels cascade;
+- preservation of the overall P1-D2 visual direction.
+
+This acceptance does not claim completion of the final Primary Dock, final
+Secondary Dock, final Inspector composition, final Bottom Dock, P1-E
+property/schema semantics, P1-F real Atara panel composition, or File/Edit/View/
+Tools cascading migration.
 
 ## 19. Decision
 
-**READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE.** Automatic gates pass and the
-final polish is limited to the accepted review concern. This is not READY FOR
-MERGE; P1-D remains open until exact-head GitHub Quality Gate and explicit
-bounded manual visual re-acceptance pass.
+**READY FOR MERGE.** Automatic validation gates and final bounded manual visual
+acceptance pass. PR #105 is not yet merged or canonical, and P1-D overall does
+not close until the PR is merged and post-merge verification succeeds.
