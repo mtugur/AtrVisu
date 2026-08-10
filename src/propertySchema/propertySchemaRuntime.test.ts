@@ -52,6 +52,12 @@ const accessors = (value: string | number | boolean | undefined) => createProper
 
 const validators = createPropertyValidatorRegistry();
 
+type Mutable<Value> = Value extends readonly (infer Item)[]
+  ? Mutable<Item>[]
+  : Value extends object
+    ? { -readonly [Key in keyof Value]: Mutable<Value[Key]> }
+    : Value;
+
 const expectRegistryCode = (action: () => unknown, code: PropertySchemaRegistryError["code"]) => {
   expect(action).toThrowError(expect.objectContaining({ code }));
 };
@@ -97,6 +103,98 @@ describe("property schema runtime contracts", () => {
     });
   });
 
+  it("registers a detached schema snapshot that caller mutations cannot change", () => {
+    const input = schema(baseField({
+      dataType: "number",
+      unit: "mm",
+      validation: { min: 0, allowedValues: [10, 20] }
+    }));
+    const runtimeAccessors = accessors(10);
+    const registry = createPropertySchemaRegistry({ schemas: [input], accessors: runtimeAccessors, validators });
+    const registered = registry.get(input.id)!;
+    const projectionBeforeMutation = projectPropertySchema({
+      schema: registered,
+      source,
+      accessors: runtimeAccessors,
+      validators
+    });
+    const mutableInput = input as Mutable<PropertySchemaDefinition>;
+    const mutableField = mutableInput.sections[0].fields[0];
+
+    mutableInput.sections[0].appliesTo[0] = "entity.civil";
+    mutableField.accessorId = "accessor.after-registration";
+    mutableField.labelKey = "property.field.after-registration";
+    mutableField.unit = "unit.after-registration";
+    mutableField.validation!.allowedValues![0] = 999;
+    mutableField.validation!.validatorId = "validator.after-registration";
+    mutableField.exportMappings![0].key = "afterRegistration";
+
+    expect(registry.list()).toEqual([registered]);
+    expect(registry.list()[0]).toBe(registered);
+    expect(registered.sections[0].appliesTo).toEqual(["entity.machine"]);
+    expect(registered.sections[0].fields[0]).toMatchObject({
+      accessorId: "test.identity.name",
+      labelKey: "property.field.machine-code",
+      unit: "mm",
+      validation: { min: 0, allowedValues: [10, 20] },
+      exportMappings: [{ target: "bom", key: "machineCode" }]
+    });
+    expect(projectPropertySchema({
+      schema: registered,
+      source,
+      accessors: runtimeAccessors,
+      validators
+    })).toEqual(projectionBeforeMutation);
+  });
+
+  it("deeply freezes registered metadata so validation boundaries cannot be bypassed", () => {
+    const input = schema(baseField({
+      dataType: "number",
+      unit: "mm",
+      validation: { min: 0, allowedValues: [10, 20] }
+    }));
+    const registered = createPropertySchemaRegistry({
+      schemas: [input],
+      accessors: accessors(10),
+      validators
+    }).get(input.id)!;
+    const mutableRegistered = registered as unknown as Mutable<PropertySchemaDefinition>;
+    const registeredSection = mutableRegistered.sections[0];
+    const registeredField = registeredSection.fields[0];
+
+    expect([
+      registered,
+      registered.sections,
+      registered.sections[0],
+      registered.sections[0].appliesTo,
+      registered.sections[0].fields,
+      registered.sections[0].fields[0],
+      registered.sections[0].fields[0].validation,
+      registered.sections[0].fields[0].validation?.allowedValues,
+      registered.sections[0].fields[0].exportMappings,
+      registered.sections[0].fields[0].exportMappings?.[0]
+    ].every((value) => value === undefined || Object.isFrozen(value))).toBe(true);
+
+    const mutationAttempts = [
+      () => { registeredSection.appliesTo[0] = "entity.civil"; },
+      () => { registeredField.accessorId = "accessor.bypass"; },
+      () => { registeredField.labelKey = "property.field.bypass"; },
+      () => { registeredField.unit = "unit.bypass"; },
+      () => { registeredField.validation!.validatorId = "validator.bypass"; },
+      () => { registeredField.validation!.allowedValues![0] = 999; },
+      () => { registeredField.exportMappings![0].key = "bypass"; }
+    ];
+    mutationAttempts.forEach((attempt) => expect(attempt).toThrow(TypeError));
+
+    expect(registered.sections[0].fields[0]).toMatchObject({
+      accessorId: "test.identity.name",
+      labelKey: "property.field.machine-code",
+      unit: "mm",
+      validation: { min: 0, allowedValues: [10, 20] },
+      exportMappings: [{ target: "bom", key: "machineCode" }]
+    });
+  });
+
   it("keeps missing values explicit instead of inventing defaults", () => {
     const registry = createPropertySchemaRegistry({ schemas: [schema()], accessors: accessors(undefined), validators });
     const projection = projectPropertySchema({
@@ -110,6 +208,31 @@ describe("property schema runtime contracts", () => {
       displayValue: "Not available",
       missing: true
     });
+  });
+
+  it("projects resolved validation messages while preserving stable issue metadata", () => {
+    const requiredSchema = schema(baseField({ required: true }));
+    const runtimeAccessors = accessors(undefined);
+    const registry = createPropertySchemaRegistry({
+      schemas: [requiredSchema],
+      accessors: runtimeAccessors,
+      validators
+    });
+    const projection = projectPropertySchema({
+      schema: registry.get(requiredSchema.id)!,
+      source,
+      accessors: runtimeAccessors,
+      validators,
+      locale: "en"
+    });
+
+    expect(projection.sections[0].fields[0].issues).toEqual([{
+      code: "property.required",
+      severity: "error",
+      propertyId: "test.identity.name",
+      messageKey: "property.validation.required",
+      message: "A value is required."
+    }]);
   });
 
   it("runs pure declarative and registered validation with structured issues", () => {

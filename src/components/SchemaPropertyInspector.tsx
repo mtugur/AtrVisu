@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { resolvePropertyMessage, type PropertyProjection } from "../propertySchema";
+import type { PropertyProjection } from "../propertySchema";
 
 type SchemaPropertyInspectorProps = {
   projection: PropertyProjection;
@@ -38,7 +38,7 @@ export function SchemaPropertyInspector({ projection, notice }: SchemaPropertyIn
                     {field.issues.length > 0 ? (
                       <div className="schema-property-validation" role="alert" aria-live="polite">
                         {field.issues.map((issue) => (
-                          <span key={issue.code}>{resolvePropertyMessage(issue.messageKey)}</span>
+                          <span key={issue.code}>{issue.message}</span>
                         ))}
                       </div>
                     ) : null}

@@ -49,7 +49,10 @@ export const projectPropertySchema = (options: {
       ...(section.descriptionKey ? { description: resolvePropertyMessage(section.descriptionKey, locale) } : {}),
       fields: section.fields.map((field): PropertyFieldViewModel => {
         const resolved = options.accessors.read(field.accessorId as string, options.source);
-        const issues = validatePropertyValue(field, resolved.value, options.source, options.validators);
+        const issues = validatePropertyValue(field, resolved.value, options.source, options.validators).map((issue) => ({
+          ...issue,
+          message: resolvePropertyMessage(issue.messageKey, locale)
+        }));
         return {
           id: field.id,
           label: resolvePropertyMessage(field.labelKey, locale),

@@ -54,6 +54,19 @@ export type PropertySchemaRegistry = {
   list: () => readonly RegisteredPropertySchema[];
 };
 
+const createCanonicalSchemaSnapshot = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((item) => createCanonicalSchemaSnapshot(item)));
+  }
+  if (typeof value === "object" && value !== null) {
+    const snapshot = Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [key, createCanonicalSchemaSnapshot(nestedValue)])
+    );
+    return Object.freeze(snapshot);
+  }
+  return value;
+};
+
 const messageKeys = (schema: PropertySchemaDefinition) => [
   schema.labelKey,
   schema.descriptionKey,
@@ -119,7 +132,8 @@ export const createPropertySchemaRegistry = (options: {
         `Property schema message is not registered: ${missingMessage}`
       );
     }
-    byId.set(schema.id, Object.freeze(schema));
+    const canonicalSchema = createCanonicalSchemaSnapshot(schema) as RegisteredPropertySchema;
+    byId.set(canonicalSchema.id, canonicalSchema);
   });
   return Object.freeze({
     get: (id: string) => byId.get(id),

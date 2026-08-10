@@ -31,6 +31,10 @@ export type PropertyValidationIssue = {
   params?: Readonly<Record<string, string | number | boolean>>;
 };
 
+export type ProjectedPropertyValidationIssue = PropertyValidationIssue & {
+  message: string;
+};
+
 export type PropertyCustomValidator = {
   id: string;
   validate: (
@@ -52,7 +56,7 @@ export type PropertyFieldViewModel = {
   missing: boolean;
   editable: boolean;
   required: boolean;
-  issues: readonly PropertyValidationIssue[];
+  issues: readonly ProjectedPropertyValidationIssue[];
   exportMappings: PropertyExportMappings;
 };
 
@@ -73,4 +77,10 @@ export type PropertyProjection = {
   issueCount: number;
 };
 
-export type RegisteredPropertySchema = Readonly<PropertySchemaDefinition>;
+type DeepReadonly<T> = T extends readonly (infer Item)[]
+  ? readonly DeepReadonly<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T;
+
+export type RegisteredPropertySchema = DeepReadonly<PropertySchemaDefinition>;

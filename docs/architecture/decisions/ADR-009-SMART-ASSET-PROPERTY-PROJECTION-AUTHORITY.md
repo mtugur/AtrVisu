@@ -24,7 +24,11 @@ One runtime registry validates schemas before use. It rejects malformed current
 schemas and gives unsupported future versions a distinct failure code. Every
 runtime field must reference a registered accessor. Every custom validator,
 unit, and localization key must also be registered. Duplicate schema,
-property, accessor, or validator identities fail deterministically.
+property, accessor, or validator identities fail deterministically. After a
+schema passes those checks, the registry creates and stores a detached,
+recursively frozen canonical snapshot. Caller-owned arrays and objects are
+never retained, and registry readers cannot mutate nested section, field,
+validation, allowed-value, applicability, or export metadata after validation.
 
 Accessors are explicit pure functions. The schema `path` remains descriptive
 and export-facing metadata; it is never traversed or assigned dynamically.
@@ -32,7 +36,11 @@ The canonical projection combines a registered schema, a selected entity
 source, registered accessors, current typed values, units, localization, and
 validation into normalized section and field view models. Those view models,
 including export mappings, are the single interpretation for the Inspector and
-future P1-G commercial consumers.
+future P1-G commercial consumers. Validation remains structured and
+presentation-neutral until projection; the projection resolves each issue's
+presentation message with the same locale used for labels, values, and units.
+Presentation components render that projected message and do not consult the
+localization catalog independently.
 
 The initial ATARA schema sits above the existing typed/normalized data. It
 contains Identity, Physical, Capacity, Electrical, Pneumatic, Network, and
@@ -55,9 +63,10 @@ syntax and never strips unit text, accepts locale punctuation silently, or
 coerces arbitrary strings through JavaScript number conversion.
 
 Declarative validation produces structured issues with stable codes, severity,
-property ID, and localization message key. Complex rules may call a pure
-registered validator by `validatorId`; unknown validator IDs prevent schema
-registration.
+property ID, and localization message key. The projected issue retains those
+stable fields and adds its resolved presentation message. Complex rules may
+call a pure registered validator by `validatorId`; unknown validator IDs
+prevent schema registration.
 
 ## Compatibility Boundary
 
@@ -71,6 +80,8 @@ mappings rather than create independent BOM/report property metadata.
 ## Consequences
 
 - One safe projection supplies localized Inspector and future commercial data.
+- Registered schemas are detached immutable authority snapshots rather than
+  caller-owned mutable metadata.
 - Machine-family-specific property components remain prohibited.
 - Missing engineering values are visible and auditable.
 - Schema registration fails early for unsafe or incomplete metadata.
@@ -91,6 +102,11 @@ mappings rather than create independent BOM/report property metadata.
 
 - Contract, version, localization, unit, validation, registry, accessor, and
   projection tests remain deterministic.
+- Caller and nested registered metadata mutation tests prove that successful
+  registration cannot later bypass accessor, unit, localization, validation,
+  applicability, or export-mapping checks.
+- Projection and Inspector tests prove that validation presentation text is
+  resolved once by projection while stable issue metadata remains intact.
 - The ATARA schema has globally unique field IDs and valid export mappings.
 - Chromium proves selection projection updates without App, Editor Host,
   Inspector, canvas, or scene lifecycle reconstruction.

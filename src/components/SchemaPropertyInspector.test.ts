@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
-import { projectAtaraMachineProperties } from "../propertySchema";
+import { projectAtaraMachineProperties, type PropertyProjection } from "../propertySchema";
 import { SchemaPropertyInspector } from "./SchemaPropertyInspector";
 
 const roots: Root[] = [];
@@ -79,5 +79,38 @@ describe("SchemaPropertyInspector", () => {
     expect(container.querySelector('[data-testid="schema-property-inspector"]')).toBe(inspector);
     expect(container.querySelector('[data-property-id="atara.identity.machine-code"]')?.textContent).toBe("PL-02");
     expect(container.querySelector('[data-property-id="atara.physical.width"]')?.textContent).toBe("2000 mm");
+  });
+
+  it("renders the validation message supplied by the projection without localizing it again", async () => {
+    const baseProjection = projectAtaraMachineProperties(placedMachine("one", "CP-01"));
+    const firstSection = baseProjection.sections[0];
+    const firstField = firstSection.fields[0];
+    const projectedMessage = "Projection-owned validation presentation.";
+    const projection: PropertyProjection = {
+      ...baseProjection,
+      sections: [{
+        ...firstSection,
+        fields: [{
+          ...firstField,
+          issues: [{
+            code: "property.required",
+            severity: "error",
+            propertyId: firstField.id,
+            messageKey: "property.validation.required",
+            message: projectedMessage
+          }]
+        }]
+      }],
+      issueCount: 1
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+
+    await act(async () => root.render(createElement(SchemaPropertyInspector, { projection })));
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(projectedMessage);
+    expect(container.textContent).not.toContain("A value is required.");
   });
 });

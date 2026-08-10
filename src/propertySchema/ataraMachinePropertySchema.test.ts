@@ -71,7 +71,8 @@ const fieldById = (projection: ReturnType<typeof projectAtaraMachineProperties>,
 describe("canonical ATARA machine property schema", () => {
   it("is registered, valid, versioned, and globally unique", () => {
     expect(validatePropertySchemaDefinition(ATARA_MACHINE_PROPERTY_SCHEMA)).toEqual({ valid: true, errors: [] });
-    expect(PROPERTY_SCHEMA_REGISTRY.get(ATARA_MACHINE_PROPERTY_SCHEMA.id)).toBe(ATARA_MACHINE_PROPERTY_SCHEMA);
+    expect(PROPERTY_SCHEMA_REGISTRY.get(ATARA_MACHINE_PROPERTY_SCHEMA.id)).not.toBe(ATARA_MACHINE_PROPERTY_SCHEMA);
+    expect(PROPERTY_SCHEMA_REGISTRY.get(ATARA_MACHINE_PROPERTY_SCHEMA.id)).toEqual(ATARA_MACHINE_PROPERTY_SCHEMA);
     const fields = ATARA_MACHINE_PROPERTY_SCHEMA.sections.flatMap((section) => section.fields);
     expect(ATARA_MACHINE_PROPERTY_SCHEMA.sections.map((section) => section.id)).toEqual([
       "identity", "physical", "capacity", "electrical", "pneumatic", "network", "maintenance"
@@ -81,7 +82,7 @@ describe("canonical ATARA machine property schema", () => {
     expect(fields.every((field) => field.editable === false && field.accessorId === field.id)).toBe(true);
   });
 
-  it("projects existing typed ATARA data, units, and export mappings through one authority", () => {
+  it("keeps the canonical ATARA projection unchanged through the registered snapshot", () => {
     const projection = projectAtaraMachineProperties(machine(definition("Case Packer", "CP-01")));
 
     expect(projection.sections).toHaveLength(7);

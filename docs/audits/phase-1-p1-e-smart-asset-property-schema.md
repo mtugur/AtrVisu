@@ -30,7 +30,11 @@ Runtime registration rejects unsupported future versions distinctly from
 malformed current metadata. Invalid static metadata, duplicate schema or field
 IDs, missing accessors, unknown validators, unknown units, and missing
 localization messages fail with stable codes. The registry executes no schema
-path and no schema value is executable.
+path and no schema value is executable. Successful registration copies the
+validated input into a detached, recursively frozen canonical snapshot.
+Sections, fields, applicability lists, validation rules, allowed values, export
+mappings, and their nested metadata retain no mutable caller-owned references;
+`get()` and `list()` expose only that registered snapshot.
 
 ## 4. Projection Authority
 
@@ -38,11 +42,15 @@ path and no schema value is executable.
 registered schema, selected entity source, accessor registry, validator
 registry, localization, and unit metadata, then emits normalized schema,
 section, and field view models. Raw values, formatted values, explicit missing
-state, accessibility issues, editability, and export mappings remain together.
+state, validation issues, editability, and export mappings remain together.
+Each projected validation issue preserves its stable code, severity, property
+ID, message key, and parameters while adding the presentation message resolved
+with the projection locale.
 
-The generic `SchemaPropertyInspector` renders this projection. Future P1-G BOM
-and report work must consume the same projection/export mappings rather than
-introduce a second field table.
+The generic `SchemaPropertyInspector` renders this projection, including its
+resolved validation messages, without importing or consulting the localization
+catalog. Future P1-G BOM and report work must consume the same
+projection/export mappings rather than introduce a second field table.
 
 ## 5. Existing Authority Reuse
 
@@ -86,8 +94,9 @@ empty input, non-finite values, and unknown units without coercion.
 
 Validation is pure and returns structured issues. Required, type, minimum,
 maximum, step, pattern, allowed-values, and custom registered validators are
-covered. Validation messages use localization keys and render through an
-accessible live alert when present.
+covered. Validation retains localization keys as stable metadata; projection
+alone resolves their bounded English presentation messages, which render
+through an accessible live alert when present.
 
 ## 8. Inspector and Browser Evidence
 
@@ -115,12 +124,17 @@ report generation.
 
 ## 10. Validation Evidence
 
-- Focused schema/ATARA/Inspector/P1-A validation: 5 files / 73 tests, passed.
+- Review correction: independent review comment `5239858145` identified
+  shallow schema retention and presentation-layer validation localization; both
+  are corrected in this same package before manual acceptance.
+- Focused immutable-registry/projection/Inspector validation: 3 files / 19
+  tests, passed.
+- Focused schema/ATARA/Inspector/P1-A validation: 5 files / 72 tests, passed.
 - Focused Chromium schema Inspector: 1/1 passed.
 - Dependency audit (`--audit-level=low`): 0 vulnerabilities, passed.
 - Design-token governance: 217 maintained files, passed.
 - Build: passed; the existing large-chunk warning remains non-blocking.
-- Full unit: 129 files / 1147 tests, passed.
+- Full unit: 129 files / 1151 tests, passed.
 - Full E2E: 58/58, passed.
 - `git diff --check`: passed.
 
@@ -140,5 +154,6 @@ Bounded scope:
 
 **READY FOR REVIEW AND EXACT-HEAD CI.** The complete local gate passes. Final
 bounded manual visual acceptance remains required because the existing
-Inspector now exposes visible schema-driven content. P1-F dock composition and
-P1-G commercial outputs remain explicitly outside P1-E.
+Inspector now exposes visible schema-driven content; it has not begun during
+the infrastructure correction batch. P1-F dock composition and P1-G
+commercial outputs remain explicitly outside P1-E.
