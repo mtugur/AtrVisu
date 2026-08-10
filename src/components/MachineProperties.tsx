@@ -5,7 +5,12 @@ import type { PlacedMachine } from "../types/machine";
 import type { VisualModelDiagnostics } from "../types/overlays";
 import type { PlacementSettings } from "../types/placement";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
-import { getEffectiveMaintenanceClearance, normalizeAtaraMachineData, summarizeUtilityRequirements } from "../utils/ataraMachineData";
+import { getEffectiveMaintenanceClearance } from "../utils/ataraMachineData";
+import {
+  createAtaraMachinePropertySource,
+  getAtaraMachinePropertySourceValue,
+  projectAtaraMachineProperties
+} from "../propertySchema";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import { commitRotationAngle } from "../utils/placement";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
@@ -16,6 +21,7 @@ import {
 } from "../utils/connectionPoints";
 import { createNumericFieldRule } from "../utils/numericFieldRules";
 import { NumericInput } from "./common/NumericInput";
+import { SchemaPropertyInspector } from "./SchemaPropertyInspector";
 
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
@@ -117,17 +123,13 @@ export const commitMachineRotationDraft = (
 };
 
 export const getSelectedAtaraMachineDataState = (selectedMachine?: PlacedMachine) => {
-  const dimensionsMm = selectedMachine ? getMachineDimensionsMm(selectedMachine.definition) : null;
-  const ataraSnapshotData = selectedMachine
-    ? normalizeAtaraMachineData(selectedMachine.definitionSnapshot.ataraMachineData, dimensionsMm ?? undefined)
-    : undefined;
-  const ataraDefinitionData = selectedMachine
-    ? normalizeAtaraMachineData(selectedMachine.definition.ataraMachineData, dimensionsMm ?? undefined)
+  const sourceValue = selectedMachine
+    ? getAtaraMachinePropertySourceValue(createAtaraMachinePropertySource(selectedMachine))
     : undefined;
 
   return {
-    ataraMachineData: ataraSnapshotData ?? ataraDefinitionData,
-    hasNewerLibraryAtaraData: Boolean(!ataraSnapshotData && ataraDefinitionData),
+    ataraMachineData: sourceValue?.ataraMachineData,
+    hasNewerLibraryAtaraData: sourceValue?.hasNewerLibraryAtaraData ?? false,
     ataraClearance: selectedMachine ? getEffectiveMaintenanceClearance(selectedMachine.definition) : null
   };
 };
@@ -233,7 +235,8 @@ export function MachineProperties({
   const formatScale = (scale?: { x: number; y: number; z: number }) =>
     scale ? `X ${scale.x.toFixed(4)}, Y ${scale.y.toFixed(4)}, Z ${scale.z.toFixed(4)}` : "Not available";
   const collisionEnvelope = selectedMachine ? getCollisionEnvelopeForMachine(selectedMachine) : null;
-  const { ataraMachineData, hasNewerLibraryAtaraData, ataraClearance } = getSelectedAtaraMachineDataState(selectedMachine);
+  const { hasNewerLibraryAtaraData } = getSelectedAtaraMachineDataState(selectedMachine);
+  const smartAssetProjection = selectedMachine ? projectAtaraMachineProperties(selectedMachine) : null;
   const connectionPoints = selectedMachine ? getConnectionPointsForObject(selectedMachine) : [];
   const connectionPointDiagnostics = selectedMachine ? validateConnectionPointsForObject(selectedMachine) : null;
   const connectionPointTypeCounts = connectionPoints.reduce<Record<string, number>>((counts, point) => {
@@ -355,47 +358,14 @@ export function MachineProperties({
             </div>
           ) : null}
 
-          <details className="diagnostics-section" data-testid="atara-machine-data-diagnostics">
-            <summary>ATARA Machine Data</summary>
-            {ataraMachineData ? (
-              <div className="diagnostics-grid">
-                {hasNewerLibraryAtaraData ? (
-                  <>
-                    <span>Snapshot Warning</span>
-                    <strong>This object uses an older definition snapshot. Re-add the item or update from library.</strong>
-                  </>
-                ) : null}
-                <span>ATR ID</span>
-                <strong>{ataraMachineData.identity?.atrId ?? "Not assigned"}</strong>
-                <span>Machine Code</span>
-                <strong>{ataraMachineData.identity?.machineCode ?? "Not assigned"}</strong>
-                <span>Product Family Code</span>
-                <strong>{ataraMachineData.identity?.productFamilyCode ?? selectedMachine.definition.productFamilyCode ?? "Not assigned"}</strong>
-                <span>PDN Code</span>
-                <strong>{ataraMachineData.identity?.pdnCode ?? "Not assigned"}</strong>
-                <span>Is ATARA Product</span>
-                <strong>{ataraMachineData.identity?.isAtaraProduct ? "Yes" : "No"}</strong>
-                <span>Weight / Operating Weight</span>
-                <strong>
-                  {ataraMachineData.physical?.weightKg ?? "Not assigned"} kg / {ataraMachineData.physical?.operatingWeightKg ?? "Not assigned"} kg
-                </strong>
-                <span>Nominal Capacity</span>
-                <strong>
-                  {ataraMachineData.operationalData?.capacityNominal ?? "Not assigned"} {ataraMachineData.operationalData?.capacityUnit ?? ""}
-                </strong>
-                <span>Utilities</span>
-                <strong>{summarizeUtilityRequirements(ataraMachineData)}</strong>
-                <span>Connection Points</span>
-                <strong>{ataraMachineData.connectionPoints?.length ?? 0}</strong>
-                <span>Maintenance Clearance</span>
-                <strong>
-                  F {ataraClearance?.frontMm ?? 0} mm, B {ataraClearance?.backMm ?? 0} mm, L {ataraClearance?.leftMm ?? 0} mm, R {ataraClearance?.rightMm ?? 0} mm, T {ataraClearance?.topMm ?? 0} mm
-                </strong>
-              </div>
-            ) : (
-              <p className="empty-selection">No ATARA machine data assigned.</p>
-            )}
-          </details>
+          {smartAssetProjection ? (
+            <SchemaPropertyInspector
+              projection={smartAssetProjection}
+              notice={hasNewerLibraryAtaraData
+                ? "This object uses an older definition snapshot. Re-add the item or update from library."
+                : undefined}
+            />
+          ) : null}
 
           <details className="diagnostics-section" data-testid="connection-point-diagnostics" open>
             <summary>Connection Points</summary>

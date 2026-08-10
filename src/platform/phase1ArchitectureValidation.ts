@@ -66,12 +66,15 @@ const WORKSPACE_PRESET_KEYS = [
 ] as const;
 const UI_PREFERENCES_KEYS = ["schemaVersion", "theme", "density", "activeWorkspaceId", "panels"] as const;
 const PANEL_PREFERENCE_KEYS = ["panelId", "visible", "collapsed", "size", "order", "dock"] as const;
-const PROPERTY_SCHEMA_KEYS = ["schemaVersion", "id", "labelKey", "sections"] as const;
-const PROPERTY_SECTION_KEYS = ["id", "labelKey", "order", "appliesTo", "fields"] as const;
+const PROPERTY_SCHEMA_KEYS = ["schemaVersion", "id", "labelKey", "descriptionKey", "sections"] as const;
+const PROPERTY_SECTION_KEYS = ["id", "labelKey", "descriptionKey", "order", "appliesTo", "fields"] as const;
 const PROPERTY_FIELD_KEYS = [
   "id",
   "path",
+  "accessorId",
   "labelKey",
+  "descriptionKey",
+  "helpKey",
   "dataType",
   "unit",
   "editable",
@@ -560,7 +563,7 @@ const validateAllowedValues = (
     addError(errors, "property.allowed_values", path, "allowedValues must be a non-empty array.");
     return;
   }
-  const expectedType = dataType === "enum" ? "string" : dataType;
+  const expectedType = dataType === "enum" || dataType === "text" ? "string" : dataType;
   const keys: string[] = [];
   value.forEach((item, index) => {
     if (typeof item !== expectedType) {
@@ -594,7 +597,16 @@ const validatePropertyField = (
   } else {
     fieldPaths.push(field.path);
   }
+  if (field.accessorId !== undefined) {
+    addMetadataIdentifierError(field.accessorId, `${path}.accessorId`, errors);
+  }
   addLocalizationKeyError(field.labelKey, `${path}.labelKey`, errors);
+  if (field.descriptionKey !== undefined) {
+    addLocalizationKeyError(field.descriptionKey, `${path}.descriptionKey`, errors);
+  }
+  if (field.helpKey !== undefined) {
+    addLocalizationKeyError(field.helpKey, `${path}.helpKey`, errors);
+  }
   if (field.unit !== undefined) {
     addMetadataIdentifierError(field.unit, `${path}.unit`, errors);
   }
@@ -633,8 +645,8 @@ const validatePropertyField = (
         addError(errors, "property.numeric_validation_type", validationPath, "Numeric validation requires a number field.");
       }
       if (validation.pattern !== undefined) {
-        if (typeof validation.pattern !== "string" || dataType !== "string") {
-          addError(errors, "property.pattern_type", `${validationPath}.pattern`, "pattern requires a string field and string value.");
+        if (typeof validation.pattern !== "string" || (dataType !== "string" && dataType !== "text")) {
+          addError(errors, "property.pattern_type", `${validationPath}.pattern`, "pattern requires a string or text field and string value.");
         } else {
           try {
             new RegExp(validation.pattern);
@@ -694,12 +706,16 @@ export const validatePropertySchemaDefinition = (input: unknown): Phase1Architec
   addVersionError(input.schemaVersion, PROPERTY_SCHEMA_VERSION, "propertySchema.schemaVersion", errors);
   addStableIdError(input.id, "propertySchema.id", errors);
   addLocalizationKeyError(input.labelKey, "propertySchema.labelKey", errors);
+  if (input.descriptionKey !== undefined) {
+    addLocalizationKeyError(input.descriptionKey, "propertySchema.descriptionKey", errors);
+  }
   if (!Array.isArray(input.sections)) {
     addError(errors, "property.sections", "propertySchema.sections", "Property sections must be an array.");
     return result(errors);
   }
 
   const sectionIds: string[] = [];
+  const fieldIds: string[] = [];
   const fieldPaths: string[] = [];
   input.sections.forEach((section, sectionIndex) => {
     const sectionPath = `propertySchema.sections.${sectionIndex}`;
@@ -714,6 +730,9 @@ export const validatePropertySchemaDefinition = (input: unknown): Phase1Architec
       addError(errors, "id.required", `${sectionPath}.id`, "Section ID is required.");
     }
     addLocalizationKeyError(section.labelKey, `${sectionPath}.labelKey`, errors);
+    if (section.descriptionKey !== undefined) {
+      addLocalizationKeyError(section.descriptionKey, `${sectionPath}.descriptionKey`, errors);
+    }
     if (!isFiniteNumber(section.order) || section.order < 0) {
       addError(errors, "property.section_order", `${sectionPath}.order`, "Section order must be non-negative and finite.");
     }
@@ -725,13 +744,15 @@ export const validatePropertySchemaDefinition = (input: unknown): Phase1Architec
       addError(errors, "property.fields", `${sectionPath}.fields`, "Section fields must be an array.");
       return;
     }
-    const fieldIds: string[] = [];
+    const sectionFieldIds: string[] = [];
     section.fields.forEach((field, fieldIndex) => {
-      validatePropertyField(field, `${sectionPath}.fields.${fieldIndex}`, fieldIds, fieldPaths, errors);
+      validatePropertyField(field, `${sectionPath}.fields.${fieldIndex}`, sectionFieldIds, fieldPaths, errors);
     });
-    addDuplicateErrors(fieldIds, `${sectionPath}.fields`, "property.duplicate_field_id", errors);
+    fieldIds.push(...sectionFieldIds);
+    addDuplicateErrors(sectionFieldIds, `${sectionPath}.fields`, "property.duplicate_field_id", errors);
   });
   addDuplicateErrors(sectionIds, "propertySchema.sections", "property.duplicate_section_id", errors);
+  addDuplicateErrors(fieldIds, "propertySchema.sections", "property.duplicate_field_id", errors);
   addDuplicateErrors(fieldPaths, "propertySchema.sections", "property.duplicate_field_path", errors);
   return result(errors);
 };

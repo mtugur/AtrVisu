@@ -117,6 +117,23 @@ describe("MachineProperties ATARA diagnostics", () => {
     expect(state.ataraMachineData?.identity?.atrId).toBe("ATR-LIBRARY");
     expect(state.hasNewerLibraryAtaraData).toBe(true);
   });
+
+  it("renders the canonical schema-driven smart asset Inspector without writable duplicate fields", () => {
+    const markup = renderSelectedMachineProperties(createPlacedMachine({
+      ...baseDefinition,
+      ataraMachineData: {
+        identity: { manufacturer: "Atara Makine", machineCode: "CP-01" },
+        physical: { widthMm: 1000, depthMm: 1000, heightMm: 1000, weightKg: 800 }
+      }
+    }));
+
+    expect(markup).toContain('data-testid="schema-property-inspector"');
+    expect(markup).toContain('data-schema-id="schema.atara.machine"');
+    expect(markup).toContain("Smart Asset Properties");
+    expect(markup).toContain("Atara Makine");
+    expect(markup).toContain("800 kg");
+    expect(markup).not.toContain('data-property-id="atara.identity.machine-code"><input');
+  });
 });
 
 describe("MachineProperties rotation editing", () => {
