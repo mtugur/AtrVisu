@@ -66,10 +66,19 @@ describe("platform feature access matrix", () => {
   });
 
   it("keeps planned definitions explicit and excludes them from regression", () => {
-    ["view.fitView", "panel.layoutExplorer", "panel.statusBar", "panel.diagnostics"].forEach((featureId) => {
+    ["view.fitView", "panel.diagnostics"].forEach((featureId) => {
       expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
         classification: "declared-planned",
         requiredForRegression: false
+      });
+    });
+  });
+
+  it("classifies the live explorer and status bar as required runtime surfaces", () => {
+    ["panel.layoutExplorer", "panel.statusBar"].forEach((featureId) => {
+      expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
+        classification: "required-runtime",
+        requiredForRegression: true
       });
     });
   });

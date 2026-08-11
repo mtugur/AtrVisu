@@ -51,10 +51,11 @@ describe("surface coverage audit", () => {
     expect(getSurfaceIdsByPanelId("panel.inspector")).toContain("surface.multiSelectionAlignment");
   });
 
-  it("keeps planned and quality-only definitions out of runtime surface links", () => {
+  it("keeps planned and quality-only definitions out while linking live workbench panels", () => {
     expect(getSurfaceIdsByCommandId("view.fitView")).toEqual([]);
     expect(getSurfaceIdsByCommandId("diagnostics.noRedConsole")).toEqual([]);
-    expect(getSurfaceIdsByPanelId("panel.layoutExplorer")).toEqual([]);
+    expect(getSurfaceIdsByPanelId("panel.layoutExplorer")).toContain("surface.layoutExplorer");
+    expect(getSurfaceIdsByPanelId("panel.statusBar")).toContain("surface.workbenchStatusBar");
     expect(getSurfaceIdsByPanelId("panel.diagnostics")).toEqual([]);
     expect(getSurfaceIdsByFeatureId("diagnostics.noRedConsole")).toContain(
       "surface.noRedConsoleQualityGate"

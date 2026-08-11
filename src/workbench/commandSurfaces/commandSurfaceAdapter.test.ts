@@ -71,6 +71,7 @@ describe("command surface adapter", () => {
       fallbackLabel
     }))).toEqual([
       { id: "file", labelKey: "menu.file", fallbackLabel: "File" },
+      { id: "insert", labelKey: "menu.insert", fallbackLabel: "Insert" },
       { id: "edit", labelKey: "menu.edit", fallbackLabel: "Edit" },
       { id: "view", labelKey: "menu.view", fallbackLabel: "View" },
       { id: "tools", labelKey: "menu.tools", fallbackLabel: "Tools" }

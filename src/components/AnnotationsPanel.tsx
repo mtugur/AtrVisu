@@ -17,6 +17,7 @@ type AnnotationsPanelProps = {
   onChangeAnnotationLayer: (annotationId: string, layerId: string) => void;
   onCommitAnnotationEdit: () => void;
   onDeleteAnnotation: (annotationId: string) => void;
+  variant?: "full" | "properties";
 };
 
 const annotationTypes: Array<{ value: AnnotationType; label: string }> = [
@@ -72,7 +73,8 @@ export function AnnotationsPanel({
   onUpdateAnnotation,
   onChangeAnnotationLayer,
   onCommitAnnotationEdit,
-  onDeleteAnnotation
+  onDeleteAnnotation,
+  variant = "full"
 }: AnnotationsPanelProps) {
   const selectedAnnotation = annotations.find((annotation) => annotation.id === selectedAnnotationId);
   const targetMachine = selectedAnnotation?.targetObjectId
@@ -106,33 +108,37 @@ export function AnnotationsPanel({
 
   return (
     <section className="annotations-panel" data-testid="annotations-panel" aria-label="Annotations">
-      <div className="alignment-button-grid">
-        <button type="button" data-testid="add-note-annotation" onClick={() => onAddAnnotation("note")}>
-          Add Note
-        </button>
-        <button type="button" onClick={() => onAddAnnotation("warning")}>
-          Add Warning
-        </button>
-        <button type="button" onClick={() => onAddAnnotation("callout")}>
-          Add Callout
-        </button>
-      </div>
-      <p className="collision-note">
-        Callouts attach to the selected object when one is selected. Free notes stay fixed in the layout.
-      </p>
-      <div className="annotation-list" aria-label="Annotation list">
-        {annotations.length > 0 ? annotations.map((annotation) => (
-          <button
-            className={`annotation-list-item${annotation.id === selectedAnnotationId ? " is-selected" : ""}`}
-            key={annotation.id}
-            type="button"
-            onClick={() => onSelectAnnotation(annotation.id)}
-          >
-            <strong>{annotation.text || "(empty annotation)"}</strong>
-            <span>{annotation.type}{annotation.targetObjectId ? " | attached" : ""}</span>
-          </button>
-        )) : <p className="empty-selection">No annotations yet.</p>}
-      </div>
+      {variant === "full" ? (
+        <>
+          <div className="alignment-button-grid">
+            <button type="button" data-testid="add-note-annotation" onClick={() => onAddAnnotation("note")}>
+              Add Note
+            </button>
+            <button type="button" onClick={() => onAddAnnotation("warning")}>
+              Add Warning
+            </button>
+            <button type="button" onClick={() => onAddAnnotation("callout")}>
+              Add Callout
+            </button>
+          </div>
+          <p className="collision-note">
+            Callouts attach to the selected object when one is selected. Free notes stay fixed in the layout.
+          </p>
+          <div className="annotation-list" aria-label="Annotation list">
+            {annotations.length > 0 ? annotations.map((annotation) => (
+              <button
+                className={`annotation-list-item${annotation.id === selectedAnnotationId ? " is-selected" : ""}`}
+                key={annotation.id}
+                type="button"
+                onClick={() => onSelectAnnotation(annotation.id)}
+              >
+                <strong>{annotation.text || "(empty annotation)"}</strong>
+                <span>{annotation.type}{annotation.targetObjectId ? " | attached" : ""}</span>
+              </button>
+            )) : <p className="empty-selection">No annotations yet.</p>}
+          </div>
+        </>
+      ) : null}
       {selectedAnnotation ? (
         <div className="annotation-editor" data-testid="annotation-properties">
           <label className="property-field">

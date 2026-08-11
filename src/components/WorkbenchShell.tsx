@@ -17,7 +17,9 @@ export type WorkbenchShellProps = {
   statusBar?: ReactNode;
   overlayLayer?: ReactNode;
   diagnostics?: ReactNode;
+  editorLeftInset?: number;
   editorRightInset?: number;
+  editorBottomInset?: number;
   workspaceInspectorMode?: WorkspaceInspectorMode;
 };
 
@@ -25,7 +27,7 @@ export const WORKBENCH_CHROME_TOP_INSET = "var(--av-workbench-top-inset)";
 
 type WorkbenchShellRegionSlot = Exclude<
   keyof WorkbenchShellProps,
-  "diagnostics" | "editorRightInset" | "workspaceInspectorMode"
+  "diagnostics" | "editorLeftInset" | "editorRightInset" | "editorBottomInset" | "workspaceInspectorMode"
 >;
 type CanonicalWorkbenchRegionId = (typeof WORKBENCH_REGION_IDS)[number];
 
@@ -71,7 +73,9 @@ export function WorkbenchShell({
   statusBar,
   overlayLayer,
   diagnostics,
+  editorLeftInset = 0,
   editorRightInset = 0,
+  editorBottomInset = 0,
   workspaceInspectorMode
 }: WorkbenchShellProps) {
   return (
@@ -86,7 +90,9 @@ export function WorkbenchShell({
       )}
       viewport={editorHost}
       shellTopInset={WORKBENCH_CHROME_TOP_INSET}
+      viewportLeftInset={editorLeftInset}
       viewportRightInset={editorRightInset}
+      viewportBottomInset={editorBottomInset}
       viewportWorkbenchRegion={WORKBENCH_SHELL_REGION_BY_SLOT.editorHost}
       rightPanel={secondaryDock}
       rightPanelWorkbenchRegion={WORKBENCH_SHELL_REGION_BY_SLOT.secondaryDock}

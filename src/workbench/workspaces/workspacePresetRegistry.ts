@@ -42,9 +42,13 @@ export class WorkspacePresetRegistryError extends Error {
 
 export const liveWorkspacePanelDescriptors = Object.freeze(
   runtimePanelDescriptors.filter((descriptor) => (
-    descriptor.runtimeLocation === "right-panel-shell"
+    descriptor.runtimeLocation !== "unbound"
+    && descriptor.runtimeLocation !== "modal-layer"
+    && descriptor.runtimeLocation !== "status-bar"
     && (descriptor.surfaceKind === "section" || descriptor.surfaceKind === "contextual")
+    && descriptor.definition.id !== RUNTIME_PANEL_IDS.primaryDockShell
     && descriptor.definition.id !== RUNTIME_PANEL_IDS.rightPanelShell
+    && descriptor.definition.id !== RUNTIME_PANEL_IDS.bottomDockShell
   ))
 ) as readonly RuntimePanelDescriptor[];
 

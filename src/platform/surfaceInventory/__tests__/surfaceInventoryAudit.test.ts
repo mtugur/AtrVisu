@@ -33,8 +33,11 @@ describe("surface inventory audit", () => {
     expect(getSurfaceInventoryItemsByCommandId("diagnostics.noRedConsole")).toEqual([]);
   });
 
-  it("does not represent declared-planned panels as live surfaces", () => {
-    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer")).toEqual([]);
+  it("represents live workbench panels and excludes declared-planned panels", () => {
+    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer").map((item) => item.surfaceId))
+      .toContain("surface.layoutExplorer");
+    expect(getSurfaceInventoryItemsByPanelId("panel.statusBar").map((item) => item.surfaceId))
+      .toContain("surface.workbenchStatusBar");
     expect(getSurfaceInventoryItemsByPanelId("panel.diagnostics")).toEqual([]);
   });
 

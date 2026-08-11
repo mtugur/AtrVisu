@@ -16,7 +16,9 @@ export const RUNTIME_PANEL_IDS = {
   projectManager: "panel.projectManager",
   libraryManager: "panel.libraryManager",
   taxonomyManager: "panel.taxonomyManager",
+  primaryDockShell: "panel.primaryDockShell",
   rightPanelShell: "panel.rightPanelShell",
+  bottomDockShell: "panel.bottomDockShell",
   layoutControls: "panel.layoutControls",
   viewpoints: "panel.viewpoints",
   civilReferences: "panel.civilReferences",
@@ -33,7 +35,13 @@ export type RuntimePanelId = typeof RUNTIME_PANEL_IDS[keyof typeof RUNTIME_PANEL
 export type RuntimePanelCapability = "open" | "close" | "toggle";
 export type RuntimePanelClassification = "required-runtime" | "declared-planned" | "modal/tool-surface";
 export type RuntimePanelSurfaceKind = "section" | "shell" | "modal" | "contextual" | "unbound";
-export type RuntimePanelLocation = "right-panel-shell" | "modal-layer" | "unbound";
+export type RuntimePanelLocation =
+  | "primary-dock"
+  | "secondary-dock"
+  | "bottom-dock"
+  | "status-bar"
+  | "modal-layer"
+  | "unbound";
 
 export type RuntimePanelState = {
   isVisible: boolean;
@@ -92,7 +100,8 @@ const panel = (
   id: RuntimePanelId,
   title: string,
   surfaceKind: RuntimePanelSurfaceKind,
-  classification: RuntimePanelClassification = "required-runtime"
+  classification: RuntimePanelClassification = "required-runtime",
+  runtimeLocation: RuntimePanelLocation = "secondary-dock"
 ): RuntimePanelDescriptor => ({
   definition: {
     id,
@@ -105,14 +114,14 @@ const panel = (
   },
   classification,
   surfaceKind,
-  runtimeLocation: surfaceKind === "modal" ? "modal-layer" : "right-panel-shell"
+  runtimeLocation: surfaceKind === "modal" ? "modal-layer" : runtimeLocation
 });
 
 const seedClassifications: Readonly<Record<string, RuntimePanelClassification>> = {
   [RUNTIME_PANEL_IDS.machineLibrary]: "required-runtime",
-  [RUNTIME_PANEL_IDS.layoutExplorer]: "declared-planned",
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "required-runtime",
   [RUNTIME_PANEL_IDS.inspector]: "required-runtime",
-  [RUNTIME_PANEL_IDS.statusBar]: "declared-planned",
+  [RUNTIME_PANEL_IDS.statusBar]: "required-runtime",
   [RUNTIME_PANEL_IDS.annotations]: "required-runtime",
   [RUNTIME_PANEL_IDS.layers]: "required-runtime",
   [RUNTIME_PANEL_IDS.groups]: "required-runtime",
@@ -121,13 +130,13 @@ const seedClassifications: Readonly<Record<string, RuntimePanelClassification>> 
 
 const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {
   [RUNTIME_PANEL_IDS.machineLibrary]: "section",
-  [RUNTIME_PANEL_IDS.layoutExplorer]: "unbound",
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "section",
   [RUNTIME_PANEL_IDS.inspector]: "contextual",
-  [RUNTIME_PANEL_IDS.statusBar]: "unbound",
+  [RUNTIME_PANEL_IDS.statusBar]: "section",
   [RUNTIME_PANEL_IDS.annotations]: "section",
   [RUNTIME_PANEL_IDS.layers]: "section",
   [RUNTIME_PANEL_IDS.groups]: "section",
-  [RUNTIME_PANEL_IDS.collisionCheck]: "section",
+  [RUNTIME_PANEL_IDS.collisionCheck]: "modal",
   [RUNTIME_PANEL_IDS.performanceBenchmark]: "modal",
   [RUNTIME_PANEL_IDS.diagnostics]: "unbound",
   [RUNTIME_PANEL_IDS.projectManager]: "modal",
@@ -136,9 +145,15 @@ const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {
 };
 
 const seedRuntimeLocations: Readonly<Record<string, RuntimePanelLocation>> = {
-  [RUNTIME_PANEL_IDS.layoutExplorer]: "unbound",
-  [RUNTIME_PANEL_IDS.statusBar]: "unbound",
+  [RUNTIME_PANEL_IDS.machineLibrary]: "primary-dock",
+  [RUNTIME_PANEL_IDS.layoutExplorer]: "primary-dock",
+  [RUNTIME_PANEL_IDS.layers]: "primary-dock",
+  [RUNTIME_PANEL_IDS.groups]: "primary-dock",
+  [RUNTIME_PANEL_IDS.inspector]: "secondary-dock",
+  [RUNTIME_PANEL_IDS.annotations]: "secondary-dock",
+  [RUNTIME_PANEL_IDS.statusBar]: "status-bar",
   [RUNTIME_PANEL_IDS.diagnostics]: "unbound",
+  [RUNTIME_PANEL_IDS.collisionCheck]: "modal-layer",
   [RUNTIME_PANEL_IDS.performanceBenchmark]: "modal-layer",
   [RUNTIME_PANEL_IDS.projectManager]: "modal-layer",
   [RUNTIME_PANEL_IDS.libraryManager]: "modal-layer",
@@ -150,21 +165,23 @@ const seededDescriptors: readonly RuntimePanelDescriptor[] = platformPanelSeedDe
   classification: seedClassifications[definition.id] ?? "modal/tool-surface",
   surfaceKind: seedSurfaceKinds[definition.id] ?? "unbound",
   runtimeLocation: seedRuntimeLocations[definition.id]
-    ?? (seedSurfaceKinds[definition.id] === "unbound" ? "unbound" : "right-panel-shell")
+    ?? (seedSurfaceKinds[definition.id] === "unbound" ? "unbound" : "secondary-dock")
 }));
 
 const runtimeOnlyDescriptors: readonly RuntimePanelDescriptor[] = [
-  panel(RUNTIME_PANEL_IDS.rightPanelShell, "Right Panel Shell", "shell"),
-  panel(RUNTIME_PANEL_IDS.layoutControls, "Layout Controls", "section"),
-  panel(RUNTIME_PANEL_IDS.viewpoints, "Viewpoints", "section"),
-  panel(RUNTIME_PANEL_IDS.civilReferences, "Building / Civil", "section"),
-  panel(RUNTIME_PANEL_IDS.projectStatus, "Project Status", "section"),
-  panel(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, "Performance Benchmark Launcher", "section"),
-  panel(RUNTIME_PANEL_IDS.simulationControls, "Simulation Controls", "section"),
-  panel(RUNTIME_PANEL_IDS.precisionPlacement, "Precision Placement", "section"),
-  panel(RUNTIME_PANEL_IDS.alignmentTools, "Alignment Tools", "section"),
-  panel(RUNTIME_PANEL_IDS.connectionPointSnap, "Connection Point Snap", "contextual"),
-  panel(RUNTIME_PANEL_IDS.displayOverlayControls, "Display / Overlay Controls", "section")
+  panel(RUNTIME_PANEL_IDS.primaryDockShell, "Primary Dock", "shell", "required-runtime", "primary-dock"),
+  panel(RUNTIME_PANEL_IDS.rightPanelShell, "Secondary Dock", "shell", "required-runtime", "secondary-dock"),
+  panel(RUNTIME_PANEL_IDS.bottomDockShell, "Bottom Dock", "shell", "required-runtime", "bottom-dock"),
+  panel(RUNTIME_PANEL_IDS.layoutControls, "Layout Import / Export", "modal", "required-runtime", "modal-layer"),
+  panel(RUNTIME_PANEL_IDS.viewpoints, "Viewpoints", "section", "required-runtime", "bottom-dock"),
+  panel(RUNTIME_PANEL_IDS.civilReferences, "Building / Civil", "unbound", "modal/tool-surface", "unbound"),
+  panel(RUNTIME_PANEL_IDS.projectStatus, "Project Status", "unbound", "modal/tool-surface", "unbound"),
+  panel(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, "Performance Benchmark Launcher", "unbound", "modal/tool-surface", "unbound"),
+  panel(RUNTIME_PANEL_IDS.simulationControls, "Simulation Controls", "modal", "modal/tool-surface", "modal-layer"),
+  panel(RUNTIME_PANEL_IDS.precisionPlacement, "Precision Placement", "contextual", "required-runtime", "secondary-dock"),
+  panel(RUNTIME_PANEL_IDS.alignmentTools, "Alignment Tools", "contextual", "required-runtime", "secondary-dock"),
+  panel(RUNTIME_PANEL_IDS.connectionPointSnap, "Connection Point Snap", "contextual", "required-runtime", "secondary-dock"),
+  panel(RUNTIME_PANEL_IDS.displayOverlayControls, "Display / Overlay Controls", "unbound", "modal/tool-surface", "unbound")
 ];
 
 export const runtimePanelDescriptors = [

@@ -77,8 +77,18 @@ describe("WorkbenchShell", () => {
     }));
 
     expect(positive).toContain('style="--av-shell-top-inset:var(--av-workbench-top-inset)"');
-    expect(positive).toContain('style="right:min(420px, calc(100vw - 28px))"');
-    expect(negative).toContain('style="right:min(0px, calc(100vw - 28px))"');
+    expect(positive).toContain('style="left:min(0px, calc(100vw - 28px));right:min(420px, calc(100vw - 28px));bottom:0px"');
+    expect(negative).toContain('style="left:min(0px, calc(100vw - 28px));right:min(0px, calc(100vw - 28px));bottom:0px"');
+  });
+
+  it("applies independent left and bottom dock insets", () => {
+    const markup = renderToStaticMarkup(createElement(WorkbenchShell, {
+      editorHost: slot("editorHost"),
+      editorLeftInset: 312,
+      editorBottomInset: 208
+    }));
+
+    expect(markup).toContain('style="left:min(312px, calc(100vw - 28px));right:min(0px, calc(100vw - 28px));bottom:208px"');
   });
 
   it("does not remount the editor when secondary dock content changes", async () => {

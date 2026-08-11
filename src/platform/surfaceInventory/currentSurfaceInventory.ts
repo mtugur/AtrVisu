@@ -27,6 +27,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     ],
     commandIds: [
       "project.save",
+      "project.manager",
+      "layout.controls",
       "project.exportJson",
       "project.importJson",
       "project.restorePrompt",
@@ -41,7 +43,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "library.manager",
       "library.taxonomyManager",
       "collision.check",
-      "performance.benchmark"
+      "performance.benchmark",
+      "simulation.controls"
     ],
     featureIds: [
       "project.save",
@@ -104,6 +107,16 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     commandIds: ["library.addMachine"],
     panelIds: ["panel.machineLibrary"],
     featureIds: ["library.addMachine", "panel.machineLibrary"]
+  },
+  {
+    surfaceId: "surface.layoutExplorer",
+    surfaceType: "panel",
+    label: "Layout Explorer",
+    owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/workbench/LayoutExplorer.tsx"],
+    panelIds: ["panel.layoutExplorer"],
+    featureIds: ["panel.layoutExplorer", "selection.singleSelect", "selection.multiSelect"],
+    notes: "Projects current PlatformEntity adapters and writes through the canonical Runtime Selection Bridge."
   },
   {
     surfaceId: "surface.sceneViewport",
@@ -173,6 +186,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Project Manager",
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/ProjectManager.tsx"],
+    commandIds: ["project.manager"],
     panelIds: ["panel.projectManager"],
     featureIds: [
       "project.save",
@@ -474,12 +488,14 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   },
   {
     surfaceId: "surface.layoutControls",
-    surfaceType: "panel",
-    label: "Layout Controls",
+    surfaceType: "manager",
+    label: "Layout Import And Export",
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/LayoutControls.tsx"],
+    commandIds: ["layout.controls"],
     panelIds: ["panel.layoutControls"],
-    featureIds: ["panel.layoutControls"]
+    featureIds: ["panel.layoutControls"],
+    notes: "File-menu command opens the existing layout JSON controls in a dedicated modal tool surface."
   },
   {
     surfaceId: "surface.simulationControls",
@@ -487,8 +503,19 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Simulation Controls",
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/SimulationControls.tsx"],
+    commandIds: ["simulation.controls"],
     panelIds: ["panel.simulationControls"],
     featureIds: ["panel.simulationControls"]
+  },
+  {
+    surfaceId: "surface.workbenchStatusBar",
+    surfaceType: "diagnostics",
+    label: "Workbench Status Bar",
+    owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/workbench/WorkbenchStatusBar.tsx"],
+    panelIds: ["panel.statusBar"],
+    featureIds: ["panel.statusBar", "selection.singleSelect", "selection.multiSelect"],
+    notes: "Read-only status projection for canonical selection, millimetre units, snap state, and dirty state."
   },
   {
     surfaceId: "surface.displayOverlayControls",
