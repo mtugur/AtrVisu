@@ -40,6 +40,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("assembly.ungroup", "edit", "Ungroup", "Remove the assembly while preserving its members.", true),
 
   createCommandSeed("view.fitView", "view", "Fit View", "Fit the viewport to the current layout."),
+  createCommandSeed("view.displayOverlayControls", "view", "Display / Overlay Controls", "Open global display and overlay settings."),
   createCommandSeed("view.toggleLabels", "view", "Toggle Labels", "Show or hide layout labels."),
   createCommandSeed("view.viewpoints", "view", "Viewpoints", "Open or manage saved viewpoint states."),
   createCommandSeed("view.toggleConnectionPoints", "view", "Toggle Connection Points", "Show or hide connection point overlays."),

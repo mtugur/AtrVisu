@@ -51,6 +51,25 @@ describe("surface inventory audit", () => {
     expect(getSurfaceInventoryItemsByFeatureId("library.manager").map((item) => item.surfaceId)).toContain("surface.libraryManager");
   });
 
+  it("links the View-owned display modal to its command, panel, and overlay features", () => {
+    expect(getSurfaceInventoryItemsByCommandId("view.displayOverlayControls").map((item) => item.surfaceId))
+      .toContain("surface.displayOverlayControls");
+    expect(getSurfaceInventoryItemsByPanelId("panel.displayOverlayControls").map((item) => item.surfaceId))
+      .toContain("surface.displayOverlayControls");
+    [
+      "view.selectionBox",
+      "view.metadataBox",
+      "view.collisionEnvelope",
+      "view.clearanceEnvelope",
+      "annotations.visibility",
+      "annotations.leaderLines",
+      "connectionPoints.displayMode"
+    ].forEach((featureId) => {
+      expect(getSurfaceInventoryItemsByFeatureId(featureId).map((item) => item.surfaceId))
+        .toContain("surface.displayOverlayControls");
+    });
+  });
+
   it("finds the multi-selection alignment surface by feature, command, and panel links", () => {
     expect(getSurfaceInventoryItemsByFeatureId("selection.multiSelect").map((item) => item.surfaceId)).toContain(
       "surface.multiSelectionAlignment"

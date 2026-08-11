@@ -81,6 +81,10 @@ describe("command surface adapter", () => {
     expect(adapter.getCommandBarItems().map((item) => item.commandId)).toEqual(COMMAND_BAR_COMMAND_IDS);
     expect(adapter.getMenus().flatMap((menu) => menu.items).find((item) => item.commandId === "edit.undo"))
       .toMatchObject({ label: "Undo", shortcut: "Ctrl/Cmd+Z" });
+    expect(adapter.getMenus().find((menu) => menu.id === "view")?.items[0]).toMatchObject({
+      commandId: "view.displayOverlayControls",
+      label: "Display / Overlay Controls"
+    });
   });
 
   it("routes core and runtime commands to one live bridge each without seed execution", async () => {

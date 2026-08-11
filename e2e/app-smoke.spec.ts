@@ -232,6 +232,15 @@ const openPreferenceBranch = async (
 
 const openVisiblePanels = (page: Page) => openPreferenceBranch(page, "visible-panels");
 
+const expandContextualPanel = async (page: Page, panelId: string) => {
+  const toggle = page.getByTestId(`contextual-panel-toggle-${panelId}`);
+  await expect(toggle).toBeVisible();
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    await toggle.click();
+  }
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+};
+
 const expectNoModalBackdrop = async (page: Page) => {
   await expect(page.locator(".manager-backdrop")).toHaveCount(0);
 };
@@ -821,6 +830,13 @@ test("runtime feature access complete gate is bound to observed visible command 
   await observe("view.showMeasurements", () =>
     getCommandBarCommand(page, "view.showMeasurements").click()
   );
+  const viewMenu = await openWorkbenchMenu(page, "View");
+  await observe("view.displayOverlayControls", () =>
+    viewMenu.locator('[data-command-id="view.displayOverlayControls"]').click()
+  );
+  await expect(page.getByTestId("display-overlay-tool-surface")).toBeVisible();
+  await page.getByRole("button", { name: "Close Display / Overlay Controls" }).click();
+  await expect(page.getByTestId("display-overlay-tool-surface")).toHaveCount(0);
 
   const machineIds = await getMachineIds(page);
   await clickSceneMachine(page, machineIds[0]);
@@ -851,6 +867,12 @@ test("runtime feature access complete gate is bound to observed visible command 
   const multiSelectionSection = page.getByRole("button", { name: /Multi-Selection/i });
   if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
     await multiSelectionSection.click();
+  }
+  const alignmentContributionToggle = page.getByTestId(
+    "contextual-panel-toggle-panel.alignmentTools"
+  );
+  if ((await alignmentContributionToggle.getAttribute("aria-expanded")) !== "true") {
+    await alignmentContributionToggle.click();
   }
   const multiSelectionPanel = page.getByTestId("multi-selection-panel");
   const positionsBeforeAlignment = await readCanvasRecord<PlanPosition>(
@@ -1180,6 +1202,69 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   await expect(page.getByTestId("collision-check-tool-surface")).toBeVisible();
   await page.getByRole("button", { name: "Close Collision Check" }).click();
 
+  expect(errors).toEqual([]);
+});
+
+test("View-owned display controls update the persisted overlay authority without remounting the editor", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewport(page);
+  const before = await getRuntimeViewportSnapshot(page);
+
+  const viewMenu = await openWorkbenchMenu(page, "View");
+  await viewMenu.locator('[data-command-id="view.displayOverlayControls"]').click();
+  const surface = page.getByTestId("display-overlay-tool-surface");
+  const controls = page.getByTestId("overlay-controls");
+  await expect(surface).toBeVisible();
+  await expect(controls).toBeVisible();
+  expect(await getRuntimePanel(page, "panel.displayOverlayControls")).toMatchObject({
+    bound: true,
+    visible: true,
+    open: true,
+    surfaceKind: "modal",
+    runtimeLocation: "modal-layer"
+  });
+
+  await controls.getByLabel("Show Selection Box", { exact: true }).uncheck();
+  await controls.getByLabel("Show Metadata Box", { exact: true }).check();
+  await controls.getByLabel("Show Collision Envelope", { exact: true }).check();
+  await controls.getByLabel("Show Clearance Envelope", { exact: true }).check();
+  await controls.getByLabel("Show Annotations", { exact: true }).uncheck();
+  await expect(controls.getByLabel("Show Annotation Leader Lines", { exact: true })).toBeDisabled();
+  await controls.getByLabel("Show Annotations", { exact: true }).check();
+  await controls.getByLabel("Show Annotation Leader Lines", { exact: true }).uncheck();
+  await controls.getByLabel("Show Connection Points", { exact: true }).check();
+  await controls.getByRole("combobox", {
+    name: "Connection Point Display Mode",
+    exact: true
+  }).selectOption("all");
+
+  await expect.poll(() => page.evaluate(() => {
+    const raw = window.localStorage.getItem("atrvisu.overlaySettings");
+    return raw ? JSON.parse(raw) : null;
+  })).toMatchObject({
+    showSelectionBox: false,
+    showMetadataBox: true,
+    showCollisionEnvelope: true,
+    showClearanceEnvelope: true,
+    showAnnotations: true,
+    showAnnotationLeaderLines: false,
+    showConnectionPoints: true,
+    connectionPointDisplayMode: "all"
+  });
+
+  await page.getByRole("button", { name: "Close Display / Overlay Controls" }).click();
+  await expect(surface).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.displayOverlayControls")).toMatchObject({
+    visible: false,
+    open: false
+  });
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(after.camera).toEqual(before.camera);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
@@ -2126,6 +2211,7 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
     await multiSelectionSection.click();
   }
+  await expandContextualPanel(page, "panel.alignmentTools");
   const multiSelectionPanel = page.getByTestId("multi-selection-panel");
   const positionsBeforeAlignment = await readCanvasRecord<PlanPosition>(
     page,
@@ -2341,6 +2427,7 @@ test("rigid assembly projection renders without exposing member arrange actions"
   if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
     await multiSelectionSection.click();
   }
+  await expandContextualPanel(page, "panel.alignmentTools");
   const multiSelectionPanel = page.getByTestId("multi-selection-panel");
   await expect(multiSelectionPanel).toBeVisible();
   await expect(page.getByTestId("multi-selection-alignment-actions")).toBeVisible();
@@ -3556,6 +3643,9 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await page.keyboard.up("Control");
   await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available)
     .toBe(true);
+  await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toBeVisible();
+  await expect(page.getByTestId("contextual-panel-panel.alignmentTools")).toBeVisible();
+  const beforeContextVisibility = await getRuntimeViewportSnapshot(page);
 
   panels = await openVisiblePanels(page);
   snapLabel = panels.surface.locator("label").filter({ hasText: "Connection Point Snap" });
@@ -3564,6 +3654,62 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await expect(snapToggle).toBeChecked();
   await snapToggle.uncheck();
   await expect(control.trigger).toContainText("Current arrangement");
+  await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
+    visible: false,
+    open: false
+  });
+  await snapToggle.check();
+  await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toBeVisible();
+  expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ visible: true });
+
+  const alignmentLabel = panels.surface.locator("label").filter({ hasText: "Alignment Tools" });
+  const alignmentToggle = alignmentLabel.locator('input[type="checkbox"]');
+  await expect(alignmentToggle).toBeEnabled();
+  await alignmentToggle.uncheck();
+  await expect(page.getByTestId("contextual-panel-panel.alignmentTools")).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.alignmentTools")).toMatchObject({
+    visible: false,
+    open: false
+  });
+  await alignmentToggle.check();
+  await expect(page.getByTestId("contextual-panel-panel.alignmentTools")).toBeVisible();
+  const afterContextVisibility = await getRuntimeViewportSnapshot(page);
+  expect(afterContextVisibility.invariants).toEqual(beforeContextVisibility.invariants);
+  expect(afterContextVisibility.camera).toEqual(beforeContextVisibility.camera);
+  expect(afterContextVisibility.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeContextVisibility.viewport?.sceneLifecycleGeneration);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await clickSceneMachine(page, machineIds[0]);
+  const beforeSingleContextVisibility = await getRuntimeViewportSnapshot(page);
+  const precisionContribution = page.getByTestId("contextual-panel-panel.precisionPlacement");
+  await expect(precisionContribution).toBeVisible();
+  const precisionHeader = page.getByTestId(
+    "contextual-panel-toggle-panel.precisionPlacement"
+  );
+  await precisionHeader.click();
+  await expect(precisionHeader).toHaveAttribute("aria-expanded", "false");
+  expect(await getRuntimePanel(page, "panel.precisionPlacement")).toMatchObject({
+    visible: true,
+    open: false
+  });
+  await precisionHeader.click();
+  await expect(precisionHeader).toHaveAttribute("aria-expanded", "true");
+
+  panels = await openVisiblePanels(page);
+  const precisionToggle = panels.surface.getByLabel("Precision Placement", { exact: true });
+  await expect(precisionToggle).toBeEnabled();
+  await precisionToggle.uncheck();
+  await expect(control.trigger).toContainText("Current arrangement");
+  await expect(precisionContribution).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.precisionPlacement")).toMatchObject({
+    visible: false,
+    open: false
+  });
+  await precisionToggle.check();
+  await expect(precisionContribution).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
 
@@ -3571,15 +3717,49 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   let inspectorLabel = panels.surface.locator("label").filter({ hasText: "Inspector" });
   let inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
   await expect(inspectorToggle).toBeEnabled();
+  await inspectorToggle.uncheck();
+  await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.inspector")).toMatchObject({
+    visible: false,
+    open: false
+  });
+  await inspectorToggle.check();
+  await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
+  const afterSingleContextVisibility = await getRuntimeViewportSnapshot(page);
+  expect(afterSingleContextVisibility.invariants).toEqual(beforeSingleContextVisibility.invariants);
+  expect(afterSingleContextVisibility.camera).toEqual(beforeSingleContextVisibility.camera);
+  expect(afterSingleContextVisibility.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeSingleContextVisibility.viewport?.sceneLifecycleGeneration);
+
   const insertMenu = await openWorkbenchMenu(page, "Insert");
   await insertMenu.locator('[data-command-id="annotations.create"]').click();
+  const annotationsContribution = page.getByTestId("contextual-panel-panel.annotations");
+  await expect(annotationsContribution).toBeVisible();
   await expect(page.getByTestId("annotation-properties")).toBeVisible();
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.available)
     .toBe(true);
+  const beforeAnnotationVisibility = await getRuntimeViewportSnapshot(page);
 
   panels = await openVisiblePanels(page);
+  const annotationsToggle = panels.surface.getByLabel("Annotations", { exact: true });
+  await expect(annotationsToggle).toBeEnabled();
+  await annotationsToggle.uncheck();
+  await expect(annotationsContribution).toHaveCount(0);
+  await expect(page.getByTestId("annotation-properties")).toHaveCount(0);
+  expect(await getRuntimePanel(page, "panel.annotations")).toMatchObject({
+    visible: false,
+    open: false
+  });
+  await annotationsToggle.check();
+  await expect(annotationsContribution).toBeVisible();
+  await expect(page.getByTestId("annotation-properties")).toBeVisible();
+  const afterAnnotationVisibility = await getRuntimeViewportSnapshot(page);
+  expect(afterAnnotationVisibility.invariants).toEqual(beforeAnnotationVisibility.invariants);
+  expect(afterAnnotationVisibility.camera).toEqual(beforeAnnotationVisibility.camera);
+  expect(afterAnnotationVisibility.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeAnnotationVisibility.viewport?.sceneLifecycleGeneration);
   inspectorLabel = panels.surface.locator("label").filter({ hasText: "Inspector" });
   inspectorToggle = inspectorLabel.locator('input[type="checkbox"]');
   await expect(inspectorToggle).toBeEnabled();
@@ -3599,6 +3779,10 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await expect(page.getByTestId("design-system-root")).toHaveCount(1);
   await expect(canvas).toHaveCount(1);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  const finalContextVisibility = await getRuntimeViewportSnapshot(page);
+  expect(finalContextVisibility.camera).toEqual(beforeContextVisibility.camera);
+  expect(finalContextVisibility.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeContextVisibility.viewport?.sceneLifecycleGeneration);
   expect(errors).toEqual([]);
 });
 

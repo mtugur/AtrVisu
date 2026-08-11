@@ -83,6 +83,29 @@ describe("platform feature access matrix", () => {
     });
   });
 
+  it("maps every global display overlay capability to the View-owned modal", () => {
+    [
+      "view.displayOverlayControls",
+      "view.selectionBox",
+      "view.metadataBox",
+      "view.collisionEnvelope",
+      "view.clearanceEnvelope",
+      "annotations.visibility",
+      "annotations.leaderLines",
+      "connectionPoints.displayMode"
+    ].forEach((featureId) => {
+      expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
+        requiredForRegression: true,
+        panelIds: ["panel.displayOverlayControls"]
+      });
+    });
+    expect(featureAccessEntries.find((entry) => entry.featureId === "view.displayOverlayControls"))
+      .toMatchObject({
+        commandIds: ["view.displayOverlayControls"],
+        surfaces: ["menu", "modal"]
+      });
+  });
+
   it("models no-red-console as external quality evidence without fake runtime links", () => {
     const qualityFeature = featureAccessEntries.find(
       (entry) => entry.featureId === "diagnostics.noRedConsole"

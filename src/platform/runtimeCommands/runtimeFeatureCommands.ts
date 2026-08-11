@@ -22,6 +22,7 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   projectRestorePrompt: "project.restorePrompt",
   projectManager: "project.manager",
   layoutControls: "layout.controls",
+  displayOverlayControls: "view.displayOverlayControls",
   toggleLabels: "view.toggleLabels",
   viewpoints: "view.viewpoints",
   toggleConnectionPoints: "view.toggleConnectionPoints",

@@ -92,7 +92,12 @@ export const platformFeatureAccessMatrix = [
     requiredForRegression: false,
     notes: "No current user-facing Fit View action exists."
   }),
-  feature("view.toggleLabels", "Toggle labels", ["panel"], {
+  feature("view.displayOverlayControls", "Display and overlay controls", ["menu", "modal"], {
+    commandIds: ["view.displayOverlayControls"],
+    panelIds: ["panel.displayOverlayControls"],
+    requiresSurfaceExecutionEvidence: true
+  }),
+  feature("view.toggleLabels", "Toggle labels", ["menu", "toolbar", "modal"], {
     commandIds: ["view.toggleLabels"],
     panelIds: ["panel.displayOverlayControls"],
     requiresSurfaceExecutionEvidence: true
@@ -102,15 +107,35 @@ export const platformFeatureAccessMatrix = [
     panelIds: ["panel.viewpoints"],
     runtimeRequirements: ["viewport"]
   }),
-  feature("connectionPoints.toggle", "Toggle connection points", ["panel"], {
+  feature("connectionPoints.toggle", "Toggle connection points", ["menu", "toolbar", "modal"], {
     commandIds: ["view.toggleConnectionPoints"],
     panelIds: ["panel.displayOverlayControls"],
     requiresSurfaceExecutionEvidence: true
   }),
-  feature("measurements.show", "Show measurements", ["panel"], {
+  feature("measurements.show", "Show measurements", ["menu", "toolbar"], {
     commandIds: ["view.showMeasurements"],
-    panelIds: ["panel.displayOverlayControls"],
     requiresSurfaceExecutionEvidence: true
+  }),
+  feature("view.selectionBox", "Selection box overlay", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
+  }),
+  feature("view.metadataBox", "Metadata box overlay", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
+  }),
+  feature("view.collisionEnvelope", "Collision envelope overlay", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
+  }),
+  feature("view.clearanceEnvelope", "Clearance envelope overlay", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
+  }),
+  feature("annotations.visibility", "Annotation overlay visibility", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
+  }),
+  feature("annotations.leaderLines", "Annotation leader line visibility", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
+  }),
+  feature("connectionPoints.displayMode", "Connection point display mode", ["modal"], {
+    panelIds: ["panel.displayOverlayControls"]
   }),
   feature("viewport.main", "Main scene viewport", ["api"], {
     runtimeRequirements: ["viewport"]
@@ -276,7 +301,7 @@ export const platformFeatureAccessMatrix = [
   panelFeature("panel.precisionPlacement", "Precision Placement panel"),
   panelFeature("panel.alignmentTools", "Alignment Tools panel"),
   panelFeature("panel.connectionPointSnap", "Connection Point Snap panel"),
-  panelFeature("panel.displayOverlayControls", "Display and Overlay Controls panel"),
+  panelFeature("panel.displayOverlayControls", "Display and Overlay Controls panel", ["modal"]),
   panelFeature("panel.collisionCheck", "Collision Check panel"),
   panelFeature("panel.projectManager", "Project Manager", ["modal"]),
   panelFeature("panel.performanceBenchmark", "Performance Benchmark", ["modal"]),

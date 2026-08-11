@@ -3,6 +3,10 @@ import type { AlignmentAction, DistributionAction, EqualGapAction } from "../typ
 import type { PlacedMachine } from "../types/machine";
 import { calculateReferencePointMeasurementBetweenMachines } from "../utils/placement";
 import { formatLength } from "../utils/units";
+import {
+  WorkbenchContextContribution,
+  type WorkbenchContextContributionProps
+} from "./workbench/WorkbenchContextContribution";
 
 type MultiSelectionPropertiesProps = {
   selectedMachines: PlacedMachine[];
@@ -17,6 +21,10 @@ type MultiSelectionPropertiesProps = {
   onClearSelection: () => void;
   onDeleteSelected: () => void;
   canArrangeSelection?: boolean;
+  alignmentContribution?: Omit<
+    WorkbenchContextContributionProps,
+    "title" | "children" | "badge"
+  >;
 };
 
 const formatMm = (value: number) => formatLength(value, "mm", 0);
@@ -33,12 +41,57 @@ export function MultiSelectionProperties({
   onDuplicateSelected,
   onClearSelection,
   onDeleteSelected,
-  canArrangeSelection = true
+  canArrangeSelection = true,
+  alignmentContribution
 }: MultiSelectionPropertiesProps) {
   const canDistribute = canArrangeSelection && selectedMachines.length >= 3;
   const pairMeasurement = selectedMachines.length === 2
     ? calculateReferencePointMeasurementBetweenMachines(selectedMachines[0], selectedMachines[1])
     : null;
+  const alignmentActions = (
+    <>
+      <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-alignment-actions">
+        <strong>Align Selection</strong>
+        <div className="alignment-button-grid">
+          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("left")}>
+            Align Left
+          </button>
+          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerX")}>
+            Align Center X
+          </button>
+          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("right")}>
+            Align Right
+          </button>
+          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("front")}>
+            Align Top
+          </button>
+          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerY")}>
+            Align Center Y
+          </button>
+          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("back")}>
+            Align Bottom
+          </button>
+        </div>
+      </div>
+      <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-distribution-actions">
+        <strong>Distribute Selection</strong>
+        <div className="alignment-button-grid">
+          <button type="button" disabled={!canDistribute} onClick={() => onDistribute("horizontal")}>
+            Distribute Horizontal Center
+          </button>
+          <button type="button" disabled={!canDistribute} onClick={() => onDistribute("vertical")}>
+            Distribute Vertical Center
+          </button>
+          <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapX")}>
+            Equal Gap X
+          </button>
+          <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapY")}>
+            Equal Gap Y
+          </button>
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <section className="properties-section multi-selection-panel" data-testid="multi-selection-panel" aria-label="Multi-selection properties">
@@ -100,46 +153,11 @@ export function MultiSelectionProperties({
             </strong>
           </div>
         ) : null}
-        <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-alignment-actions">
-          <strong>Align Selection</strong>
-          <div className="alignment-button-grid">
-            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("left")}>
-              Align Left
-            </button>
-            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerX")}>
-              Align Center X
-            </button>
-            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("right")}>
-              Align Right
-            </button>
-            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("front")}>
-              Align Top
-            </button>
-            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerY")}>
-              Align Center Y
-            </button>
-            <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("back")}>
-              Align Bottom
-            </button>
-          </div>
-        </div>
-        <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-distribution-actions">
-          <strong>Distribute Selection</strong>
-          <div className="alignment-button-grid">
-            <button type="button" disabled={!canDistribute} onClick={() => onDistribute("horizontal")}>
-              Distribute Horizontal Center
-            </button>
-            <button type="button" disabled={!canDistribute} onClick={() => onDistribute("vertical")}>
-              Distribute Vertical Center
-            </button>
-            <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapX")}>
-              Equal Gap X
-            </button>
-            <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapY")}>
-              Equal Gap Y
-            </button>
-          </div>
-        </div>
+        {alignmentContribution ? (
+          <WorkbenchContextContribution {...alignmentContribution} title="Alignment Tools">
+            {alignmentActions}
+          </WorkbenchContextContribution>
+        ) : alignmentActions}
         <div className="selection-actions">
           <button type="button" disabled={!canDuplicateSelected} onClick={onDuplicateSelected}>
             Duplicate Selected

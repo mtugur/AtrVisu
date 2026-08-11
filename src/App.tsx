@@ -15,6 +15,7 @@ import { LayoutExplorer } from "./components/workbench/LayoutExplorer";
 import { WorkbenchBottomDock } from "./components/workbench/WorkbenchBottomDock";
 import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDock";
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
+import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
@@ -497,6 +498,7 @@ export function App() {
   const [isCollisionCheckOpen, setIsCollisionCheckOpen] = useState(false);
   const [isSimulationControlsOpen, setIsSimulationControlsOpen] = useState(false);
   const [isLayoutControlsOpen, setIsLayoutControlsOpen] = useState(false);
+  const [isDisplayOverlayControlsOpen, setIsDisplayOverlayControlsOpen] = useState(false);
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
   const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
@@ -607,6 +609,7 @@ export function App() {
     isCollisionCheckOpen,
     isSimulationControlsOpen,
     isLayoutControlsOpen,
+    isDisplayOverlayControlsOpen,
     isLibraryManagerOpen,
     isTaxonomyManagerOpen,
     connectionPointSnapAvailable: false,
@@ -1169,6 +1172,12 @@ export function App() {
       collapsed: !expanded
     });
   }, [uiPreferencesStore]);
+  const setPanelSectionExpansionPreservingVisibility = useCallback((
+    panelId: PanelSectionId,
+    expanded: boolean
+  ) => {
+    uiPreferencesStore.updatePanelPreference(panelId, { collapsed: !expanded });
+  }, [uiPreferencesStore]);
 
   const setLibraryManagerRuntimeController = useCallback(
     (controller: LibraryManagerRuntimeController | null) => {
@@ -1426,7 +1435,12 @@ export function App() {
               context: "unavailable"
             }
       ),
-      [RUNTIME_PANEL_IDS.displayOverlayControls]: sectionBinding(RUNTIME_PANEL_IDS.displayOverlayControls),
+      [RUNTIME_PANEL_IDS.displayOverlayControls]: {
+        getState: () => modalState(runtimePanelStateRef.current.isDisplayOverlayControlsOpen),
+        open: () => setIsDisplayOverlayControlsOpen(true),
+        close: () => setIsDisplayOverlayControlsOpen(false),
+        toggle: () => setIsDisplayOverlayControlsOpen((current) => !current)
+      },
       [RUNTIME_PANEL_IDS.collisionCheck]: {
         getState: () => modalState(runtimePanelStateRef.current.isCollisionCheckOpen),
         open: () => setIsCollisionCheckOpen(true),
@@ -1508,6 +1522,7 @@ export function App() {
       isCollisionCheckOpen,
       isSimulationControlsOpen,
       isLayoutControlsOpen,
+      isDisplayOverlayControlsOpen,
       isLibraryManagerOpen,
       isTaxonomyManagerOpen,
       connectionPointSnapAvailable,
@@ -1521,6 +1536,7 @@ export function App() {
     connectionPointSnapReason,
     editingAnnotationId,
     isCollisionCheckOpen,
+    isDisplayOverlayControlsOpen,
     isLayoutControlsOpen,
     isLibraryManagerOpen,
     isBottomDockCollapsed,
@@ -1754,7 +1770,8 @@ export function App() {
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
     setIsPanelCollapsed(false);
-  }, []);
+    setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
+  }, [setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
     setIsPanelCollapsed(false);
@@ -1773,9 +1790,10 @@ export function App() {
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
     if (entityId.startsWith("annotation:")) {
       setAnnotationSelectionSignal((current) => current + 1);
+      setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
     setIsPanelCollapsed(false);
-  }, []);
+  }, [setPanelSectionExpansionPreservingVisibility]);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
     const orderedIds = primaryId
@@ -2840,7 +2858,8 @@ export function App() {
     ], "inspector"));
     setAnnotationSelectionSignal((current) => current + 1);
     setIsPanelCollapsed(false);
-  }, [markLayoutChanged, selectedMachine]);
+    setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
+  }, [markLayoutChanged, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
@@ -3070,6 +3089,12 @@ export function App() {
       getEnableState: () => ({ enabled: true }),
       execute: () => mapPanelOperationToRuntimeCommandResult(
         runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.layoutControls)
+      )
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.displayOverlayControls]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => mapPanelOperationToRuntimeCommandResult(
+        runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.displayOverlayControls)
       )
     },
     [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels]: {
@@ -4710,21 +4735,28 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
           >
             {editingAnnotationId ? (
-              <AnnotationsPanel
-                variant="properties"
-                annotations={annotations}
-                selectedAnnotationId={editingAnnotationId}
-                placedMachines={placedMachines}
-                layers={layers}
-                isSelectedAnnotationLocked={selectedAnnotationLocked}
-                onAddAnnotation={(type) =>
-                  executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.createAnnotation, type)}
-                onSelectAnnotation={selectAnnotationForEditing}
-                onUpdateAnnotation={updateSelectedAnnotation}
-                onChangeAnnotationLayer={changeAnnotationLayer}
-                onCommitAnnotationEdit={commitAnnotationEdit}
-                onDeleteAnnotation={executeDeleteSelectedCommand}
-              />
+              <WorkbenchContextContribution
+                panelId={RUNTIME_PANEL_IDS.annotations}
+                title="Annotation Details"
+                badge="Annotation"
+                {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.annotations)}
+              >
+                <AnnotationsPanel
+                  variant="properties"
+                  annotations={annotations}
+                  selectedAnnotationId={editingAnnotationId}
+                  placedMachines={placedMachines}
+                  layers={layers}
+                  isSelectedAnnotationLocked={selectedAnnotationLocked}
+                  onAddAnnotation={(type) =>
+                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.createAnnotation, type)}
+                  onSelectAnnotation={selectAnnotationForEditing}
+                  onUpdateAnnotation={updateSelectedAnnotation}
+                  onChangeAnnotationLayer={changeAnnotationLayer}
+                  onCommitAnnotationEdit={commitAnnotationEdit}
+                  onDeleteAnnotation={executeDeleteSelectedCommand}
+                />
+              </WorkbenchContextContribution>
             ) : selectedGroup && (selectedCivilReferenceIds.length > 0 || selectedMachineIds.length <= 1) ? (
               <div className="property-grid" data-testid="assembly-properties-panel">
                 <div className="property-readout">
@@ -4787,10 +4819,18 @@ export function App() {
                   onClearSelection={clearSelection}
                   onDeleteSelected={executeDeleteSelectedCommand}
                   canArrangeSelection={!selectedGroup}
+                  alignmentContribution={{
+                    panelId: RUNTIME_PANEL_IDS.alignmentTools,
+                    ...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)
+                  }}
                 />
                 {connectionPointSnapAvailable ? (
-                  <details className="workbench-context-tools" open>
-                    <summary>Connection Point Snap</summary>
+                  <WorkbenchContextContribution
+                    panelId={RUNTIME_PANEL_IDS.connectionPointSnap}
+                    title="Connection Point Snap"
+                    badge="2"
+                    {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.connectionPointSnap)}
+                  >
                     <ConnectionPointSnapPanel
                       selectedMachines={selectedMachines}
                       primarySelectedMachine={selectedMachine}
@@ -4800,7 +4840,7 @@ export function App() {
                       )}
                       onClearSelection={clearSelection}
                     />
-                  </details>
+                  </WorkbenchContextContribution>
                 ) : null}
               </>
             ) : selectedAlignableEntities.length > 1 ? (
@@ -4809,32 +4849,39 @@ export function App() {
                   <span>{selectedGroup ? "Assembly" : "Selected entities"}</span>
                   <strong>{selectedGroup?.name ?? selectedAlignableEntities.length}</strong>
                 </div>
-                <AlignmentToolsPanel
-                  selectedEntityCount={selectedAlignableEntities.length}
-                  primarySelectionLabel={primarySelectedAlignable?.label}
-                  nudgeSettings={nudgeSettings}
-                  onAlign={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "align", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onDistribute={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "distribute", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onEqualGap={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload
-                  )}
-                  onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
-                  )}
-                  onChangeNudgeSettings={setNudgeSettings}
-                />
+                <WorkbenchContextContribution
+                  panelId={RUNTIME_PANEL_IDS.alignmentTools}
+                  title="Alignment Tools"
+                  badge={`${selectedAlignableEntities.length}`}
+                  {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)}
+                >
+                  <AlignmentToolsPanel
+                    selectedEntityCount={selectedAlignableEntities.length}
+                    primarySelectionLabel={primarySelectedAlignable?.label}
+                    nudgeSettings={nudgeSettings}
+                    onAlign={(action) => executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                      { kind: "align", action } satisfies RuntimeAlignmentPayload
+                    )}
+                    onDistribute={(action) => executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                      { kind: "distribute", action } satisfies RuntimeAlignmentPayload
+                    )}
+                    onEqualGap={(action) => executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                      { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
+                    )}
+                    onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                      { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload
+                    )}
+                    onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                      { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
+                    )}
+                    onChangeNudgeSettings={setNudgeSettings}
+                  />
+                </WorkbenchContextContribution>
               </div>
             ) : singleSelectedMachine ? (
               <>
@@ -4850,8 +4897,14 @@ export function App() {
                   onDuplicateSelected={executeDuplicateSelectedCommand}
                   onDeleteSelected={executeDeleteSelectedCommand}
                 />
-                <details className="workbench-context-tools">
-                  <summary>Placement Settings</summary>
+                <WorkbenchContextContribution
+                  panelId={RUNTIME_PANEL_IDS.precisionPlacement}
+                  title="Placement Settings"
+                  badge={placementSettings.gridSnapEnabled
+                    ? `${placementSettings.gridSnapStepMm} mm`
+                    : "Free"}
+                  {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.precisionPlacement)}
+                >
                   <PrecisionPlacementPanel
                     settings={placementSettings}
                     placedMachines={placedMachines}
@@ -4859,10 +4912,14 @@ export function App() {
                     onChangeSettings={setPlacementSettings}
                     onUpdateMachine={updateMachine}
                   />
-                </details>
+                </WorkbenchContextContribution>
                 {connectionPointSnapAvailable ? (
-                  <details className="workbench-context-tools">
-                    <summary>Connection Point Snap</summary>
+                  <WorkbenchContextContribution
+                    panelId={RUNTIME_PANEL_IDS.connectionPointSnap}
+                    title="Connection Point Snap"
+                    badge="2"
+                    {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.connectionPointSnap)}
+                  >
                     <ConnectionPointSnapPanel
                       selectedMachines={selectedMachines}
                       primarySelectedMachine={selectedMachine}
@@ -4872,7 +4929,7 @@ export function App() {
                       )}
                       onClearSelection={clearSelection}
                     />
-                  </details>
+                  </WorkbenchContextContribution>
                 ) : null}
               </>
             ) : (
@@ -5089,6 +5146,47 @@ export function App() {
               onClearBenchmarkScene={clearBenchmarkScene}
               onClose={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.performanceBenchmark)}
             />
+          ) : null}
+          {isDisplayOverlayControlsOpen ? (
+            <div className="manager-backdrop" data-testid="display-overlay-tool-surface">
+              <section
+                className="manager-dialog workbench-tool-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Display / Overlay Controls"
+              >
+                <header className="manager-header">
+                  <div>
+                    <span>View Tool</span>
+                    <h2>Display / Overlay Controls</h2>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close Display / Overlay Controls"
+                    onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.displayOverlayControls)}
+                  >
+                    Close
+                  </button>
+                </header>
+                <div className="workbench-tool-dialog-body">
+                  <DisplayOverlayControls
+                    settings={overlaySettings}
+                    onChange={(settings) => {
+                      if (settings.showLabels !== overlaySettings.showLabels) {
+                        executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.toggleLabels, settings);
+                      } else if (settings.showConnectionPoints !== overlaySettings.showConnectionPoints) {
+                        executeRuntimeFeatureCommand(
+                          RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
+                          settings
+                        );
+                      } else {
+                        setOverlaySettings(settings);
+                      }
+                    }}
+                  />
+                </div>
+              </section>
+            </div>
           ) : null}
           {isCollisionCheckOpen ? (
             <div className="manager-backdrop" data-testid="collision-check-tool-surface">

@@ -86,11 +86,17 @@ describe("runtime panel registry bridge", () => {
 
   it("reports the current runtime location separately from seed dock metadata", () => {
     const bridge = createRuntimePanelRegistryBridge(() => ({
-      [RUNTIME_PANEL_IDS.collisionCheck]: { getState: availableState }
+      [RUNTIME_PANEL_IDS.collisionCheck]: { getState: availableState },
+      [RUNTIME_PANEL_IDS.displayOverlayControls]: { getState: availableState }
     }));
 
     expect(bridge.registry.get(RUNTIME_PANEL_IDS.collisionCheck)?.dock).toBe("modal");
     expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.collisionCheck)).toMatchObject({
+      bound: true,
+      surfaceKind: "modal",
+      runtimeLocation: "modal-layer"
+    });
+    expect(bridge.getRuntimePanel(RUNTIME_PANEL_IDS.displayOverlayControls)).toMatchObject({
       bound: true,
       surfaceKind: "modal",
       runtimeLocation: "modal-layer"

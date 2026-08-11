@@ -519,18 +519,26 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   },
   {
     surfaceId: "surface.displayOverlayControls",
-    surfaceType: "visual-overlay",
+    surfaceType: "modal",
     label: "Display And Overlay Controls",
     owner: "existing-ui",
     sourceFiles: ["src/App.tsx", "src/components/DisplayOverlayControls.tsx"],
-    commandIds: ["view.toggleLabels", "view.toggleConnectionPoints", "view.showMeasurements"],
+    commandIds: ["view.displayOverlayControls", "view.toggleLabels", "view.toggleConnectionPoints"],
     panelIds: ["panel.displayOverlayControls"],
     featureIds: [
+      "view.displayOverlayControls",
       "view.toggleLabels",
       "connectionPoints.toggle",
-      "measurements.show",
+      "view.selectionBox",
+      "view.metadataBox",
+      "view.collisionEnvelope",
+      "view.clearanceEnvelope",
+      "annotations.visibility",
+      "annotations.leaderLines",
+      "connectionPoints.displayMode",
       "panel.displayOverlayControls"
-    ]
+    ],
+    notes: "View-owned global modal backed by the existing persisted overlaySettings authority."
   },
   {
     surfaceId: "surface.noRedConsoleQualityGate",

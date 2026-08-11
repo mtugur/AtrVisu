@@ -55,6 +55,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     labelKey: "menu.view",
     fallbackLabel: "View",
     commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.displayOverlayControls,
       RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
       RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
       RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,

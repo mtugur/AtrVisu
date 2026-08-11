@@ -29,6 +29,13 @@ bounded multi-selection tools. Annotation properties are also Inspector
 context. Global managers, diagnostics, civil creation, simulation, viewpoints,
 and performance tools do not belong in the Inspector.
 
+Inspector contributions that are canonical workspace panels (`annotations`,
+`precisionPlacement`, `alignmentTools`, and `connectionPointSnap`) are rendered
+only when both their selection context and existing UI Preferences / Runtime
+Panel state allow them. Their disclosure state uses that same panel authority.
+Manual visibility changes continue to clear the active workspace identity; the
+Sales and Layout Engineering presets remain the declared composition sources.
+
 The Bottom Dock is contribution-driven. Viewpoints is its first contribution
 and continues to use the existing viewpoint state and command authority. The
 Status Bar projects live selection, primary entity, millimetre working unit,
@@ -39,6 +46,17 @@ their existing modal/tool surfaces. File owns project and layout file actions;
 View owns display and viewpoint actions; Insert owns annotation and civil
 creation; Tools owns Library Manager, Taxonomy Manager, Collision Check,
 Simulation Controls, and Performance Benchmark.
+
+Display and overlay controls are a View-owned registered modal/tool surface,
+not Inspector content. They update the existing persisted `overlaySettings`
+authority for selection and metadata boxes, collision and clearance envelopes,
+annotations and leader lines, and connection-point display mode. Existing
+labels and connection-point commands remain their registered command routes.
+
+Layout Explorer uses native navigation and nested-list semantics around its
+existing entity action buttons. It intentionally does not declare an ARIA tree
+until the complete tree keyboard, focus, expansion, and selection contract can
+be implemented without replacing Runtime Selection authority.
 
 Workspace presets and manual panel visibility continue through the existing UI
 Preferences and workspace runtime. Panel switching and dock geometry may resize
@@ -62,6 +80,10 @@ Manager through the normal Tools route.
   acceptable on narrow layouts.
 - Existing compatibility JSX is retained behind a disabled rollback boundary,
   but it is not part of the rendered product composition.
+- Contextual panel visibility and collapse have one UI Preferences / Runtime
+  Panel authority; no local visibility store is introduced.
+- The global display tool preserves one overlay state authority and does not
+  remount Editor Host, Babylon, or canvas.
 - No demo-only scene, second entity tree, second viewpoint store, or property
   interpretation model is introduced.
 - P1-G retains ownership of BOM, Excel, PDF, quotation, and commercial output.
@@ -76,3 +98,6 @@ Manager through the normal Tools route.
   with no document overflow or red runtime errors.
 - Panel visibility and hydration tests prove hidden Primary panels remain
   restorable and preference updates are not lost.
+- Unit and Chromium tests prove View-owned overlay reachability, contextual
+  panel DOM/registry agreement, preset/manual-override policy, and native
+  Explorer accessibility semantics without scene lifecycle changes.

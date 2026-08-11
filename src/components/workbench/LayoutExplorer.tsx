@@ -74,23 +74,25 @@ export function LayoutExplorer({
         <span>Layout entities</span>
         <strong>{entities.filter((entity) => entity.type !== "group").length}</strong>
       </header>
-      <div className="layout-explorer-tree" role="tree" aria-label="Scene entities">
+      <nav className="layout-explorer-tree" aria-label="Scene entities">
+        <ul className="layout-explorer-list">
         {groups.map((group) => (
-          <section className="layout-explorer-group" key={group.id} aria-label={group.name}>
+          <li className="layout-explorer-group" key={group.id}>
             {renderEntity(group)}
-            <div className="layout-explorer-children">
+            <ul className="layout-explorer-children" aria-label={`${group.name} members`}>
               {group.childrenIds.flatMap((childId) => {
                 const child = entityById.get(childId);
-                return child ? [renderEntity(child, true)] : [];
+                return child ? [<li key={child.id}>{renderEntity(child, true)}</li>] : [];
               })}
-            </div>
-          </section>
+            </ul>
+          </li>
         ))}
-        {ungrouped.map((entity) => renderEntity(entity))}
+        {ungrouped.map((entity) => <li key={entity.id}>{renderEntity(entity)}</li>)}
+        </ul>
         {entities.length === 0 ? (
           <p className="empty-selection">Add a machine, civil reference, or annotation to populate the layout.</p>
         ) : null}
-      </div>
+      </nav>
       <p className="layout-explorer-rename-note" title="Rename requires a canonical history-backed mutation command.">
         Rename is unavailable until a history-backed entity rename command exists.
       </p>

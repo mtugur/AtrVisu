@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PlatformEntity, SelectionState } from "../../platform/contracts";
 import { LayoutExplorer } from "./LayoutExplorer";
 import { WorkbenchBottomDock } from "./WorkbenchBottomDock";
+import { WorkbenchContextContribution } from "./WorkbenchContextContribution";
 import { WorkbenchPrimaryDock } from "./WorkbenchPrimaryDock";
 import { WorkbenchStatusBar } from "./WorkbenchStatusBar";
 
@@ -101,6 +102,11 @@ describe("final workbench composition contracts", () => {
     expect(markup).toContain("Flow Pack Machine");
     expect(markup).toContain("Belt Conveyor");
     expect(markup).toContain("Default | Primary");
+    expect(markup).toContain('<nav class="layout-explorer-tree" aria-label="Scene entities">');
+    expect(markup).toContain('<ul class="layout-explorer-list">');
+    expect(markup).toContain("<li>");
+    expect(markup).not.toContain('role="tree"');
+    expect(markup).not.toContain('role="treeitem"');
 
     const tree = LayoutExplorer(props);
     findButton(tree, "layout-explorer-entity-machine:packer").props.onClick?.({
@@ -115,6 +121,56 @@ describe("final workbench composition contracts", () => {
     });
     expect(onSelectEntity).toHaveBeenNthCalledWith(1, "machine:packer", "replace");
     expect(onSelectEntity).toHaveBeenNthCalledWith(2, "machine:conveyor", "toggle");
+  });
+
+  it("renders contextual contributions only when visible and exposes controlled collapse", () => {
+    const onExpandedChange = vi.fn();
+    const visibleMarkup = renderToStaticMarkup(createElement(WorkbenchContextContribution, {
+      panelId: "panel.precisionPlacement",
+      title: "Placement Settings",
+      expanded: true,
+      visible: true,
+      onExpandedChange,
+      children: "placement-controls"
+    }));
+    const collapsedMarkup = renderToStaticMarkup(createElement(WorkbenchContextContribution, {
+      panelId: "panel.precisionPlacement",
+      title: "Placement Settings",
+      expanded: false,
+      visible: true,
+      onExpandedChange,
+      children: "placement-controls"
+    }));
+    const hiddenMarkup = renderToStaticMarkup(createElement(WorkbenchContextContribution, {
+      panelId: "panel.precisionPlacement",
+      title: "Placement Settings",
+      expanded: true,
+      visible: false,
+      onExpandedChange,
+      children: "placement-controls"
+    }));
+
+    expect(visibleMarkup).toContain('data-panel-id="panel.precisionPlacement"');
+    expect(visibleMarkup).toContain('aria-expanded="true"');
+    expect(visibleMarkup).toContain("placement-controls");
+    expect(collapsedMarkup).toContain('aria-expanded="false"');
+    expect(collapsedMarkup).not.toContain("placement-controls");
+    expect(hiddenMarkup).toBe("");
+
+    const tree = WorkbenchContextContribution({
+      panelId: "panel.precisionPlacement",
+      title: "Placement Settings",
+      expanded: true,
+      visible: true,
+      onExpandedChange,
+      children: "placement-controls"
+    });
+    findButton(tree, "contextual-panel-toggle-panel.precisionPlacement").props.onClick?.({
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false
+    });
+    expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 
   it("renders the generic Bottom Dock contribution and persistent status projection", () => {
