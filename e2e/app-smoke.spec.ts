@@ -127,6 +127,8 @@ const createE2EUiPreferences = (overrides: {
   theme?: "light" | "dark" | "system";
   density?: "compact" | "comfortable";
   width?: number;
+  primaryDockWidth?: number;
+  bottomDockHeight?: number;
   activeWorkspaceId?: "workspace.sales-layout" | "workspace.layout-engineering";
   panelOverrides?: Readonly<Record<string, Readonly<{
     visible?: boolean;
@@ -165,7 +167,13 @@ const createE2EUiPreferences = (overrides: {
       panelId,
       visible: overrides.panelOverrides?.[panelId]?.visible ?? true,
       collapsed: overrides.panelOverrides?.[panelId]?.collapsed ?? collapsed,
-      ...(panelId === "panel.rightPanelShell" ? { size: overrides.width ?? 360 } : {}),
+      ...(panelId === "panel.rightPanelShell"
+        ? { size: overrides.width ?? 360 }
+        : panelId === "panel.primaryDockShell"
+          ? { size: overrides.primaryDockWidth ?? 304 }
+          : panelId === "panel.bottomDockShell"
+            ? { size: overrides.bottomDockHeight ?? 136 }
+            : {}),
       order,
       dock: panelId === "panel.primaryDockShell"
         || panelId === "panel.machineLibrary"
@@ -1568,6 +1576,8 @@ test("640x800 workbench preserves chrome and mobile bottom-panel geometry", asyn
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 640, height: 800 });
   await openCleanApp(page);
+  await expect(page.getByTestId("primary-dock-resize-handle")).toHaveCount(0);
+  await expect(page.getByTestId("bottom-dock-resize-handle")).toHaveCount(0);
   const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
   await expect(rightPanel).toBeHidden();
@@ -1610,6 +1620,14 @@ test("640x800 workbench preserves chrome and mobile bottom-panel geometry", asyn
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   await page.getByRole("button", { name: "Open Inspector" }).click();
   await expect(page.getByTestId("right-panel")).toBeVisible();
+  await getCommandBarCommand(page, "view.viewpoints").click();
+  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+  expect(await page.getByTestId("bottom-dock").evaluate((element) =>
+    element.scrollWidth <= element.clientWidth
+  )).toBe(true);
+  expect(await page.locator(".workbench-bottom-dock-content").evaluate((element) =>
+    element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight
+  )).toBe(true);
   const after = await waitForRuntimeViewport(page);
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
@@ -1944,6 +1962,146 @@ test("runtime panel width drag resizes only the viewport", async ({ page }) => {
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   expect(after.camera).toEqual(before.camera);
   expect(after.invariants).toEqual(before.invariants);
+  expect(errors).toEqual([]);
+});
+
+test("Primary and Bottom Dock resizing persists without changing editor state", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  await getCommandBarCommand(page, "view.viewpoints").click();
+  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+
+  const before = await waitForRuntimeViewport(page);
+  const primaryDock = page.getByTestId("primary-dock");
+  const bottomDock = page.getByTestId("bottom-dock");
+  const primaryWidthBefore = await primaryDock.evaluate((element) => element.getBoundingClientRect().width);
+  const bottomHeightBefore = await bottomDock.evaluate((element) => element.getBoundingClientRect().height);
+  expect(bottomHeightBefore).toBeGreaterThanOrEqual(120);
+  expect(bottomHeightBefore).toBeLessThanOrEqual(150);
+
+  const primaryResize = page.getByTestId("primary-dock-resize-handle");
+  await expect(primaryResize).toHaveAttribute("aria-label", "Resize Primary Dock");
+  const primaryHandleBounds = await primaryResize.boundingBox();
+  if (!primaryHandleBounds) {
+    throw new Error("Primary Dock resize handle bounds are unavailable.");
+  }
+  await page.mouse.move(
+    primaryHandleBounds.x + primaryHandleBounds.width / 2,
+    primaryHandleBounds.y + 80
+  );
+  await page.mouse.down();
+  await page.mouse.move(primaryHandleBounds.x + 80, primaryHandleBounds.y + 80, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeGreaterThan(primaryWidthBefore);
+  const widerPrimaryWidth = await primaryDock.evaluate((element) => element.getBoundingClientRect().width);
+  const widerHandleBounds = await primaryResize.boundingBox();
+  if (!widerHandleBounds) {
+    throw new Error("Resized Primary Dock handle bounds are unavailable.");
+  }
+  await page.mouse.move(widerHandleBounds.x + widerHandleBounds.width / 2, widerHandleBounds.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(widerHandleBounds.x - 96, widerHandleBounds.y + 80, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeLessThan(primaryWidthBefore);
+  const resizedPrimaryWidth = await primaryDock.evaluate((element) => element.getBoundingClientRect().width);
+  expect(resizedPrimaryWidth).toBeLessThan(widerPrimaryWidth);
+
+  await expect(page.getByTestId("primary-dock-tab-panel.layoutExplorer"))
+    .toHaveAttribute("aria-pressed", "true");
+  const explorerRow = page.locator(".layout-explorer-row").first();
+  await expect(explorerRow).toBeVisible();
+  await expect(explorerRow).toHaveAttribute("title", /Machine.*Default/);
+  expect(await page.locator('[data-panel-id="panel.layoutExplorer"]').evaluate((element) =>
+    element.scrollWidth <= element.clientWidth
+  )).toBe(true);
+
+  const bottomResize = page.getByTestId("bottom-dock-resize-handle");
+  await expect(bottomResize).toHaveAttribute("aria-label", "Resize Bottom Dock");
+  const bottomHandleBounds = await bottomResize.boundingBox();
+  if (!bottomHandleBounds) {
+    throw new Error("Bottom Dock resize handle bounds are unavailable.");
+  }
+  await page.mouse.move(bottomHandleBounds.x + 120, bottomHandleBounds.y + bottomHandleBounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bottomHandleBounds.x + 120, bottomHandleBounds.y - 56, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
+    .toBeGreaterThan(bottomHeightBefore);
+  const resizedBottomHeight = await bottomDock.evaluate((element) => element.getBoundingClientRect().height);
+
+  await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
+    .toBe(resizedPrimaryWidth);
+
+  await page.getByRole("button", { name: "Collapse Bottom Dock", exact: true }).click();
+  await expect(bottomDock).toHaveAttribute("data-collapsed", "true");
+  await page.getByRole("button", { name: "Expand Bottom Dock", exact: true }).click();
+  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
+    .toBe(resizedBottomHeight);
+
+  await expect.poll(() => page.evaluate(() => {
+    const panels = window.__atrvisuUiPreferences?.getSnapshot().preferences.panels ?? [];
+    return {
+      primary: panels.find((panel) => panel.panelId === "panel.primaryDockShell")?.size,
+      bottom: panels.find((panel) => panel.panelId === "panel.bottomDockShell")?.size
+    };
+  })).toEqual({ primary: resizedPrimaryWidth, bottom: resizedBottomHeight });
+
+  const afterResize = await getRuntimeViewportSnapshot(page);
+  expect(afterResize.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(afterResize.camera).toEqual(before.camera);
+  expect(afterResize.invariants).toEqual(before.invariants);
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page);
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
+    .toBe(resizedPrimaryWidth);
+  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
+    .toBe(resizedBottomHeight);
+  expect(errors).toEqual([]);
+});
+
+test("medium workbench constrains dock resizing around a dominant viewport", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+
+  const primaryDock = page.getByTestId("primary-dock");
+  const resizeHandle = page.getByTestId("primary-dock-resize-handle");
+  await expect(resizeHandle).toHaveAttribute("aria-valuemax", "344");
+  await resizeHandle.focus();
+  for (let index = 0; index < 8; index += 1) {
+    await resizeHandle.press("ArrowRight");
+  }
+  await expect.poll(() => primaryDock.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
+    .toBe(344);
+  await getCommandBarCommand(page, "view.viewpoints").click();
+  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+  expect(await page.locator('[data-app-shell-zone="scene-viewport"]').evaluate((element) =>
+    element.getBoundingClientRect().width
+  )).toBeGreaterThanOrEqual(320);
+  expect(await page.getByTestId("bottom-dock").evaluate((element) =>
+    element.scrollWidth <= element.clientWidth
+  )).toBe(true);
+  expect(await page.locator(".workbench-bottom-dock-content").evaluate((element) =>
+    element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight
+  )).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
+    .toBe(true);
   expect(errors).toEqual([]);
 });
 

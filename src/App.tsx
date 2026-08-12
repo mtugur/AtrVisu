@@ -255,6 +255,15 @@ import {
   LAYOUT_3D_EDITOR_ID
 } from "./workbench/layout3dEditorDefinition";
 import {
+  DEFAULT_BOTTOM_DOCK_HEIGHT,
+  DEFAULT_PRIMARY_DOCK_WIDTH,
+  DOCK_RESIZE_BREAKPOINT,
+  PRIMARY_DOCK_RAIL_WIDTH,
+  clampDockSize,
+  getBottomDockHeightBounds,
+  getPrimaryDockWidthBounds
+} from "./workbench/dockSizing";
+import {
   createWorkspaceRuntime,
   liveWorkspacePanelDescriptors,
   workspaceFallbackLabels,
@@ -408,11 +417,23 @@ export function App() {
   const panelWidth = shellPreference?.size ?? 360;
   const isPanelCollapsed = !shellPreference?.visible || Boolean(shellPreference.collapsed);
   const primaryDockPreference = panelPreferences.get(RUNTIME_PANEL_IDS.primaryDockShell);
-  const primaryDockWidth = primaryDockPreference?.size ?? 304;
+  const primaryDockWidth = primaryDockPreference?.size ?? DEFAULT_PRIMARY_DOCK_WIDTH;
   const isPrimaryDockCollapsed = !primaryDockPreference?.visible || Boolean(primaryDockPreference.collapsed);
   const bottomDockPreference = panelPreferences.get(RUNTIME_PANEL_IDS.bottomDockShell);
-  const bottomDockHeight = bottomDockPreference?.size ?? 210;
+  const bottomDockHeight = bottomDockPreference?.size ?? DEFAULT_BOTTOM_DOCK_HEIGHT;
   const isBottomDockCollapsed = !bottomDockPreference?.visible || Boolean(bottomDockPreference.collapsed);
+  const [workbenchViewportSize, setWorkbenchViewportSize] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight
+  }));
+  const primaryDockWidthBounds = getPrimaryDockWidthBounds(
+    workbenchViewportSize.width,
+    isPanelCollapsed ? 0 : panelWidth
+  );
+  const bottomDockHeightBounds = getBottomDockHeightBounds(workbenchViewportSize.height);
+  const effectivePrimaryDockWidth = clampDockSize(primaryDockWidth, primaryDockWidthBounds);
+  const effectiveBottomDockHeight = clampDockSize(bottomDockHeight, bottomDockHeightBounds);
+  const dockResizeEnabled = workbenchViewportSize.width > DOCK_RESIZE_BREAKPOINT;
   const panelSectionExpansion = useMemo(() => Object.fromEntries(
     uiPreferences.panels
       .filter((panel) => panel.panelId !== RUNTIME_PANEL_IDS.rightPanelShell)
@@ -444,6 +465,24 @@ export function App() {
       size: Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, requested))
     });
   }, [uiPreferencesStore]);
+  const setPrimaryDockWidth = useCallback((requested: number) => {
+    const currentPreferences = uiPreferencesStore.getSnapshot().preferences.panels;
+    const rightPanel = currentPreferences.find(
+      (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
+    );
+    const rightInset = !rightPanel?.visible || rightPanel.collapsed ? 0 : rightPanel.size ?? 360;
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
+      size: clampDockSize(
+        requested,
+        getPrimaryDockWidthBounds(window.innerWidth, rightInset)
+      )
+    });
+  }, [uiPreferencesStore]);
+  const setBottomDockHeight = useCallback((requested: number) => {
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
+      size: clampDockSize(requested, getBottomDockHeightBounds(window.innerHeight))
+    });
+  }, [uiPreferencesStore]);
   const setPrimaryDockCollapsed = useCallback((collapsed: boolean) => {
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
       visible: true,
@@ -456,6 +495,13 @@ export function App() {
       collapsed
     });
   }, [uiPreferencesStore]);
+  useEffect(() => {
+    const handleWorkbenchResize = () => {
+      setWorkbenchViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener("resize", handleWorkbenchResize);
+    return () => window.removeEventListener("resize", handleWorkbenchResize);
+  }, []);
   const [enableE2EDiagnostics] = useState(() =>
     new URLSearchParams(window.location.search).get("e2eDiagnostics") === "1"
   );
@@ -594,7 +640,14 @@ export function App() {
     simulationRunning: false,
     simulationSpeed: 1
   });
-  const previousViewportShellStateRef = useRef({ isPanelCollapsed, panelWidth });
+  const previousViewportShellStateRef = useRef({
+    isPanelCollapsed,
+    panelWidth,
+    isPrimaryDockCollapsed,
+    primaryDockWidth: effectivePrimaryDockWidth,
+    isBottomDockCollapsed,
+    bottomDockHeight: effectiveBottomDockHeight
+  });
   const runtimePanelStateRef = useRef({
     panelSectionExpansion,
     panelSectionVisibility,
@@ -1340,7 +1393,7 @@ export function App() {
           isVisible: true,
           isOpen: !runtimePanelStateRef.current.isPrimaryDockCollapsed,
           available: true,
-          context: `${primaryDockWidth}px`
+          context: `${effectivePrimaryDockWidth}px`
         }),
         open: () => setPrimaryDockCollapsed(false),
         close: () => {
@@ -1374,7 +1427,7 @@ export function App() {
           isVisible: true,
           isOpen: !runtimePanelStateRef.current.isBottomDockCollapsed,
           available: true,
-          context: `${bottomDockHeight}px`
+          context: `${effectiveBottomDockHeight}px`
         }),
         open: () => setBottomDockCollapsed(false),
         close: () => setBottomDockCollapsed(true),
@@ -1486,8 +1539,8 @@ export function App() {
     openTaxonomyManager,
     refreshProjects,
     requestLibraryManagerClose,
-    bottomDockHeight,
-    primaryDockWidth,
+    effectiveBottomDockHeight,
+    effectivePrimaryDockWidth,
     setBottomDockCollapsed,
     setPrimaryDockCollapsed,
     setPanelSectionExpanded
@@ -1574,7 +1627,14 @@ export function App() {
 
   useLayoutEffect(() => {
     const previous = previousViewportShellStateRef.current;
-    const next = { isPanelCollapsed, panelWidth };
+    const next = {
+      isPanelCollapsed,
+      panelWidth,
+      isPrimaryDockCollapsed,
+      primaryDockWidth: effectivePrimaryDockWidth,
+      isBottomDockCollapsed,
+      bottomDockHeight: effectiveBottomDockHeight
+    };
     previousViewportShellStateRef.current = next;
     const reason = getRuntimeViewportShellResizeReason(previous, next);
     if (!reason) {
@@ -1592,7 +1652,15 @@ export function App() {
         { width: viewport.cssWidth, height: viewport.cssHeight }
       )
     );
-  }, [isPanelCollapsed, panelWidth, runtimeViewportBridge]);
+  }, [
+    effectiveBottomDockHeight,
+    effectivePrimaryDockWidth,
+    isBottomDockCollapsed,
+    isPanelCollapsed,
+    isPrimaryDockCollapsed,
+    panelWidth,
+    runtimeViewportBridge
+  ]);
 
   useEffect(() => {
     if (!enableE2EDiagnostics) {
@@ -4164,9 +4232,9 @@ export function App() {
   const primarySelectionEntity = runtimeSelection.primaryId
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
-  const primaryDockInset = isPrimaryDockCollapsed ? 78 : primaryDockWidth;
+  const primaryDockInset = isPrimaryDockCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
   const bottomDockInset = STATUS_BAR_HEIGHT + (
-    isBottomDockCollapsed ? COLLAPSED_BOTTOM_DOCK_HEIGHT : bottomDockHeight
+    isBottomDockCollapsed ? COLLAPSED_BOTTOM_DOCK_HEIGHT : effectiveBottomDockHeight
   );
   const layerNames = new Map(layers.map((layer) => [layer.id, layer.name]));
   const showLegacyCompatibilityStack = false;
@@ -4326,12 +4394,16 @@ export function App() {
           ].filter((item) => panelSectionVisibility[item.panelId] !== false)}
           activePanelId={activePrimaryPanelId}
           collapsed={isPrimaryDockCollapsed}
-          width={primaryDockWidth}
+          width={effectivePrimaryDockWidth}
+          minWidth={primaryDockWidthBounds.min}
+          maxWidth={primaryDockWidthBounds.max}
+          resizeEnabled={dockResizeEnabled}
           bottomInset={bottomDockInset}
           onActivate={(panelId) => {
             runtimePanelBridge.openPanel(panelId);
           }}
           onToggleCollapsed={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.primaryDockShell)}
+          onResize={setPrimaryDockWidth}
         />
       )}
       editorLeftInset={primaryDockInset}
@@ -5060,7 +5132,10 @@ export function App() {
           ]}
           activePanelId={activeBottomPanelId}
           collapsed={isBottomDockCollapsed}
-          expandedHeight={bottomDockHeight}
+          expandedHeight={effectiveBottomDockHeight}
+          minHeight={bottomDockHeightBounds.min}
+          maxHeight={bottomDockHeightBounds.max}
+          resizeEnabled={dockResizeEnabled}
           leftInset={primaryDockInset}
           rightInset={isPanelCollapsed ? 0 : panelWidth}
           onActivate={(panelId) => {
@@ -5068,6 +5143,7 @@ export function App() {
             setBottomDockCollapsed(false);
           }}
           onToggleCollapsed={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.bottomDockShell)}
+          onResize={setBottomDockHeight}
         />
       )}
       statusBar={(

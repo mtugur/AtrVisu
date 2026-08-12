@@ -58,11 +58,21 @@ export function ViewpointsPanel({
       </button>
 
       <div className="viewpoint-actions">
-        <button type="button" disabled={viewpoints.length === 0} onClick={() => onStepViewpoint("previous")}>
-          Previous Viewpoint
+        <button
+          type="button"
+          aria-label="Previous Viewpoint"
+          disabled={viewpoints.length === 0}
+          onClick={() => onStepViewpoint("previous")}
+        >
+          Previous
         </button>
-        <button type="button" disabled={viewpoints.length === 0} onClick={() => onStepViewpoint("next")}>
-          Next Viewpoint
+        <button
+          type="button"
+          aria-label="Next Viewpoint"
+          disabled={viewpoints.length === 0}
+          onClick={() => onStepViewpoint("next")}
+        >
+          Next
         </button>
       </div>
 

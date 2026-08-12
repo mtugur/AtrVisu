@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { CSSProperties } from "react";
 import type { PanelId } from "../../platform/contracts";
+import { WorkbenchDockResizeHandle } from "./WorkbenchDockResizeHandle";
 
 export type WorkbenchBottomDockContribution = Readonly<{
   panelId: PanelId;
@@ -14,10 +15,14 @@ type WorkbenchBottomDockProps = {
   activePanelId: PanelId;
   collapsed: boolean;
   expandedHeight: number;
+  minHeight: number;
+  maxHeight: number;
+  resizeEnabled: boolean;
   leftInset: number;
   rightInset: number;
   onActivate: (panelId: PanelId) => void;
   onToggleCollapsed: () => void;
+  onResize: (height: number) => void;
 };
 
 export function WorkbenchBottomDock({
@@ -25,10 +30,14 @@ export function WorkbenchBottomDock({
   activePanelId,
   collapsed,
   expandedHeight,
+  minHeight,
+  maxHeight,
+  resizeEnabled,
   leftInset,
   rightInset,
   onActivate,
-  onToggleCollapsed
+  onToggleCollapsed,
+  onResize
 }: WorkbenchBottomDockProps) {
   const activeContribution = contributions.find((item) => item.panelId === activePanelId)
     ?? contributions[0];
@@ -45,6 +54,17 @@ export function WorkbenchBottomDock({
         "--av-bottom-dock-right-inset": `${Math.max(0, rightInset)}px`
       } as CSSProperties}
     >
+      {!collapsed && resizeEnabled && maxHeight > minHeight ? (
+        <WorkbenchDockResizeHandle
+          axis="vertical"
+          label="Resize Bottom Dock"
+          testId="bottom-dock-resize-handle"
+          value={expandedHeight}
+          min={minHeight}
+          max={maxHeight}
+          onResize={onResize}
+        />
+      ) : null}
       <header className="workbench-bottom-dock-header">
         <nav aria-label="Bottom Dock contributions">
           {contributions.map((contribution) => (

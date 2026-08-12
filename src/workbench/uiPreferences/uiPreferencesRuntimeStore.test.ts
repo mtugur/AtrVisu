@@ -92,6 +92,48 @@ describe("UI preferences runtime store", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Primary and Bottom Dock size in the single persisted panel preference authority", async () => {
+    const repository = createStorage();
+    const store = createUiPreferencesRuntimeStore({
+      storage: repository.storage,
+      legacyStorage: emptyLegacyStorage
+    });
+
+    await store.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
+      size: 392,
+      collapsed: false
+    }).persisted;
+    await store.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
+      collapsed: true
+    }).persisted;
+    await store.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
+      collapsed: false
+    }).persisted;
+    await store.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
+      size: 184,
+      collapsed: false
+    }).persisted;
+    await store.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
+      collapsed: true
+    }).persisted;
+    await store.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
+      collapsed: false
+    }).persisted;
+
+    const snapshot = store.getSnapshot().preferences;
+    expect(getPanel(snapshot, RUNTIME_PANEL_IDS.primaryDockShell)).toMatchObject({
+      size: 392,
+      collapsed: false
+    });
+    expect(getPanel(snapshot, RUNTIME_PANEL_IDS.bottomDockShell)).toMatchObject({
+      size: 184,
+      collapsed: false
+    });
+    const persisted = repository.writes[repository.writes.length - 1];
+    expect(getPanel(persisted, RUNTIME_PANEL_IDS.primaryDockShell).size).toBe(392);
+    expect(getPanel(persisted, RUNTIME_PANEL_IDS.bottomDockShell).size).toBe(184);
+  });
+
   it("serializes writes so stale completions cannot overwrite the latest state", async () => {
     const firstWrite = deferred<void>();
     const secondWrite = deferred<void>();

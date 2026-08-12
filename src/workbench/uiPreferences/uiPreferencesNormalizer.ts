@@ -13,6 +13,12 @@ import {
 import { validateWorkbenchUiPreferences } from "../../platform/phase1ArchitectureValidation";
 import { RUNTIME_PANEL_IDS } from "../../platform/runtimePanels/runtimePanelRegistryBridge";
 import {
+  MAX_BOTTOM_DOCK_HEIGHT,
+  MAX_PRIMARY_DOCK_WIDTH,
+  MIN_BOTTOM_DOCK_HEIGHT,
+  MIN_PRIMARY_DOCK_WIDTH
+} from "../dockSizing";
+import {
   COMPATIBILITY_PANEL_IDS,
   MAX_RIGHT_PANEL_WIDTH,
   MIN_RIGHT_PANEL_WIDTH,
@@ -31,6 +37,19 @@ const ALLOWED_WORKSPACE_IDS = new Set<string>(WORKSPACE_IDS);
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === "object" && value !== null && !Array.isArray(value)
 );
+
+const getPanelSizeBounds = (panelId: string): readonly [number, number] | null => {
+  if (panelId === RUNTIME_PANEL_IDS.rightPanelShell) {
+    return [MIN_RIGHT_PANEL_WIDTH, MAX_RIGHT_PANEL_WIDTH];
+  }
+  if (panelId === RUNTIME_PANEL_IDS.primaryDockShell) {
+    return [MIN_PRIMARY_DOCK_WIDTH, MAX_PRIMARY_DOCK_WIDTH];
+  }
+  if (panelId === RUNTIME_PANEL_IDS.bottomDockShell) {
+    return [MIN_BOTTOM_DOCK_HEIGHT, MAX_BOTTOM_DOCK_HEIGHT];
+  }
+  return null;
+};
 
 export type NormalizeWorkbenchUiPreferencesResult = {
   preferences: WorkbenchUiPreferences;
@@ -86,10 +105,11 @@ export const normalizeWorkbenchUiPreferences = (
     const dock = ALLOWED_DOCKS.has(candidate.dock as WorkbenchDockRegionId)
       ? candidate.dock as WorkbenchDockRegionId
       : fallback.dock;
-    const size = candidate.panelId === RUNTIME_PANEL_IDS.rightPanelShell
+    const sizeBounds = getPanelSizeBounds(candidate.panelId);
+    const size = sizeBounds
       && typeof candidate.size === "number"
       && Number.isFinite(candidate.size)
-      ? Math.min(MAX_RIGHT_PANEL_WIDTH, Math.max(MIN_RIGHT_PANEL_WIDTH, candidate.size))
+      ? Math.min(sizeBounds[1], Math.max(sizeBounds[0], candidate.size))
       : fallback.size;
     acceptedById.set(candidate.panelId, {
       panelId: fallback.panelId,

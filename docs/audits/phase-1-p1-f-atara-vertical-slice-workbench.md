@@ -89,13 +89,38 @@ and 640x800. Narrow layout avoids three permanent columns, preserves one canvas,
 keeps Inspector and Bottom Dock controls reachable, and avoids horizontal root
 overflow.
 
+Manual review comment `5263363104` identified two bounded ergonomics gaps:
+Primary Dock sizing/collapse discoverability and an oversized sparse Bottom
+Dock. The correction keeps the existing architecture and addresses them as
+follows:
+
+- Primary Dock exposes an accessible right-edge resize separator on desktop
+  and medium layouts, with 260-480 px static bounds and a viewport-dominance
+  maximum. The rail uses a visible focused chevron control, collapse retains
+  navigation, and expansion restores the prior width.
+- Layout Explorer rows expand with the dock, keep entity identity, type and
+  context visible, truncate only when constrained, expose the full row context
+  in a tooltip, and do not add horizontal scrolling.
+- Bottom Dock starts at a content-driven 136 px on desktop, adapts to 150 px
+  at medium geometry when its two-row strip needs it, and exposes an accessible
+  top-edge resize separator with a viewport-relative maximum.
+- Primary width and Bottom height persist only through existing UI Preferences
+  `PanelPreference.size`; the normalizer accepts and bounds those existing
+  schema-compatible fields. No IndexedDB version or sizing store was added.
+- At 640x800 desktop resize handles are absent, the Bottom Dock retains the
+  one-context responsive composition, and document/dock content has no
+  horizontal or nested-scroll regression.
+- Chromium resizes both docks, collapses/reopens them, reloads persisted sizes,
+  and proves one App, one Editor Host, one canvas, unchanged camera, selection,
+  history/dirty state, and scene lifecycle generation.
+
 ## Validation Evidence
 
 - Dependency audit: 0 vulnerabilities at low severity.
-- Design-token governance: passed for 222 maintained files.
+- Design-token governance: passed for 224 maintained files.
 - Build: passed; known bundle-size warning only.
-- Unit: 130 files / 1161 tests passed.
-- Chromium: 60/60 tests passed, including the real ATARA slice and correction regressions.
+- Unit: 131 files / 1167 tests passed.
+- Chromium: 62/62 tests passed, including the real ATARA slice, ergonomics resize/persistence, and responsive regressions.
 - Diff check: passed after generated test artifacts were removed.
 
 ## P1-G Boundary
@@ -104,4 +129,4 @@ P1-F does not implement BOM, Excel, PDF, quotation, pricing, throughput
 simulation, or commercial output. P1-G must consume the existing P1-E schema
 projection and export mappings rather than create a parallel property source.
 
-Decision: **AUTOMATIC IMPLEMENTATION GATE PASSED; BOUNDED VISUAL ACCEPTANCE REMAINS OPEN.**
+Decision: **READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE.**

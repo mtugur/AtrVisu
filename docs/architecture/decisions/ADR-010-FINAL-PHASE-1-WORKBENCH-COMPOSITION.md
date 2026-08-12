@@ -23,6 +23,14 @@ the existing `PlatformEntity` snapshot and Runtime Selection state. Scene and
 Explorer selection share the same canonical IDs and primary-selection order.
 Rename remains unavailable until a history-backed rename command exists.
 
+The expanded Primary Dock is user-resizable from its right edge on desktop and
+medium layouts. Its bounded width and collapse state remain fields of the
+existing UI Preferences `PanelPreference`; collapse preserves the activity
+rail and expansion restores the persisted width. Layout Explorer consumes the
+available width without horizontal scrolling and retains full identity/type/
+context text through its row tooltip. Narrow layout disables the desktop drag
+handle and keeps the existing one-context composition.
+
 The Secondary Dock is the contextual Inspector. It renders an empty state,
 single-entity properties, P1-E Smart Asset Properties, assembly context, or
 bounded multi-selection tools. Annotation properties are also Inspector
@@ -40,6 +48,10 @@ The Bottom Dock is contribution-driven. Viewpoints is its first contribution
 and continues to use the existing viewpoint state and command authority. The
 Status Bar projects live selection, primary entity, millimetre working unit,
 snap state, and project dirty state without owning copies of those values.
+The Viewpoints contribution uses a content-driven compact engineering strip;
+the desktop default expanded height is 136 px, with a bounded responsive fit.
+The generic Bottom Dock is vertically resizable from its top edge and persists
+its expanded height through the same UI Preferences panel-size authority.
 
 Global tools remain reachable through registered menu or command surfaces and
 their existing modal/tool surfaces. File owns project and layout file actions;
@@ -82,6 +94,8 @@ Manager through the normal Tools route.
   but it is not part of the rendered product composition.
 - Contextual panel visibility and collapse have one UI Preferences / Runtime
   Panel authority; no local visibility store is introduced.
+- Primary width and Bottom height use that same authority; resize helpers hold
+  only transient pointer-start data and introduce no second sizing store.
 - The global display tool preserves one overlay state authority and does not
   remount Editor Host, Babylon, or canvas.
 - No demo-only scene, second entity tree, second viewpoint store, or property
@@ -96,6 +110,9 @@ Manager through the normal Tools route.
   line through normal product routes.
 - Desktop, medium, and narrow geometry retain one Editor Host and one canvas,
   with no document overflow or red runtime errors.
+- Dock resize/collapse tests preserve active contribution, camera, Runtime
+  Selection, history/dirty state, viewport dominance, and scene lifecycle
+  generation across resize, restore, and preference-backed reload.
 - Panel visibility and hydration tests prove hidden Primary panels remain
   restorable and preference updates are not lost.
 - Unit and Chromium tests prove View-owned overlay reachability, contextual

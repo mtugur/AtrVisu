@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { CSSProperties } from "react";
 import type { PanelId } from "../../platform/contracts";
+import { WorkbenchDockResizeHandle } from "./WorkbenchDockResizeHandle";
 
 export type WorkbenchPrimaryDockItem = Readonly<{
   panelId: PanelId;
@@ -14,9 +15,13 @@ type WorkbenchPrimaryDockProps = {
   activePanelId: PanelId;
   collapsed: boolean;
   width: number;
+  minWidth: number;
+  maxWidth: number;
+  resizeEnabled: boolean;
   bottomInset: number;
   onActivate: (panelId: PanelId) => void;
   onToggleCollapsed: () => void;
+  onResize: (width: number) => void;
 };
 
 export function WorkbenchPrimaryDock({
@@ -24,9 +29,13 @@ export function WorkbenchPrimaryDock({
   activePanelId,
   collapsed,
   width,
+  minWidth,
+  maxWidth,
+  resizeEnabled,
   bottomInset,
   onActivate,
-  onToggleCollapsed
+  onToggleCollapsed,
+  onResize
 }: WorkbenchPrimaryDockProps) {
   const activeItem = items.find((item) => item.panelId === activePanelId) ?? items[0];
 
@@ -61,11 +70,15 @@ export function WorkbenchPrimaryDock({
         <button
           type="button"
           className="workbench-dock-collapse"
+          data-testid="primary-dock-collapse-toggle"
           aria-label={collapsed ? "Expand Primary Dock" : "Collapse Primary Dock"}
           title={collapsed ? "Expand Primary Dock" : "Collapse Primary Dock"}
           onClick={onToggleCollapsed}
         >
-          {collapsed ? ">" : "<"}
+          <span
+            className={`workbench-dock-collapse-icon ${collapsed ? "is-expand" : "is-collapse"}`}
+            aria-hidden="true"
+          />
         </button>
       </nav>
       <div className="workbench-primary-dock-content" hidden={collapsed}>
@@ -86,6 +99,17 @@ export function WorkbenchPrimaryDock({
           ))}
         </div>
       </div>
+      {!collapsed && resizeEnabled && maxWidth > minWidth ? (
+        <WorkbenchDockResizeHandle
+          axis="horizontal"
+          label="Resize Primary Dock"
+          testId="primary-dock-resize-handle"
+          value={width}
+          min={minWidth}
+          max={maxWidth}
+          onResize={onResize}
+        />
+      ) : null}
     </aside>
   );
 }

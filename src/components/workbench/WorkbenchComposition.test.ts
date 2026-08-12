@@ -55,14 +55,22 @@ describe("final workbench composition contracts", () => {
       activePanelId: "panel.layoutExplorer",
       collapsed: false,
       width: 304,
+      minWidth: 260,
+      maxWidth: 480,
+      resizeEnabled: true,
       bottomInset: 62,
       onActivate,
-      onToggleCollapsed: vi.fn()
+      onToggleCollapsed: vi.fn(),
+      onResize: vi.fn()
     }));
 
     expect(markup).toContain('data-testid="primary-dock"');
     expect(markup).toContain('data-panel-id="panel.layoutExplorer"');
     expect(markup).toContain('data-panel-id="panel.machineLibrary" hidden=""');
+    expect(markup).toContain('aria-label="Resize Primary Dock"');
+    expect(markup).toContain('aria-valuenow="304"');
+    expect(markup).toContain('aria-label="Collapse Primary Dock"');
+    expect(markup).not.toContain("&lt;");
 
     const tree = WorkbenchPrimaryDock({
       items: [
@@ -72,9 +80,13 @@ describe("final workbench composition contracts", () => {
       activePanelId: "panel.machineLibrary",
       collapsed: false,
       width: 304,
+      minWidth: 260,
+      maxWidth: 480,
+      resizeEnabled: true,
       bottomInset: 62,
       onActivate,
-      onToggleCollapsed: vi.fn()
+      onToggleCollapsed: vi.fn(),
+      onResize: vi.fn()
     });
     findButton(tree, "primary-dock-tab-panel.layoutExplorer").props.onClick?.({
       ctrlKey: false,
@@ -179,11 +191,15 @@ describe("final workbench composition contracts", () => {
       contributions: [{ panelId: "panel.viewpoints", label: "Viewpoints", content: "viewpoint-content" }],
       activePanelId: "panel.viewpoints",
       collapsed: false,
-      expandedHeight: 210,
+      expandedHeight: 136,
+      minHeight: 120,
+      maxHeight: 420,
+      resizeEnabled: true,
       leftInset: 304,
       rightInset: 360,
       onActivate,
-      onToggleCollapsed: vi.fn()
+      onToggleCollapsed: vi.fn(),
+      onResize: vi.fn()
     }));
     const statusMarkup = renderToStaticMarkup(createElement(WorkbenchStatusBar, {
       selectionCount: 3,
@@ -194,6 +210,8 @@ describe("final workbench composition contracts", () => {
 
     expect(bottomMarkup).toContain('data-panel-id="panel.viewpoints"');
     expect(bottomMarkup).toContain("viewpoint-content");
+    expect(bottomMarkup).toContain('aria-label="Resize Bottom Dock"');
+    expect(bottomMarkup).toContain('aria-valuenow="136"');
     expect(statusMarkup).toContain("Selected: 3");
     expect(statusMarkup).toContain("Robot Palletizer (machine)");
     expect(statusMarkup).toContain("Unit: mm");

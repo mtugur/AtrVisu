@@ -6,6 +6,8 @@
 | Nine-region workbench mapping | PASS | WorkbenchShell/AppShell tests and ADR-010 |
 | Primary Dock ownership | PASS | Library, Explorer, Layers, Groups registry-backed contributions |
 | One active Primary panel | PASS | Workbench composition unit and Chromium tests |
+| Primary Dock resize/collapse ergonomics | PASS | Accessible bounded right-edge resize, chevron collapse, rail preservation, and width restore |
+| Primary Dock size authority | PASS | Existing UI Preferences `PanelPreference.size`; no dedicated store or schema change |
 | Layout Explorer uses PlatformEntity | PASS | `LayoutExplorer` typed contract and composition tests |
 | Layout Explorer accessibility semantics | PASS | Native navigation/nested-list semantics; no incomplete ARIA tree declaration |
 | Bidirectional Runtime Selection | PASS | Scene/Explorer Chromium vertical slice |
@@ -15,6 +17,8 @@
 | Contextual collapse authority | PASS | Controlled contribution disclosure updates the same Runtime Panel state |
 | P1-E Smart Asset Properties | PASS | Existing schema tests plus vertical-slice Inspector assertion |
 | Generic Bottom Dock | PASS | Contribution contract and Viewpoints lifecycle tests |
+| Compact/resizable Bottom Dock | PASS | 136 px desktop default, responsive content fit, bounded top-edge resize, and height restore |
+| Bottom Dock size authority | PASS | Existing UI Preferences `PanelPreference.size`; persisted reload coverage |
 | Persistent Status Bar | PASS | Live selection, primary, mm, snap, dirty tests |
 | Workspace preset integration | PASS | Registry/application tests and Chromium persistence tests |
 | Hidden panel restoration | PASS | Runtime availability correction and Chromium reload test |
@@ -26,15 +30,15 @@
 | Normal product vertical slice | PASS | Library -> scene -> Explorer -> Inspector -> Layers/Groups -> Viewpoint E2E |
 | No editor/scene remount | PASS | Lifecycle generation and single App/EditorHost/canvas assertions |
 | Viewport invariants | PASS | Panel collapse/resize, orthographic, camera, selection, history, dirty tests |
-| Responsive geometry | PASS | 1440x900, 1024x768, 640x800 Chromium coverage |
+| Responsive geometry | PASS | 1440x900, 1024x768, 640x800 Chromium coverage; viewport dominance and no horizontal/nested-scroll regression |
 | No red console/page errors | PASS | E2E collectors |
 | Build | PASS | TypeScript + Vite; known chunk warning only |
-| Unit suite | PASS | 130 files / 1161 tests |
-| Full Chromium suite | PASS | 60/60 tests, including the real ATARA vertical slice and correction regressions |
+| Unit suite | PASS | 131 files / 1167 tests |
+| Full Chromium suite | PASS | 62/62 tests, including the real ATARA slice, resize persistence, and responsive regressions |
 | Dependency audit | PASS | 0 vulnerabilities at low severity |
-| Design-token governance | PASS | 222 maintained files |
+| Design-token governance | PASS | 224 maintained files |
 | Diff check | PASS | Final whitespace/error scan |
-| Manual visual acceptance | OPEN | Bounded desktop/medium/narrow composition review |
+| Manual visual re-acceptance | READY | Final bounded review after manual comment `5263363104` correction |
 | P1-G outputs excluded | PASS | No BOM/Excel/PDF/quotation implementation |
 
-Decision: **AUTOMATIC IMPLEMENTATION GATE PASSED; MANUAL VISUAL ACCEPTANCE REMAINS OPEN.**
+Decision: **READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE.**

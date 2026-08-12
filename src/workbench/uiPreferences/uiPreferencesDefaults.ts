@@ -1,6 +1,10 @@
 import type { PanelPreference, WorkbenchUiPreferences } from "../../platform/contracts";
 import { UI_PREFERENCES_SCHEMA_VERSION } from "../../platform/contracts";
 import { RUNTIME_PANEL_IDS } from "../../platform/runtimePanels/runtimePanelRegistryBridge";
+import {
+  DEFAULT_BOTTOM_DOCK_HEIGHT,
+  DEFAULT_PRIMARY_DOCK_WIDTH
+} from "../dockSizing";
 
 export const MIN_RIGHT_PANEL_WIDTH = 280;
 export const MAX_RIGHT_PANEL_WIDTH = 600;
@@ -8,8 +12,8 @@ export const DEFAULT_RIGHT_PANEL_WIDTH = 360;
 
 export const COMPATIBILITY_PANEL_DEFAULTS = [
   { panelId: RUNTIME_PANEL_IDS.rightPanelShell, collapsed: false, size: DEFAULT_RIGHT_PANEL_WIDTH },
-  { panelId: RUNTIME_PANEL_IDS.primaryDockShell, collapsed: false, size: 304 },
-  { panelId: RUNTIME_PANEL_IDS.bottomDockShell, collapsed: true, size: 210 },
+  { panelId: RUNTIME_PANEL_IDS.primaryDockShell, collapsed: false, size: DEFAULT_PRIMARY_DOCK_WIDTH },
+  { panelId: RUNTIME_PANEL_IDS.bottomDockShell, collapsed: true, size: DEFAULT_BOTTOM_DOCK_HEIGHT },
   { panelId: RUNTIME_PANEL_IDS.machineLibrary, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.layoutExplorer, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.layoutControls, collapsed: false },
