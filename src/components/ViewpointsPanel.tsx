@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { LayoutViewpoint } from "../types/viewpoints";
 
 type ViewpointsPanelProps = {
@@ -13,6 +13,18 @@ type ViewpointsPanelProps = {
   onStepViewpoint: (direction: "previous" | "next") => void;
 };
 
+type StripNavigationState = {
+  hasOverflow: boolean;
+  canScrollBackward: boolean;
+  canScrollForward: boolean;
+};
+
+const initialStripNavigationState: StripNavigationState = {
+  hasOverflow: false,
+  canScrollBackward: false,
+  canScrollForward: false
+};
+
 export function ViewpointsPanel({
   viewpoints,
   selectedViewpointId,
@@ -25,13 +37,93 @@ export function ViewpointsPanel({
   onStepViewpoint
 }: ViewpointsPanelProps) {
   const [name, setName] = useState("");
+  const [stripNavigation, setStripNavigation] = useState(initialStripNavigationState);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const selectedCardRef = useRef<HTMLButtonElement | null>(null);
   const selectedViewpoint = viewpoints.find((viewpoint) => viewpoint.id === selectedViewpointId) ?? null;
+
+  const updateStripNavigation = useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip) {
+      return;
+    }
+    const overflowTolerance = 1;
+    const hasOverflow = strip.scrollWidth > strip.clientWidth + overflowTolerance;
+    const nextState = {
+      hasOverflow,
+      canScrollBackward: hasOverflow && strip.scrollLeft > overflowTolerance,
+      canScrollForward: hasOverflow
+        && strip.scrollLeft + strip.clientWidth < strip.scrollWidth - overflowTolerance
+    };
+    setStripNavigation((current) => (
+      current.hasOverflow === nextState.hasOverflow
+      && current.canScrollBackward === nextState.canScrollBackward
+      && current.canScrollForward === nextState.canScrollForward
+        ? current
+        : nextState
+    ));
+  }, []);
+
+  const revealSelectedCard = useCallback(() => {
+    selectedCardRef.current?.scrollIntoView?.({
+      block: "nearest",
+      inline: "nearest"
+    });
+  }, []);
+
+  const scrollStrip = useCallback((direction: "backward" | "forward") => {
+    const strip = stripRef.current;
+    if (!strip) {
+      return;
+    }
+    const distance = Math.max(156, Math.floor(strip.clientWidth * 0.8));
+    strip.scrollBy({
+      left: direction === "backward" ? -distance : distance,
+      behavior: "smooth"
+    });
+  }, []);
 
   useEffect(() => {
     if (viewpoints.length === 0) {
       onSelectViewpoint(null);
     }
   }, [onSelectViewpoint, viewpoints.length]);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) {
+      return undefined;
+    }
+    const handleScroll = () => updateStripNavigation();
+    const handleResize = () => {
+      revealSelectedCard();
+      updateStripNavigation();
+    };
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(handleResize);
+    strip.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleResize);
+    resizeObserver?.observe(strip);
+    const frameId = window.requestAnimationFrame(handleResize);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      resizeObserver?.disconnect();
+      strip.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [revealSelectedCard, updateStripNavigation, viewpoints.length]);
+
+  useEffect(() => {
+    if (!selectedViewpointId) {
+      updateStripNavigation();
+      return undefined;
+    }
+    revealSelectedCard();
+    const frameId = window.requestAnimationFrame(updateStripNavigation);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [revealSelectedCard, selectedViewpointId, updateStripNavigation, viewpoints.length]);
 
   return (
     <section className="viewpoints-panel" data-testid="viewpoints-panel" aria-label="Viewpoints">
@@ -82,7 +174,31 @@ export function ViewpointsPanel({
 
       <div className="viewpoints-results" data-testid="viewpoints-results">
         <span className="viewpoint-saved-label">Saved viewpoints</span>
-        <div className="viewpoint-strip" data-testid="viewpoint-strip">
+        <div className="viewpoint-navigation" data-testid="viewpoint-navigation">
+          {stripNavigation.hasOverflow ? (
+            <button
+              className="viewpoint-strip-scroll"
+              data-testid="viewpoint-strip-scroll-backward"
+              type="button"
+              aria-label="Scroll saved viewpoints left"
+              title="Scroll saved viewpoints left"
+              disabled={!stripNavigation.canScrollBackward}
+              onClick={() => scrollStrip("backward")}
+            >
+              &lt;
+            </button>
+          ) : null}
+          <div
+            className="viewpoint-strip"
+            data-testid="viewpoint-strip"
+            ref={stripRef}
+            onWheel={(event) => {
+              if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                event.preventDefault();
+                event.currentTarget.scrollLeft += event.deltaY;
+              }
+            }}
+          >
           <div className="viewpoint-list" aria-label="Saved viewpoints">
             {viewpoints.length > 0 ? viewpoints.map((viewpoint) => {
               const updatedAt = new Date(viewpoint.updatedAt).toLocaleString();
@@ -93,6 +209,7 @@ export function ViewpointsPanel({
                   key={viewpoint.id}
                   type="button"
                   aria-pressed={viewpoint.id === selectedViewpointId}
+                  ref={viewpoint.id === selectedViewpointId ? selectedCardRef : undefined}
                   onClick={() => onSelectViewpoint(viewpoint.id)}
                   onDoubleClick={() => onApplyViewpoint(viewpoint.id)}
                 >
@@ -102,13 +219,28 @@ export function ViewpointsPanel({
               );
             }) : <p className="empty-selection">No viewpoints saved yet.</p>}
           </div>
-
-          {selectedViewpoint ? (
-            <div
-              className="viewpoint-actions viewpoint-context-actions"
-              data-testid="viewpoint-context-actions"
-              aria-label={`Actions for ${selectedViewpoint.name}`}
+          </div>
+          {stripNavigation.hasOverflow ? (
+            <button
+              className="viewpoint-strip-scroll"
+              data-testid="viewpoint-strip-scroll-forward"
+              type="button"
+              aria-label="Scroll saved viewpoints right"
+              title="Scroll saved viewpoints right"
+              disabled={!stripNavigation.canScrollForward}
+              onClick={() => scrollStrip("forward")}
             >
+              &gt;
+            </button>
+          ) : null}
+        </div>
+
+        {selectedViewpoint ? (
+          <div
+            className="viewpoint-actions viewpoint-context-actions"
+            data-testid="viewpoint-context-actions"
+            aria-label={`Actions for ${selectedViewpoint.name}`}
+          >
               <button
                 data-testid="apply-viewpoint"
                 type="button"
@@ -140,9 +272,8 @@ export function ViewpointsPanel({
               <button className="danger-action" type="button" onClick={() => onDeleteViewpoint(selectedViewpoint.id)}>
                 Delete
               </button>
-            </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     </section>
   );

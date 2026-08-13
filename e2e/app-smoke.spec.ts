@@ -2117,6 +2117,22 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
     await page.getByTestId("capture-viewpoint").click();
     await expect(page.getByRole("button", { name: new RegExp(name, "i") })).toBeVisible();
   };
+  const expectSelectedCardRevealed = async (index: number) => {
+    const item = page.locator(".viewpoint-list-item").nth(index - 1);
+    await expect(item).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("viewpoint-context-actions")).toBeVisible();
+    await expect(page.getByTestId("viewpoint-context-actions").getByRole("button"))
+      .toHaveText(["Apply", "Update", "Rename", "Delete"]);
+    await expect.poll(() => item.evaluate((element) => {
+      const strip = element.closest('[data-testid="viewpoint-strip"]');
+      if (!strip) {
+        return false;
+      }
+      const itemBox = element.getBoundingClientRect();
+      const stripBox = strip.getBoundingClientRect();
+      return itemBox.left >= stripBox.left - 1 && itemBox.right <= stripBox.right + 1;
+    })).toBe(true);
+  };
   const expectBoundedPopulatedLayout = async () => {
     const contextActions = page.getByTestId("viewpoint-context-actions");
     await expect(contextActions).toBeVisible();
@@ -2131,9 +2147,10 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       const panel = document.querySelector('[data-testid="viewpoints-panel"]');
       const toolbar = document.querySelector('[data-testid="viewpoints-toolbar"]');
       const results = document.querySelector('[data-testid="viewpoints-results"]');
+      const navigation = document.querySelector('[data-testid="viewpoint-navigation"]');
       const strip = document.querySelector('[data-testid="viewpoint-strip"]');
       const actions = document.querySelector('[data-testid="viewpoint-context-actions"]');
-      if (!dock || !content || !panel || !toolbar || !results || !strip || !actions) {
+      if (!dock || !content || !panel || !toolbar || !results || !navigation || !strip || !actions) {
         throw new Error("Viewpoints populated layout is incomplete.");
       }
       const dockBox = dock.getBoundingClientRect();
@@ -2141,49 +2158,85 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       const panelBox = panel.getBoundingClientRect();
       const toolbarBox = toolbar.getBoundingClientRect();
       const resultsBox = results.getBoundingClientRect();
+      const navigationBox = navigation.getBoundingClientRect();
+      const actionsBox = actions.getBoundingClientRect();
       return {
         stablePanelRegions: panel.children.length === 2
           && panel.children[0] === toolbar
           && panel.children[1] === results,
-        actionsOwnedByStrip: actions.parentElement === strip,
+        actionsOutsideStrip: !strip.contains(actions) && actions.parentElement === results,
+        stripOwnedByNavigation: strip.parentElement === navigation,
         orderedRows: toolbarBox.bottom <= resultsBox.top + 1,
         panelInsideDock: panelBox.top >= contentBox.top - 1 && panelBox.bottom <= contentBox.bottom + 1,
+        actionsInsideDock: actionsBox.left >= contentBox.left - 1
+          && actionsBox.right <= contentBox.right + 1
+          && actionsBox.bottom <= contentBox.bottom + 1,
         dockInsideDocument: dockBox.left >= -1 && dockBox.right <= document.documentElement.clientWidth + 1,
         noDockHorizontalOverflow: dock.scrollWidth <= dock.clientWidth,
         noContentVerticalOverflow: content.scrollHeight <= content.clientHeight,
         noDocumentHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-        stripOverflowY: getComputedStyle(strip).overflowY
+        stripOverflowX: getComputedStyle(strip).overflowX,
+        stripOverflowY: getComputedStyle(strip).overflowY,
+        stripScrollbarHidden: getComputedStyle(strip).scrollbarWidth === "none",
+        responsiveActionRow: window.innerWidth > 1200 || actionsBox.top >= navigationBox.bottom - 1,
+        stripHasOverflow: strip.scrollWidth > strip.clientWidth
       };
     });
 
     expect(geometry).toEqual({
       stablePanelRegions: true,
-      actionsOwnedByStrip: true,
+      actionsOutsideStrip: true,
+      stripOwnedByNavigation: true,
       orderedRows: true,
       panelInsideDock: true,
+      actionsInsideDock: true,
       dockInsideDocument: true,
       noDockHorizontalOverflow: true,
       noContentVerticalOverflow: true,
       noDocumentHorizontalOverflow: true,
-      stripOverflowY: "hidden"
+      stripOverflowX: "auto",
+      stripOverflowY: "hidden",
+      stripScrollbarHidden: true,
+      responsiveActionRow: true,
+      stripHasOverflow: true
     });
   };
 
-  await capture("Overview");
-  await expect(page.locator(".viewpoint-list-item")).toHaveCount(1);
+  for (let index = 1; index <= 8; index += 1) {
+    await capture(`Viewpoint ${index}`);
+  }
+  await expect(page.locator(".viewpoint-list-item")).toHaveCount(8);
   await expect(page.getByTestId("viewpoint-context-actions").getByRole("button"))
     .toHaveText(["Apply", "Update", "Rename", "Delete"]);
+  await expect(page.getByTestId("viewpoint-strip-scroll-backward")).toBeVisible();
+  await expect(page.getByTestId("viewpoint-strip-scroll-forward")).toBeVisible();
+  await expectSelectedCardRevealed(8);
   await expectBoundedPopulatedLayout();
 
-  await capture("Service View");
-  await expect(page.locator(".viewpoint-list-item")).toHaveCount(2);
-  await expect(page.getByRole("button", { name: /Service View/i })).toHaveAttribute("aria-pressed", "true");
+  const strip = page.getByTestId("viewpoint-strip");
+  const initialScrollLeft = await strip.evaluate((element) => element.scrollLeft);
+  await page.getByTestId("viewpoint-strip-scroll-backward").click();
+  await expect.poll(() => strip.evaluate((element) => element.scrollLeft)).toBeLessThan(initialScrollLeft);
+  const backwardScrollLeft = await strip.evaluate((element) => element.scrollLeft);
+  await page.getByTestId("viewpoint-strip-scroll-forward").click();
+  await expect.poll(() => strip.evaluate((element) => element.scrollLeft)).toBeGreaterThan(backwardScrollLeft);
+
+  await page.getByRole("button", { name: "Next Viewpoint" }).click();
+  await expectSelectedCardRevealed(1);
+  await page.locator(".viewpoint-list-item").nth(3).evaluate((element: HTMLElement) => element.click());
+  await expectSelectedCardRevealed(4);
+  await page.locator(".viewpoint-list-item").nth(7).evaluate((element: HTMLElement) => element.click());
+  await expectSelectedCardRevealed(8);
+  await page.getByRole("button", { name: "Previous Viewpoint" }).click();
+  await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
 
   await page.setViewportSize({ width: 1024, height: 768 });
+  await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
 
   await page.setViewportSize({ width: 640, height: 800 });
+  await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);

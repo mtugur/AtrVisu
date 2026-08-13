@@ -59,11 +59,30 @@ const renderPanel = async (
       ...handlers
     }));
   });
-  return { container, handlers };
+  const rerender = async (nextViewpoints: LayoutViewpoint[], nextSelectedViewpointId: string | null) => {
+    await act(async () => {
+      root.render(createElement(ViewpointsPanel, {
+        viewpoints: nextViewpoints,
+        selectedViewpointId: nextSelectedViewpointId,
+        ...handlers
+      }));
+    });
+  };
+  return { container, handlers, rerender };
+};
+
+const setStripGeometry = async (
+  strip: HTMLDivElement,
+  geometry: { clientWidth: number; scrollWidth: number; scrollLeft?: number }
+) => {
+  Object.defineProperty(strip, "clientWidth", { configurable: true, value: geometry.clientWidth });
+  Object.defineProperty(strip, "scrollWidth", { configurable: true, value: geometry.scrollWidth });
+  strip.scrollLeft = geometry.scrollLeft ?? 0;
+  await act(async () => strip.dispatchEvent(new Event("scroll")));
 };
 
 describe("ViewpointsPanel", () => {
-  it("renders an intentional compact empty state in two stable layout regions", async () => {
+  it("renders an intentional compact zero-viewpoint state without navigation or actions", async () => {
     const { container } = await renderPanel([], null);
     const panel = container.querySelector('[data-testid="viewpoints-panel"]') as HTMLElement;
 
@@ -73,11 +92,13 @@ describe("ViewpointsPanel", () => {
     ]);
     expect(container.querySelector(".viewpoint-list")?.textContent).toContain("No viewpoints saved yet.");
     expect(container.querySelector('[data-testid="viewpoint-context-actions"]')).toBeNull();
+    expect(container.querySelector('[data-testid="viewpoint-strip-scroll-backward"]')).toBeNull();
+    expect(container.querySelector('[data-testid="viewpoint-strip-scroll-forward"]')).toBeNull();
     expect(container.querySelector<HTMLButtonElement>('[aria-label="Previous Viewpoint"]')?.disabled).toBe(true);
     expect(container.querySelector<HTMLButtonElement>('[aria-label="Next Viewpoint"]')?.disabled).toBe(true);
   });
 
-  it("renders one saved viewpoint without creating contextual actions before selection", async () => {
+  it("renders one saved viewpoint without overflow controls or contextual actions before selection", async () => {
     const viewpoint = createViewpoint("overview", "Overview");
     const { container, handlers } = await renderPanel([viewpoint], null);
     const item = container.querySelector<HTMLButtonElement>('[data-testid="viewpoint-item-overview"]');
@@ -85,30 +106,103 @@ describe("ViewpointsPanel", () => {
     expect(item?.textContent).toContain("Overview");
     expect(item?.getAttribute("aria-pressed")).toBe("false");
     expect(container.querySelector('[data-testid="viewpoint-context-actions"]')).toBeNull();
+    expect(container.querySelector('[data-testid^="viewpoint-strip-scroll-"]')).toBeNull();
     await act(async () => item?.click());
     expect(handlers.onSelectViewpoint).toHaveBeenCalledWith("overview");
   });
 
-  it("keeps selected actions bounded inside the saved-viewpoint strip", async () => {
-    const viewpoints = [
-      createViewpoint("overview", "Overview"),
-      createViewpoint("detail", "Detail"),
-      createViewpoint("service", "Service")
-    ];
-    const { container } = await renderPanel(viewpoints, "detail");
+  it.each([4, 5, 20])("keeps %i viewpoint cards inside the dedicated saved-list viewport", async (count) => {
+    const viewpoints = Array.from({ length: count }, (_, index) => (
+      createViewpoint(`viewpoint-${index + 1}`, `Viewpoint ${index + 1}`)
+    ));
+    const { container } = await renderPanel(viewpoints, "viewpoint-1");
     const panel = container.querySelector('[data-testid="viewpoints-panel"]') as HTMLElement;
-    const strip = container.querySelector('[data-testid="viewpoint-strip"]');
-    const contextActions = container.querySelector('[data-testid="viewpoint-context-actions"]');
+    const navigation = container.querySelector('[data-testid="viewpoint-navigation"]') as HTMLElement;
+    const strip = container.querySelector('[data-testid="viewpoint-strip"]') as HTMLElement;
+    const list = container.querySelector(".viewpoint-list") as HTMLElement;
+    const contextActions = container.querySelector('[data-testid="viewpoint-context-actions"]') as HTMLElement;
 
-    expect(container.querySelectorAll(".viewpoint-list-item")).toHaveLength(3);
-    expect(container.querySelector('[data-testid="viewpoint-item-detail"]')?.getAttribute("aria-pressed")).toBe("true");
-    expect(contextActions?.parentElement).toBe(strip);
+    expect(container.querySelectorAll(".viewpoint-list-item")).toHaveLength(count);
+    expect(container.querySelector('[data-testid="viewpoint-item-viewpoint-1"]')?.getAttribute("aria-pressed"))
+      .toBe("true");
+    expect(strip.contains(list)).toBe(true);
+    expect(navigation.contains(strip)).toBe(true);
+    expect(strip.contains(contextActions)).toBe(false);
+    expect(contextActions.parentElement).toBe(container.querySelector('[data-testid="viewpoints-results"]'));
     expect(Array.from(panel.children).map((child) => child.className)).toEqual([
       "viewpoints-toolbar",
       "viewpoints-results"
     ]);
     expect(Array.from(contextActions?.querySelectorAll("button") ?? []).map((button) => button.textContent?.trim()))
       .toEqual(["Apply", "Update", "Rename", "Delete"]);
+
+    await setStripGeometry(strip as HTMLDivElement, {
+      clientWidth: 640,
+      scrollWidth: count * 160
+    });
+    expect(Boolean(container.querySelector('[data-testid="viewpoint-strip-scroll-backward"]')))
+      .toBe(count > 4);
+    expect(Boolean(container.querySelector('[data-testid="viewpoint-strip-scroll-forward"]')))
+      .toBe(count > 4);
+  });
+
+  it("shows compact strip controls only for overflow and keeps actions fixed outside it", async () => {
+    const viewpoints = Array.from({ length: 20 }, (_, index) => (
+      createViewpoint(`viewpoint-${index + 1}`, `Viewpoint ${index + 1}`)
+    ));
+    const { container } = await renderPanel(viewpoints, "viewpoint-1");
+    const strip = container.querySelector<HTMLDivElement>('[data-testid="viewpoint-strip"]') as HTMLDivElement;
+    const scrollBy = vi.fn((optionsOrX?: ScrollToOptions | number) => {
+      strip.scrollLeft += typeof optionsOrX === "number" ? optionsOrX : optionsOrX?.left ?? 0;
+      strip.dispatchEvent(new Event("scroll"));
+    });
+    strip.scrollBy = scrollBy as typeof strip.scrollBy;
+
+    await setStripGeometry(strip, { clientWidth: 320, scrollWidth: 3200 });
+    const backward = container.querySelector<HTMLButtonElement>('[data-testid="viewpoint-strip-scroll-backward"]');
+    const forward = container.querySelector<HTMLButtonElement>('[data-testid="viewpoint-strip-scroll-forward"]');
+    const actions = container.querySelector('[data-testid="viewpoint-context-actions"]') as HTMLElement;
+
+    expect(backward?.disabled).toBe(true);
+    expect(forward?.disabled).toBe(false);
+    expect(strip.contains(actions)).toBe(false);
+    await act(async () => forward?.click());
+    expect(scrollBy).toHaveBeenCalledWith({ left: 256, behavior: "smooth" });
+
+    await setStripGeometry(strip, { clientWidth: 3200, scrollWidth: 3200 });
+    expect(container.querySelector('[data-testid="viewpoint-strip-scroll-backward"]')).toBeNull();
+    expect(container.querySelector('[data-testid="viewpoint-strip-scroll-forward"]')).toBeNull();
+  });
+
+  it("automatically reveals the selected card for programmatic selection changes", async () => {
+    const viewpoints = Array.from({ length: 20 }, (_, index) => (
+      createViewpoint(`viewpoint-${index + 1}`, `Viewpoint ${index + 1}`)
+    ));
+    const reveal = vi.fn();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: reveal
+    });
+
+    try {
+      const { container, rerender } = await renderPanel(viewpoints, "viewpoint-1");
+      expect(reveal).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest" });
+      expect(reveal.mock.instances[reveal.mock.instances.length - 1])
+        .toBe(container.querySelector('[data-testid="viewpoint-item-viewpoint-1"]'));
+      reveal.mockClear();
+
+      await rerender(viewpoints, "viewpoint-10");
+      expect(reveal).toHaveBeenCalledTimes(1);
+      expect(reveal).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest" });
+      expect(reveal.mock.instances[reveal.mock.instances.length - 1])
+        .toBe(container.querySelector('[data-testid="viewpoint-item-viewpoint-10"]'));
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView
+      });
+    }
   });
 
   it("keeps every existing viewpoint command reachable from the stable composition", async () => {

@@ -19,8 +19,9 @@
 | Generic Bottom Dock | PASS | Contribution contract and Viewpoints lifecycle tests |
 | Compact/resizable Bottom Dock | PASS | 136 px desktop default, responsive content fit, bounded top-edge resize, and height restore |
 | Bottom Dock size authority | PASS | Existing UI Preferences `PanelPreference.size`; persisted reload coverage |
-| Viewpoints stable composition | PASS | Two fixed layout regions; selected actions remain inside the saved-viewpoint strip rather than creating an accidental grid row |
-| Viewpoints populated states | PASS | Zero/one/multiple/selected component coverage and 1440x900, 1024x768, 640x800 Chromium geometry |
+| Viewpoints stable composition | PASS | Toolbar, card-only scroll viewport, and fixed selected-action zone are independent DOM regions |
+| Viewpoints populated states | PASS | 0/1/4/5/20 component coverage and eight-capture Chromium coverage at 1440x900, 1024x768, 640x800 |
+| Viewpoints scalable navigation | PASS | Overflow-only left/right controls, hidden native scrollbar, wheel support, and selected-card auto-reveal |
 | Persistent Status Bar | PASS | Live selection, primary, mm, snap, dirty tests |
 | Workspace preset integration | PASS | Registry/application tests and Chromium persistence tests |
 | Hidden panel restoration | PASS | Runtime availability correction and Chromium reload test |
@@ -35,12 +36,12 @@
 | Responsive geometry | PASS | 1440x900, 1024x768, 640x800 Chromium coverage; viewport dominance and no horizontal/nested-scroll regression |
 | No red console/page errors | PASS | E2E collectors |
 | Build | PASS | TypeScript + Vite; known chunk warning only |
-| Unit suite | PASS | 132 files / 1171 tests |
+| Unit suite | PASS | 132 files / 1175 tests |
 | Full Chromium suite | PASS | 63/63 tests, including the real ATARA slice, resize persistence, and populated Viewpoints responsive regressions |
 | Dependency audit | PASS | 0 vulnerabilities at low severity |
 | Design-token governance | PASS | 224 maintained files |
 | Diff check | PASS | Final whitespace/error scan |
-| Manual visual re-acceptance | READY | Final Viewpoints-only review after manual evidence `5277590695`; Primary Dock is already accepted |
+| Manual visual re-acceptance | READY | Final scalable Viewpoints-only review after manual evidence `5278335170`; Primary Dock is already accepted |
 | P1-G outputs excluded | PASS | No BOM/Excel/PDF/quotation implementation |
 
 Decision: **READY FOR FINAL VIEWPOINTS MANUAL RE-ACCEPTANCE.**

@@ -127,12 +127,26 @@ free of horizontal or nested vertical overflow at 1440x900, 1024x768, and
 `PanelPreference.size` remain authoritative; no migration or thumbnail storage
 was introduced.
 
+Final scalability review comment `5278335170` found that the selected action
+zone still shared the saved-card overflow container, so a fifth card could
+scroll Apply/Update/Rename/Delete offscreen. The corrected composition has
+three independent regions: toolbar, card-only navigation viewport, and fixed
+selection actions. Only the card viewport owns horizontal overflow. Compact
+left/right strip controls are derived from live viewport overflow, and the
+selected card is revealed after Capture, Previous/Next, click selection, any
+other programmatic selection update, and responsive viewport changes. Medium
+and 640 px-class layouts place the fixed action zone on a dedicated compact row
+when the insets leave insufficient horizontal space. Component tests cover
+0/1/4/5/20 cards; Chromium captures eight viewpoints and verifies first,
+middle, and last auto-reveal at 1440x900, 1024x768, and 640x800 without moving
+the action zone into the scroll viewport or introducing root/dock overflow.
+
 ## Validation Evidence
 
 - Dependency audit: 0 vulnerabilities at low severity.
 - Design-token governance: passed for 224 maintained files.
 - Build: passed; known bundle-size warning only.
-- Unit: 132 files / 1171 tests passed.
+- Unit: 132 files / 1175 tests passed.
 - Chromium: 63/63 tests passed, including the real ATARA slice, ergonomics
   resize/persistence, and populated Viewpoints regressions at desktop, medium,
   and narrow sizes.
