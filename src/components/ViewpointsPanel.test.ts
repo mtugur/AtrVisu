@@ -178,31 +178,20 @@ describe("ViewpointsPanel", () => {
     const viewpoints = Array.from({ length: 20 }, (_, index) => (
       createViewpoint(`viewpoint-${index + 1}`, `Viewpoint ${index + 1}`)
     ));
-    const reveal = vi.fn();
-    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: reveal
-    });
+    const { container, rerender } = await renderPanel(viewpoints, "viewpoint-1");
+    const strip = container.querySelector<HTMLDivElement>('[data-testid="viewpoint-strip"]') as HTMLDivElement;
+    vi.spyOn(strip, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      right: 320
+    } as DOMRect);
+    const target = container.querySelector<HTMLButtonElement>('[data-testid="viewpoint-item-viewpoint-10"]')!;
+    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
+      left: 480,
+      right: 636
+    } as DOMRect);
 
-    try {
-      const { container, rerender } = await renderPanel(viewpoints, "viewpoint-1");
-      expect(reveal).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest" });
-      expect(reveal.mock.instances[reveal.mock.instances.length - 1])
-        .toBe(container.querySelector('[data-testid="viewpoint-item-viewpoint-1"]'));
-      reveal.mockClear();
-
-      await rerender(viewpoints, "viewpoint-10");
-      expect(reveal).toHaveBeenCalledTimes(1);
-      expect(reveal).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest" });
-      expect(reveal.mock.instances[reveal.mock.instances.length - 1])
-        .toBe(container.querySelector('[data-testid="viewpoint-item-viewpoint-10"]'));
-    } finally {
-      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-        configurable: true,
-        value: originalScrollIntoView
-      });
-    }
+    await rerender(viewpoints, "viewpoint-10");
+    expect(strip.scrollLeft).toBe(316);
   });
 
   it("keeps every existing viewpoint command reachable from the stable composition", async () => {

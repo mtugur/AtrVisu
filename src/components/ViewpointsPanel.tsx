@@ -65,10 +65,18 @@ export function ViewpointsPanel({
   }, []);
 
   const revealSelectedCard = useCallback(() => {
-    selectedCardRef.current?.scrollIntoView?.({
-      block: "nearest",
-      inline: "nearest"
-    });
+    const strip = stripRef.current;
+    const selectedCard = selectedCardRef.current;
+    if (!strip || !selectedCard) {
+      return;
+    }
+    const stripBounds = strip.getBoundingClientRect();
+    const cardBounds = selectedCard.getBoundingClientRect();
+    if (cardBounds.left < stripBounds.left) {
+      strip.scrollLeft += cardBounds.left - stripBounds.left;
+    } else if (cardBounds.right > stripBounds.right) {
+      strip.scrollLeft += cardBounds.right - stripBounds.right;
+    }
   }, []);
 
   const scrollStrip = useCallback((direction: "backward" | "forward") => {
@@ -94,10 +102,17 @@ export function ViewpointsPanel({
     if (!strip) {
       return undefined;
     }
+    let resizeFrameId: number | null = null;
     const handleScroll = () => updateStripNavigation();
     const handleResize = () => {
-      revealSelectedCard();
-      updateStripNavigation();
+      if (resizeFrameId !== null) {
+        window.cancelAnimationFrame(resizeFrameId);
+      }
+      resizeFrameId = window.requestAnimationFrame(() => {
+        resizeFrameId = null;
+        revealSelectedCard();
+        updateStripNavigation();
+      });
     };
     const resizeObserver = typeof ResizeObserver === "undefined"
       ? null
@@ -105,10 +120,12 @@ export function ViewpointsPanel({
     strip.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", handleResize);
     resizeObserver?.observe(strip);
-    const frameId = window.requestAnimationFrame(handleResize);
+    handleResize();
 
     return () => {
-      window.cancelAnimationFrame(frameId);
+      if (resizeFrameId !== null) {
+        window.cancelAnimationFrame(resizeFrameId);
+      }
       resizeObserver?.disconnect();
       strip.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleResize);
@@ -121,7 +138,10 @@ export function ViewpointsPanel({
       return undefined;
     }
     revealSelectedCard();
-    const frameId = window.requestAnimationFrame(updateStripNavigation);
+    const frameId = window.requestAnimationFrame(() => {
+      revealSelectedCard();
+      updateStripNavigation();
+    });
     return () => window.cancelAnimationFrame(frameId);
   }, [revealSelectedCard, selectedViewpointId, updateStripNavigation, viewpoints.length]);
 
