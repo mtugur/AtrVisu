@@ -114,13 +114,28 @@ follows:
   and proves one App, one Editor Host, one canvas, unchanged camera, selection,
   history/dirty state, and scene lifecycle generation.
 
+Final manual review comment `5277590695` accepted the Primary Dock correction
+and isolated one populated Viewpoints regression: selected commands entered the
+four-column contribution grid as an uncontrolled fifth child. The final
+bounded correction replaces that implicit grid flow with two stable regions:
+a compact name/capture/Previous/Next toolbar and a saved-viewpoint strip that
+also owns the selected Apply/Update/Rename/Delete context. Zero, one, multiple,
+selected, and unselected states now share the same structure. The strip owns
+any necessary horizontal scrolling, while the Bottom Dock and document remain
+free of horizontal or nested vertical overflow at 1440x900, 1024x768, and
+640x800. The existing 136 px default, user-resizable height, and persisted
+`PanelPreference.size` remain authoritative; no migration or thumbnail storage
+was introduced.
+
 ## Validation Evidence
 
 - Dependency audit: 0 vulnerabilities at low severity.
 - Design-token governance: passed for 224 maintained files.
 - Build: passed; known bundle-size warning only.
-- Unit: 131 files / 1167 tests passed.
-- Chromium: 62/62 tests passed, including the real ATARA slice, ergonomics resize/persistence, and responsive regressions.
+- Unit: 132 files / 1171 tests passed.
+- Chromium: 63/63 tests passed, including the real ATARA slice, ergonomics
+  resize/persistence, and populated Viewpoints regressions at desktop, medium,
+  and narrow sizes.
 - Diff check: passed after generated test artifacts were removed.
 
 ## P1-G Boundary
@@ -129,4 +144,4 @@ P1-F does not implement BOM, Excel, PDF, quotation, pricing, throughput
 simulation, or commercial output. P1-G must consume the existing P1-E schema
 projection and export mappings rather than create a parallel property source.
 
-Decision: **READY FOR FINAL BOUNDED MANUAL RE-ACCEPTANCE.**
+Decision: **READY FOR FINAL VIEWPOINTS MANUAL RE-ACCEPTANCE.**

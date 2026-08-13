@@ -2105,6 +2105,91 @@ test("medium workbench constrains dock resizing around a dominant viewport", asy
   expect(errors).toEqual([]);
 });
 
+test("populated Viewpoints stays bounded across desktop, medium, and narrow workbenches", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  await getCommandBarCommand(page, "view.viewpoints").click();
+  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+
+  const capture = async (name: string) => {
+    await page.getByTestId("viewpoint-name-input").fill(name);
+    await page.getByTestId("capture-viewpoint").click();
+    await expect(page.getByRole("button", { name: new RegExp(name, "i") })).toBeVisible();
+  };
+  const expectBoundedPopulatedLayout = async () => {
+    const contextActions = page.getByTestId("viewpoint-context-actions");
+    await expect(contextActions).toBeVisible();
+    for (const button of await contextActions.getByRole("button").all()) {
+      await button.scrollIntoViewIfNeeded();
+      await expect(button).toBeVisible();
+      await expect(button).toBeEnabled();
+    }
+    const geometry = await page.evaluate(() => {
+      const dock = document.querySelector('[data-testid="bottom-dock"]');
+      const content = document.querySelector(".workbench-bottom-dock-content");
+      const panel = document.querySelector('[data-testid="viewpoints-panel"]');
+      const toolbar = document.querySelector('[data-testid="viewpoints-toolbar"]');
+      const results = document.querySelector('[data-testid="viewpoints-results"]');
+      const strip = document.querySelector('[data-testid="viewpoint-strip"]');
+      const actions = document.querySelector('[data-testid="viewpoint-context-actions"]');
+      if (!dock || !content || !panel || !toolbar || !results || !strip || !actions) {
+        throw new Error("Viewpoints populated layout is incomplete.");
+      }
+      const dockBox = dock.getBoundingClientRect();
+      const contentBox = content.getBoundingClientRect();
+      const panelBox = panel.getBoundingClientRect();
+      const toolbarBox = toolbar.getBoundingClientRect();
+      const resultsBox = results.getBoundingClientRect();
+      return {
+        stablePanelRegions: panel.children.length === 2
+          && panel.children[0] === toolbar
+          && panel.children[1] === results,
+        actionsOwnedByStrip: actions.parentElement === strip,
+        orderedRows: toolbarBox.bottom <= resultsBox.top + 1,
+        panelInsideDock: panelBox.top >= contentBox.top - 1 && panelBox.bottom <= contentBox.bottom + 1,
+        dockInsideDocument: dockBox.left >= -1 && dockBox.right <= document.documentElement.clientWidth + 1,
+        noDockHorizontalOverflow: dock.scrollWidth <= dock.clientWidth,
+        noContentVerticalOverflow: content.scrollHeight <= content.clientHeight,
+        noDocumentHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        stripOverflowY: getComputedStyle(strip).overflowY
+      };
+    });
+
+    expect(geometry).toEqual({
+      stablePanelRegions: true,
+      actionsOwnedByStrip: true,
+      orderedRows: true,
+      panelInsideDock: true,
+      dockInsideDocument: true,
+      noDockHorizontalOverflow: true,
+      noContentVerticalOverflow: true,
+      noDocumentHorizontalOverflow: true,
+      stripOverflowY: "hidden"
+    });
+  };
+
+  await capture("Overview");
+  await expect(page.locator(".viewpoint-list-item")).toHaveCount(1);
+  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button"))
+    .toHaveText(["Apply", "Update", "Rename", "Delete"]);
+  await expectBoundedPopulatedLayout();
+
+  await capture("Service View");
+  await expect(page.locator(".viewpoint-list-item")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Service View/i })).toHaveAttribute("aria-pressed", "true");
+  await expectBoundedPopulatedLayout();
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expectBoundedPopulatedLayout();
+
+  await page.setViewportSize({ width: 640, height: 800 });
+  await expectBoundedPopulatedLayout();
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 test("browser resize reconciles viewport backing size without scene reconstruction", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

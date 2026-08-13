@@ -988,9 +988,13 @@ body.is-resizing-workbench-dock {
 
 .workbench-bottom-dock .viewpoints-panel {
   display: grid;
-  grid-template-columns: minmax(150px, 0.65fr) minmax(142px, 0.55fr) minmax(210px, 1.5fr) minmax(148px, 0.65fr);
-  align-items: center;
-  gap: var(--av-spacing-xs);
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--av-spacing-2xs);
+}
+
+.workbench-bottom-dock .viewpoints-toolbar {
+  grid-template-columns: minmax(112px, 0.8fr) minmax(76px, 0.45fr) minmax(126px, 0.75fr);
 }
 
 .workbench-bottom-dock .viewpoints-panel .property-field {
@@ -999,25 +1003,27 @@ body.is-resizing-workbench-dock {
 
 .workbench-bottom-dock .viewpoints-panel .property-field > span {
   font-size: var(--av-font-size-xs);
+  line-height: 1;
 }
 
 .workbench-bottom-dock .viewpoints-panel input,
 .workbench-bottom-dock .viewpoint-actions button,
-.workbench-bottom-dock .viewpoints-panel > button {
+.workbench-bottom-dock .viewpoints-toolbar > button {
   min-height: 30px;
 }
 
-.workbench-bottom-dock .viewpoint-list {
-  display: flex;
-  min-width: 0;
-  max-height: 76px;
+.workbench-bottom-dock .viewpoints-results {
   gap: var(--av-spacing-xs);
-  overflow: auto;
+}
+
+.workbench-bottom-dock .viewpoint-strip {
+  max-height: 44px;
 }
 
 .workbench-bottom-dock .viewpoint-list-item {
   flex: 0 0 156px;
-  padding: var(--av-spacing-xs);
+  min-height: 34px;
+  padding: 3px var(--av-spacing-xs);
 }
 
 .workbench-status-bar {
@@ -1676,10 +1682,62 @@ body.is-resizing-workbench-dock {
 }
 
 .viewpoints-panel,
-.viewpoint-list {
+.viewpoints-toolbar,
+.viewpoints-results {
   display: grid;
   gap: 10px;
   min-width: 0;
+}
+
+.viewpoints-toolbar {
+  grid-template-columns: minmax(150px, 1fr) minmax(132px, 0.65fr) minmax(180px, 0.8fr);
+  align-items: end;
+}
+
+.viewpoints-results {
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+}
+
+.viewpoint-saved-label {
+  color: var(--av-text-secondary);
+  font-size: var(--av-font-size-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.viewpoint-strip {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+  gap: var(--av-spacing-xs);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.viewpoint-strip::-webkit-scrollbar {
+  height: 6px;
+}
+
+.viewpoint-list {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  gap: var(--av-spacing-xs);
+}
+
+.viewpoint-list:has(.empty-selection) {
+  flex: 1 1 auto;
+}
+
+.viewpoint-list .empty-selection {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  padding: 0 var(--av-spacing-sm);
+  border: 1px dashed var(--av-border-subtle);
+  border-radius: 6px;
 }
 
 .viewpoint-actions {
@@ -1690,7 +1748,7 @@ body.is-resizing-workbench-dock {
 }
 
 .viewpoint-actions button,
-.viewpoints-panel > button {
+.viewpoints-toolbar > button {
   min-height: 36px;
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 18%, transparent);
   border-radius: 8px;
@@ -1703,23 +1761,23 @@ body.is-resizing-workbench-dock {
 
 .viewpoint-actions button:hover:not(:disabled),
 .viewpoint-actions button:focus-visible,
-.viewpoints-panel > button:hover:not(:disabled),
-.viewpoints-panel > button:focus-visible {
+.viewpoints-toolbar > button:hover:not(:disabled),
+.viewpoints-toolbar > button:focus-visible {
   border-color: color-mix(in srgb, var(--av-interaction-accent) 62%, transparent);
   background: color-mix(in srgb, var(--av-interaction-accent) 12%, transparent);
   outline: none;
 }
 
 .viewpoint-actions button:disabled,
-.viewpoints-panel > button:disabled {
+.viewpoints-toolbar > button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
 
-.viewpoint-list {
-  max-height: 190px;
-  overflow-y: auto;
-  overflow-x: hidden;
+.viewpoint-context-actions {
+  grid-template-columns: repeat(4, minmax(62px, auto));
+  flex: 0 0 auto;
+  gap: var(--av-spacing-2xs);
 }
 
 .viewpoint-list-item {
@@ -1738,7 +1796,9 @@ body.is-resizing-workbench-dock {
 .viewpoint-list-item strong,
 .viewpoint-list-item span {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .viewpoint-list-item strong {
@@ -3513,12 +3573,8 @@ body.is-resizing-workbench-dock {
     height: min(max(var(--av-bottom-dock-height, 136px), 150px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
-  .workbench-bottom-dock .viewpoints-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .workbench-bottom-dock .viewpoint-list {
-    max-height: 38px;
+  .workbench-bottom-dock .viewpoints-toolbar {
+    grid-template-columns: minmax(96px, 0.8fr) minmax(68px, 0.45fr) minmax(112px, 0.75fr);
   }
 }
 
@@ -3562,8 +3618,8 @@ body.is-resizing-workbench-dock {
     display: none;
   }
 
-  .workbench-bottom-dock .viewpoints-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .workbench-bottom-dock .viewpoints-toolbar {
+    grid-template-columns: minmax(112px, 0.8fr) minmax(74px, 0.45fr) minmax(126px, 0.75fr);
   }
 
   .workbench-status-bar {
@@ -3711,7 +3767,7 @@ body.is-resizing-workbench-dock {
     height: min(max(var(--av-bottom-dock-height, 136px), 220px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
-  .workbench-bottom-dock .viewpoints-panel {
+  .workbench-bottom-dock .viewpoints-toolbar {
     grid-template-columns: 1fr;
   }
 }

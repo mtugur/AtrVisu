@@ -50,6 +50,13 @@ Status Bar projects live selection, primary entity, millimetre working unit,
 snap state, and project dirty state without owning copies of those values.
 The Viewpoints contribution uses a content-driven compact engineering strip;
 the desktop default expanded height is 136 px, with a bounded responsive fit.
+Its layout has two stable regions: a name/capture/step toolbar and one compact
+saved-viewpoint strip. Selection-specific Apply, Update, Rename, and Delete
+actions are owned by that strip rather than entering the contribution grid as
+an additional row. The strip is the sole horizontal overflow owner when saved
+items and contextual actions exceed the available medium/narrow width. Empty,
+single, multiple, selected, and unselected states therefore retain the same
+bounded composition without reserving thumbnail space.
 The generic Bottom Dock is vertically resizable from its top edge and persists
 its expanded height through the same UI Preferences panel-size authority.
 
@@ -118,3 +125,7 @@ Manager through the normal Tools route.
 - Unit and Chromium tests prove View-owned overlay reachability, contextual
   panel DOM/registry agreement, preset/manual-override policy, and native
   Explorer accessibility semantics without scene lifecycle changes.
+- Viewpoints component and Chromium tests prove the two-region layout contract,
+  command reachability, bounded selected actions, populated horizontal strip,
+  and no document or nested vertical overflow at desktop, medium, and narrow
+  viewport sizes.
