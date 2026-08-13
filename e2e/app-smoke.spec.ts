@@ -2149,8 +2149,9 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       const results = document.querySelector('[data-testid="viewpoints-results"]');
       const navigation = document.querySelector('[data-testid="viewpoint-navigation"]');
       const strip = document.querySelector('[data-testid="viewpoint-strip"]');
+      const firstCard = strip?.querySelector(".viewpoint-list-item");
       const actions = document.querySelector('[data-testid="viewpoint-context-actions"]');
-      if (!dock || !content || !panel || !toolbar || !results || !navigation || !strip || !actions) {
+      if (!dock || !content || !panel || !toolbar || !results || !navigation || !strip || !firstCard || !actions) {
         throw new Error("Viewpoints populated layout is incomplete.");
       }
       const dockBox = dock.getBoundingClientRect();
@@ -2178,6 +2179,7 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
         stripOverflowX: getComputedStyle(strip).overflowX,
         stripOverflowY: getComputedStyle(strip).overflowY,
         stripScrollbarHidden: getComputedStyle(strip).scrollbarWidth === "none",
+        stripCanRevealWholeCard: strip.clientWidth >= firstCard.getBoundingClientRect().width,
         responsiveActionRow: window.innerWidth > 1200 || actionsBox.top >= navigationBox.bottom - 1,
         stripHasOverflow: strip.scrollWidth > strip.clientWidth
       };
@@ -2197,6 +2199,7 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       stripOverflowX: "auto",
       stripOverflowY: "hidden",
       stripScrollbarHidden: true,
+      stripCanRevealWholeCard: true,
       responsiveActionRow: true,
       stripHasOverflow: true
     });

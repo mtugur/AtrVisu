@@ -3607,11 +3607,15 @@ body.is-resizing-workbench-dock {
   }
 
   .workbench-bottom-dock:has(.viewpoint-context-actions):not(.is-collapsed) {
-    height: min(max(var(--av-bottom-dock-height, 136px), 164px), calc(100vh - var(--av-shell-top-inset) - 28px));
+    height: min(max(var(--av-bottom-dock-height, 136px), 188px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
   .workbench-bottom-dock .viewpoints-results {
     grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .workbench-bottom-dock:has(.viewpoint-context-actions) .viewpoints-results {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .workbench-bottom-dock .viewpoint-context-actions {
@@ -3656,7 +3660,7 @@ body.is-resizing-workbench-dock {
   }
 
   .workbench-bottom-dock:has(.viewpoint-context-actions):not(.is-collapsed) {
-    height: min(max(var(--av-bottom-dock-height, 136px), 172px), calc(100vh - var(--av-shell-top-inset) - 28px));
+    height: min(max(var(--av-bottom-dock-height, 136px), 196px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
   .workbench-dock-resize-handle {
@@ -3669,6 +3673,10 @@ body.is-resizing-workbench-dock {
 
   .workbench-bottom-dock .viewpoints-results {
     grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .workbench-bottom-dock:has(.viewpoint-context-actions) .viewpoints-results {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .workbench-bottom-dock .viewpoint-context-actions {
