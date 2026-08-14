@@ -65,7 +65,7 @@ describe("UI preferences storage and normalization", () => {
     expect(result.preferences.panels).toHaveLength(defaults.panels.length);
     expect(result.preferences.panels.find((panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell)?.size).toBe(600);
     expect(result.preferences.panels.find((panel) => panel.panelId === RUNTIME_PANEL_IDS.primaryDockShell)?.size).toBe(480);
-    expect(result.preferences.panels.find((panel) => panel.panelId === RUNTIME_PANEL_IDS.bottomDockShell)?.size).toBe(120);
+    expect(result.preferences.panels.find((panel) => panel.panelId === RUNTIME_PANEL_IDS.bottomDockShell)?.size).toBe(100);
     expect(new Set(result.preferences.panels.map((panel) => panel.order)).size).toBe(defaults.panels.length);
     result.preferences.panels.forEach((panel) => {
       expect(panel.dock).toBe(defaults.panels.find(({ panelId }) => panelId === panel.panelId)?.dock);

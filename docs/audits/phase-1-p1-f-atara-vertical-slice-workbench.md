@@ -101,9 +101,10 @@ follows:
 - Layout Explorer rows expand with the dock, keep entity identity, type and
   context visible, truncate only when constrained, expose the full row context
   in a tooltip, and do not add horizontal scrolling.
-- Bottom Dock starts at a content-driven 136 px on desktop, adapts to 150 px
-  at medium geometry when its two-row strip needs it, and exposes an accessible
-  top-edge resize separator with a viewport-relative maximum.
+- Bottom Dock uses a content-driven 107 px fresh desktop default, adapts only
+  to the minimum responsive content fit, and exposes an accessible top-edge
+  resize separator with a viewport-relative maximum. Explicitly persisted user
+  sizes remain authoritative.
 - Primary width and Bottom height persist only through existing UI Preferences
   `PanelPreference.size`; the normalizer accepts and bounds those existing
   schema-compatible fields. No IndexedDB version or sizing store was added.
@@ -123,9 +124,10 @@ also owns the selected Apply/Update/Rename/Delete context. Zero, one, multiple,
 selected, and unselected states now share the same structure. The strip owns
 any necessary horizontal scrolling, while the Bottom Dock and document remain
 free of horizontal or nested vertical overflow at 1440x900, 1024x768, and
-640x800. The existing 136 px default, user-resizable height, and persisted
-`PanelPreference.size` remain authoritative; no migration or thumbnail storage
-was introduced.
+640x800. That intermediate correction retained the then-current 136 px default
+and the existing user-resizable `PanelPreference.size`; the final compactness
+correction below narrows only the fresh default without migrating explicit
+user sizes or adding thumbnail storage.
 
 Final scalability review comment `5278335170` found that the selected action
 zone still shared the saved-card overflow container, so a fifth card could
@@ -137,16 +139,40 @@ selected card is revealed after Capture, Previous/Next, click selection, any
 other programmatic selection update, and responsive viewport changes. Medium
 and 640 px-class layouts place the fixed action zone on a dedicated compact row
 when the insets leave insufficient horizontal space. Component tests cover
-0/1/4/5/20 cards; Chromium captures eight viewpoints and verifies first,
+0/1/4/5/8/20 cards; Chromium captures eight viewpoints and verifies first,
 middle, and last auto-reveal at 1440x900, 1024x768, and 640x800 without moving
 the action zone into the scroll viewport or introducing root/dock overflow.
+
+Final compactness review comment `5279461752` found two remaining presentation
+defects: the fresh Bottom Dock still reserved unnecessary height while cards
+forced name and timestamp into a 34 px strip, and a constrained Library header
+could collapse into character-by-character wrapping. The final correction
+keeps the same authorities and makes the desktop contribution genuinely
+content-oriented at 107 px for users without an explicit persisted size.
+Responsive geometry uses only the derived height needed when fixed actions move
+to their own row; selection never changes that height.
+
+Saved cards now use a stable non-shrinking 168 px basis at every population
+count. They render only the viewpoint name on one readable ellipsis-bounded
+line; the full name and retained timestamp remain discoverable through title
+and accessible text. Component coverage exercises 0/1/4/5/8/20 viewpoints,
+including long Turkish-style names. Chromium captures eight viewpoints and
+proves stable card geometry, strip-only overflow, fixed actions, navigation,
+selection auto-reveal, and no root/dock/nested overflow at 1440x900, 1024x768,
+and 640x800.
+
+The Library header now gives its text cell a real shrink boundary, keeps the
+library title on one ellipsis-bounded line, preserves the Read-only status, and
+retains the full title through native title and accessible button text. Normal
+tree labels keep intentional word wrapping. Component and Chromium coverage
+verify this contract at the supported 260 px Primary Dock minimum.
 
 ## Validation Evidence
 
 - Dependency audit: 0 vulnerabilities at low severity.
 - Design-token governance: passed for 224 maintained files.
 - Build: passed; known bundle-size warning only.
-- Unit: 132 files / 1175 tests passed.
+- Unit: 132 files / 1178 tests passed.
 - Chromium: 63/63 tests passed, including the real ATARA slice, ergonomics
   resize/persistence, and populated Viewpoints regressions at desktop, medium,
   and narrow sizes.
@@ -158,4 +184,4 @@ P1-F does not implement BOM, Excel, PDF, quotation, pricing, throughput
 simulation, or commercial output. P1-G must consume the existing P1-E schema
 projection and export mappings rather than create a parallel property source.
 
-Decision: **READY FOR FINAL VIEWPOINTS MANUAL RE-ACCEPTANCE.**
+Decision: **READY FOR FINAL P1-F MANUAL RE-ACCEPTANCE.**

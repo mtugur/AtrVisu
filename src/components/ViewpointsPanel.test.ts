@@ -111,7 +111,7 @@ describe("ViewpointsPanel", () => {
     expect(handlers.onSelectViewpoint).toHaveBeenCalledWith("overview");
   });
 
-  it.each([4, 5, 20])("keeps %i viewpoint cards inside the dedicated saved-list viewport", async (count) => {
+  it.each([4, 5, 8, 20])("keeps %i viewpoint cards inside the dedicated saved-list viewport", async (count) => {
     const viewpoints = Array.from({ length: count }, (_, index) => (
       createViewpoint(`viewpoint-${index + 1}`, `Viewpoint ${index + 1}`)
     ));
@@ -137,13 +137,28 @@ describe("ViewpointsPanel", () => {
       .toEqual(["Apply", "Update", "Rename", "Delete"]);
 
     await setStripGeometry(strip as HTMLDivElement, {
-      clientWidth: 640,
-      scrollWidth: count * 160
+      clientWidth: 720,
+      scrollWidth: count * 176
     });
     expect(Boolean(container.querySelector('[data-testid="viewpoint-strip-scroll-backward"]')))
       .toBe(count > 4);
     expect(Boolean(container.querySelector('[data-testid="viewpoint-strip-scroll-forward"]')))
       .toBe(count > 4);
+  });
+
+  it("keeps long names as the only visual card line while retaining accessible timestamps", async () => {
+    const viewpoint = createViewpoint(
+      "turkish-line",
+      "Uzun Atara Paketleme Hatti Genel Gorunumu"
+    );
+    const { container } = await renderPanel([viewpoint], "turkish-line");
+    const item = container.querySelector<HTMLButtonElement>('[data-testid="viewpoint-item-turkish-line"]')!;
+
+    expect(Array.from(item.children).map((child) => child.tagName)).toEqual(["STRONG"]);
+    expect(item.textContent).toBe(viewpoint.name);
+    expect(item.title).toContain(viewpoint.name);
+    expect(item.title).toContain("Updated");
+    expect(item.getAttribute("aria-label")).toContain("updated");
   });
 
   it("shows compact strip controls only for overflow and keeps actions fixed outside it", async () => {

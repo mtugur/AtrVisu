@@ -49,7 +49,7 @@ export function WorkbenchBottomDock({
       data-collapsed={collapsed ? "true" : "false"}
       aria-label="Bottom Dock"
       style={{
-        "--av-bottom-dock-height": `${Math.max(120, expandedHeight)}px`,
+        "--av-bottom-dock-height": `${Math.max(minHeight, expandedHeight)}px`,
         "--av-bottom-dock-left-inset": `${Math.max(0, leftInset)}px`,
         "--av-bottom-dock-right-inset": `${Math.max(0, rightInset)}px`
       } as CSSProperties}

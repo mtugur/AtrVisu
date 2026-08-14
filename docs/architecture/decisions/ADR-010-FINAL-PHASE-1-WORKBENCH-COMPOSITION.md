@@ -49,7 +49,8 @@ and continues to use the existing viewpoint state and command authority. The
 Status Bar projects live selection, primary entity, millimetre working unit,
 snap state, and project dirty state without owning copies of those values.
 The Viewpoints contribution uses a content-driven compact engineering strip;
-the desktop default expanded height is 136 px, with a bounded responsive fit.
+the fresh desktop default expanded height is 107 px, with a bounded responsive
+fit. An explicitly persisted user height remains authoritative.
 Its layout has three stable regions: a name/capture/step toolbar, a saved-card
 navigation viewport, and a fixed selection-action zone. Only saved cards live
 inside the horizontally scrollable viewport. Compact previous/next strip
@@ -58,10 +59,18 @@ the primary navigation UI, and every selection change reveals the selected
 card. Apply, Update, Rename, and Delete remain outside that viewport, so card
 counts cannot push actions offscreen. Medium and narrow layouts may place the
 fixed action zone on its own compact row while preserving the same ownership.
-Empty, single, multiple, selected, and unselected states remain bounded without
-reserving thumbnail space.
+Saved cards have a stable 168 px basis and display only one readable,
+ellipsis-bounded name line. The timestamp remains canonical viewpoint data and
+is exposed through the card's title and accessible label without consuming a
+second visual row. Empty, single, multiple, selected, and unselected states
+remain bounded without reserving thumbnail space.
 The generic Bottom Dock is vertically resizable from its top edge and persists
 its expanded height through the same UI Preferences panel-size authority.
+
+Constrained Library header rows keep the library name on one ellipsis-bounded
+line, preserve the status badge, and expose the full name through title and
+accessible button text. Intentionally multi-line tree labels retain normal word
+wrapping; valid Primary Dock widths never force character-by-character titles.
 
 Global tools remain reachable through registered menu or command surfaces and
 their existing modal/tool surfaces. File owns project and layout file actions;
@@ -129,6 +138,9 @@ Manager through the normal Tools route.
   panel DOM/registry agreement, preset/manual-override policy, and native
   Explorer accessibility semantics without scene lifecycle changes.
 - Viewpoints component and Chromium tests prove the three-region layout
-  contract, command reachability, 0/1/4/5/20-card scalability, fixed selected
-  actions, selection auto-reveal, overflow-only strip controls, and no document
-  or nested vertical overflow at desktop, medium, and narrow viewport sizes.
+  contract, command reachability, 0/1/4/5/8/20-card scalability, fixed selected
+  actions, single-line stable-width cards, selection auto-reveal, overflow-only
+  strip controls, and no document or nested vertical overflow at desktop,
+  medium, and narrow viewport sizes.
+- Library component and Chromium tests prove that the minimum supported Primary
+  Dock width preserves a single-line discoverable title and visible status.

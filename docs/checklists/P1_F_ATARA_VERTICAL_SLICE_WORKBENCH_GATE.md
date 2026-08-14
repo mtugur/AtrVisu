@@ -17,11 +17,13 @@
 | Contextual collapse authority | PASS | Controlled contribution disclosure updates the same Runtime Panel state |
 | P1-E Smart Asset Properties | PASS | Existing schema tests plus vertical-slice Inspector assertion |
 | Generic Bottom Dock | PASS | Contribution contract and Viewpoints lifecycle tests |
-| Compact/resizable Bottom Dock | PASS | 136 px desktop default, responsive content fit, bounded top-edge resize, and height restore |
+| Compact/resizable Bottom Dock | PASS | 107 px fresh desktop default, responsive content fit, bounded top-edge resize, persisted explicit size authority, and height restore |
 | Bottom Dock size authority | PASS | Existing UI Preferences `PanelPreference.size`; persisted reload coverage |
 | Viewpoints stable composition | PASS | Toolbar, card-only scroll viewport, and fixed selected-action zone are independent DOM regions |
-| Viewpoints populated states | PASS | 0/1/4/5/20 component coverage and eight-capture Chromium coverage at 1440x900, 1024x768, 640x800 |
+| Viewpoints populated states | PASS | 0/1/4/5/8/20 component coverage and eight-capture Chromium coverage at 1440x900, 1024x768, 640x800 |
 | Viewpoints scalable navigation | PASS | Overflow-only left/right controls, hidden native scrollbar, wheel support, and selected-card auto-reveal |
+| Viewpoints compact card readability | PASS | Stable 168 px non-shrinking cards, one ellipsis-bounded name line, and timestamp/full-name title plus accessible text |
+| Library minimum-width title | PASS | Single-line ellipsis at the 260 px Primary Dock minimum, full-title discoverability, and visible Read-only status |
 | Persistent Status Bar | PASS | Live selection, primary, mm, snap, dirty tests |
 | Workspace preset integration | PASS | Registry/application tests and Chromium persistence tests |
 | Hidden panel restoration | PASS | Runtime availability correction and Chromium reload test |
@@ -36,12 +38,12 @@
 | Responsive geometry | PASS | 1440x900, 1024x768, 640x800 Chromium coverage; viewport dominance and no horizontal/nested-scroll regression |
 | No red console/page errors | PASS | E2E collectors |
 | Build | PASS | TypeScript + Vite; known chunk warning only |
-| Unit suite | PASS | 132 files / 1175 tests |
+| Unit suite | PASS | 132 files / 1178 tests |
 | Full Chromium suite | PASS | 63/63 tests, including the real ATARA slice, resize persistence, and populated Viewpoints responsive regressions |
 | Dependency audit | PASS | 0 vulnerabilities at low severity |
 | Design-token governance | PASS | 224 maintained files |
 | Diff check | PASS | Final whitespace/error scan |
-| Manual visual re-acceptance | READY | Final scalable Viewpoints-only review after manual evidence `5278335170`; Primary Dock is already accepted |
+| Manual visual re-acceptance | READY | Final compact Viewpoints and Library narrow-width review after manual evidence `5279461752` |
 | P1-G outputs excluded | PASS | No BOM/Excel/PDF/quotation implementation |
 
-Decision: **READY FOR FINAL VIEWPOINTS MANUAL RE-ACCEPTANCE.**
+Decision: **READY FOR FINAL P1-F MANUAL RE-ACCEPTANCE.**

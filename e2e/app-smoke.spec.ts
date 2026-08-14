@@ -172,7 +172,7 @@ const createE2EUiPreferences = (overrides: {
         : panelId === "panel.primaryDockShell"
           ? { size: overrides.primaryDockWidth ?? 304 }
           : panelId === "panel.bottomDockShell"
-            ? { size: overrides.bottomDockHeight ?? 136 }
+            ? { size: overrides.bottomDockHeight ?? 107 }
             : {}),
       order,
       dock: panelId === "panel.primaryDockShell"
@@ -1981,8 +1981,8 @@ test("Primary and Bottom Dock resizing persists without changing editor state", 
   const bottomDock = page.getByTestId("bottom-dock");
   const primaryWidthBefore = await primaryDock.evaluate((element) => element.getBoundingClientRect().width);
   const bottomHeightBefore = await bottomDock.evaluate((element) => element.getBoundingClientRect().height);
-  expect(bottomHeightBefore).toBeGreaterThanOrEqual(120);
-  expect(bottomHeightBefore).toBeLessThanOrEqual(150);
+  expect(bottomHeightBefore).toBeGreaterThanOrEqual(100);
+  expect(bottomHeightBefore).toBeLessThanOrEqual(108);
 
   const primaryResize = page.getByTestId("primary-dock-resize-handle");
   await expect(primaryResize).toHaveAttribute("aria-label", "Resize Primary Dock");
@@ -2109,6 +2109,45 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openCleanApp(page);
+  const expectNarrowLibraryTitle = async () => {
+    await openPrimaryDockPanel(page, "panel.machineLibrary");
+    const title = page.locator(".library-title").first();
+    const name = title.locator("strong");
+    const status = title.locator("small");
+    await expect(title).toBeVisible();
+    await expect(status).toHaveText("Read-only");
+    await expect(name).toHaveAttribute("title", /Atara Standard Library/);
+    expect(await title.evaluate((element) => {
+      const nameElement = element.querySelector("strong");
+      const statusElement = element.querySelector("small");
+      if (!nameElement || !statusElement) {
+        return false;
+      }
+      const nameStyle = getComputedStyle(nameElement);
+      const nameBox = nameElement.getBoundingClientRect();
+      const statusBox = statusElement.getBoundingClientRect();
+      const titleBox = element.getBoundingClientRect();
+      return nameStyle.whiteSpace === "nowrap"
+        && nameStyle.overflow === "hidden"
+        && nameStyle.textOverflow === "ellipsis"
+        && nameBox.width > 1
+        && nameElement.scrollHeight <= nameElement.clientHeight + 1
+        && statusBox.right <= titleBox.right + 1
+        && document.documentElement.scrollWidth <= document.documentElement.clientWidth;
+    })).toBe(true);
+  };
+  const primaryDock = page.getByTestId("primary-dock");
+  const primaryResize = page.getByTestId("primary-dock-resize-handle");
+  const primaryResizeBounds = await primaryResize.boundingBox();
+  if (!primaryResizeBounds) {
+    throw new Error("Primary Dock resize handle bounds are unavailable.");
+  }
+  await page.mouse.move(primaryResizeBounds.x, primaryResizeBounds.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(primaryResizeBounds.x - 100, primaryResizeBounds.y + 80, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width)).toBe(260);
+  await expectNarrowLibraryTitle();
   await getCommandBarCommand(page, "view.viewpoints").click();
   await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
 
@@ -2161,6 +2200,9 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       const resultsBox = results.getBoundingClientRect();
       const navigationBox = navigation.getBoundingClientRect();
       const actionsBox = actions.getBoundingClientRect();
+      const cards = Array.from(strip.querySelectorAll<HTMLElement>(".viewpoint-list-item"));
+      const cardWidths = cards.map((card) => card.getBoundingClientRect().width);
+      const cardFontSizes = cards.map((card) => getComputedStyle(card).fontSize);
       return {
         stablePanelRegions: panel.children.length === 2
           && panel.children[0] === toolbar
@@ -2180,6 +2222,14 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
         stripOverflowY: getComputedStyle(strip).overflowY,
         stripScrollbarHidden: getComputedStyle(strip).scrollbarWidth === "none",
         stripCanRevealWholeCard: strip.clientWidth >= firstCard.getBoundingClientRect().width,
+        stableCardWidth: new Set(cardWidths.map((width) => Math.round(width))).size === 1
+          && Math.round(cardWidths[0] ?? 0) === 168,
+        stableCardTypography: new Set(cardFontSizes).size === 1,
+        singleLineCards: cards.every((card) => card.children.length === 1
+          && card.firstElementChild?.tagName === "STRONG"
+          && card.scrollHeight <= card.clientHeight),
+        compactDesktopHeight: window.innerWidth <= 1200 || dockBox.height >= 100 && dockBox.height <= 108,
+        noMaterialUnusedBody: contentBox.height - panelBox.height <= 8,
         responsiveActionRow: window.innerWidth > 1200 || actionsBox.top >= navigationBox.bottom - 1,
         stripHasOverflow: strip.scrollWidth > strip.clientWidth
       };
@@ -2200,13 +2250,28 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       stripOverflowY: "hidden",
       stripScrollbarHidden: true,
       stripCanRevealWholeCard: true,
+      stableCardWidth: true,
+      stableCardTypography: true,
+      singleLineCards: true,
+      compactDesktopHeight: true,
+      noMaterialUnusedBody: true,
       responsiveActionRow: true,
       stripHasOverflow: true
     });
   };
 
-  for (let index = 1; index <= 8; index += 1) {
-    await capture(`Viewpoint ${index}`);
+  const viewpointNames = [
+    "Genel Gorunum",
+    "Paketleme Hatti Giris Gorunumu",
+    "Konveyor ve Robot Paletleme Istasyonu",
+    "Viewpoint 4",
+    "Viewpoint 5",
+    "Viewpoint 6",
+    "Viewpoint 7",
+    "Viewpoint 8"
+  ];
+  for (const viewpointName of viewpointNames) {
+    await capture(viewpointName);
   }
   await expect(page.locator(".viewpoint-list-item")).toHaveCount(8);
   await expect(page.getByTestId("viewpoint-context-actions").getByRole("button"))
@@ -2235,6 +2300,7 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
   await expectBoundedPopulatedLayout();
 
   await page.setViewportSize({ width: 1024, height: 768 });
+  await expectNarrowLibraryTitle();
   await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
 

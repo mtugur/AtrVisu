@@ -149,9 +149,9 @@ export function ViewpointsPanel({
     <section className="viewpoints-panel" data-testid="viewpoints-panel" aria-label="Viewpoints">
       <div className="viewpoints-toolbar" data-testid="viewpoints-toolbar">
         <label className="property-field">
-          <span>Viewpoint Name</span>
           <input
             data-testid="viewpoint-name-input"
+            aria-label="Viewpoint Name"
             placeholder="Genel Gorunum"
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -193,7 +193,7 @@ export function ViewpointsPanel({
       </div>
 
       <div className="viewpoints-results" data-testid="viewpoints-results">
-        <span className="viewpoint-saved-label">Saved viewpoints</span>
+        <span className="viewpoint-saved-label">Saved</span>
         <div className="viewpoint-navigation" data-testid="viewpoint-navigation">
           {stripNavigation.hasOverflow ? (
             <button
@@ -229,12 +229,13 @@ export function ViewpointsPanel({
                   key={viewpoint.id}
                   type="button"
                   aria-pressed={viewpoint.id === selectedViewpointId}
+                  aria-label={`${viewpoint.name}, updated ${updatedAt}`}
+                  title={`${viewpoint.name} - Updated ${updatedAt}`}
                   ref={viewpoint.id === selectedViewpointId ? selectedCardRef : undefined}
                   onClick={() => onSelectViewpoint(viewpoint.id)}
                   onDoubleClick={() => onApplyViewpoint(viewpoint.id)}
                 >
                   <strong>{viewpoint.name}</strong>
-                  <span title={`Updated ${updatedAt}`}>{updatedAt}</span>
                 </button>
               );
             }) : <p className="empty-selection">No viewpoints saved yet.</p>}

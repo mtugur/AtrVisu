@@ -937,7 +937,7 @@ body.is-resizing-workbench-dock {
   left: var(--av-bottom-dock-left-inset, 0);
   z-index: var(--av-z-chrome);
   display: grid;
-  height: var(--av-bottom-dock-height, 136px);
+  height: var(--av-bottom-dock-height, 107px);
   min-width: 0;
   min-height: 0;
   grid-template-rows: 34px minmax(0, 1fr);
@@ -983,7 +983,7 @@ body.is-resizing-workbench-dock {
 .workbench-bottom-dock-content {
   min-height: 0;
   overflow: auto;
-  padding: var(--av-spacing-2xs) var(--av-spacing-sm);
+  padding: 2px var(--av-spacing-sm);
 }
 
 .workbench-bottom-dock .viewpoints-panel {
@@ -1001,11 +1001,6 @@ body.is-resizing-workbench-dock {
   gap: 2px;
 }
 
-.workbench-bottom-dock .viewpoints-panel .property-field > span {
-  font-size: var(--av-font-size-xs);
-  line-height: 1;
-}
-
 .workbench-bottom-dock .viewpoints-panel input,
 .workbench-bottom-dock .viewpoint-actions button,
 .workbench-bottom-dock .viewpoints-toolbar > button {
@@ -1021,7 +1016,10 @@ body.is-resizing-workbench-dock {
 }
 
 .workbench-bottom-dock .viewpoint-list-item {
-  flex: 0 0 156px;
+  width: 168px;
+  min-width: 168px;
+  max-width: 168px;
+  flex: 0 0 168px;
   min-height: 34px;
   padding: 3px var(--av-spacing-xs);
 }
@@ -1810,8 +1808,8 @@ body.is-resizing-workbench-dock {
 }
 
 .viewpoint-list-item {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: center;
   min-width: 0;
   padding: 9px 10px;
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 14%, transparent);
@@ -1822,8 +1820,7 @@ body.is-resizing-workbench-dock {
   cursor: pointer;
 }
 
-.viewpoint-list-item strong,
-.viewpoint-list-item span {
+.viewpoint-list-item strong {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1832,10 +1829,8 @@ body.is-resizing-workbench-dock {
 
 .viewpoint-list-item strong {
   color: var(--av-text-primary);
-}
-
-.viewpoint-list-item span {
-  font-size: 0.74rem;
+  font-size: var(--av-font-size-sm);
+  font-weight: 700;
 }
 
 .viewpoint-list-item.is-selected,
@@ -2122,6 +2117,7 @@ body.is-resizing-workbench-dock {
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 38px;
   padding: 0 10px;
   border: 0;
@@ -2137,13 +2133,21 @@ body.is-resizing-workbench-dock {
   outline-offset: 2px;
 }
 
-.library-title strong,
+.library-title strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .library-tree-toggle strong {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .library-title small {
+  min-width: 0;
+  white-space: nowrap;
   color: color-mix(in srgb, var(--av-text-primary) 58%, transparent);
   font-size: 0.72rem;
   font-weight: 700;
@@ -3599,15 +3603,11 @@ body.is-resizing-workbench-dock {
 
 @media (min-width: 721px) and (max-width: 1200px) {
   .workbench-bottom-dock:not(.is-collapsed) {
-    height: min(max(var(--av-bottom-dock-height, 136px), 150px), calc(100vh - var(--av-shell-top-inset) - 28px));
+    height: min(max(var(--av-bottom-dock-height, 107px), 145px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
   .workbench-bottom-dock .viewpoints-toolbar {
     grid-template-columns: minmax(96px, 0.8fr) minmax(68px, 0.45fr) minmax(112px, 0.75fr);
-  }
-
-  .workbench-bottom-dock:has(.viewpoint-context-actions):not(.is-collapsed) {
-    height: min(max(var(--av-bottom-dock-height, 136px), 188px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
   .workbench-bottom-dock .viewpoints-results {
@@ -3615,7 +3615,7 @@ body.is-resizing-workbench-dock {
   }
 
   .workbench-bottom-dock:has(.viewpoint-context-actions) .viewpoints-results {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
   }
 
   .workbench-bottom-dock .viewpoint-context-actions {
@@ -3656,11 +3656,7 @@ body.is-resizing-workbench-dock {
 
   .workbench-bottom-dock:not(.is-collapsed) {
     z-index: calc(var(--av-z-chrome) + 3);
-    height: min(var(--av-bottom-dock-height, 136px), calc(100vh - var(--av-shell-top-inset) - 28px));
-  }
-
-  .workbench-bottom-dock:has(.viewpoint-context-actions):not(.is-collapsed) {
-    height: min(max(var(--av-bottom-dock-height, 136px), 196px), calc(100vh - var(--av-shell-top-inset) - 28px));
+    height: min(max(var(--av-bottom-dock-height, 107px), 145px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
   .workbench-dock-resize-handle {
@@ -3676,7 +3672,7 @@ body.is-resizing-workbench-dock {
   }
 
   .workbench-bottom-dock:has(.viewpoint-context-actions) .viewpoints-results {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: max-content minmax(0, 1fr);
   }
 
   .workbench-bottom-dock .viewpoint-context-actions {
@@ -3825,7 +3821,7 @@ body.is-resizing-workbench-dock {
   }
 
   .workbench-bottom-dock:not(.is-collapsed) {
-    height: min(max(var(--av-bottom-dock-height, 136px), 220px), calc(100vh - var(--av-shell-top-inset) - 28px));
+    height: min(max(var(--av-bottom-dock-height, 107px), 196px), calc(100vh - var(--av-shell-top-inset) - 28px));
   }
 
   .workbench-bottom-dock .viewpoints-toolbar {
