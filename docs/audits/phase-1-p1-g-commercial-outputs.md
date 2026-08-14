@@ -18,7 +18,7 @@ camera authority, selection authority, or scene lifecycle.
 | Output | Runtime authority | Result |
 | --- | --- | --- |
 | BOM / Equipment Excel | Immutable snapshot + P1-E `bom` mappings | Real XLSX with Summary, BOM, Instances |
-| Measured 2D Layout Plan | Same snapshot + canonical mm footprints + P1-E `report` mappings | Real two-page A3 landscape PDF |
+| Measured 2D Layout Plan | Same snapshot + canonical mm footprints + P1-E `report` mappings | Real paginated A3 landscape PDF |
 | 3D Snapshot | Existing Babylon scene/current camera | Presentation-clean 1920 x 1080 PNG |
 
 The snapshot contains project/layout/revision identity, equipment instances,
@@ -46,6 +46,25 @@ coordinate footprints through front-left-bottom millimetre utilities. Overall
 X/Y extents come from rotated corners. Hidden domain geometry is excluded from
 the plan while BOM quantities remain independent of panel and selection state.
 
+The schedule begins on page 2 and continues at a deterministic 35 rows per A3
+landscape page. Every continuation repeats schedule context, project/layout/
+revision identity, and column headers. Tests preserve every instance exactly
+once at 0, 1, 4, 35, 36, and 100 rows; 100 rows produce three schedule pages
+plus the measured plan page.
+
+PDF text embeds local Noto Sans Regular and Bold assets from the official Noto
+repository. The assets carry the included SIL Open Font License 1.1 and are
+bundled into the lazy PDF serializer. `@pdf-lib/fontkit` provides the
+MIT-licensed embedding adapter. There is no remote runtime font fetch or system
+font dependency. Turkish strings including `İstanbul Şişeleme Hattı`,
+`Ürün Besleme Konveyörü`, `Görüş / Ölçüm`, and `Müşteri Çözümü` serialize and
+reload without transliteration or failure.
+
+Vendored asset SHA-256 evidence:
+
+- NotoSans-Regular.ttf: `B85C38ECEA8A7CFB39C24E395A4007474FA5A4FC864F6EE33309EB4948D232D5`
+- NotoSans-Bold.ttf: `C976E4B1B99EDC88775377FCC21692CA4BFA46B6D6CA6522BFDA505B28FF9D6A`
+
 PNG capture uses the current camera and a render-target screenshot. It hides
 only transient editor affordances, restores every visibility value after
 success or failure, preserves labels/annotations supported by current display
@@ -55,9 +74,17 @@ settings, and does not capture application chrome.
 
 - `fflate@0.8.3`: dependency-free MIT OpenXML ZIP adapter.
 - `pdf-lib@1.17.1`: MIT client-side PDF document adapter.
+- `@pdf-lib/fontkit@1.1.1`: MIT custom-font embedding adapter.
+- Noto Sans Regular/Bold TTF: SIL Open Font License 1.1, vendored with license.
 
-Both are dynamically loaded at export time. No unrelated package was upgraded.
-The npm lockfile is the sole dependency-resolution record.
+Serializer code and font assets are loaded only with the export path. No
+unrelated package was upgraded. The npm lockfile is the sole
+dependency-resolution record. Its correction scope adds only the direct
+`@pdf-lib/fontkit@1.1.1` node; the required `pako` range is satisfied by the
+existing PDF dependency graph.
+
+Independent review `5292939994` required and is addressed by the Unicode font
+and no-row-loss pagination regressions in this correction batch.
 
 ## Runtime Surface Evidence
 
@@ -71,12 +98,13 @@ same IDs.
 ## Validation Evidence
 
 - Focused commercial/platform tests: PASS, 13 files / 99 tests.
+- Focused correction regression: PASS, 5 files / 24 tests.
 - Focused Chromium commercial download: PASS, 1 test.
 - Focused runtime Feature Access observed gate: PASS, 1 test.
 - Dependency audit: PASS, 0 vulnerabilities at `--audit-level=low`.
-- Design-token governance: PASS, 235 maintained files.
-- Build: PASS; XLSX and PDF serializers split into on-demand chunks.
-- Full unit: PASS, 136 files / 1191 tests.
+- Design-token governance: PASS, 237 maintained files.
+- Build: PASS; XLSX and Unicode PDF serializers split into on-demand chunks.
+- Full unit: PASS, 136 files / 1198 tests.
 - Full Chromium: PASS, 64 tests.
 - Diff check: PASS.
 

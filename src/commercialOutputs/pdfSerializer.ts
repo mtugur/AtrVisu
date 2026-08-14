@@ -1,6 +1,8 @@
-import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { TECHNICAL_COLOR_RGB, type TechnicalRgb } from "../designSystem";
 import type { LayoutPlanModel } from "./layoutPlan";
+import { embedCommercialPdfFonts } from "./pdfFontAdapter";
+import { paginateEquipmentSchedule, type EquipmentSchedulePage } from "./schedulePagination";
 
 const A3_LANDSCAPE: [number, number] = [1190.55, 841.89];
 const PAGE_MARGIN = 42;
@@ -99,10 +101,22 @@ const drawPlan = (page: PDFPage, font: PDFFont, bold: PDFFont, model: LayoutPlan
   page.drawText("+Y", { x: drawing.x + 8, y: drawing.y + drawing.height - 12, size: 8, font: bold });
 };
 
-const drawSchedule = (page: PDFPage, font: PDFFont, bold: PDFFont, model: LayoutPlanModel) => {
+const drawSchedule = (
+  page: PDFPage,
+  font: PDFFont,
+  bold: PDFFont,
+  model: LayoutPlanModel,
+  schedulePage: EquipmentSchedulePage
+) => {
   const [pageWidth, pageHeight] = A3_LANDSCAPE;
   page.drawText("EQUIPMENT SCHEDULE", { x: PAGE_MARGIN, y: pageHeight - PAGE_MARGIN, size: 18, font: bold, color: pdfColor(TECHNICAL_COLOR_RGB.sceneGround) });
   page.drawText(`${model.projectName} / ${model.layoutName} / ${model.revision}`, { x: PAGE_MARGIN, y: pageHeight - PAGE_MARGIN - 22, size: 9, font });
+  page.drawText(`Schedule page ${schedulePage.pageIndex + 1} of ${schedulePage.pageCount}`, {
+    x: pageWidth - PAGE_MARGIN - 116,
+    y: pageHeight - PAGE_MARGIN - 22,
+    size: 8,
+    font: bold
+  });
   const columns = [
     { label: "Equipment", width: 140 },
     { label: "Instance", width: 100 },
@@ -122,10 +136,8 @@ const drawSchedule = (page: PDFPage, font: PDFFont, bold: PDFFont, model: Layout
     x += column.width;
   });
   y -= 20;
-  model.schedule.forEach((row, rowIndex) => {
-    if (y < PAGE_MARGIN + 28) {
-      return;
-    }
+  schedulePage.rows.forEach((row, pageRowIndex) => {
+    const rowIndex = schedulePage.rowStartIndex + pageRowIndex;
     if (rowIndex % 2 === 0) {
       page.drawRectangle({ x: PAGE_MARGIN, y: y - 3, width: pageWidth - PAGE_MARGIN * 2, height: 19, color: pdfColor(TECHNICAL_COLOR_RGB.nearWhite) });
     }
@@ -147,12 +159,13 @@ export const serializeLayoutPlanPdf = async (model: LayoutPlanModel) => {
   document.setProducer("AtrVisu");
   document.setCreationDate(new Date(model.generatedAt));
   document.setModificationDate(new Date(model.generatedAt));
-  const font = await document.embedFont(StandardFonts.Helvetica);
-  const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  const { regular: font, bold } = await embedCommercialPdfFonts(document);
   const planPage = document.addPage(A3_LANDSCAPE);
   drawPlan(planPage, font, bold, model);
   drawMetadata(planPage, font, bold, model);
-  const schedulePage = document.addPage(A3_LANDSCAPE);
-  drawSchedule(schedulePage, font, bold, model);
+  paginateEquipmentSchedule(model.schedule).forEach((schedulePageModel) => {
+    const schedulePage = document.addPage(A3_LANDSCAPE);
+    drawSchedule(schedulePage, font, bold, model, schedulePageModel);
+  });
   return document.save({ useObjectStreams: false });
 };

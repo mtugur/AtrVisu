@@ -1385,10 +1385,10 @@ test("commercial outputs download real XLSX PDF and clean PNG without runtime mu
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
 
   await openProjectManagerFromFileMenu(page);
-  await page.getByTestId("new-project-name").fill("Commercial Output Acceptance");
-  await page.getByTestId("new-customer-name").fill("ATARA Customer");
+  await page.getByTestId("new-project-name").fill("İstanbul Şişeleme Hattı");
+  await page.getByTestId("new-customer-name").fill("Müşteri Çözümü");
   await page.getByTestId("create-project").click();
-  await expect(page.getByTestId("project-manager-project-list")).toContainText("Commercial Output Acceptance");
+  await expect(page.getByTestId("project-manager-project-list")).toContainText("İstanbul Şişeleme Hattı");
   await page.getByTestId("close-project-manager").click();
 
   const lineAssets = [
@@ -1414,7 +1414,7 @@ test("commercial outputs download real XLSX PDF and clean PNG without runtime mu
   );
   const modal = page.getByTestId("commercial-outputs-modal");
   await expect(modal).toBeVisible();
-  await expect(modal).toContainText("Commercial Output Acceptance");
+  await expect(modal).toContainText("İstanbul Şişeleme Hattı");
   await expect(modal).toContainText("Layout-1");
   await expect(modal).toContainText("R00");
   await expect(modal).toContainText("Equipment");
@@ -1427,7 +1427,7 @@ test("commercial outputs download real XLSX PDF and clean PNG without runtime mu
       page.getByTestId("export-commercial-bom").click()
     )
   ]);
-  expect(xlsxDownload.suggestedFilename()).toBe("Commercial_Output_Acceptance_Layout_1_R00_BOM.xlsx");
+  expect(xlsxDownload.suggestedFilename()).toBe("İstanbul_Şişeleme_Hattı_Layout_1_R00_BOM.xlsx");
   const xlsxPath = await xlsxDownload.path();
   expect(xlsxPath).not.toBeNull();
   const workbookFiles = unzipSync(await readFile(xlsxPath ?? ""));
@@ -1443,7 +1443,7 @@ test("commercial outputs download real XLSX PDF and clean PNG without runtime mu
       page.getByTestId("export-commercial-plan").click()
     )
   ]);
-  expect(pdfDownload.suggestedFilename()).toBe("Commercial_Output_Acceptance_Layout_1_R00_Plan.pdf");
+  expect(pdfDownload.suggestedFilename()).toBe("İstanbul_Şişeleme_Hattı_Layout_1_R00_Plan.pdf");
   const pdfPath = await pdfDownload.path();
   expect(pdfPath).not.toBeNull();
   expect((await readFile(pdfPath ?? "")).subarray(0, 5).toString()).toBe("%PDF-");
@@ -1454,7 +1454,7 @@ test("commercial outputs download real XLSX PDF and clean PNG without runtime mu
       page.getByTestId("export-commercial-snapshot").click()
     )
   ]);
-  expect(pngDownload.suggestedFilename()).toBe("Commercial_Output_Acceptance_Layout_1_R00_3D.png");
+  expect(pngDownload.suggestedFilename()).toBe("İstanbul_Şişeleme_Hattı_Layout_1_R00_3D.png");
   const pngPath = await pngDownload.path();
   expect(pngPath).not.toBeNull();
   const pngBytes = await readFile(pngPath ?? "");

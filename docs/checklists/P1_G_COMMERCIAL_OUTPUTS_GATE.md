@@ -14,22 +14,27 @@
 | Real XLSX | PASS | Valid OpenXML package; Summary, BOM, Instances |
 | Stable BOM grouping | PASS | Definition/library identity; duplicate conveyor quantity 2 |
 | Canonical instance rows | PASS | One machine row with mm transforms, dimensions, layer, group |
-| Real measured PDF | PASS | A3 landscape Page 1 plan + Page 2 schedule |
+| Real measured PDF | PASS | A3 landscape Page 1 plan + paginated Page 2+ schedule |
+| Unicode PDF authority | PASS | Embedded Noto Sans Regular/Bold; offline OFL assets via fontkit |
+| Turkish commercial text | PASS | Metadata, equipment, report values, filename, and Chromium download |
+| Schedule continuation | PASS | 35 rows/page; repeated context/header; no silent truncation |
+| Schedule boundary coverage | PASS | 0/1/4/35/36/100 rows; every instance exactly once |
 | Canonical 2D geometry | PASS | Front-left-bottom mm footprints, rotation and negative coordinates |
 | Current-camera PNG | PASS | Babylon render-target capture at 1920 x 1080 |
 | Clean capture restoration | PASS | Transient affordances restored in success/failure tests |
 | Genuine ATARA flow | PASS | Flow Pack, two Conveyors, Robot Palletizer through normal Library path |
 | Runtime invariants | PASS | No camera, selection, history, dirty, workspace, or lifecycle mutation |
 | Feature Access evidence | PASS | Commands/panel/surface inventory and observed execution gate |
-| Dependency policy | PASS | Isolated MIT `fflate` and `pdf-lib`; dynamic serializers |
-| Focused validation | PASS | 13 files / 99 tests plus two focused Chromium tests |
+| Dependency policy | PASS | MIT `fflate`, `pdf-lib`, `@pdf-lib/fontkit`; OFL Noto Sans; dynamic serializers |
+| Independent review | PASS | Correctness blockers from `5292939994` covered in one batch |
+| Focused validation | PASS | Initial 13/99 plus correction 5/24 and focused Chromium download |
 | Dependency audit | PASS | 0 vulnerabilities at `--audit-level=low` |
-| Design-token governance | PASS | 235 maintained files |
+| Design-token governance | PASS | 237 maintained files |
 | Build | PASS | TypeScript and Vite production build; serializers lazy-loaded |
-| Full unit suite | PASS | 136 files / 1191 tests |
+| Full unit suite | PASS | 136 files / 1198 tests |
 | Full Chromium suite | PASS | 64 tests |
 | Diff check | PASS | `git diff --check` |
 | Exact-head GitHub Quality Gate | PR GATE | Evaluated against the pushed exact head before manual acceptance |
-| Manual output acceptance | BLOCKED | Review XLSX, both PDF pages, and PNG after green exact-head CI |
+| Manual output acceptance | BLOCKED | Review XLSX, every generated PDF page, and PNG after green exact-head CI |
 
 Decision: **READY FOR EXACT-HEAD CI; MANUAL OUTPUT ACCEPTANCE REQUIRED AFTER GREEN CI.**

@@ -46,6 +46,7 @@ describe("P1-C command surface architecture", () => {
     expect(Object.keys(packageJson.dependencies).sort()).toEqual([
       "@babylonjs/core",
       "@babylonjs/loaders",
+      "@pdf-lib/fontkit",
       "fflate",
       "idb",
       "pdf-lib",
