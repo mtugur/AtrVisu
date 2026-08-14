@@ -57,9 +57,7 @@ describe("canonical workspace preset registry", () => {
       inspectorMode: "summary",
       densityPreference: "comfortable",
       initiallyVisiblePanelIds: [
-        "panel.machineLibrary", "panel.layoutControls", "panel.viewpoints", "panel.projectStatus",
-        "panel.annotations", "panel.precisionPlacement", "panel.connectionPointSnap",
-        "panel.displayOverlayControls", "panel.inspector"
+        "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints", "panel.inspector"
       ],
       emphasizedCommandIds: [
         "project.save", "edit.duplicateSelected", "view.toggleLabels", "view.viewpoints"
@@ -77,10 +75,9 @@ describe("canonical workspace preset registry", () => {
       inspectorMode: "engineering",
       densityPreference: "compact",
       initiallyVisiblePanelIds: [
-        "panel.machineLibrary", "panel.layoutControls", "panel.viewpoints", "panel.layers",
-        "panel.civilReferences", "panel.groups", "panel.projectStatus", "panel.annotations",
-        "panel.precisionPlacement", "panel.alignmentTools", "panel.connectionPointSnap",
-        "panel.displayOverlayControls", "panel.collisionCheck", "panel.inspector"
+        "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints", "panel.layers",
+        "panel.groups", "panel.annotations", "panel.precisionPlacement", "panel.alignmentTools",
+        "panel.connectionPointSnap", "panel.inspector"
       ],
       emphasizedCommandIds: [
         "edit.undo", "edit.redo", "edit.duplicateSelected", "edit.deleteSelected",
@@ -117,7 +114,7 @@ describe("canonical workspace preset registry", () => {
       WORKSPACE_PRESET_REGISTRY_ERROR_CODES.unknownEditor
     );
     expectRegistryError(
-      () => createWorkspacePresetRegistry([{ ...sales, initiallyVisiblePanelIds: ["panel.layoutExplorer"] }]),
+      () => createWorkspacePresetRegistry([{ ...sales, initiallyVisiblePanelIds: ["panel.diagnostics"] }]),
       WORKSPACE_PRESET_REGISTRY_ERROR_CODES.unavailablePanel
     );
     expectRegistryError(

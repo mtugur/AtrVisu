@@ -103,6 +103,7 @@ export function WorkbenchCommandBar({
       role="toolbar"
       aria-label="Layout commands"
       data-testid="workbench-command-bar"
+      data-app-shell-zone="top-toolbar"
       onKeyDown={handleKeyDown}
     >
       {items.map((item, index) => (

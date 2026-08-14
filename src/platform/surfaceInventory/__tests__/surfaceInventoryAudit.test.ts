@@ -33,8 +33,11 @@ describe("surface inventory audit", () => {
     expect(getSurfaceInventoryItemsByCommandId("diagnostics.noRedConsole")).toEqual([]);
   });
 
-  it("does not represent declared-planned panels as live surfaces", () => {
-    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer")).toEqual([]);
+  it("represents live workbench panels and excludes declared-planned panels", () => {
+    expect(getSurfaceInventoryItemsByPanelId("panel.layoutExplorer").map((item) => item.surfaceId))
+      .toContain("surface.layoutExplorer");
+    expect(getSurfaceInventoryItemsByPanelId("panel.statusBar").map((item) => item.surfaceId))
+      .toContain("surface.workbenchStatusBar");
     expect(getSurfaceInventoryItemsByPanelId("panel.diagnostics")).toEqual([]);
   });
 
@@ -46,6 +49,25 @@ describe("surface inventory audit", () => {
 
   it("finds surfaces by feature id", () => {
     expect(getSurfaceInventoryItemsByFeatureId("library.manager").map((item) => item.surfaceId)).toContain("surface.libraryManager");
+  });
+
+  it("links the View-owned display modal to its command, panel, and overlay features", () => {
+    expect(getSurfaceInventoryItemsByCommandId("view.displayOverlayControls").map((item) => item.surfaceId))
+      .toContain("surface.displayOverlayControls");
+    expect(getSurfaceInventoryItemsByPanelId("panel.displayOverlayControls").map((item) => item.surfaceId))
+      .toContain("surface.displayOverlayControls");
+    [
+      "view.selectionBox",
+      "view.metadataBox",
+      "view.collisionEnvelope",
+      "view.clearanceEnvelope",
+      "annotations.visibility",
+      "annotations.leaderLines",
+      "connectionPoints.displayMode"
+    ].forEach((featureId) => {
+      expect(getSurfaceInventoryItemsByFeatureId(featureId).map((item) => item.surfaceId))
+        .toContain("surface.displayOverlayControls");
+    });
   });
 
   it("finds the multi-selection alignment surface by feature, command, and panel links", () => {

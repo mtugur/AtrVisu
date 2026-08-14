@@ -71,6 +71,7 @@ describe("command surface adapter", () => {
       fallbackLabel
     }))).toEqual([
       { id: "file", labelKey: "menu.file", fallbackLabel: "File" },
+      { id: "insert", labelKey: "menu.insert", fallbackLabel: "Insert" },
       { id: "edit", labelKey: "menu.edit", fallbackLabel: "Edit" },
       { id: "view", labelKey: "menu.view", fallbackLabel: "View" },
       { id: "tools", labelKey: "menu.tools", fallbackLabel: "Tools" }
@@ -80,6 +81,10 @@ describe("command surface adapter", () => {
     expect(adapter.getCommandBarItems().map((item) => item.commandId)).toEqual(COMMAND_BAR_COMMAND_IDS);
     expect(adapter.getMenus().flatMap((menu) => menu.items).find((item) => item.commandId === "edit.undo"))
       .toMatchObject({ label: "Undo", shortcut: "Ctrl/Cmd+Z" });
+    expect(adapter.getMenus().find((menu) => menu.id === "view")?.items[0]).toMatchObject({
+      commandId: "view.displayOverlayControls",
+      label: "Display / Overlay Controls"
+    });
   });
 
   it("routes core and runtime commands to one live bridge each without seed execution", async () => {

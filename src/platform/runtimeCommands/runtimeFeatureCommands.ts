@@ -20,6 +20,9 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   projectExportJson: "project.exportJson",
   projectImportJson: "project.importJson",
   projectRestorePrompt: "project.restorePrompt",
+  projectManager: "project.manager",
+  layoutControls: "layout.controls",
+  displayOverlayControls: "view.displayOverlayControls",
   toggleLabels: "view.toggleLabels",
   viewpoints: "view.viewpoints",
   toggleConnectionPoints: "view.toggleConnectionPoints",
@@ -38,7 +41,8 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   rotationSnap: "snap.rotation",
   connectionPointSnap: "snap.connectionPoint",
   collisionCheck: "collision.check",
-  performanceBenchmark: "performance.benchmark"
+  performanceBenchmark: "performance.benchmark",
+  simulationControls: "simulation.controls"
 } as const;
 
 export type RuntimeFeatureCommandId =

@@ -25,6 +25,8 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("project.exportJson", "file", "Export Project JSON", "Export the current project as JSON."),
   createCommandSeed("project.importJson", "file", "Import Project JSON", "Import a project JSON file."),
   createCommandSeed("project.restorePrompt", "file", "Restore Autosave", "Restore a previously autosaved layout when available."),
+  createCommandSeed("project.manager", "file", "Project Manager", "Open the Project Manager."),
+  createCommandSeed("layout.controls", "file", "Layout Import / Export", "Open layout JSON import and export tools."),
 
   createCommandSeed("edit.undo", "edit", "Undo", "Undo the last layout transaction.", false, "Ctrl/Cmd+Z"),
   createCommandSeed("edit.redo", "edit", "Redo", "Redo the next layout transaction.", false, "Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z"),
@@ -38,6 +40,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("assembly.ungroup", "edit", "Ungroup", "Remove the assembly while preserving its members.", true),
 
   createCommandSeed("view.fitView", "view", "Fit View", "Fit the viewport to the current layout."),
+  createCommandSeed("view.displayOverlayControls", "view", "Display / Overlay Controls", "Open global display and overlay settings."),
   createCommandSeed("view.toggleLabels", "view", "Toggle Labels", "Show or hide layout labels."),
   createCommandSeed("view.viewpoints", "view", "Viewpoints", "Open or manage saved viewpoint states."),
   createCommandSeed("view.toggleConnectionPoints", "view", "Toggle Connection Points", "Show or hide connection point overlays."),
@@ -59,6 +62,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("library.manager", "tools", "Library Manager", "Open the Library Manager."),
   createCommandSeed("library.taxonomyManager", "tools", "Taxonomy Manager", "Open the Taxonomy Manager."),
   createCommandSeed("collision.check", "tools", "Collision Check", "Run or review collision checks."),
-  createCommandSeed("performance.benchmark", "tools", "Performance Benchmark", "Open the performance benchmark tool.")
+  createCommandSeed("performance.benchmark", "tools", "Performance Benchmark", "Open the performance benchmark tool."),
+  createCommandSeed("simulation.controls", "tools", "Simulation Controls", "Open the current simulation controls.")
 ] as const satisfies readonly CommandDefinition[];
 

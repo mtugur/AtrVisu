@@ -20,7 +20,23 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.projectSave,
       RUNTIME_FEATURE_COMMAND_IDS.projectExportJson,
       RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
-      RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt
+      RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt,
+      RUNTIME_FEATURE_COMMAND_IDS.projectManager,
+      RUNTIME_FEATURE_COMMAND_IDS.layoutControls
+    ]
+  },
+  {
+    id: "insert",
+    labelKey: "menu.insert",
+    fallbackLabel: "Insert",
+    commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation,
+      RUNTIME_FEATURE_COMMAND_IDS.addFloor,
+      RUNTIME_FEATURE_COMMAND_IDS.addWall,
+      RUNTIME_FEATURE_COMMAND_IDS.addColumn,
+      RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
+      RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
+      RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
     ]
   },
   {
@@ -39,6 +55,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     labelKey: "menu.view",
     fallbackLabel: "View",
     commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.displayOverlayControls,
       RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
       RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
       RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
@@ -53,7 +70,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.libraryManager,
       RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager,
       RUNTIME_FEATURE_COMMAND_IDS.collisionCheck,
-      RUNTIME_FEATURE_COMMAND_IDS.performanceBenchmark
+      RUNTIME_FEATURE_COMMAND_IDS.performanceBenchmark,
+      RUNTIME_FEATURE_COMMAND_IDS.simulationControls
     ]
   }
 ] as const;

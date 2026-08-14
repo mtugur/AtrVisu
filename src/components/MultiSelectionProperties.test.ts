@@ -152,6 +152,41 @@ describe("MultiSelectionProperties", () => {
     expect(markup).toContain("Align Bottom");
   });
 
+  it("honors the contextual alignment panel visibility and collapse contract", () => {
+    const selectedMachines = [machine("a", "Packer"), machine("b", "Conveyor")];
+    const renderWithContribution = (visible: boolean, expanded: boolean) => renderToStaticMarkup(
+      createElement(MultiSelectionProperties, {
+        selectedMachines,
+        primarySelectedMachine: selectedMachines[0],
+        selectionBounds: null,
+        onAlign: () => undefined,
+        onDistribute: () => undefined,
+        onEqualGap: () => undefined,
+        canDuplicateSelected: true,
+        onDuplicateSelected: () => undefined,
+        onClearSelection: () => undefined,
+        onDeleteSelected: () => undefined,
+        alignmentContribution: {
+          panelId: "panel.alignmentTools",
+          visible,
+          expanded,
+          onExpandedChange: () => undefined
+        }
+      })
+    );
+
+    const expandedMarkup = renderWithContribution(true, true);
+    const collapsedMarkup = renderWithContribution(true, false);
+    const hiddenMarkup = renderWithContribution(false, true);
+
+    expect(expandedMarkup).toContain('data-testid="contextual-panel-panel.alignmentTools"');
+    expect(expandedMarkup).toContain('data-testid="multi-selection-alignment-actions"');
+    expect(collapsedMarkup).toContain('aria-expanded="false"');
+    expect(collapsedMarkup).not.toContain('data-testid="multi-selection-alignment-actions"');
+    expect(hiddenMarkup).not.toContain('data-testid="contextual-panel-panel.alignmentTools"');
+    expect(hiddenMarkup).not.toContain('data-testid="multi-selection-alignment-actions"');
+  });
+
   it("renders duplicate and delete actions for machine multi-selection", () => {
     const markup = renderPanel([machine("a", "Packer"), machine("b", "Conveyor")]);
 

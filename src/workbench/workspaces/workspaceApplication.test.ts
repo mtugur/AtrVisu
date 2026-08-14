@@ -10,7 +10,10 @@ import {
   LAYOUT_ENGINEERING_WORKSPACE_ID,
   SALES_LAYOUT_WORKSPACE_ID
 } from "./workspacePresetDefinitions";
-import { workspacePresetRegistry } from "./workspacePresetRegistry";
+import {
+  liveWorkspacePanelDescriptors,
+  workspacePresetRegistry
+} from "./workspacePresetRegistry";
 
 const customizePreferences = () => {
   const defaults = createDefaultWorkbenchUiPreferences();
@@ -31,6 +34,14 @@ const customizePreferences = () => {
 const getPanel = (preferences: WorkbenchUiPreferences, panelId: string) =>
   preferences.panels.find((panel) => panel.panelId === panelId)!;
 
+const liveContentPanelIds = new Set(
+  liveWorkspacePanelDescriptors.map(({ definition }) => definition.id)
+);
+
+const isWorkbenchShellPanel = (panelId: string) => panelId === RUNTIME_PANEL_IDS.primaryDockShell
+  || panelId === RUNTIME_PANEL_IDS.rightPanelShell
+  || panelId === RUNTIME_PANEL_IDS.bottomDockShell;
+
 describe("workspace application", () => {
   it("applies Sales Layout in one presentation result while preserving theme and panel geometry", () => {
     const before = customizePreferences();
@@ -50,13 +61,16 @@ describe("workspace application", () => {
     });
     result.preferences.panels.forEach((panel) => {
       const previous = getPanel(before, panel.panelId);
+      const isAlwaysOpenShell = isWorkbenchShellPanel(panel.panelId);
       expect(panel).toMatchObject({
-        collapsed: panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell ? false : previous.collapsed,
+        collapsed: isAlwaysOpenShell ? false : previous.collapsed,
         order: previous.order,
         dock: previous.dock
       });
-      if (panel.panelId !== RUNTIME_PANEL_IDS.rightPanelShell) {
-        expect(panel.visible).toBe(preset.initiallyVisiblePanelIds.includes(panel.panelId));
+      if (!isAlwaysOpenShell) {
+        expect(panel.visible).toBe(liveContentPanelIds.has(panel.panelId)
+          ? preset.initiallyVisiblePanelIds.includes(panel.panelId)
+          : previous.visible);
       }
     });
     expect(before).toEqual(customizePreferences());
@@ -70,10 +84,13 @@ describe("workspace application", () => {
     expect(result.preferences.activeWorkspaceId).toBe(LAYOUT_ENGINEERING_WORKSPACE_ID);
     expect(result.preferences.density).toBe("compact");
     result.preferences.panels
-      .filter(({ panelId }) => panelId !== RUNTIME_PANEL_IDS.rightPanelShell)
+      .filter(({ panelId }) => !isWorkbenchShellPanel(panelId))
       .forEach((panel) => {
-        expect(panel.visible).toBe(preset.initiallyVisiblePanelIds.includes(panel.panelId));
-        expect(panel.collapsed).toBe(getPanel(before, panel.panelId).collapsed);
+        const previous = getPanel(before, panel.panelId);
+        expect(panel.visible).toBe(liveContentPanelIds.has(panel.panelId)
+          ? preset.initiallyVisiblePanelIds.includes(panel.panelId)
+          : previous.visible);
+        expect(panel.collapsed).toBe(previous.collapsed);
       });
   });
 

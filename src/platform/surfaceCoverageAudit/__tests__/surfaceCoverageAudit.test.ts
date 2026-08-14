@@ -51,10 +51,22 @@ describe("surface coverage audit", () => {
     expect(getSurfaceIdsByPanelId("panel.inspector")).toContain("surface.multiSelectionAlignment");
   });
 
-  it("keeps planned and quality-only definitions out of runtime surface links", () => {
+  it("covers the registered View-owned display and overlay surface", () => {
+    expect(getSurfaceIdsByCommandId("view.displayOverlayControls"))
+      .toContain("surface.displayOverlayControls");
+    expect(getSurfaceIdsByPanelId("panel.displayOverlayControls"))
+      .toContain("surface.displayOverlayControls");
+    expect(getSurfaceIdsByFeatureId("annotations.leaderLines"))
+      .toContain("surface.displayOverlayControls");
+    expect(getSurfaceIdsByFeatureId("connectionPoints.displayMode"))
+      .toContain("surface.displayOverlayControls");
+  });
+
+  it("keeps planned and quality-only definitions out while linking live workbench panels", () => {
     expect(getSurfaceIdsByCommandId("view.fitView")).toEqual([]);
     expect(getSurfaceIdsByCommandId("diagnostics.noRedConsole")).toEqual([]);
-    expect(getSurfaceIdsByPanelId("panel.layoutExplorer")).toEqual([]);
+    expect(getSurfaceIdsByPanelId("panel.layoutExplorer")).toContain("surface.layoutExplorer");
+    expect(getSurfaceIdsByPanelId("panel.statusBar")).toContain("surface.workbenchStatusBar");
     expect(getSurfaceIdsByPanelId("panel.diagnostics")).toEqual([]);
     expect(getSurfaceIdsByFeatureId("diagnostics.noRedConsole")).toContain(
       "surface.noRedConsoleQualityGate"

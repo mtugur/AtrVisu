@@ -20,13 +20,8 @@ export const workspacePresetDefinitions = Object.freeze([
     defaultEditorId: LAYOUT_3D_EDITOR_ID,
     initiallyVisiblePanelIds: Object.freeze([
       RUNTIME_PANEL_IDS.machineLibrary,
-      RUNTIME_PANEL_IDS.layoutControls,
+      RUNTIME_PANEL_IDS.layoutExplorer,
       RUNTIME_PANEL_IDS.viewpoints,
-      RUNTIME_PANEL_IDS.projectStatus,
-      RUNTIME_PANEL_IDS.annotations,
-      RUNTIME_PANEL_IDS.precisionPlacement,
-      RUNTIME_PANEL_IDS.connectionPointSnap,
-      RUNTIME_PANEL_IDS.displayOverlayControls,
       RUNTIME_PANEL_IDS.inspector
     ]),
     emphasizedCommandIds: Object.freeze([
@@ -46,18 +41,14 @@ export const workspacePresetDefinitions = Object.freeze([
     defaultEditorId: LAYOUT_3D_EDITOR_ID,
     initiallyVisiblePanelIds: Object.freeze([
       RUNTIME_PANEL_IDS.machineLibrary,
-      RUNTIME_PANEL_IDS.layoutControls,
+      RUNTIME_PANEL_IDS.layoutExplorer,
       RUNTIME_PANEL_IDS.viewpoints,
       RUNTIME_PANEL_IDS.layers,
-      RUNTIME_PANEL_IDS.civilReferences,
       RUNTIME_PANEL_IDS.groups,
-      RUNTIME_PANEL_IDS.projectStatus,
       RUNTIME_PANEL_IDS.annotations,
       RUNTIME_PANEL_IDS.precisionPlacement,
       RUNTIME_PANEL_IDS.alignmentTools,
       RUNTIME_PANEL_IDS.connectionPointSnap,
-      RUNTIME_PANEL_IDS.displayOverlayControls,
-      RUNTIME_PANEL_IDS.collisionCheck,
       RUNTIME_PANEL_IDS.inspector
     ]),
     emphasizedCommandIds: Object.freeze([

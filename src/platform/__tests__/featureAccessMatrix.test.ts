@@ -66,12 +66,44 @@ describe("platform feature access matrix", () => {
   });
 
   it("keeps planned definitions explicit and excludes them from regression", () => {
-    ["view.fitView", "panel.layoutExplorer", "panel.statusBar", "panel.diagnostics"].forEach((featureId) => {
+    ["view.fitView", "panel.diagnostics"].forEach((featureId) => {
       expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
         classification: "declared-planned",
         requiredForRegression: false
       });
     });
+  });
+
+  it("classifies the live explorer and status bar as required runtime surfaces", () => {
+    ["panel.layoutExplorer", "panel.statusBar"].forEach((featureId) => {
+      expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
+        classification: "required-runtime",
+        requiredForRegression: true
+      });
+    });
+  });
+
+  it("maps every global display overlay capability to the View-owned modal", () => {
+    [
+      "view.displayOverlayControls",
+      "view.selectionBox",
+      "view.metadataBox",
+      "view.collisionEnvelope",
+      "view.clearanceEnvelope",
+      "annotations.visibility",
+      "annotations.leaderLines",
+      "connectionPoints.displayMode"
+    ].forEach((featureId) => {
+      expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
+        requiredForRegression: true,
+        panelIds: ["panel.displayOverlayControls"]
+      });
+    });
+    expect(featureAccessEntries.find((entry) => entry.featureId === "view.displayOverlayControls"))
+      .toMatchObject({
+        commandIds: ["view.displayOverlayControls"],
+        surfaces: ["menu", "modal"]
+      });
   });
 
   it("models no-red-console as external quality evidence without fake runtime links", () => {

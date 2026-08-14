@@ -205,6 +205,7 @@ export function MachineLibrary({
               <button
                 className="library-title"
                 type="button"
+                title={`${library.libraryName} - ${library.loadError ?? (library.readonly ? "Read-only" : "Editable later")}`}
                 onClick={() =>
                   setOpenLibraries((current) => {
                     const next = new Set(current);
@@ -218,7 +219,7 @@ export function MachineLibrary({
                 }
               >
                 <span aria-hidden="true">{isOpen ? "-" : "+"}</span>
-                <strong>{library.libraryName}</strong>
+                <strong title={library.libraryName}>{library.libraryName}</strong>
                 <small>{library.loadError ?? (library.readonly ? "Read-only" : "Editable later")}</small>
               </button>
 

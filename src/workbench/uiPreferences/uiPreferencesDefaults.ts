@@ -1,6 +1,10 @@
 import type { PanelPreference, WorkbenchUiPreferences } from "../../platform/contracts";
 import { UI_PREFERENCES_SCHEMA_VERSION } from "../../platform/contracts";
 import { RUNTIME_PANEL_IDS } from "../../platform/runtimePanels/runtimePanelRegistryBridge";
+import {
+  DEFAULT_BOTTOM_DOCK_HEIGHT,
+  DEFAULT_PRIMARY_DOCK_WIDTH
+} from "../dockSizing";
 
 export const MIN_RIGHT_PANEL_WIDTH = 280;
 export const MAX_RIGHT_PANEL_WIDTH = 600;
@@ -8,7 +12,10 @@ export const DEFAULT_RIGHT_PANEL_WIDTH = 360;
 
 export const COMPATIBILITY_PANEL_DEFAULTS = [
   { panelId: RUNTIME_PANEL_IDS.rightPanelShell, collapsed: false, size: DEFAULT_RIGHT_PANEL_WIDTH },
+  { panelId: RUNTIME_PANEL_IDS.primaryDockShell, collapsed: false, size: DEFAULT_PRIMARY_DOCK_WIDTH },
+  { panelId: RUNTIME_PANEL_IDS.bottomDockShell, collapsed: true, size: DEFAULT_BOTTOM_DOCK_HEIGHT },
   { panelId: RUNTIME_PANEL_IDS.machineLibrary, collapsed: false },
+  { panelId: RUNTIME_PANEL_IDS.layoutExplorer, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.layoutControls, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.viewpoints, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.layers, collapsed: true },
@@ -23,7 +30,8 @@ export const COMPATIBILITY_PANEL_DEFAULTS = [
   { panelId: RUNTIME_PANEL_IDS.connectionPointSnap, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.displayOverlayControls, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.collisionCheck, collapsed: false },
-  { panelId: RUNTIME_PANEL_IDS.inspector, collapsed: true }
+  { panelId: RUNTIME_PANEL_IDS.inspector, collapsed: false },
+  { panelId: RUNTIME_PANEL_IDS.statusBar, collapsed: false }
 ] as const;
 
 export type CompatibilityPanelId = typeof COMPATIBILITY_PANEL_DEFAULTS[number]["panelId"];
@@ -40,9 +48,19 @@ export const createDefaultWorkbenchUiPreferences = (): WorkbenchUiPreferences =>
     panelId: entry.panelId,
     visible: true,
     collapsed: entry.collapsed,
-    ...(entry.panelId === RUNTIME_PANEL_IDS.rightPanelShell ? { size: entry.size } : {}),
+    ...("size" in entry ? { size: entry.size } : {}),
     order,
-    dock: "secondary-dock"
+    dock: entry.panelId === RUNTIME_PANEL_IDS.primaryDockShell
+      || entry.panelId === RUNTIME_PANEL_IDS.machineLibrary
+      || entry.panelId === RUNTIME_PANEL_IDS.layoutExplorer
+      || entry.panelId === RUNTIME_PANEL_IDS.layers
+      || entry.panelId === RUNTIME_PANEL_IDS.groups
+      ? "primary-dock"
+      : entry.panelId === RUNTIME_PANEL_IDS.bottomDockShell
+        || entry.panelId === RUNTIME_PANEL_IDS.viewpoints
+        || entry.panelId === RUNTIME_PANEL_IDS.statusBar
+        ? "bottom-dock"
+        : "secondary-dock"
   }))
 });
 

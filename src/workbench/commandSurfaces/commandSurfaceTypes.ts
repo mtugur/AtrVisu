@@ -27,8 +27,8 @@ export type CommandSurfaceItem = Readonly<{
 }>;
 
 export type CommandSurfaceMenu = Readonly<{
-  id: "file" | "edit" | "view" | "tools";
-  labelKey: `menu.${"file" | "edit" | "view" | "tools"}`;
+  id: "file" | "edit" | "insert" | "view" | "tools";
+  labelKey: `menu.${"file" | "edit" | "insert" | "view" | "tools"}`;
   fallbackLabel: string;
   items: readonly CommandSurfaceItem[];
 }>;

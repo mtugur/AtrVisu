@@ -9,7 +9,9 @@ type OverlayLayerRegionId = Extract<WorkbenchRegionId, "overlay-layer">;
 type AppShellProps = {
   beforeViewport?: ReactNode;
   viewport?: ReactNode;
+  viewportLeftInset?: number;
   viewportRightInset?: number;
+  viewportBottomInset?: number;
   shellTopInset?: string;
   viewportWorkbenchRegion?: EditorHostRegionId;
   rightPanel?: ReactNode;
@@ -49,7 +51,9 @@ const withZoneAnchor = (
 export function AppShell({
   beforeViewport,
   viewport,
+  viewportLeftInset = 0,
   viewportRightInset = 0,
+  viewportBottomInset = 0,
   shellTopInset = "0px",
   viewportWorkbenchRegion,
   rightPanel,
@@ -78,7 +82,9 @@ export function AppShell({
             ? { "data-workbench-region": viewportWorkbenchRegion }
             : {})}
           style={{
-            right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))`
+            left: `min(${Math.max(0, viewportLeftInset)}px, calc(100vw - 28px))`,
+            right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))`,
+            bottom: `${Math.max(0, viewportBottomInset)}px`
           }}
         >
           {viewport}

@@ -38,8 +38,18 @@ export const applyWorkspaceToPreferences = (
     preferences.density = preset.densityPreference;
   }
   preferences.panels = preferences.panels.map((panel) => {
-    if (panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell) {
+    if (
+      panel.panelId === RUNTIME_PANEL_IDS.primaryDockShell
+      || panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
+    ) {
       return { ...panel, visible: true, collapsed: false };
+    }
+    if (panel.panelId === RUNTIME_PANEL_IDS.bottomDockShell) {
+      return {
+        ...panel,
+        visible: true,
+        collapsed: !visiblePanelIds.has(RUNTIME_PANEL_IDS.viewpoints)
+      };
     }
     if (!liveContentPanelIds.has(panel.panelId)) {
       return panel;

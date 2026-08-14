@@ -94,7 +94,7 @@ describe("AppShell render contract", () => {
 
     expect(markup).toContain('class="scene-viewport-host"');
     expect(markup).toContain('style="--av-shell-top-inset:0px"');
-    expect(markup).toContain('style="right:min(420px, calc(100vw - 28px))"');
+    expect(markup).toContain('style="left:min(0px, calc(100vw - 28px));right:min(420px, calc(100vw - 28px));bottom:0px"');
   });
 
   it("owns one shell inset property without injecting right-panel geometry", () => {
@@ -118,6 +118,6 @@ describe("AppShell render contract", () => {
 
     expect(styles).toMatch(/\.scene-viewport-host\s*{[^}]*top:\s*var\(--av-shell-top-inset\)/s);
     expect(styles).toMatch(/\.machine-panel\s*{[^}]*top:\s*var\(--av-shell-top-inset\)[^}]*height:\s*calc\(100% - var\(--av-shell-top-inset\)\)/s);
-    expect(styles).toMatch(/@media \(max-width: 720px\)\s*{[\s\S]*?\.machine-panel\s*{[^}]*top:\s*auto;[^}]*bottom:\s*0;[^}]*height:\s*min\(44vh, 360px\)/);
+    expect(styles).toMatch(/@media \(max-width: 720px\)\s*{[\s\S]*?\.machine-panel\s*{[^}]*top:\s*auto;[^}]*bottom:\s*(?:28px|0)(?:\s*!important)?;[^}]*height:\s*min\(44vh, 360px\)(?:\s*!important)?/);
   });
 });
