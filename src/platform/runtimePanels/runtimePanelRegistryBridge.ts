@@ -16,6 +16,7 @@ export const RUNTIME_PANEL_IDS = {
   projectManager: "panel.projectManager",
   libraryManager: "panel.libraryManager",
   taxonomyManager: "panel.taxonomyManager",
+  commercialOutputs: "panel.commercialOutputs",
   primaryDockShell: "panel.primaryDockShell",
   rightPanelShell: "panel.rightPanelShell",
   bottomDockShell: "panel.bottomDockShell",
@@ -141,7 +142,8 @@ const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {
   [RUNTIME_PANEL_IDS.diagnostics]: "unbound",
   [RUNTIME_PANEL_IDS.projectManager]: "modal",
   [RUNTIME_PANEL_IDS.libraryManager]: "modal",
-  [RUNTIME_PANEL_IDS.taxonomyManager]: "modal"
+  [RUNTIME_PANEL_IDS.taxonomyManager]: "modal",
+  [RUNTIME_PANEL_IDS.commercialOutputs]: "modal"
 };
 
 const seedRuntimeLocations: Readonly<Record<string, RuntimePanelLocation>> = {
@@ -157,7 +159,8 @@ const seedRuntimeLocations: Readonly<Record<string, RuntimePanelLocation>> = {
   [RUNTIME_PANEL_IDS.performanceBenchmark]: "modal-layer",
   [RUNTIME_PANEL_IDS.projectManager]: "modal-layer",
   [RUNTIME_PANEL_IDS.libraryManager]: "modal-layer",
-  [RUNTIME_PANEL_IDS.taxonomyManager]: "modal-layer"
+  [RUNTIME_PANEL_IDS.taxonomyManager]: "modal-layer",
+  [RUNTIME_PANEL_IDS.commercialOutputs]: "modal-layer"
 };
 
 const seededDescriptors: readonly RuntimePanelDescriptor[] = platformPanelSeedDefinitions.map((definition) => ({

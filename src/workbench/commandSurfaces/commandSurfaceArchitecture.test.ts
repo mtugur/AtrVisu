@@ -38,7 +38,7 @@ describe("P1-C command surface architecture", () => {
     expect(adapter).toContain("runtimeBridge.executeCommand");
   });
 
-  it("adds no dependency and leaves package lock governed by npm", () => {
+  it("keeps the production dependency allowlist explicit and package lock governed by npm", () => {
     const packageJson = JSON.parse(readRepositoryFile("../package.json")) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
@@ -46,7 +46,9 @@ describe("P1-C command surface architecture", () => {
     expect(Object.keys(packageJson.dependencies).sort()).toEqual([
       "@babylonjs/core",
       "@babylonjs/loaders",
+      "fflate",
       "idb",
+      "pdf-lib",
       "react",
       "react-dom"
     ]);

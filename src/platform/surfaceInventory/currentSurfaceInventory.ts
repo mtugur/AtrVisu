@@ -29,6 +29,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "project.save",
       "project.manager",
       "layout.controls",
+      "project.commercialOutputs",
       "project.exportJson",
       "project.importJson",
       "project.restorePrompt",
@@ -51,6 +52,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "project.exportJson",
       "project.importJson",
       "project.restorePrompt",
+      "project.commercialOutputs",
       "edit.undo",
       "edit.redo",
       "object.duplicate",
@@ -496,6 +498,35 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     panelIds: ["panel.layoutControls"],
     featureIds: ["panel.layoutControls"],
     notes: "File-menu command opens the existing layout JSON controls in a dedicated modal tool surface."
+  },
+  {
+    surfaceId: "surface.commercialOutputs",
+    surfaceType: "modal",
+    label: "Commercial Outputs",
+    owner: "platform",
+    sourceFiles: [
+      "src/App.tsx",
+      "src/components/CommercialOutputsModal.tsx",
+      "src/commercialOutputs/commercialOutputSnapshot.ts",
+      "src/commercialOutputs/xlsxSerializer.ts",
+      "src/commercialOutputs/pdfSerializer.ts",
+      "src/components/BabylonScene.tsx"
+    ],
+    commandIds: [
+      "project.commercialOutputs",
+      "commercial.exportBomExcel",
+      "commercial.exportLayoutPdf",
+      "commercial.exportScenePng"
+    ],
+    panelIds: ["panel.commercialOutputs"],
+    featureIds: [
+      "project.commercialOutputs",
+      "commercial.exportBomExcel",
+      "commercial.exportLayoutPdf",
+      "commercial.exportScenePng",
+      "panel.commercialOutputs"
+    ],
+    notes: "File-owned modal routes three real client-side exports through registered runtime commands and one immutable derived commercial-output snapshot."
   },
   {
     surfaceId: "surface.simulationControls",
