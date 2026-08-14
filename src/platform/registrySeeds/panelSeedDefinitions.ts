@@ -33,6 +33,7 @@ export const platformPanelSeedDefinitions = [
 
   createPanelSeed("panel.projectManager", "Project Manager", "modal", "manager"),
   createPanelSeed("panel.libraryManager", "Library Manager", "modal", "manager"),
-  createPanelSeed("panel.taxonomyManager", "Taxonomy Manager", "modal", "manager")
+  createPanelSeed("panel.taxonomyManager", "Taxonomy Manager", "modal", "manager"),
+  createPanelSeed("panel.commercialOutputs", "Commercial Outputs", "modal", "tool")
 ] as const satisfies readonly PanelDefinition[];
 

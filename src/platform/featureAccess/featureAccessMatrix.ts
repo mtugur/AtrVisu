@@ -65,6 +65,27 @@ export const platformFeatureAccessMatrix = [
     commandIds: ["project.manager"],
     panelIds: ["panel.projectManager"]
   }),
+  feature("project.commercialOutputs", "Commercial Outputs", ["menu", "modal"], {
+    commandIds: ["project.commercialOutputs"],
+    panelIds: ["panel.commercialOutputs"],
+    requiresSurfaceExecutionEvidence: true
+  }),
+  feature("commercial.exportBomExcel", "Export BOM Excel", ["modal"], {
+    commandIds: ["commercial.exportBomExcel"],
+    panelIds: ["panel.commercialOutputs"],
+    requiresSurfaceExecutionEvidence: true
+  }),
+  feature("commercial.exportLayoutPdf", "Export measured layout PDF", ["modal"], {
+    commandIds: ["commercial.exportLayoutPdf"],
+    panelIds: ["panel.commercialOutputs"],
+    requiresSurfaceExecutionEvidence: true
+  }),
+  feature("commercial.exportScenePng", "Export presentation 3D snapshot", ["modal"], {
+    commandIds: ["commercial.exportScenePng"],
+    panelIds: ["panel.commercialOutputs"],
+    runtimeRequirements: ["viewport"],
+    requiresSurfaceExecutionEvidence: true
+  }),
   feature("edit.undo", "Undo", ["toolbar", "shortcut"], {
     commandIds: ["edit.undo"],
     requiresSurfaceExecutionEvidence: true
@@ -307,6 +328,7 @@ export const platformFeatureAccessMatrix = [
   panelFeature("panel.performanceBenchmark", "Performance Benchmark", ["modal"]),
   panelFeature("panel.libraryManager", "Library Manager", ["modal"]),
   panelFeature("panel.taxonomyManager", "Taxonomy Manager", ["modal"]),
+  panelFeature("panel.commercialOutputs", "Commercial Outputs", ["modal"]),
   feature("panel.diagnostics", "Diagnostics panel", ["panel"], {
     classification: "declared-planned",
     panelIds: ["panel.diagnostics"],

@@ -22,7 +22,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.projectImportJson,
       RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt,
       RUNTIME_FEATURE_COMMAND_IDS.projectManager,
-      RUNTIME_FEATURE_COMMAND_IDS.layoutControls
+      RUNTIME_FEATURE_COMMAND_IDS.layoutControls,
+      RUNTIME_FEATURE_COMMAND_IDS.commercialOutputs
     ]
   },
   {

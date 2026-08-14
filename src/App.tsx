@@ -21,6 +21,7 @@ import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
 import { CivilReferencePanel } from "./components/CivilReferencePanel";
 import { CivilReferenceProperties } from "./components/CivilReferenceProperties";
+import { CommercialOutputsModal } from "./components/CommercialOutputsModal";
 import { AnnotationsPanel } from "./components/AnnotationsPanel";
 import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
@@ -49,6 +50,11 @@ import type { CivilReferenceItem, CivilReferenceType } from "./types/civil";
 import type { ObjectGroup } from "./types/groups";
 import type { LayoutLayer } from "./types/layers";
 import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
+import { createCommercialOutputSnapshot } from "./commercialOutputs/commercialOutputSnapshot";
+import type { CommercialOutputKind } from "./commercialOutputs/types";
+import { createCommercialOutputFileName } from "./commercialOutputs/fileNames";
+import { createLayoutPlanModel } from "./commercialOutputs/layoutPlan";
+import { dataUrlToBytes, downloadCommercialOutput, getPngDimensions } from "./commercialOutputs/download";
 import { createCommandSurfaceAdapter } from "./workbench/commandSurfaces";
 import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
@@ -545,6 +551,7 @@ export function App() {
   const [isSimulationControlsOpen, setIsSimulationControlsOpen] = useState(false);
   const [isLayoutControlsOpen, setIsLayoutControlsOpen] = useState(false);
   const [isDisplayOverlayControlsOpen, setIsDisplayOverlayControlsOpen] = useState(false);
+  const [isCommercialOutputsOpen, setIsCommercialOutputsOpen] = useState(false);
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
   const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
@@ -663,6 +670,7 @@ export function App() {
     isSimulationControlsOpen,
     isLayoutControlsOpen,
     isDisplayOverlayControlsOpen,
+    isCommercialOutputsOpen,
     isLibraryManagerOpen,
     isTaxonomyManagerOpen,
     connectionPointSnapAvailable: false,
@@ -905,6 +913,20 @@ export function App() {
   const currentRevision = currentLayout && currentRevisionId
     ? currentLayout.revisions.find((revision) => revision.revisionId === currentRevisionId)
     : null;
+  const commercialOutputSnapshot = useMemo(() => createCommercialOutputSnapshot({
+    metadata: {
+      projectId: currentProject?.projectId,
+      projectName: currentProject?.projectName,
+      layoutId: currentLayout?.layoutId,
+      layoutName: currentLayout?.layoutName,
+      revisionId: currentRevision?.revisionId,
+      revision: currentRevision?.revisionCode
+    },
+    machines: placedMachines,
+    civilReferences,
+    layers,
+    groups
+  }), [civilReferences, currentLayout, currentProject, currentRevision, groups, layers, placedMachines]);
   const collisionResult = useMemo(
     () => checkAllObjectCollisions(visiblePlacedMachines, visibleCivilReferences, collisionSettings.enabled),
     [collisionSettings.enabled, visibleCivilReferences, visiblePlacedMachines]
@@ -1439,6 +1461,12 @@ export function App() {
         close: () => setIsLayoutControlsOpen(false),
         toggle: () => setIsLayoutControlsOpen((current) => !current)
       },
+      [RUNTIME_PANEL_IDS.commercialOutputs]: {
+        getState: () => modalState(runtimePanelStateRef.current.isCommercialOutputsOpen),
+        open: () => setIsCommercialOutputsOpen(true),
+        close: () => setIsCommercialOutputsOpen(false),
+        toggle: () => setIsCommercialOutputsOpen((current) => !current)
+      },
       [RUNTIME_PANEL_IDS.machineLibrary]: primaryPanelBinding(
         RUNTIME_PANEL_IDS.machineLibrary,
         closeMachineLibraryManagers
@@ -1576,6 +1604,7 @@ export function App() {
       isSimulationControlsOpen,
       isLayoutControlsOpen,
       isDisplayOverlayControlsOpen,
+      isCommercialOutputsOpen,
       isLibraryManagerOpen,
       isTaxonomyManagerOpen,
       connectionPointSnapAvailable,
@@ -1590,6 +1619,7 @@ export function App() {
     editingAnnotationId,
     isCollisionCheckOpen,
     isDisplayOverlayControlsOpen,
+    isCommercialOutputsOpen,
     isLayoutControlsOpen,
     isLibraryManagerOpen,
     isBottomDockCollapsed,
@@ -3114,6 +3144,43 @@ export function App() {
     setAutosaveReady(true);
   }, []);
 
+  const exportCommercialBom = useCallback(async () => {
+    const { serializeCommercialOutputXlsx } = await import("./commercialOutputs/xlsxSerializer");
+    const bytes = serializeCommercialOutputXlsx(commercialOutputSnapshot);
+    downloadCommercialOutput(
+      bytes,
+      createCommercialOutputFileName(commercialOutputSnapshot.metadata, "bom"),
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+  }, [commercialOutputSnapshot]);
+
+  const exportCommercialPlan = useCallback(async () => {
+    const { serializeLayoutPlanPdf } = await import("./commercialOutputs/pdfSerializer");
+    const bytes = await serializeLayoutPlanPdf(createLayoutPlanModel(commercialOutputSnapshot));
+    downloadCommercialOutput(
+      bytes,
+      createCommercialOutputFileName(commercialOutputSnapshot.metadata, "plan"),
+      "application/pdf"
+    );
+  }, [commercialOutputSnapshot]);
+
+  const exportCommercialSnapshot = useCallback(async () => {
+    const dataUrl = await sceneRef.current?.capturePresentationSnapshot();
+    if (!dataUrl) {
+      throw new Error("The 3D scene is not ready for presentation capture.");
+    }
+    const bytes = dataUrlToBytes(dataUrl);
+    const dimensions = getPngDimensions(bytes);
+    if (!dimensions || dimensions.width !== 1920 || dimensions.height !== 1080 || bytes.byteLength <= 24) {
+      throw new Error("The 3D presentation snapshot did not produce a valid 1920 x 1080 PNG.");
+    }
+    downloadCommercialOutput(
+      bytes,
+      createCommercialOutputFileName(commercialOutputSnapshot.metadata, "snapshot"),
+      "image/png"
+    );
+  }, [commercialOutputSnapshot]);
+
   const projectRuntimeCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() =>
     createProjectRuntimeCommandBindings({
       projects,
@@ -3158,6 +3225,39 @@ export function App() {
       execute: () => mapPanelOperationToRuntimeCommandResult(
         runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.layoutControls)
       )
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.commercialOutputs]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => mapPanelOperationToRuntimeCommandResult(
+        runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.commercialOutputs)
+      )
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.exportBomExcel]: {
+      getEnableState: () => commercialOutputSnapshot.equipmentCount > 0
+        ? { enabled: true }
+        : { enabled: false, reason: "Add equipment before exporting a BOM." },
+      execute: async () => {
+        await exportCommercialBom();
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.exportLayoutPdf]: {
+      getEnableState: () => commercialOutputSnapshot.extents
+        ? { enabled: true }
+        : { enabled: false, reason: "Add visible layout geometry before exporting a plan." },
+      execute: async () => {
+        await exportCommercialPlan();
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.exportScenePng]: {
+      getEnableState: () => commercialOutputSnapshot.planFootprints.some((footprint) => footprint.visible)
+        ? { enabled: true }
+        : { enabled: false, reason: "Add visible scene content before exporting a snapshot." },
+      execute: async () => {
+        await exportCommercialSnapshot();
+        return createExecutedRuntimeFeatureCommandResult();
+      }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.displayOverlayControls]: {
       getEnableState: () => ({ enabled: true }),
@@ -3370,6 +3470,10 @@ export function App() {
     applyPairAnchorSnap,
     connectionPointSnapContext.available,
     connectionPointSnapReason,
+    commercialOutputSnapshot,
+    exportCommercialBom,
+    exportCommercialPlan,
+    exportCommercialSnapshot,
     projectRuntimeCommandBindings,
     recoveryLayout,
     restoreAutosavedLayout,
@@ -5211,6 +5315,34 @@ export function App() {
                 return executeRuntimeFeatureCommand(commandId, payload);
               }}
               onRequestProjectImport={requestProjectImportFile}
+            />
+          ) : null}
+          {isCommercialOutputsOpen ? (
+            <CommercialOutputsModal
+              snapshot={commercialOutputSnapshot}
+              actions={{
+                bom: commercialOutputSnapshot.equipmentCount > 0
+                  ? { enabled: true }
+                  : { enabled: false, reason: "Add equipment before exporting a BOM." },
+                plan: commercialOutputSnapshot.extents
+                  ? { enabled: true }
+                  : { enabled: false, reason: "Add visible layout geometry before exporting a plan." },
+                snapshot: commercialOutputSnapshot.planFootprints.some((footprint) => footprint.visible)
+                  ? { enabled: true }
+                  : { enabled: false, reason: "Add visible scene content before exporting a snapshot." }
+              }}
+              onExport={async (kind: CommercialOutputKind) => {
+                const commandId = kind === "bom"
+                  ? RUNTIME_FEATURE_COMMAND_IDS.exportBomExcel
+                  : kind === "plan"
+                    ? RUNTIME_FEATURE_COMMAND_IDS.exportLayoutPdf
+                    : RUNTIME_FEATURE_COMMAND_IDS.exportScenePng;
+                const result = await executeRuntimeFeatureCommand(commandId);
+                if (!result.handled) {
+                  throw new Error(result.reason ?? "The commercial output command was not completed.");
+                }
+              }}
+              onClose={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.commercialOutputs)}
             />
           ) : null}
           {isPerformanceBenchmarkOpen ? (

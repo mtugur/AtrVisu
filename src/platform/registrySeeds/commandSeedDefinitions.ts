@@ -27,6 +27,10 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("project.restorePrompt", "file", "Restore Autosave", "Restore a previously autosaved layout when available."),
   createCommandSeed("project.manager", "file", "Project Manager", "Open the Project Manager."),
   createCommandSeed("layout.controls", "file", "Layout Import / Export", "Open layout JSON import and export tools."),
+  createCommandSeed("project.commercialOutputs", "file", "Commercial Outputs...", "Open BOM, measured plan, and presentation snapshot outputs."),
+  createCommandSeed("commercial.exportBomExcel", "file", "Export BOM Excel", "Export a commercial equipment workbook."),
+  createCommandSeed("commercial.exportLayoutPdf", "file", "Export 2D Layout PDF", "Export a measured A3 layout plan and equipment schedule."),
+  createCommandSeed("commercial.exportScenePng", "file", "Export 3D Snapshot", "Export a presentation-clean image from the current scene camera."),
 
   createCommandSeed("edit.undo", "edit", "Undo", "Undo the last layout transaction.", false, "Ctrl/Cmd+Z"),
   createCommandSeed("edit.redo", "edit", "Redo", "Redo the next layout transaction.", false, "Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z"),

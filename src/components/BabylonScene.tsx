@@ -99,6 +99,8 @@ import {
   createTechnicalColor3,
   createTechnicalColor3FromHex
 } from "../designSystem/technicalPaletteBabylon";
+import { CreateScreenshotUsingRenderTargetAsync } from "@babylonjs/core/Misc/screenshotTools";
+import { captureWithoutEditorAffordances } from "../commercialOutputs/presentationCapture";
 
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
@@ -173,6 +175,7 @@ export type BabylonSceneHandle = {
   getRuntimeViewportState: () => RuntimeViewportState | null;
   getRuntimeViewportCameraSnapshot: () => RuntimeViewportCameraSnapshot | null;
   requestRuntimeViewportResize: (request: ViewportResizeRequest) => RuntimeViewportResizeResult;
+  capturePresentationSnapshot: () => Promise<string>;
 };
 
 type PlacedMachineNode = {
@@ -1291,6 +1294,37 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   }, [onPerformanceMetricsChange]);
 
   useImperativeHandle(ref, () => ({
+    capturePresentationSnapshot: async () => {
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      if (!scene || !camera) {
+        throw new Error("The 3D scene is not ready for presentation capture.");
+      }
+      const editorAffordances = [
+        ...[...machineNodesRef.current.values()].flatMap((node) => [
+          node.selectionFrame,
+          node.metadataFrame,
+          node.collisionFrame,
+          ...(node.clearanceFrame ? [node.clearanceFrame] : []),
+          ...node.connectionPointMarkers.flatMap((marker) => [marker.marker, marker.label])
+        ]),
+        ...[...civilReferenceNodesRef.current.values()].map((node) => node.selectionFrame),
+        ...[...annotationNodesRef.current.values()].flatMap((node) => [node.hitTarget, node.anchor, node.handleStem])
+      ];
+      return captureWithoutEditorAffordances(editorAffordances, () =>
+        CreateScreenshotUsingRenderTargetAsync(
+          scene.getEngine(),
+          camera,
+          { width: 1920, height: 1080 },
+          "image/png",
+          1,
+          true,
+          undefined,
+          true,
+          false
+        )
+      );
+    },
     getCameraState: () => {
       const camera = cameraRef.current;
       if (!camera) {

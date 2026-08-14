@@ -1,4 +1,6 @@
 import { expect, type Dialog, type Page, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { strFromU8, unzipSync } from "fflate";
 
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
@@ -941,6 +943,26 @@ test("runtime feature access complete gate is bound to observed visible command 
   await page.getByTestId("close-taxonomy-manager-header").click();
   await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
 
+  const fileMenu = await openWorkbenchMenu(page, "File");
+  await observe("project.commercialOutputs", () =>
+    fileMenu.locator('[data-command-id="project.commercialOutputs"]').click()
+  );
+  await expect(page.getByTestId("commercial-outputs-modal")).toBeVisible();
+  await Promise.all([
+    page.waitForEvent("download"),
+    observe("commercial.exportBomExcel", () => page.getByTestId("export-commercial-bom").click())
+  ]);
+  await Promise.all([
+    page.waitForEvent("download"),
+    observe("commercial.exportLayoutPdf", () => page.getByTestId("export-commercial-plan").click())
+  ]);
+  await Promise.all([
+    page.waitForEvent("download"),
+    observe("commercial.exportScenePng", () => page.getByTestId("export-commercial-snapshot").click())
+  ]);
+  await page.getByTestId("close-commercial-outputs").click();
+  await expect(page.getByTestId("commercial-outputs-modal")).toHaveCount(0);
+
   const toolsMenu = await openWorkbenchMenu(page, "Tools");
   await observe("performance.benchmark", () =>
     toolsMenu.locator('[data-command-id="performance.benchmark"]').click()
@@ -1352,6 +1374,104 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
 
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("commercial outputs download real XLSX PDF and clean PNG without runtime mutation", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+
+  await openProjectManagerFromFileMenu(page);
+  await page.getByTestId("new-project-name").fill("İstanbul Şişeleme Hattı");
+  await page.getByTestId("new-customer-name").fill("Müşteri Çözümü");
+  await page.getByTestId("create-project").click();
+  await expect(page.getByTestId("project-manager-project-list")).toContainText("İstanbul Şişeleme Hattı");
+  await page.getByTestId("close-project-manager").click();
+
+  const lineAssets = [
+    { name: "Flow Pack Machine", groups: ["Primary Packaging", "Horizontal Flow Pack"], xMm: "-1200" },
+    { name: "Belt Conveyor", groups: ["Conveyors", "Belt Conveyors"], xMm: "3600" },
+    { name: "Belt Conveyor", groups: ["Conveyors", "Belt Conveyors"], xMm: "9000" },
+    { name: "Robot Palletizer", groups: ["Palletizing", "Robot Palletizers"], xMm: "14600" }
+  ] as const;
+  for (const [index, asset] of lineAssets.entries()) {
+    await addCanonicalAtaraMachine(page, asset.name, asset.groups);
+    await waitForMachineDiagnostics(page, index + 1);
+    const properties = page.getByLabel("Selected machine properties");
+    await properties.getByLabel("Plan X").fill(asset.xMm);
+    await properties.getByLabel("Plan X").blur();
+  }
+
+  const before = await waitForRuntimeViewport(page);
+  const projectBefore = await getActiveProjectRuntimeContext(page);
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const fileMenu = await openWorkbenchMenu(page, "File");
+  await expectRuntimeCommandExecutionOnce(page, "project.commercialOutputs", () =>
+    fileMenu.locator('[data-command-id="project.commercialOutputs"]').click()
+  );
+  const modal = page.getByTestId("commercial-outputs-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText("İstanbul Şişeleme Hattı");
+  await expect(modal).toContainText("Layout-1");
+  await expect(modal).toContainText("R00");
+  await expect(modal).toContainText("Equipment");
+  await expect(modal).toContainText("4");
+  await expect(page.getByTestId("commercial-output-data-gap-warning")).toBeVisible();
+
+  const [xlsxDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    expectRuntimeCommandExecutionOnce(page, "commercial.exportBomExcel", () =>
+      page.getByTestId("export-commercial-bom").click()
+    )
+  ]);
+  expect(xlsxDownload.suggestedFilename()).toBe("İstanbul_Şişeleme_Hattı_Layout_1_R00_BOM.xlsx");
+  const xlsxPath = await xlsxDownload.path();
+  expect(xlsxPath).not.toBeNull();
+  const workbookFiles = unzipSync(await readFile(xlsxPath ?? ""));
+  expect(strFromU8(workbookFiles["xl/workbook.xml"])).toContain('name="Summary"');
+  const bomXml = strFromU8(workbookFiles["xl/worksheets/sheet2.xml"]);
+  expect(bomXml).toContain("Belt Conveyor");
+  expect(bomXml).toMatch(/<v>2<\/v>/);
+  expect(strFromU8(workbookFiles["xl/worksheets/sheet3.xml"]).match(/conveyor-belt-01/g)?.length).toBeGreaterThanOrEqual(2);
+
+  const [pdfDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    expectRuntimeCommandExecutionOnce(page, "commercial.exportLayoutPdf", () =>
+      page.getByTestId("export-commercial-plan").click()
+    )
+  ]);
+  expect(pdfDownload.suggestedFilename()).toBe("İstanbul_Şişeleme_Hattı_Layout_1_R00_Plan.pdf");
+  const pdfPath = await pdfDownload.path();
+  expect(pdfPath).not.toBeNull();
+  expect((await readFile(pdfPath ?? "")).subarray(0, 5).toString()).toBe("%PDF-");
+
+  const [pngDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    expectRuntimeCommandExecutionOnce(page, "commercial.exportScenePng", () =>
+      page.getByTestId("export-commercial-snapshot").click()
+    )
+  ]);
+  expect(pngDownload.suggestedFilename()).toBe("İstanbul_Şişeleme_Hattı_Layout_1_R00_3D.png");
+  const pngPath = await pngDownload.path();
+  expect(pngPath).not.toBeNull();
+  const pngBytes = await readFile(pngPath ?? "");
+  expect([...pngBytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(pngBytes.readUInt32BE(16)).toBe(1920);
+  expect(pngBytes.readUInt32BE(20)).toBe(1080);
+  expect(pngBytes.byteLength).toBeGreaterThan(1024);
+
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(after.camera).toEqual(before.camera);
+  expect(await getActiveProjectRuntimeContext(page)).toEqual(projectBefore);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 
