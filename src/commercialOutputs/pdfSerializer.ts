@@ -2,6 +2,8 @@ import { PDFDocument, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { TECHNICAL_COLOR_RGB, type TechnicalRgb } from "../designSystem";
 import type { LayoutPlanModel } from "./layoutPlan";
 import { embedCommercialPdfFonts } from "./pdfFontAdapter";
+import { createPlanLabelPresentation } from "./pdfPlanPresentation";
+import { formatCommercialOutputTimestampUtc } from "./presentationFormat";
 import { paginateEquipmentSchedule, type EquipmentSchedulePage } from "./schedulePagination";
 
 const A3_LANDSCAPE: [number, number] = [1190.55, 841.89];
@@ -28,7 +30,7 @@ const drawMetadata = (page: PDFPage, font: PDFFont, bold: PDFFont, model: Layout
   page.drawText(`Project: ${model.projectName}`, { x: PAGE_MARGIN + 12, y: PAGE_MARGIN + 30, size: 9, font });
   page.drawText(`Layout: ${model.layoutName}`, { x: 360, y: PAGE_MARGIN + 30, size: 9, font });
   page.drawText(`Revision: ${model.revision}`, { x: 660, y: PAGE_MARGIN + 30, size: 9, font });
-  page.drawText(`Generated: ${model.generatedAt}`, { x: PAGE_MARGIN + 12, y: PAGE_MARGIN + 12, size: 8, font });
+  page.drawText(`Generated: ${formatCommercialOutputTimestampUtc(model.generatedAt)}`, { x: PAGE_MARGIN + 12, y: PAGE_MARGIN + 12, size: 8, font });
   page.drawText(`Unit: ${model.unit}`, { x: 660, y: PAGE_MARGIN + 12, size: 8, font });
   page.drawText(model.scaleLabel, { x: 850, y: PAGE_MARGIN + 12, size: 8, font: bold });
 };
@@ -79,10 +81,36 @@ const drawPlan = (page: PDFPage, font: PDFFont, bold: PDFFont, model: LayoutPlan
     });
     const centerX = corners.reduce((sum, corner) => sum + corner.x, 0) / corners.length;
     const centerY = corners.reduce((sum, corner) => sum + corner.y, 0) / corners.length;
-    page.drawText(truncate(footprint.name, 28), { x: centerX - 32, y: centerY - 3, size: 7, font: bold, color: pdfColor(TECHNICAL_COLOR_RGB.sceneGround) });
     if (corners.length >= 2) {
       const frontMid = { x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2 };
-      page.drawLine({ start: { x: centerX, y: centerY }, end: frontMid, thickness: 1.4, color: pdfColor(TECHNICAL_COLOR_RGB.axisX) });
+      const label = truncate(footprint.name, 28);
+      createPlanLabelPresentation({
+        center: { x: centerX, y: centerY },
+        frontMid,
+        label,
+        labelWidth: bold.widthOfTextAtSize(label, 7),
+        fontSize: 7
+      }).forEach((command) => {
+        if (command.kind === "orientation") {
+          page.drawLine({ start: command.start, end: command.end, thickness: 1.4, color: pdfColor(TECHNICAL_COLOR_RGB.axisX) });
+        } else if (command.kind === "label-knockout") {
+          page.drawRectangle({
+            x: command.x,
+            y: command.y,
+            width: command.width,
+            height: command.height,
+            color: pdfColor(TECHNICAL_COLOR_RGB.white)
+          });
+        } else {
+          page.drawText(command.text, {
+            x: command.x,
+            y: command.y,
+            size: command.size,
+            font: bold,
+            color: pdfColor(TECHNICAL_COLOR_RGB.sceneGround)
+          });
+        }
+      });
     }
   });
 

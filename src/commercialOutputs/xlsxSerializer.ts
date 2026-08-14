@@ -1,9 +1,17 @@
 import { strToU8, zipSync } from "fflate";
 import type { CommercialOutputBomGroup, CommercialOutputProperty, CommercialOutputSnapshot } from "./types";
 import { UNKNOWN_COMMERCIAL_VALUE } from "./types";
+import { formatCommercialOutputTimestampUtc } from "./presentationFormat";
 
 type WorkbookCell = string | number | boolean;
 type WorkbookRow = readonly WorkbookCell[];
+
+interface WorksheetPresentation {
+  readonly columnWidths: readonly number[];
+  readonly frozenColumns?: number;
+  readonly autoFilter?: boolean;
+  readonly numericColumns?: readonly number[];
+}
 
 const xmlEscape = (value: string) => value
   .replace(/&/g, "&amp;")
@@ -23,9 +31,15 @@ const columnName = (columnIndex: number) => {
   return name;
 };
 
-const cellXml = (value: WorkbookCell, row: number, column: number, header: boolean) => {
+const cellXml = (
+  value: WorkbookCell,
+  row: number,
+  column: number,
+  header: boolean,
+  numericColumns: ReadonlySet<number>
+) => {
   const reference = `${columnName(column)}${row + 1}`;
-  const style = header ? " s=\"1\"" : "";
+  const style = header ? " s=\"1\"" : numericColumns.has(column) ? " s=\"2\"" : "";
   if (typeof value === "number" && Number.isFinite(value)) {
     return `<c r="${reference}"${style}><v>${value}</v></c>`;
   }
@@ -35,16 +49,33 @@ const cellXml = (value: WorkbookCell, row: number, column: number, header: boole
   return `<c r="${reference}" t="inlineStr"${style}><is><t xml:space="preserve">${xmlEscape(String(value))}</t></is></c>`;
 };
 
-const worksheetXml = (rows: readonly WorkbookRow[], headerRows = 1) => {
+const worksheetXml = (
+  rows: readonly WorkbookRow[],
+  presentation: WorksheetPresentation,
+  headerRows = 1
+) => {
+  const numericColumns = new Set(presentation.numericColumns ?? []);
   const rowXml = rows.map((row, rowIndex) => (
-    `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => cellXml(cell, rowIndex, columnIndex, rowIndex < headerRows)).join("")}</row>`
+    `<row r="${rowIndex + 1}"${rowIndex < headerRows ? " ht=\"30\" customHeight=\"1\"" : ""}>${row.map((cell, columnIndex) => cellXml(cell, rowIndex, columnIndex, rowIndex < headerRows, numericColumns)).join("")}</row>`
   )).join("");
   const widthCount = Math.max(1, ...rows.map((row) => row.length));
-  const widths = Array.from({ length: widthCount }, (_, index) => `<col min="${index + 1}" max="${index + 1}" width="${index === 0 ? 28 : 20}" customWidth="1"/>`).join("");
+  const widths = Array.from({ length: widthCount }, (_, index) => (
+    `<col min="${index + 1}" max="${index + 1}" width="${presentation.columnWidths[index] ?? 18}" customWidth="1"/>`
+  )).join("");
+  const lastColumn = columnName(widthCount - 1);
+  const lastRow = Math.max(rows.length, 1);
+  const frozenColumns = presentation.frozenColumns ?? 0;
+  const activePane = frozenColumns > 0 ? "bottomRight" : "bottomLeft";
+  const topLeftCell = `${columnName(frozenColumns)}${headerRows + 1}`;
+  const sheetViews = `<sheetViews><sheetView workbookViewId="0"><pane${frozenColumns > 0 ? ` xSplit="${frozenColumns}"` : ""} ySplit="${headerRows}" topLeftCell="${topLeftCell}" activePane="${activePane}" state="frozen"/></sheetView></sheetViews>`;
+  const autoFilter = presentation.autoFilter ? `<autoFilter ref="A1:${lastColumn}${lastRow}"/>` : "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  ${sheetViews}
+  <sheetFormatPr defaultRowHeight="15"/>
   <cols>${widths}</cols>
   <sheetData>${rowXml}</sheetData>
+  ${autoFilter}
 </worksheet>`;
 };
 
@@ -78,7 +109,7 @@ export const createBomWorkbookRows = (snapshot: CommercialOutputSnapshot) => {
     ["Project name", snapshot.metadata.projectName],
     ["Layout name", snapshot.metadata.layoutName],
     ["Revision", snapshot.metadata.revision],
-    ["Generated timestamp", snapshot.metadata.generatedAt],
+    ["Generated timestamp", formatCommercialOutputTimestampUtc(snapshot.metadata.generatedAt)],
     ["Canonical unit", snapshot.metadata.canonicalUnit],
     ["Equipment instances", snapshot.equipmentCount],
     ["BOM groups", snapshot.bomGroupCount],
@@ -160,15 +191,27 @@ export const serializeCommercialOutputXlsx = (snapshot: CommercialOutputSnapshot
 </Relationships>`),
     "xl/styles.xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="1"><numFmt numFmtId="164" formatCode="0.###"/></numFmts>
   <fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Aptos"/></font></fonts>
   <fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4E78"/><bgColor indexed="64"/></patternFill></fill></fills>
   <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>
+  <cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>
 </styleSheet>`),
-    "xl/worksheets/sheet1.xml": strToU8(worksheetXml(rows.summary)),
-    "xl/worksheets/sheet2.xml": strToU8(worksheetXml(rows.bom)),
-    "xl/worksheets/sheet3.xml": strToU8(worksheetXml(rows.instances))
+    "xl/worksheets/sheet1.xml": strToU8(worksheetXml(rows.summary, {
+      columnWidths: [30, 34]
+    })),
+    "xl/worksheets/sheet2.xml": strToU8(worksheetXml(rows.bom, {
+      columnWidths: [32, 28, 44, 12, ...Array(Math.max(0, rows.bom[0].length - 4)).fill(18)],
+      frozenColumns: 3,
+      autoFilter: true
+    })),
+    "xl/worksheets/sheet3.xml": strToU8(worksheetXml(rows.instances, {
+      columnWidths: [28, 28, 44, 32, 18, 26, 15, 15, 16, 16, 14, 14, 14],
+      frozenColumns: 4,
+      autoFilter: true,
+      numericColumns: [6, 7, 8, 9, 10, 11, 12]
+    }))
   };
   return zipSync(files, { level: 6 });
 };

@@ -28,6 +28,13 @@ presentation only and never determine equivalence. Instance rows retain one
 row per placed machine with canonical Plan X, Plan Y, rotation, dimensions,
 layer, and group context.
 
+Workbook presentation is deterministic but remains separate from the snapshot
+and table contracts. Summary, BOM, and Instances retain their existing columns,
+values, and ordering. BOM and Instances declare intentional identity/property
+column widths, wrapped headers, frozen header/leading identity panes, and table
+autofilters. Canonical millimetre and degree numbers remain numeric cells and
+use the presentation-only `0.###` format.
+
 The measured plan is a deterministic A3 landscape document. Its geometry is
 derived from canonical domain footprints, including rotated and negative
 coordinates, and never from Babylon mesh bounds or metres. Page 1 contains the
@@ -44,6 +51,17 @@ Regular and Bold files. The files are sourced from the official
 No system font or remote runtime font request participates in output. Turkish
 project, layout, equipment, and report text is preserved without
 transliteration or ASCII fallback.
+
+The plan draws each front/orientation indicator before a compact opaque label
+knockout and the equipment label. The knockout covers the indicator origin at
+the footprint centre, so normal, narrow, tall, and rotated footprints retain
+orientation information without crossing their label. Label text continues to
+use the same embedded Unicode font authority.
+
+Canonical `generatedAt` values remain ISO timestamps in the commercial output
+snapshot and PDF document metadata. One presentation formatter converts that
+same value to the explicit, locale-independent `YYYY-MM-DD HH:mm UTC` form for
+the XLSX Summary and visible PDF title block.
 
 The 3D presentation image is captured from the existing Babylon scene and
 current camera at 1920 x 1080. The capture does not alter the camera or scene.
@@ -98,8 +116,10 @@ vulnerabilities.
   filenames, rotation, negative coordinates, extents, and injected time.
 - Serializer tests inspect the XLSX OpenXML package and parse the PDF metadata,
   page count, dimensions, Unicode font path, schedule boundaries, and canonical
-  plan model. Turkish content and 0/1/4/35/36/100-row schedules are explicit
-  regressions.
+  plan model. OpenXML widths, wrapped headers, freeze panes, filters, numeric
+  formatting, preserved long identities, deterministic UTC presentation text,
+  and label/orientation command order are explicit regressions. Turkish content
+  and 0/1/4/35/36/100-row schedules remain covered.
 - Chromium downloads all three outputs through registered product commands and
   validates file signatures, names, workbook contents, PNG dimensions, state
   invariants, single editor/canvas identity, and no red errors.
@@ -108,3 +128,8 @@ vulnerabilities.
 
 Independent review `5292939994` is closed architecturally by the embedded
 Unicode font authority and deterministic schedule continuation policy.
+
+Manual artifact review `5293547482` is addressed by deterministic workbook
+readability metadata, the shared UTC presentation formatter, and the plan-label
+knockout policy. Snapshot, workbook data, schedule, and PNG contracts are
+unchanged.

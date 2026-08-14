@@ -6,7 +6,9 @@ import { getPngDimensions } from "./download";
 import { createLayoutPlanModel } from "./layoutPlan";
 import type { LayoutPlanModel, LayoutPlanScheduleRow } from "./layoutPlan";
 import { COMMERCIAL_PDF_FONT_AUTHORITY } from "./pdfFontAdapter";
+import { createPlanLabelPresentation } from "./pdfPlanPresentation";
 import { serializeLayoutPlanPdf } from "./pdfSerializer";
+import { formatCommercialOutputTimestampUtc } from "./presentationFormat";
 import { EQUIPMENT_SCHEDULE_ROWS_PER_PAGE, paginateEquipmentSchedule } from "./schedulePagination";
 import { commercialOutputFixtureInput } from "./testFixtures";
 import { serializeCommercialOutputXlsx } from "./xlsxSerializer";
@@ -36,8 +38,10 @@ describe("commercial output serializers", () => {
     const snapshot = createCommercialOutputSnapshot(commercialOutputFixtureInput());
     const files = unzipSync(serializeCommercialOutputXlsx(snapshot));
     const workbook = strFromU8(files["xl/workbook.xml"]);
+    const summary = strFromU8(files["xl/worksheets/sheet1.xml"]);
     const bom = strFromU8(files["xl/worksheets/sheet2.xml"]);
     const instances = strFromU8(files["xl/worksheets/sheet3.xml"]);
+    const styles = strFromU8(files["xl/styles.xml"]);
 
     expect(Object.keys(files)).toContain("[Content_Types].xml");
     expect(workbook).toContain('name="Summary"');
@@ -50,6 +54,51 @@ describe("commercial output serializers", () => {
     expect(bom).toContain("atara-standard:conveyor-belt-01");
     expect(bom).toMatch(/<v>2<\/v>/);
     expect(instances.match(/conveyor-[12]/g)).toHaveLength(2);
+    expect(summary).toContain("2026-08-14 10:20 UTC");
+    expect(summary).not.toContain(snapshot.metadata.generatedAt);
+    expect(bom).toContain('<col min="1" max="1" width="32" customWidth="1"/>');
+    expect(bom).toContain('<col min="3" max="3" width="44" customWidth="1"/>');
+    expect(bom).toContain('<pane xSplit="3" ySplit="1" topLeftCell="D2" activePane="bottomRight" state="frozen"/>');
+    expect(bom).toMatch(/<autoFilter ref="A1:[A-Z]+\d+"\/>/);
+    expect(instances).toContain('<col min="3" max="3" width="44" customWidth="1"/>');
+    expect(instances).toContain('<pane xSplit="4" ySplit="1" topLeftCell="E2" activePane="bottomRight" state="frozen"/>');
+    expect(instances).toContain('<autoFilter ref="A1:M5"/>');
+    expect(instances).toMatch(/<c r="G\d+" s="2"><v>-2000<\/v><\/c>/);
+    expect(instances).toContain("atara-standard:packaging-flowpack-01");
+    expect(styles).toContain('<numFmt numFmtId="164" formatCode="0.###"/>');
+    expect(styles).toContain('<alignment wrapText="1" vertical="center"/>');
+  });
+
+  it("formats presentation timestamps in UTC without changing canonical snapshot data", () => {
+    const snapshot = createCommercialOutputSnapshot(commercialOutputFixtureInput());
+    const canonicalTimestamp = snapshot.metadata.generatedAt;
+
+    expect(formatCommercialOutputTimestampUtc(canonicalTimestamp)).toBe("2026-08-14 10:20 UTC");
+    expect(snapshot.metadata.generatedAt).toBe(canonicalTimestamp);
+  });
+
+  it.each([
+    { name: "normal rectangle", center: { x: 120, y: 220 }, frontMid: { x: 180, y: 220 }, label: "Flow Pack Machine", width: 72 },
+    { name: "narrow footprint", center: { x: 80, y: 160 }, frontMid: { x: 92, y: 160 }, label: "Test Forklift", width: 48 },
+    { name: "tall footprint", center: { x: 150, y: 190 }, frontMid: { x: 150, y: 255 }, label: "Vertical Buffer", width: 58 },
+    { name: "rotated Turkish footprint", center: { x: 230, y: 310 }, frontMid: { x: 270, y: 350 }, label: "Ürün Besleme Konveyörü", width: 96 }
+  ])("keeps $name labels above orientation indicators with a deterministic knockout", ({ center, frontMid, label, width }) => {
+    const commands = createPlanLabelPresentation({ center, frontMid, label, labelWidth: width, fontSize: 7 });
+    const knockout = commands[1];
+    const text = commands[2];
+
+    expect(commands.map((command) => command.kind)).toEqual(["orientation", "label-knockout", "label"]);
+    expect(commands[0]).toEqual({ kind: "orientation", start: center, end: frontMid });
+    expect(knockout.kind).toBe("label-knockout");
+    expect(text.kind).toBe("label");
+    if (knockout.kind !== "label-knockout" || text.kind !== "label") {
+      throw new Error("Unexpected plan-label presentation command order.");
+    }
+    expect(center.x).toBeGreaterThan(knockout.x);
+    expect(center.x).toBeLessThan(knockout.x + knockout.width);
+    expect(center.y).toBeGreaterThan(knockout.y);
+    expect(center.y).toBeLessThan(knockout.y + knockout.height);
+    expect(text.text).toBe(label);
   });
 
   it("creates a two-page A3 landscape PDF with canonical plan metadata and dimensions", async () => {

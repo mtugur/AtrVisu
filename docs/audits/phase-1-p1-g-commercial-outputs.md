@@ -39,6 +39,14 @@ share stable identity `atara-standard:conveyor-belt-01`, producing BOM quantity
 2 without grouping by display name. Repository asset metadata that is absent
 remains explicit `Unknown` and appears in the modal warning and output cells.
 
+The workbook opens with deterministic presentation metadata rather than
+requiring manual column repair. Summary stays compact. BOM and Instances keep
+all existing columns and raw values while declaring wider identity/equipment
+columns, wrapped header rows, frozen header and leading identity panes, and
+autofilters over their populated ranges. Millimetre and degree values remain
+numeric and use the locale-neutral `0.###` display format. Wide mapped property
+sets continue to use horizontal worksheet scrolling.
+
 ## Plan And Snapshot Evidence
 
 The plan model covers zero-degree, 90-degree, arbitrary-angle, and negative
@@ -59,6 +67,16 @@ MIT-licensed embedding adapter. There is no remote runtime font fetch or system
 font dependency. Turkish strings including `İstanbul Şişeleme Hattı`,
 `Ürün Besleme Konveyörü`, `Görüş / Ölçüm`, and `Müşteri Çözümü` serialize and
 reload without transliteration or failure.
+
+Plan equipment labels are rendered after the front/orientation line over a
+small opaque knockout that covers the indicator origin. The deterministic
+presentation command order is tested for normal, narrow, and rotated footprints,
+including a Turkish equipment label, without removing orientation geometry.
+
+The snapshot's canonical ISO `generatedAt` value remains unchanged and supplies
+PDF creation/modification metadata. A shared formatter presents it as
+`YYYY-MM-DD HH:mm UTC` in the XLSX Summary and visible PDF title block without
+browser locale dependence.
 
 Vendored asset SHA-256 evidence:
 
@@ -83,8 +101,10 @@ dependency-resolution record. Its correction scope adds only the direct
 `@pdf-lib/fontkit@1.1.1` node; the required `pako` range is satisfied by the
 existing PDF dependency graph.
 
-Independent review `5292939994` required and is addressed by the Unicode font
-and no-row-loss pagination regressions in this correction batch.
+Independent review `5292939994` is addressed by the Unicode font and no-row-loss
+pagination regressions. Manual artifact review `5293547482` is addressed by the
+bounded workbook-readability, UTC timestamp, and plan-label presentation
+corrections without changing output data or PNG capture.
 
 ## Runtime Surface Evidence
 
@@ -99,13 +119,15 @@ same IDs.
 
 - Focused commercial/platform tests: PASS, 13 files / 99 tests.
 - Focused correction regression: PASS, 5 files / 24 tests.
+- Focused final presentation regression: PASS, 4 files / 24 tests, including
+  OpenXML/PDF/timestamp coverage and deterministic label separation.
 - Focused Chromium commercial download: PASS, 1 test.
 - Focused runtime Feature Access observed gate: PASS, 1 test.
 - Dependency audit: PASS, 0 vulnerabilities at `--audit-level=low`.
-- Design-token governance: PASS, 237 maintained files.
+- Design-token governance: PASS, 239 maintained files.
 - Build: PASS; XLSX and Unicode PDF serializers split into on-demand chunks.
-- Full unit: PASS, 136 files / 1198 tests.
+- Full unit: PASS, 136 files / 1203 tests.
 - Full Chromium: PASS, 64 tests.
 - Diff check: PASS.
 
-Decision: **READY FOR EXACT-HEAD CI; MANUAL OUTPUT ACCEPTANCE REQUIRED AFTER GREEN CI.**
+Decision: **READY FOR EXACT-HEAD CI; FINAL OUTPUT MANUAL RE-ACCEPTANCE REQUIRED AFTER GREEN CI.**
