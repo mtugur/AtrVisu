@@ -52,7 +52,10 @@ canonical.
 
 The empty Editor Host keeps its Babylon canvas mounted and overlays a restrained
 welcome only while project storage is ready and the scene has no active layout
-or entity. Both actions open the existing Project Manager authority. Help is a
+or entity. Both actions execute `project.manager` through the existing Project
+Manager and Runtime Panel authorities. Ephemeral `create` and `open` payloads
+focus the corresponding workflow, while generic entry remains neutral and
+closing clears intent without project mutation. Help is a
 registered modal panel with Quick Start, actual keyboard shortcuts, shared
 application version, dialog semantics, focus trap, Escape close, and opener
 focus restoration.
@@ -84,15 +87,15 @@ or install script, and is lockfile-pinned. No unrelated package was upgraded.
 
 ## Validation Evidence
 
-- Focused unit/component/platform tests: PASS, 23 files / 192 tests.
-- Focused Chromium PF-1 scenarios: PASS, 3 tests.
+- Focused entry-intent unit/component/platform tests: PASS, 5 files / 27 tests.
+- Focused Chromium first-run scenario: PASS, 1 test.
 - Focused Runtime Feature Access complete gate: PASS, 1 test.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
-- Design-token governance: PASS, 248 maintained files.
-- Production build: PASS, 4,120 modules transformed.
-- Full unit suite: PASS, 142 files / 1,224 tests.
+- Design-token governance: PASS, 249 maintained files.
+- Production build: PASS, 4,121 modules transformed.
+- Full unit suite: PASS, 143 files / 1,229 tests.
 - Full Chromium suite: PASS, 67 tests.
 - `git diff --check`: PASS.
 - Existing Vite large-chunk warning remains non-blocking: the generated PDF

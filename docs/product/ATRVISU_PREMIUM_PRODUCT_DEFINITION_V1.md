@@ -54,8 +54,10 @@ real keyboard shortcuts, and restrained product/version information.
 - Explorer, scene labels, Inspector, persistence, and commercial instance rows
   resolve the same placed-instance name with canonical definition fallback.
 - A genuinely empty editor offers Create New Layout and Open Existing Project
-  through the existing Project Manager authority; it creates no second project
-  model and no demo entities.
+  through the existing `project.manager` command and Project Manager authority.
+  Their ephemeral entry intent focuses the relevant create or existing-project
+  workflow without mutating project data; neutral Project Manager entry remains
+  available and no second project model or demo entity is created.
 
 ## Product Finish Sequence
 

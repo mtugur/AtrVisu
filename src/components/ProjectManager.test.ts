@@ -64,6 +64,9 @@ type RequestProjectImport = (
 ) => void;
 
 const renderManager = async (options: {
+  entryIntent?: "create" | "open" | null;
+  projects?: AtrVisuProject[];
+  onClose?: () => void;
   onExecuteRuntimeCommand?: ExecuteRuntimeCommand;
   onRequestProjectImport?: RequestProjectImport;
 } = {}) => {
@@ -76,27 +79,39 @@ const renderManager = async (options: {
     status: "executed" as const
   }));
   const onRequestProjectImport = options.onRequestProjectImport ?? vi.fn<RequestProjectImport>();
+  const onProjectsChanged = vi.fn();
+  const onCurrentSelectionChange = vi.fn();
+  const onLoadRevision = vi.fn();
+  const onSavedRevision = vi.fn();
 
   await act(async () => {
     root.render(createElement(ProjectManager, {
-      projects: [project],
+      entryIntent: options.entryIntent ?? null,
+      projects: options.projects ?? [project],
       currentProjectId: project.projectId,
       currentLayoutId: project.activeLayoutId,
       currentRevisionId: project.layouts[0].activeRevisionId,
       currentSnapshot: snapshot,
       hasSceneObjects: false,
       isDirty: false,
-      onClose: vi.fn(),
-      onProjectsChanged: vi.fn(),
-      onCurrentSelectionChange: vi.fn(),
-      onLoadRevision: vi.fn(),
-      onSavedRevision: vi.fn(),
+      onClose: options.onClose ?? vi.fn(),
+      onProjectsChanged,
+      onCurrentSelectionChange,
+      onLoadRevision,
+      onSavedRevision,
       onExecuteRuntimeCommand,
       onRequestProjectImport
     }));
   });
 
-  return { onExecuteRuntimeCommand, onRequestProjectImport };
+  return {
+    onExecuteRuntimeCommand,
+    onRequestProjectImport,
+    onProjectsChanged,
+    onCurrentSelectionChange,
+    onLoadRevision,
+    onSavedRevision
+  };
 };
 
 const clickButton = async (label: string) => {
@@ -111,6 +126,62 @@ const clickButton = async (label: string) => {
 };
 
 describe("Project Manager runtime operations", () => {
+  it("focuses the create workflow without mutating project data", async () => {
+    const callbacks = await renderManager({ entryIntent: "create", projects: [] });
+
+    expect(document.querySelector('[data-testid="project-manager-modal"]')?.getAttribute("data-entry-intent"))
+      .toBe("create");
+    expect(document.activeElement).toBe(document.querySelector('[data-testid="new-project-name"]'));
+    expect(document.querySelectorAll('[data-testid="project-manager-project-option"]')).toHaveLength(0);
+    expect(callbacks.onProjectsChanged).not.toHaveBeenCalled();
+    expect(callbacks.onCurrentSelectionChange).not.toHaveBeenCalled();
+    expect(callbacks.onLoadRevision).not.toHaveBeenCalled();
+    expect(callbacks.onSavedRevision).not.toHaveBeenCalled();
+    expect(callbacks.onExecuteRuntimeCommand).not.toHaveBeenCalled();
+  });
+
+  it("focuses the existing-project workflow for open intent", async () => {
+    const callbacks = await renderManager({ entryIntent: "open" });
+
+    expect(document.querySelector('[data-testid="project-manager-modal"]')?.getAttribute("data-entry-intent"))
+      .toBe("open");
+    expect(document.activeElement).toBe(document.querySelector('[data-testid="project-manager-project-option"]'));
+    expect(callbacks.onProjectsChanged).not.toHaveBeenCalled();
+    expect(callbacks.onCurrentSelectionChange).not.toHaveBeenCalled();
+    expect(callbacks.onLoadRevision).not.toHaveBeenCalled();
+    expect(callbacks.onSavedRevision).not.toHaveBeenCalled();
+    expect(callbacks.onExecuteRuntimeCommand).not.toHaveBeenCalled();
+  });
+
+  it("provides a focused creation route when open intent has no existing projects", async () => {
+    await renderManager({ entryIntent: "open", projects: [] });
+
+    const route = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Start a New Project"
+    );
+    expect(document.body.textContent).toContain("No existing projects are available.");
+    expect(document.activeElement).toBe(route);
+    await act(async () => route?.click());
+    expect(document.activeElement).toBe(document.querySelector('[data-testid="new-project-name"]'));
+  });
+
+  it("keeps generic entry neutral and restores opener focus after Escape", async () => {
+    const opener = document.createElement("button");
+    opener.textContent = "Project Manager";
+    document.body.appendChild(opener);
+    opener.focus();
+    const onClose = vi.fn();
+    await renderManager({ entryIntent: null, onClose });
+
+    expect(document.querySelector('[data-testid="project-manager-modal"]')?.getAttribute("data-entry-intent"))
+      .toBe("neutral");
+    expect(document.activeElement).toBe(document.querySelector('[data-testid="close-project-manager"]'));
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(onClose).toHaveBeenCalledOnce();
+    await act(async () => roots.pop()?.unmount());
+    expect(document.activeElement).toBe(opener);
+  });
+
   it("keeps save completion awaitable", async () => {
     let release: (() => void) | undefined;
     let completed = false;

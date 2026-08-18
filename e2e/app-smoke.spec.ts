@@ -1250,6 +1250,8 @@ test("PF-1 premium command information architecture is accessible and responsive
   await expect(welcome).toBeVisible();
   await expect(welcome.getByRole("button", { name: "Create New Layout" })).toBeVisible();
   await expect(welcome.getByRole("button", { name: "Open Existing Project" })).toBeVisible();
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
 
   const menuBar = page.getByTestId("workbench-menu-bar");
   expect(await menuBar.locator(".workbench-menu-trigger").allTextContents()).toEqual([
@@ -1265,10 +1267,35 @@ test("PF-1 premium command information architecture is accessible and responsive
     expect(await button.getAttribute("title")).toBeTruthy();
   }
 
-  await welcome.getByRole("button", { name: "Create New Layout" }).click();
-  await expect(page.getByTestId("project-manager-modal")).toBeVisible();
+  const createNewLayout = welcome.getByRole("button", { name: "Create New Layout" });
+  await createNewLayout.click();
+  const projectManager = page.getByTestId("project-manager-modal");
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "create");
+  await expect(page.getByTestId("new-project-name")).toBeFocused();
+  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(projectManager).toHaveCount(0);
+  await expect(createNewLayout).toBeFocused();
+
+  const openExistingProject = welcome.getByRole("button", { name: "Open Existing Project" });
+  await openExistingProject.click();
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "open");
+  await expect(page.getByRole("button", { name: "Start a New Project" })).toBeFocused();
+  await expect(page.getByTestId("project-manager-empty-state")).toContainText("No existing projects are available.");
+  await page.keyboard.press("Escape");
+  await expect(projectManager).toHaveCount(0);
+  await expect(openExistingProject).toBeFocused();
+
+  await openProjectManagerFromFileMenu(page);
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "neutral");
+  await expect(page.getByTestId("close-project-manager")).toBeFocused();
   await page.getByTestId("close-project-manager").click();
-  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
+  await expect(projectManager).toHaveCount(0);
+  await expect(welcome).toBeVisible();
+  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
 
   const helpTrigger = menuBar.getByRole("menuitem", { name: "Help", exact: true });
   const helpMenu = await openWorkbenchMenu(page, "Help");
@@ -1280,8 +1307,6 @@ test("PF-1 premium command information architecture is accessible and responsive
   await expect(help).toHaveCount(0);
   await expect(helpTrigger).toBeFocused();
 
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
   for (const viewport of [
     { width: 1440, height: 900 },
     { width: 1024, height: 768 },

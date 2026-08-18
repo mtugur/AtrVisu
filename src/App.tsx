@@ -162,6 +162,10 @@ import {
   type ProjectRuntimeCommandE2EBridge,
   type ProjectImportCommandPayload
 } from "./platform/runtimeCommands/projectRuntimeCommandAuthority";
+import {
+  getProjectManagerEntryIntent,
+  type ProjectManagerEntryIntent
+} from "./platform/runtimeCommands/projectManagerEntryIntent";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
 import {
   applyRuntimeSelectionRequest,
@@ -551,6 +555,7 @@ export function App() {
   const [isProjectStorageLoading, setIsProjectStorageLoading] = useState(true);
   const [projectStorageError, setProjectStorageError] = useState("");
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
+  const [projectManagerEntryIntent, setProjectManagerEntryIntent] = useState<ProjectManagerEntryIntent | null>(null);
   const [isPerformanceBenchmarkOpen, setIsPerformanceBenchmarkOpen] = useState(false);
   const [isCollisionCheckOpen, setIsCollisionCheckOpen] = useState(false);
   const [isSimulationControlsOpen, setIsSimulationControlsOpen] = useState(false);
@@ -1555,7 +1560,10 @@ export function App() {
           void refreshProjects();
           setIsProjectManagerOpen(true);
         },
-        close: () => setIsProjectManagerOpen(false)
+        close: () => {
+          setIsProjectManagerOpen(false);
+          setProjectManagerEntryIntent(null);
+        }
       },
       [RUNTIME_PANEL_IDS.performanceBenchmark]: {
         getState: () => modalState(runtimePanelStateRef.current.isPerformanceBenchmarkOpen),
@@ -3279,9 +3287,12 @@ export function App() {
     },
     [RUNTIME_FEATURE_COMMAND_IDS.projectManager]: {
       getEnableState: () => ({ enabled: true }),
-      execute: () => mapPanelOperationToRuntimeCommandResult(
-        runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)
-      )
+      execute: (context) => {
+        setProjectManagerEntryIntent(getProjectManagerEntryIntent(context.payload));
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)
+        );
+      }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.layoutControls]: {
       getEnableState: () => ({ enabled: true }),
@@ -4452,10 +4463,10 @@ export function App() {
           && annotations.length === 0 ? (
             <EmptyProjectWelcome
               onCreateNewLayout={() => {
-                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager);
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager, { intent: "create" });
               }}
               onOpenExistingProject={() => {
-                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager);
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager, { intent: "open" });
               }}
             />
           ) : null}
@@ -4907,7 +4918,7 @@ export function App() {
                 data-testid="open-project-manager"
                 type="button"
                 disabled={isProjectStorageLoading}
-                onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)}
+                onClick={() => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager)}
               >
                 Project Manager
               </button>
@@ -5467,6 +5478,7 @@ export function App() {
           />
           {isProjectManagerOpen ? (
             <ProjectManager
+              entryIntent={projectManagerEntryIntent}
               projects={projects}
               currentProjectId={currentProjectId}
               currentLayoutId={currentLayoutId}

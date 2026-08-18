@@ -18,18 +18,18 @@
 | Rename persistence/history | PASS | Layout round-trip and Undo/Redo regressions |
 | Cross-surface naming | PASS | PlatformEntity, scene label, Inspector, and commercial instance fallback |
 | BOM identity stability | PASS | Definition/library grouping and canonical BOM name unchanged |
-| Empty-project welcome | PASS | Existing Project Manager path; no second state authority or demo entities |
+| Empty-project welcome | PASS | Distinct ephemeral create/open intent through the same `project.manager` command and Runtime Panel authority; generic entry remains neutral; no project mutation or second state authority |
 | Help product surface | PASS | Registered commands/panel, real content, modal focus lifecycle |
 | Feature Access and inventory | PASS | Rename, Arrange, Help, command bar, Explorer, and welcome mapped |
 | Release-surface hygiene | PASS | Existing technical surfaces inventoried for PF-2; no new leak |
 | Responsive contract | PASS | Focused Chromium at 1440x900, 1024x768, 640x800 |
 | Lifecycle/domain invariance | PASS | One EditorHost/canvas and stable scene generation through UI-only actions |
-| Focused validation | PASS | 23 files / 192 unit, component, platform, and authority tests |
+| Focused validation | PASS | 5 files / 27 entry-intent unit, component, platform, and authority tests; 1 focused Chromium scenario |
 | Dependency audit | PASS | `npm audit --audit-level=low`: 0 vulnerabilities |
 | Dependency tree | PASS | `npm ls --all` completed successfully; only expected optional dependencies are absent |
-| Design-token governance | PASS | 248 maintained files |
-| Build | PASS | 4,120 modules transformed; existing 2.66 MB PDF / 5.52 MB main chunk warning recorded |
-| Full unit suite | PASS | 142 files / 1,224 tests |
+| Design-token governance | PASS | 249 maintained files |
+| Build | PASS | 4,121 modules transformed; existing 2.66 MB PDF / 5.52 MB main chunk warning recorded |
+| Full unit suite | PASS | 143 files / 1,229 tests |
 | Full Chromium suite | PASS | 67 tests |
 | Diff check | PASS | `git diff --check` |
 | Exact-head GitHub Quality Gate | PR GATE | Required before manual acceptance |
