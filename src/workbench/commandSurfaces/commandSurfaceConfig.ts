@@ -6,6 +6,10 @@ import {
   RUNTIME_FEATURE_COMMAND_IDS,
   type RuntimeFeatureCommandId
 } from "../../platform/runtimeCommands/runtimeFeatureCommands";
+import {
+  ASSEMBLY_COMMAND_IDS,
+  type AssemblyCommandId
+} from "../../platform/runtimeCommands/assemblyRuntimeCommands";
 
 export const APPLICATION_BAR_COMMAND_IDS = [
   RUNTIME_FEATURE_COMMAND_IDS.projectSave
@@ -27,26 +31,13 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     ]
   },
   {
-    id: "insert",
-    labelKey: "menu.insert",
-    fallbackLabel: "Insert",
-    commandIds: [
-      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation,
-      RUNTIME_FEATURE_COMMAND_IDS.addFloor,
-      RUNTIME_FEATURE_COMMAND_IDS.addWall,
-      RUNTIME_FEATURE_COMMAND_IDS.addColumn,
-      RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
-      RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
-      RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
-    ]
-  },
-  {
     id: "edit",
     labelKey: "menu.edit",
     fallbackLabel: "Edit",
     commandIds: [
       CORE_EDITOR_COMMAND_IDS.undo,
       CORE_EDITOR_COMMAND_IDS.redo,
+      RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
       CORE_EDITOR_COMMAND_IDS.duplicateSelected,
       CORE_EDITOR_COMMAND_IDS.deleteSelected
     ]
@@ -64,6 +55,40 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     ]
   },
   {
+    id: "insert",
+    labelKey: "menu.insert",
+    fallbackLabel: "Insert",
+    commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation,
+      RUNTIME_FEATURE_COMMAND_IDS.addFloor,
+      RUNTIME_FEATURE_COMMAND_IDS.addWall,
+      RUNTIME_FEATURE_COMMAND_IDS.addColumn,
+      RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
+      RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
+      RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
+    ]
+  },
+  {
+    id: "arrange",
+    labelKey: "menu.arrange",
+    fallbackLabel: "Arrange",
+    commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.alignLeft,
+      RUNTIME_FEATURE_COMMAND_IDS.alignRight,
+      RUNTIME_FEATURE_COMMAND_IDS.alignFront,
+      RUNTIME_FEATURE_COMMAND_IDS.alignBack,
+      RUNTIME_FEATURE_COMMAND_IDS.alignCenterX,
+      RUNTIME_FEATURE_COMMAND_IDS.alignCenterY,
+      RUNTIME_FEATURE_COMMAND_IDS.distributeHorizontal,
+      RUNTIME_FEATURE_COMMAND_IDS.distributeVertical,
+      RUNTIME_FEATURE_COMMAND_IDS.equalGapX,
+      RUNTIME_FEATURE_COMMAND_IDS.equalGapY,
+      ASSEMBLY_COMMAND_IDS.createGroup,
+      ASSEMBLY_COMMAND_IDS.ungroup,
+      RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
+    ]
+  },
+  {
     id: "tools",
     labelKey: "menu.tools",
     fallbackLabel: "Tools",
@@ -74,10 +99,21 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.performanceBenchmark,
       RUNTIME_FEATURE_COMMAND_IDS.simulationControls
     ]
+  },
+  {
+    id: "help",
+    labelKey: "menu.help",
+    fallbackLabel: "Help",
+    commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.helpQuickStart,
+      RUNTIME_FEATURE_COMMAND_IDS.helpKeyboardShortcuts,
+      RUNTIME_FEATURE_COMMAND_IDS.helpAbout
+    ]
   }
 ] as const;
 
 export const COMMAND_BAR_COMMAND_IDS = [
+  RUNTIME_FEATURE_COMMAND_IDS.projectSave,
   CORE_EDITOR_COMMAND_IDS.undo,
   CORE_EDITOR_COMMAND_IDS.redo,
   CORE_EDITOR_COMMAND_IDS.duplicateSelected,
@@ -90,9 +126,11 @@ export const COMMAND_BAR_COMMAND_IDS = [
 
 export type CommandSurfaceCoreCommandId = CoreEditorCommandId;
 export type CommandSurfaceRuntimeCommandId = RuntimeFeatureCommandId;
+export type CommandSurfaceAssemblyCommandId = AssemblyCommandId;
 
 const coreCommandIds = new Set<string>(Object.values(CORE_EDITOR_COMMAND_IDS));
 const runtimeCommandIds = new Set<string>(Object.values(RUNTIME_FEATURE_COMMAND_IDS));
+const assemblyCommandIds = new Set<string>(Object.values(ASSEMBLY_COMMAND_IDS));
 
 export const getCommandSurfaceRuntimeRoute = (commandId: string) => {
   if (coreCommandIds.has(commandId)) {
@@ -100,6 +138,9 @@ export const getCommandSurfaceRuntimeRoute = (commandId: string) => {
   }
   if (runtimeCommandIds.has(commandId)) {
     return "runtime" as const;
+  }
+  if (assemblyCommandIds.has(commandId)) {
+    return "assembly" as const;
   }
   return undefined;
 };

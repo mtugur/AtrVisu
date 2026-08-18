@@ -28,8 +28,12 @@ const metadataRegistry = {
 };
 
 const createHarness = (overrides: Partial<CommandSurfaceAdapterOptions> = {}) => {
-  const coreExecute = vi.fn(() => createExecutedRuntimeCommandResult("core"));
-  const runtimeExecute = vi.fn(() => createExecutedRuntimeCommandResult("runtime"));
+  const coreExecute = vi.fn((_commandId: string, _context?: CommandContext) =>
+    createExecutedRuntimeCommandResult("core"));
+  const runtimeExecute = vi.fn((_commandId: string, _context?: CommandContext) =>
+    createExecutedRuntimeCommandResult("runtime"));
+  const assemblyExecute = vi.fn((_commandId: string, _context?: CommandContext) =>
+    createExecutedRuntimeCommandResult("assembly"));
   const coreBridge: CoreCommandSurfaceBridge = {
     registry: metadataRegistry,
     canExecuteCommand: () => ({ enabled: true }),
@@ -46,10 +50,22 @@ const createHarness = (overrides: Partial<CommandSurfaceAdapterOptions> = {}) =>
     }),
     executeCommand: runtimeExecute
   };
+  const assemblyBridge: RuntimeCommandSurfaceBridge = {
+    registry: metadataRegistry,
+    getRuntimeCommand: (commandId) => ({
+      commandId,
+      registered: true,
+      bound: true,
+      reachable: true,
+      currentlyAvailable: true
+    }),
+    executeCommand: assemblyExecute
+  };
   const options: CommandSurfaceAdapterOptions = {
     metadataRegistry,
     coreBridge,
     runtimeBridge,
+    assemblyBridge,
     getContext: () => context,
     importRequest: { request: () => true, isPending: () => false },
     ...overrides
@@ -57,7 +73,8 @@ const createHarness = (overrides: Partial<CommandSurfaceAdapterOptions> = {}) =>
   return {
     adapter: createCommandSurfaceAdapter(options),
     coreExecute,
-    runtimeExecute
+    runtimeExecute,
+    assemblyExecute
   };
 };
 
@@ -71,13 +88,16 @@ describe("command surface adapter", () => {
       fallbackLabel
     }))).toEqual([
       { id: "file", labelKey: "menu.file", fallbackLabel: "File" },
-      { id: "insert", labelKey: "menu.insert", fallbackLabel: "Insert" },
       { id: "edit", labelKey: "menu.edit", fallbackLabel: "Edit" },
       { id: "view", labelKey: "menu.view", fallbackLabel: "View" },
-      { id: "tools", labelKey: "menu.tools", fallbackLabel: "Tools" }
+      { id: "insert", labelKey: "menu.insert", fallbackLabel: "Insert" },
+      { id: "arrange", labelKey: "menu.arrange", fallbackLabel: "Arrange" },
+      { id: "tools", labelKey: "menu.tools", fallbackLabel: "Tools" },
+      { id: "help", labelKey: "menu.help", fallbackLabel: "Help" }
     ]);
     expect(adapter.getMenus().map((menu) => menu.items.map((item) => item.commandId)))
       .toEqual(COMMAND_SURFACE_MENU_DEFINITIONS.map((menu) => [...menu.commandIds]));
+    expect(adapter.getMenus().every((menu) => menu.items.length > 0)).toBe(true);
     expect(adapter.getCommandBarItems().map((item) => item.commandId)).toEqual(COMMAND_BAR_COMMAND_IDS);
     expect(adapter.getMenus().flatMap((menu) => menu.items).find((item) => item.commandId === "edit.undo"))
       .toMatchObject({ label: "Undo", shortcut: "Ctrl/Cmd+Z" });
@@ -85,6 +105,39 @@ describe("command surface adapter", () => {
       commandId: "view.displayOverlayControls",
       label: "Display / Overlay Controls"
     });
+    expect(adapter.getItem("view.showMeasurements", "command-bar")).toMatchObject({
+      label: "Measurement Helpers",
+      tooltip: expect.stringContaining("distance and placement")
+    });
+  });
+
+  it("routes promoted Arrange actions to runtime or assembly authority without direct mutation", async () => {
+    const { adapter, runtimeExecute, assemblyExecute } = createHarness();
+    const runtimeArrangeIds = [
+      "arrange.alignLeft",
+      "arrange.alignRight",
+      "arrange.alignFront",
+      "arrange.alignBack",
+      "arrange.alignCenterX",
+      "arrange.alignCenterY",
+      "arrange.distributeHorizontal",
+      "arrange.distributeVertical",
+      "arrange.equalGapX",
+      "arrange.equalGapY",
+      "arrange.alignmentTools"
+    ];
+
+    for (const commandId of runtimeArrangeIds) {
+      await expect(adapter.execute(commandId)).resolves.toMatchObject({ handled: true });
+    }
+    await expect(adapter.execute("assembly.createGroup")).resolves.toMatchObject({ handled: true });
+    await expect(adapter.execute("assembly.ungroup")).resolves.toMatchObject({ handled: true });
+
+    expect(runtimeExecute.mock.calls.map(([commandId]) => commandId)).toEqual(runtimeArrangeIds);
+    expect(assemblyExecute.mock.calls.map(([commandId]) => commandId)).toEqual([
+      "assembly.createGroup",
+      "assembly.ungroup"
+    ]);
   });
 
   it("routes core and runtime commands to one live bridge each without seed execution", async () => {

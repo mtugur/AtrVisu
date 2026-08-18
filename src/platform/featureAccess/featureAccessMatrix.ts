@@ -106,6 +106,12 @@ export const platformFeatureAccessMatrix = [
     runtimeRequirements: ["selection", "entity"],
     requiresSurfaceExecutionEvidence: true
   }),
+  feature("entity.rename", "Rename selected project entity", ["menu", "shortcut", "panel"], {
+    commandIds: ["edit.renameSelected"],
+    panelIds: ["panel.layoutExplorer"],
+    runtimeRequirements: ["selection", "entity"],
+    requiresSurfaceExecutionEvidence: true
+  }),
 
   feature("view.fitView", "Fit view", ["api"], {
     classification: "declared-planned",
@@ -224,6 +230,23 @@ export const platformFeatureAccessMatrix = [
     runtimeRequirements: ["selection", "entity"],
     requiresSurfaceExecutionEvidence: true
   }),
+  feature("arrange.quickActions", "Arrange selection actions", ["menu", "panel"], {
+    commandIds: [
+      "arrange.alignLeft",
+      "arrange.alignRight",
+      "arrange.alignFront",
+      "arrange.alignBack",
+      "arrange.alignCenterX",
+      "arrange.alignCenterY",
+      "arrange.distributeHorizontal",
+      "arrange.distributeVertical",
+      "arrange.equalGapX",
+      "arrange.equalGapY",
+      "arrange.alignmentTools"
+    ],
+    panelIds: ["panel.alignmentTools"],
+    runtimeRequirements: ["selection", "entity"]
+  }),
 
   feature("civil.floor", "Civil floor area", ["panel"], {
     commandIds: ["civil.addFloor"],
@@ -301,6 +324,10 @@ export const platformFeatureAccessMatrix = [
     commandIds: ["simulation.controls"],
     panelIds: ["panel.simulationControls"]
   }),
+  feature("help.productGuidance", "Product help and keyboard guidance", ["menu", "modal"], {
+    commandIds: ["help.quickStart", "help.keyboardShortcuts", "help.about"],
+    panelIds: ["panel.help"]
+  }),
 
   panelFeature("panel.rightPanelShell", "Right panel shell"),
   panelFeature("panel.machineLibrary", "Machine Library panel"),
@@ -329,6 +356,7 @@ export const platformFeatureAccessMatrix = [
   panelFeature("panel.libraryManager", "Library Manager", ["modal"]),
   panelFeature("panel.taxonomyManager", "Taxonomy Manager", ["modal"]),
   panelFeature("panel.commercialOutputs", "Commercial Outputs", ["modal"]),
+  panelFeature("panel.help", "Help", ["modal"]),
   feature("panel.diagnostics", "Diagnostics panel", ["panel"], {
     classification: "declared-planned",
     panelIds: ["panel.diagnostics"],

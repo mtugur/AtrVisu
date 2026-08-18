@@ -274,9 +274,9 @@ describe("RightPanelUtilityStrip", () => {
 describe("WorkbenchCommandBar", () => {
   it("renders toolbar semantics, pressed state, and roving keyboard focus", async () => {
     const items = [
-      item("edit.undo", "command-bar", { label: "Undo" }),
-      item("edit.redo", "command-bar", { label: "Redo", disabled: true }),
-      item("view.toggleLabels", "command-bar", { label: "Toggle Labels", pressed: true })
+      item("edit.undo", "command-bar", { label: "Undo", iconId: "undo" }),
+      item("edit.redo", "command-bar", { label: "Redo", iconId: "redo", disabled: true }),
+      item("view.toggleLabels", "command-bar", { label: "Labels", iconId: "labels", pressed: true })
     ];
     const container = await mount(createElement(WorkbenchCommandBar, {
       items,
@@ -292,6 +292,10 @@ describe("WorkbenchCommandBar", () => {
       "view.toggleLabels"
     ]);
     expect(buttons[2].getAttribute("aria-pressed")).toBe("true");
+    expect(buttons.map((button) => button.dataset.iconId)).toEqual(["undo", "redo", "labels"]);
+    expect(buttons.every((button) => button.querySelector("svg") !== null)).toBe(true);
+    expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual(["Undo", "Redo", "Labels"]);
+    expect(buttons.every((button) => button.querySelector(".visually-hidden") !== null)).toBe(true);
     expect(buttons[0].dataset.workspaceEmphasized).toBe("true");
     expect(buttons[2].dataset.workspaceEmphasized).toBeUndefined();
     buttons[0].focus();

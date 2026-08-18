@@ -109,7 +109,8 @@ export const createCommandSurfaceAdapter = (
           };
     }
 
-    const reachability = options.runtimeBridge.getRuntimeCommand(commandId, context);
+    const bridge = route === "assembly" ? options.assemblyBridge : options.runtimeBridge;
+    const reachability = bridge.getRuntimeCommand(commandId, context);
     return {
       renderable: reachability.registered && reachability.bound && reachability.reachable,
       enabled: reachability.currentlyAvailable,
@@ -137,6 +138,7 @@ export const createCommandSurfaceAdapter = (
       label: metadata.label,
       tooltip: metadata.tooltip,
       ...(metadata.shortcut ? { shortcut: metadata.shortcut } : {}),
+      ...(metadata.iconId ? { iconId: metadata.iconId } : {}),
       disabled: !availability.enabled,
       ...(availability.reason ? { disabledReason: availability.reason } : {}),
       pending,
@@ -151,7 +153,7 @@ export const createCommandSurfaceAdapter = (
     await options.runtimeBridge.executeCommand(commandId, context)
   );
 
-  const execute = async (commandId: CommandId): Promise<RuntimeCommandOperationResult> => {
+  const execute = async (commandId: CommandId, payload?: unknown): Promise<RuntimeCommandOperationResult> => {
     const metadata = options.metadataRegistry.get(commandId);
     if (!metadata) {
       return createUnsupportedRuntimeCommandResult(
@@ -188,10 +190,12 @@ export const createCommandSurfaceAdapter = (
     pendingCommandIds.add(commandId);
     emitChange();
     try {
-      const context = getContextWithPayload(options.getContext());
+      const context = getContextWithPayload(options.getContext(), payload);
       return route === "core"
         ? normalizeRuntimeCommandOperationResult(options.coreBridge.executeCommand(commandId, context))
-        : await executeRuntime(commandId, context);
+        : route === "assembly"
+          ? normalizeRuntimeCommandOperationResult(await options.assemblyBridge.executeCommand(commandId, context))
+          : await executeRuntime(commandId, context);
     } catch (error) {
       return createFailedRuntimeCommandResult(error);
     } finally {

@@ -64,6 +64,30 @@ describe("commercial output snapshot", () => {
     expect(snapshot.bomGroupCount).toBe(2);
   });
 
+  it("uses the placed-instance display name without changing canonical BOM identity", () => {
+    const fixture = commercialOutputFixtureInput();
+    const renamedMachine = {
+      ...fixture.machines[0],
+      displayName: "Flow Pack Machine - Line 2"
+    };
+    const snapshot = createCommercialOutputSnapshot({
+      ...fixture,
+      machines: [renamedMachine]
+    });
+
+    expect(snapshot.equipment[0]).toMatchObject({
+      instanceId: renamedMachine.instanceId,
+      name: "Flow Pack Machine - Line 2",
+      machineDefinitionId: renamedMachine.machineDefinitionId,
+      definitionIdentity: `atara-standard:${renamedMachine.machineDefinitionId}`
+    });
+    expect(snapshot.bomGroups[0]).toMatchObject({
+      name: "Flow Pack Machine",
+      machineDefinitionId: renamedMachine.machineDefinitionId,
+      quantity: 1
+    });
+  });
+
   it("computes canonical rotated extents for zero, right-angle, arbitrary and negative footprints", () => {
     const snapshot = createCommercialOutputSnapshot(commercialOutputFixtureInput());
     expect(snapshot.extents).not.toBeNull();

@@ -4,6 +4,8 @@ import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { EditorHost } from "./components/EditorHost";
+import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
+import { HelpModal, type HelpSection } from "./components/HelpModal";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import {
   WorkbenchApplicationBar,
@@ -90,6 +92,8 @@ import { listProjects } from "./utils/projectStorage";
 import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
+import { getPlacedMachineDisplayName } from "./utils/entityNames";
+import { isRenameableProjectEntityId, renameProjectEntity } from "./utils/entityRename";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
 import {
   applyConnectionPointSnap,
@@ -141,6 +145,7 @@ import {
   type RuntimeFeatureCommandId,
   type RuntimeFeatureCommandOperationResult
 } from "./platform/runtimeCommands/runtimeFeatureCommands";
+import { createArrangeRuntimeCommandBindings } from "./platform/runtimeCommands/arrangeRuntimeCommands";
 import {
   createExecutedRuntimeCommandResult,
   createFailedRuntimeCommandResult,
@@ -554,6 +559,9 @@ export function App() {
   const [isCommercialOutputsOpen, setIsCommercialOutputsOpen] = useState(false);
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
   const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [helpSection, setHelpSection] = useState<HelpSection>("quick-start");
+  const [renameRequest, setRenameRequest] = useState<{ entityId: string; version: number } | null>(null);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
   const [latestPerformanceMetrics, setLatestPerformanceMetrics] = useState<ScenePerformanceMetrics | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -673,6 +681,7 @@ export function App() {
     isCommercialOutputsOpen,
     isLibraryManagerOpen,
     isTaxonomyManagerOpen,
+    isHelpOpen,
     connectionPointSnapAvailable: false,
     connectionPointSnapReason: "Select exactly two explicit machines.",
     propertiesContext: "none"
@@ -852,7 +861,7 @@ export function App() {
     ...visiblePlacedMachines.map((machine) => ({
       id: machine.instanceId,
       kind: "machine" as const,
-      label: machine.definition.name,
+      label: getPlacedMachineDisplayName(machine),
       bounds: getObjectPlanBounds(machine),
       positionMm: getMachinePlanPositionMm(machine),
       locked: isLayerLocked(machine.layerId, layers),
@@ -1522,6 +1531,11 @@ export function App() {
         close: () => setIsDisplayOverlayControlsOpen(false),
         toggle: () => setIsDisplayOverlayControlsOpen((current) => !current)
       },
+      [RUNTIME_PANEL_IDS.help]: {
+        getState: () => modalState(runtimePanelStateRef.current.isHelpOpen),
+        open: () => setIsHelpOpen(true),
+        close: () => setIsHelpOpen(false)
+      },
       [RUNTIME_PANEL_IDS.collisionCheck]: {
         getState: () => modalState(runtimePanelStateRef.current.isCollisionCheckOpen),
         open: () => setIsCollisionCheckOpen(true),
@@ -1607,6 +1621,7 @@ export function App() {
       isCommercialOutputsOpen,
       isLibraryManagerOpen,
       isTaxonomyManagerOpen,
+      isHelpOpen,
       connectionPointSnapAvailable,
       connectionPointSnapReason,
       propertiesContext: editingAnnotationId ? "annotation" : propertiesPanelContext
@@ -3203,6 +3218,54 @@ export function App() {
       refreshProjects
     ]);
 
+  const selectedRenameEntity = runtimeSelection.ids.length === 1 && runtimeSelection.primaryId
+    ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
+    : undefined;
+  const renameEnableState = selectedRenameEntity
+    && isRenameableProjectEntityId(selectedRenameEntity.id)
+    && !selectedRenameEntity.locked
+    ? { enabled: true as const }
+    : {
+        enabled: false as const,
+        reason: selectedRenameEntity?.locked
+          ? "Locked entities cannot be renamed."
+          : "Select one renameable machine instance, civil reference, or group."
+      };
+
+  const commitEntityRename = useCallback((entityId: string, name: string) => {
+    const result = renameProjectEntity({
+      entityId,
+      name,
+      machines: placedMachines,
+      civilReferences,
+      groups,
+      lockedEntityIds: new Set(platformEntities.filter((entity) => entity.locked).map((entity) => entity.id))
+    });
+    if (!result.changed) {
+      return false;
+    }
+    markLayoutChanged();
+    setPlacedMachines([...result.machines]);
+    setCivilReferences([...result.civilReferences]);
+    setGroups([...result.groups]);
+    return true;
+  }, [civilReferences, groups, markLayoutChanged, placedMachines, platformEntities]);
+
+  const requestSelectedEntityRename = useCallback(() => {
+    const entityId = runtimeSelectionRef.current.primaryId;
+    if (!entityId || !isRenameableProjectEntityId(entityId)) {
+      return false;
+    }
+    runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.layoutExplorer);
+    setRenameRequest((current) => ({ entityId, version: (current?.version ?? 0) + 1 }));
+    return true;
+  }, [runtimePanelBridge]);
+
+  const openHelpSection = useCallback((section: HelpSection) => {
+    setHelpSection(section);
+    return mapPanelOperationToRuntimeCommandResult(runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.help));
+  }, [runtimePanelBridge]);
+
   const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
     ...projectRuntimeCommandBindings,
     [RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt]: {
@@ -3312,6 +3375,30 @@ export function App() {
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
+    [RUNTIME_FEATURE_COMMAND_IDS.renameSelected]: {
+      getEnableState: () => renameEnableState,
+      execute: (context) => {
+        if (isRecord(context.payload)) {
+          const entityId = typeof context.payload.entityId === "string" ? context.payload.entityId : "";
+          const name = typeof context.payload.name === "string" ? context.payload.name : "";
+          if (entityId !== runtimeSelectionRef.current.primaryId || !commitEntityRename(entityId, name)) {
+            return {
+              handled: false,
+              status: "disabled",
+              reason: "Rename was not applied to the current selected entity."
+            };
+          }
+          return createExecutedRuntimeFeatureCommandResult();
+        }
+        return requestSelectedEntityRename()
+          ? createExecutedRuntimeFeatureCommandResult()
+          : {
+              handled: false,
+              status: "disabled",
+              reason: "Select one renameable entity."
+            };
+      }
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.addMachine]: {
       getEnableState: (context) => isMachineLibrarySelection(context.payload)
         ? { enabled: true }
@@ -3413,6 +3500,16 @@ export function App() {
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
+    ...createArrangeRuntimeCommandBindings({
+      selectedCount: selectedAlignableEntityIds.length,
+      movementAllowed: runtimeSelectionMovementEvaluation.allowed,
+      align: applyAlignmentAction,
+      distribute: applyDistributionAction,
+      equalGap: applyEqualGapAction,
+      openAlignmentTools: () => mapPanelOperationToRuntimeCommandResult(
+        runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.alignmentTools)
+      )
+    }),
     [RUNTIME_FEATURE_COMMAND_IDS.rotationSnap]: {
       getEnableState: () => ({ enabled: true }),
       execute: (context) => {
@@ -3457,6 +3554,18 @@ export function App() {
       execute: () => mapPanelOperationToRuntimeCommandResult(
         runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.simulationControls)
       )
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.helpQuickStart]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => openHelpSection("quick-start")
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.helpKeyboardShortcuts]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => openHelpSection("shortcuts")
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.helpAbout]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => openHelpSection("about")
     }
   }), [
     addAnnotation,
@@ -3468,6 +3577,7 @@ export function App() {
     applyEqualGapAction,
     applyPairAlignmentAction,
     applyPairAnchorSnap,
+    commitEntityRename,
     connectionPointSnapContext.available,
     connectionPointSnapReason,
     commercialOutputSnapshot,
@@ -3475,6 +3585,9 @@ export function App() {
     exportCommercialPlan,
     exportCommercialSnapshot,
     projectRuntimeCommandBindings,
+    openHelpSection,
+    renameEnableState,
+    requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,
     runtimePanelBridge,
@@ -3492,10 +3605,10 @@ export function App() {
         ? { enabled: true }
         : { enabled: false, reason: "Select at least one ungrouped entity." },
       execute: (context) => {
-        if (!isRecord(context.payload) || typeof context.payload.name !== "string") {
-          throw new Error("Create Group command requires a name.");
-        }
-        createGroupFromSelection(context.payload.name);
+        const requestedName = isRecord(context.payload) && typeof context.payload.name === "string"
+          ? context.payload.name
+          : `Assembly ${groups.length + 1}`;
+        createGroupFromSelection(requestedName);
         return createExecutedRuntimeCommandResult();
       }
     },
@@ -3952,7 +4065,8 @@ export function App() {
   const commandSurfaceMetadataRegistry = useMemo(() => ({
     get: (commandId: string) => runtimeCommandBridge.registry.get(commandId)
       ?? runtimeFeatureCommandBridge.registry.get(commandId)
-  }), [runtimeCommandBridge, runtimeFeatureCommandBridge]);
+      ?? assemblyCommandBridge.registry.get(commandId)
+  }), [assemblyCommandBridge, runtimeCommandBridge, runtimeFeatureCommandBridge]);
 
   const commandSurfaceCoreBridge = useMemo(() => ({
     registry: runtimeCommandBridge.registry,
@@ -3984,6 +4098,26 @@ export function App() {
     }
   }), [recordRuntimeCommandExecution, runtimeFeatureCommandBridge]);
 
+  const commandSurfaceAssemblyBridge = useMemo(() => ({
+    registry: assemblyCommandBridge.registry,
+    getRuntimeCommand: (commandId: string, context?: CommandContext) =>
+      assemblyCommandBridge.getRuntimeCommand(commandId, context ?? {
+        selectionIds: runtimeSelectionRef.current.ids,
+        primarySelectionId: runtimeSelectionRef.current.primaryId,
+        hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+      }),
+    executeCommand: (commandId: string, context?: CommandContext) => {
+      const resolvedContext = context ?? {
+        selectionIds: runtimeSelectionRef.current.ids,
+        primarySelectionId: runtimeSelectionRef.current.primaryId,
+        hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+      };
+      const result = assemblyCommandBridge.executeCommand(commandId as AssemblyCommandId, resolvedContext);
+      recordRuntimeCommandExecution(commandId, result);
+      return result;
+    }
+  }), [assemblyCommandBridge, recordRuntimeCommandExecution]);
+
   const getCommandSurfaceContext = useCallback(() => ({
     selectionIds: runtimeSelectionRef.current.ids,
     primarySelectionId: runtimeSelectionRef.current.primaryId,
@@ -4007,6 +4141,7 @@ export function App() {
     metadataRegistry: commandSurfaceMetadataRegistry,
     coreBridge: commandSurfaceCoreBridge,
     runtimeBridge: commandSurfaceRuntimeBridge,
+    assemblyBridge: commandSurfaceAssemblyBridge,
     getContext: getCommandSurfaceContext,
     getPressed: getCommandSurfacePressedState,
     importRequest: {
@@ -4015,6 +4150,7 @@ export function App() {
     }
   }), [
     commandSurfaceCoreBridge,
+    commandSurfaceAssemblyBridge,
     commandSurfaceMetadataRegistry,
     commandSurfaceRuntimeBridge,
     getCommandSurfaceContext,
@@ -4184,6 +4320,22 @@ export function App() {
         return;
       }
 
+      if (action === "rename-selected") {
+        const context = {
+          selectionIds: runtimeSelectionRef.current.ids,
+          primarySelectionId: runtimeSelectionRef.current.primaryId,
+          hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+        };
+        if (runtimeFeatureCommandBridge.getRuntimeCommand(
+          RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
+          context
+        ).currentlyAvailable) {
+          event.preventDefault();
+          void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.renameSelected);
+        }
+        return;
+      }
+
       const runHandledAction = (handled: boolean, execute: () => void) => {
         if (!shouldPreventEditorShortcutDefault(action, handled)) {
           return false;
@@ -4234,10 +4386,12 @@ export function App() {
   }, [
     clearSelection,
     executeCoreEditorCommand,
+    executeRuntimeFeatureCommand,
     moveSelectedByDelta,
     nudgeSettings,
     runtimeSelection.ids.length,
     runtimeSelectionMovementEvaluation.allowed,
+    runtimeFeatureCommandBridge,
     selectedAlignableEntities.length
   ]);
 
@@ -4258,38 +4412,54 @@ export function App() {
     [{
       editorId: LAYOUT_3D_EDITOR_ID,
       render: () => (
-        <BabylonScene
-          ref={sceneRef}
-          placedMachines={visiblePlacedMachines}
-          civilReferences={visibleCivilReferences}
-          annotations={visibleAnnotations}
-          selectedMachineIds={selectedMachineIds}
-          primarySelectedMachineId={primarySelectedMachineId}
-          selectedCivilReferenceId={selectedCivilReferenceId}
-          selectedCivilReferenceIds={selectedCivilReferenceIds}
-          selectedAnnotationId={selectedAnnotationId}
-          lockedMachineIds={lockedMachineIds}
-          lockedCivilReferenceIds={lockedCivilReferenceIds}
-          lockedAnnotationIds={lockedAnnotationIds}
-          activeGroupEditMachineIds={activeGroupEditMachineIds}
-          selectedAssemblyId={selectedGroupId}
-          activeGroupEditId={activeGroupEditId}
-          onSelectMachine={selectMachine}
-          onSelectCivilReference={selectCivilReferenceForEditing}
-          onSelectAnnotation={selectAnnotationForEditing}
-          onUpdateMachine={updateMachine}
-          onSetMachinePositions={setMachinePositions}
-          onSetAnnotationPosition={setAnnotationPosition}
-          onSetCivilReferencePosition={setCivilReferencePosition}
-          canBeginObjectDrag={canBeginObjectDrag}
-          isSimulationRunning={isSimulationRunning}
-          simulationSpeed={simulationSpeed}
-          overlaySettings={overlaySettings}
-          collisionResult={collisionResult}
-          enableE2EDiagnostics={enableE2EDiagnostics}
-          onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
-          onPerformanceMetricsChange={setLatestPerformanceMetrics}
-        />
+        <>
+          <BabylonScene
+            ref={sceneRef}
+            placedMachines={visiblePlacedMachines}
+            civilReferences={visibleCivilReferences}
+            annotations={visibleAnnotations}
+            selectedMachineIds={selectedMachineIds}
+            primarySelectedMachineId={primarySelectedMachineId}
+            selectedCivilReferenceId={selectedCivilReferenceId}
+            selectedCivilReferenceIds={selectedCivilReferenceIds}
+            selectedAnnotationId={selectedAnnotationId}
+            lockedMachineIds={lockedMachineIds}
+            lockedCivilReferenceIds={lockedCivilReferenceIds}
+            lockedAnnotationIds={lockedAnnotationIds}
+            activeGroupEditMachineIds={activeGroupEditMachineIds}
+            selectedAssemblyId={selectedGroupId}
+            activeGroupEditId={activeGroupEditId}
+            onSelectMachine={selectMachine}
+            onSelectCivilReference={selectCivilReferenceForEditing}
+            onSelectAnnotation={selectAnnotationForEditing}
+            onUpdateMachine={updateMachine}
+            onSetMachinePositions={setMachinePositions}
+            onSetAnnotationPosition={setAnnotationPosition}
+            onSetCivilReferencePosition={setCivilReferencePosition}
+            canBeginObjectDrag={canBeginObjectDrag}
+            isSimulationRunning={isSimulationRunning}
+            simulationSpeed={simulationSpeed}
+            overlaySettings={overlaySettings}
+            collisionResult={collisionResult}
+            enableE2EDiagnostics={enableE2EDiagnostics}
+            onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
+            onPerformanceMetricsChange={setLatestPerformanceMetrics}
+          />
+          {!isProjectStorageLoading
+          && !currentLayoutId
+          && placedMachines.length === 0
+          && civilReferences.length === 0
+          && annotations.length === 0 ? (
+            <EmptyProjectWelcome
+              onCreateNewLayout={() => {
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager);
+              }}
+              onOpenExistingProject={() => {
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager);
+              }}
+            />
+          ) : null}
+        </>
       )
     }]
   );
@@ -4442,6 +4612,14 @@ export function App() {
                   selection={runtimeSelection}
                   layerNames={layerNames}
                   onSelectEntity={selectPlatformEntityForEditing}
+                  renameRequestEntityId={renameRequest?.entityId}
+                  renameRequestVersion={renameRequest?.version}
+                  onRenameEntity={(entityId, name) =>
+                    commandSurfaceAdapter.execute(
+                      RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
+                      { entityId, name }
+                    ).then((result) => result.handled)}
+                  onRenameRequestHandled={() => setRenameRequest(null)}
                 />
               )
             },
@@ -4907,7 +5085,7 @@ export function App() {
           <PanelSection
             title={editingAnnotationId ? "Annotation Properties" : selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
             defaultExpanded
-            badge={editingAnnotationId ? "Annotation" : selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+            badge={editingAnnotationId ? "Annotation" : selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? getPlacedMachineDisplayName(selectedMachine) : "None"}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
           >
             {editingAnnotationId ? (
@@ -5118,7 +5296,7 @@ export function App() {
             <PanelSection
               title={selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
               defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference) || Boolean(selectedGroup)}
-              badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+              badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? getPlacedMachineDisplayName(selectedMachine) : "None"}
               {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
             >
               {selectedGroup && (selectedCivilReferenceIds.length > 0 || selectedMachineIds.length <= 1) ? (
@@ -5315,6 +5493,12 @@ export function App() {
                 return executeRuntimeFeatureCommand(commandId, payload);
               }}
               onRequestProjectImport={requestProjectImportFile}
+            />
+          ) : null}
+          {isHelpOpen ? (
+            <HelpModal
+              initialSection={helpSection}
+              onClose={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.help)}
             />
           ) : null}
           {isCommercialOutputsOpen ? (

@@ -807,6 +807,13 @@ test("runtime feature access complete gate is bound to observed visible command 
   await machineCard.click();
   await waitForMachineDiagnostics(page, 3);
 
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await observe("edit.renameSelected", () => page.keyboard.press("F2"));
+  const renameInput = page.getByTestId("layout-explorer").locator("input");
+  await expect(renameInput).toBeVisible();
+  await renameInput.press("Escape");
+  await expect(renameInput).toHaveCount(0);
+
   const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
   if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
     await propertiesSection.click();
@@ -1235,6 +1242,188 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   expect(errors).toEqual([]);
 });
 
+test("PF-1 premium command information architecture is accessible and responsive", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const welcome = page.getByTestId("empty-project-welcome");
+  await expect(welcome).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "Create New Layout" })).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "Open Existing Project" })).toBeVisible();
+
+  const menuBar = page.getByTestId("workbench-menu-bar");
+  expect(await menuBar.locator(".workbench-menu-trigger").allTextContents()).toEqual([
+    "File", "Edit", "View", "Insert", "Arrange", "Tools", "Help"
+  ]);
+
+  const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
+  await expect(commandButtons).toHaveCount(9);
+  for (const button of await commandButtons.all()) {
+    await expect(button.locator(":scope > svg")).toHaveCount(1);
+    await expect(button.locator(":scope > .visually-hidden")).toHaveCount(1);
+    expect(await button.getAttribute("aria-label")).toBeTruthy();
+    expect(await button.getAttribute("title")).toBeTruthy();
+  }
+
+  await welcome.getByRole("button", { name: "Create New Layout" }).click();
+  await expect(page.getByTestId("project-manager-modal")).toBeVisible();
+  await page.getByTestId("close-project-manager").click();
+  await expect(page.getByTestId("project-manager-modal")).toHaveCount(0);
+
+  const helpTrigger = menuBar.getByRole("menuitem", { name: "Help", exact: true });
+  const helpMenu = await openWorkbenchMenu(page, "Help");
+  await helpMenu.locator('[data-command-id="help.quickStart"]').click();
+  const help = page.getByTestId("help-modal");
+  await expect(help).toBeVisible();
+  await expect(help).toContainText("Commercial Outputs");
+  await page.keyboard.press("Escape");
+  await expect(help).toHaveCount(0);
+  await expect(helpTrigger).toBeFocused();
+
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 640, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )).toBe(true);
+    await expect(menuBar).toBeVisible();
+    await expect(page.getByTestId("workbench-command-bar")).toBeVisible();
+    await expect(page.getByTestId("editor-host")).toHaveCount(1);
+    await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+    if (viewport.width === 640) {
+      const welcomeLeft = await welcome.evaluate((element) => element.getBoundingClientRect().left);
+      const primaryDockRight = await page.locator(".workbench-primary-dock")
+        .evaluate((element) => element.getBoundingClientRect().right);
+      expect(welcomeLeft).toBeGreaterThanOrEqual(primaryDockRight);
+    }
+  }
+
+  expect(errors).toEqual([]);
+});
+
+test("PF-1 Arrange commands move, distribute, group, ungroup, undo, and redo once", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const machineCard = page.locator(".machine-card").first();
+  const requestedX = [0, 3000, 7000];
+
+  for (const [index, planX] of requestedX.entries()) {
+    await machineCard.click();
+    await waitForMachineDiagnostics(page, index + 1);
+    const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+    if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+      await propertiesSection.click();
+    }
+    const input = page.getByLabel("Selected machine properties").getByLabel("Plan X");
+    await input.fill(String(planX));
+    await input.blur();
+  }
+  await expect(page.getByTestId("empty-project-welcome")).toHaveCount(0);
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const machineRows = page.getByTestId("layout-explorer").locator('[data-entity-id^="machine:"]');
+  await expect(machineRows).toHaveCount(3);
+  await machineRows.nth(0).click();
+  await machineRows.nth(1).click({ modifiers: ["Control"] });
+  await machineRows.nth(2).click({ modifiers: ["Control"] });
+
+  const positionsBefore = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const beforeAlign = await getRuntimeViewportSnapshot(page);
+  let arrangeMenu = await openWorkbenchMenu(page, "Arrange");
+  await expectRuntimeCommandExecutionOnce(page, "arrange.alignLeft", () =>
+    arrangeMenu.locator('[data-command-id="arrange.alignLeft"]').click()
+  );
+  await expect.poll(async () => {
+    const xs = Object.values(await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))
+      .map((position) => position.xMm);
+    return new Set(xs).size;
+  }).toBe(1);
+  const afterAlign = await getRuntimeViewportSnapshot(page);
+  expect(afterAlign.invariants.undoDepth).toBe(beforeAlign.invariants.undoDepth + 1);
+
+  await getCommandBarCommand(page, "edit.undo").click();
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))
+    .toEqual(positionsBefore);
+  await getCommandBarCommand(page, "edit.redo").click();
+  await expect.poll(async () => new Set(
+    Object.values(await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))
+      .map((position) => position.xMm)
+  ).size).toBe(1);
+  await getCommandBarCommand(page, "edit.undo").click();
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))
+    .toEqual(positionsBefore);
+
+  arrangeMenu = await openWorkbenchMenu(page, "Arrange");
+  await expectRuntimeCommandExecutionOnce(page, "arrange.distributeHorizontal", () =>
+    arrangeMenu.locator('[data-command-id="arrange.distributeHorizontal"]').click()
+  );
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))
+    .not.toEqual(positionsBefore);
+
+  arrangeMenu = await openWorkbenchMenu(page, "Arrange");
+  await arrangeMenu.locator('[data-command-id="assembly.createGroup"]').click();
+  await expect.poll(async () => (
+    await getRuntimeViewportSnapshot(page)
+  ).invariants.groupMembership.length).toBe(1);
+  arrangeMenu = await openWorkbenchMenu(page, "Arrange");
+  page.once("dialog", (dialog) => dialog.accept());
+  await arrangeMenu.locator('[data-command-id="assembly.ungroup"]').click();
+  await expect.poll(async () => (
+    await getRuntimeViewportSnapshot(page)
+  ).invariants.groupMembership.length).toBe(0);
+
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("PF-1 Explorer F2 rename preserves canonical identity and history", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await waitForMachineDiagnostics(page, 1);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const explorer = page.getByTestId("layout-explorer");
+  const row = explorer.locator('[data-entity-id^="machine:"]').filter({ hasText: "Flow Pack Machine" });
+  await row.click();
+  const beforeRename = await getRuntimeViewportSnapshot(page);
+  await page.keyboard.press("F2");
+  const renameInput = explorer.getByRole("textbox", { name: "Rename Flow Pack Machine" });
+  await expect(renameInput).toBeVisible();
+  await renameInput.fill("Flow Pack Machine - Line 2");
+  await renameInput.press("Enter");
+  await expect(explorer).toContainText("Flow Pack Machine - Line 2");
+
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  await expect(page.getByLabel("Selected machine properties")).toContainText("Flow Pack Machine - Line 2");
+  const afterRename = await getRuntimeViewportSnapshot(page);
+  expect(afterRename.invariants.undoDepth).toBe(beforeRename.invariants.undoDepth + 1);
+
+  await getCommandBarCommand(page, "edit.undo").click();
+  await expect(explorer).not.toContainText("Flow Pack Machine - Line 2");
+  await getCommandBarCommand(page, "edit.redo").click();
+  await expect(explorer).toContainText("Flow Pack Machine - Line 2");
+
+  await openPrimaryDockPanel(page, "panel.machineLibrary");
+  await expect(page.locator('.machine-card[title="Add Flow Pack Machine"]')).toBeVisible();
+  await getCommandBarCommand(page, "view.toggleLabels").click();
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
 test("View-owned display controls update the persisted overlay authority without remounting the editor", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -1548,7 +1737,6 @@ test("workbench chrome keyboard and responsive geometry preserve the editor life
 
   const undoBefore = await getRuntimeCommandExecution(page, "edit.undo");
   await page.keyboard.press("Enter");
-  await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
   const editTrigger = menuBar.getByRole("menuitem", { name: "Edit", exact: true });
   await expect(editTrigger).toHaveAttribute("aria-expanded", "true");
@@ -3977,7 +4165,7 @@ test("Sales and Engineering workspaces persist while domain and scene invariants
   await expect(page.getByTestId("primary-dock-tab-panel.machineLibrary")).toBeVisible();
   await expect(page.getByTestId("primary-dock-tab-panel.layers")).toHaveCount(0);
   await expect(page.getByTestId("app-root")).toHaveAttribute("data-workspace-inspector-mode", "summary");
-  await expect(page.locator('[data-command-id="project.save"]')).toHaveAttribute(
+  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveAttribute(
     "data-workspace-emphasized",
     "true"
   );
@@ -4462,7 +4650,7 @@ test("workspace preferences are keyboard complete and stay inside responsive app
     await page.keyboard.press("Escape");
   }
   await expect(page.getByTestId("workbench-application-bar")).toBeVisible();
-  await expect(page.locator('[data-command-id="project.save"]')).toBeVisible();
+  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toBeVisible();
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   expect(errors).toEqual([]);

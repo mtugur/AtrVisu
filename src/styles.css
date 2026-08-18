@@ -562,9 +562,28 @@ select:disabled {
 }
 
 .workbench-command-button {
+  display: inline-grid;
+  width: var(--av-control-height-md);
   height: var(--av-control-height-md);
   flex: 0 0 auto;
-  padding: 0 var(--av-spacing-sm);
+  place-items: center;
+  padding: 0;
+}
+
+.workbench-command-button svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .workbench-command-button[aria-pressed="true"] {
@@ -607,6 +626,125 @@ select:disabled {
   background: var(--av-surface-panel-translucent);
   box-shadow: -18px 0 42px var(--av-shadow-panel);
   backdrop-filter: blur(18px);
+}
+
+.empty-project-welcome {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--av-spacing-lg);
+  pointer-events: none;
+}
+
+.empty-project-welcome-content {
+  display: grid;
+  width: min(520px, 100%);
+  gap: var(--av-spacing-md);
+  padding: var(--av-spacing-xl);
+  border: 1px solid var(--av-border-default);
+  border-radius: var(--av-control-radius-md);
+  color: var(--av-text-primary);
+  background: var(--av-surface-overlay);
+  box-shadow: var(--av-elevation-panel);
+  pointer-events: auto;
+}
+
+.empty-project-welcome-content h1,
+.empty-project-welcome-content p {
+  margin: 0;
+}
+
+.empty-project-welcome-content h1 {
+  font-size: var(--av-font-size-xl);
+}
+
+.empty-project-welcome-content p {
+  color: var(--av-text-muted);
+  line-height: 1.5;
+}
+
+.empty-project-welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--av-spacing-sm);
+}
+
+.help-dialog {
+  width: min(760px, calc(100vw - (2 * var(--av-spacing-lg))));
+  max-height: min(720px, calc(100vh - (2 * var(--av-spacing-lg))));
+}
+
+.help-dialog-layout {
+  display: grid;
+  min-height: 360px;
+  grid-template-columns: 190px minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.help-dialog-nav {
+  display: grid;
+  align-content: start;
+  gap: var(--av-spacing-2xs);
+  padding: var(--av-spacing-md);
+  border-right: 1px solid var(--av-border-subtle);
+}
+
+.help-dialog-nav button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.help-dialog-nav button[aria-current="page"] {
+  border-color: var(--av-border-accent);
+  color: var(--av-text-accent);
+  background: var(--av-interaction-selected);
+}
+
+.help-dialog-content {
+  min-width: 0;
+  overflow: auto;
+  padding: var(--av-spacing-lg);
+}
+
+.help-dialog-content h3 {
+  margin-top: 0;
+  font-size: var(--av-font-size-lg);
+}
+
+.help-dialog-content li {
+  margin-block: var(--av-spacing-xs);
+  line-height: 1.45;
+}
+
+.help-shortcut-list {
+  display: grid;
+  gap: var(--av-spacing-xs);
+}
+
+.help-shortcut-list div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--av-spacing-md);
+  padding-bottom: var(--av-spacing-xs);
+  border-bottom: 1px solid var(--av-border-subtle);
+}
+
+.help-shortcut-list dd {
+  margin: 0;
+  color: var(--av-text-muted);
+  font-family: var(--av-font-family-mono);
+}
+
+.layout-explorer-row.is-renaming {
+  display: grid;
+  gap: var(--av-spacing-2xs);
+}
+
+.layout-explorer-row.is-renaming input {
+  width: 100%;
+  min-width: 0;
 }
 
 .workbench-primary-dock {
@@ -3754,6 +3892,14 @@ body.is-resizing-workbench-dock {
     left: 0 !important;
   }
 
+  .app-shell:has(.workbench-primary-dock:not(.is-collapsed)) .empty-project-welcome {
+    left: 260px;
+  }
+
+  .app-shell:has(.workbench-primary-dock.is-collapsed) .empty-project-welcome {
+    left: 64px;
+  }
+
   .workbench-primary-dock {
     z-index: calc(var(--av-z-chrome) + 2);
     width: min(var(--av-primary-dock-width, 304px), calc(100vw - 16px));
@@ -3864,6 +4010,33 @@ body.is-resizing-workbench-dock {
   .manager-dialog {
     width: calc(100vw - 20px);
     max-height: calc(100vh - 20px);
+  }
+
+  .help-dialog-layout {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .help-dialog-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: var(--av-spacing-sm);
+    border-right: 0;
+    border-bottom: 1px solid var(--av-border-subtle);
+  }
+
+  .help-dialog-nav button {
+    justify-content: center;
+    min-width: 0;
+    padding-inline: var(--av-spacing-xs);
+  }
+
+  .empty-project-welcome {
+    padding: var(--av-spacing-sm);
+  }
+
+  .empty-project-welcome-content {
+    padding: var(--av-spacing-lg);
   }
 
   .manager-layout {

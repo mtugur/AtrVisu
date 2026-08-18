@@ -29,7 +29,8 @@ export const RUNTIME_PANEL_IDS = {
   precisionPlacement: "panel.precisionPlacement",
   alignmentTools: "panel.alignmentTools",
   connectionPointSnap: "panel.connectionPointSnap",
-  displayOverlayControls: "panel.displayOverlayControls"
+  displayOverlayControls: "panel.displayOverlayControls",
+  help: "panel.help"
 } as const;
 
 export type RuntimePanelId = typeof RUNTIME_PANEL_IDS[keyof typeof RUNTIME_PANEL_IDS];
@@ -126,7 +127,8 @@ const seedClassifications: Readonly<Record<string, RuntimePanelClassification>> 
   [RUNTIME_PANEL_IDS.annotations]: "required-runtime",
   [RUNTIME_PANEL_IDS.layers]: "required-runtime",
   [RUNTIME_PANEL_IDS.groups]: "required-runtime",
-  [RUNTIME_PANEL_IDS.diagnostics]: "declared-planned"
+  [RUNTIME_PANEL_IDS.diagnostics]: "declared-planned",
+  [RUNTIME_PANEL_IDS.help]: "required-runtime"
 };
 
 const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {
@@ -143,7 +145,8 @@ const seedSurfaceKinds: Readonly<Record<string, RuntimePanelSurfaceKind>> = {
   [RUNTIME_PANEL_IDS.projectManager]: "modal",
   [RUNTIME_PANEL_IDS.libraryManager]: "modal",
   [RUNTIME_PANEL_IDS.taxonomyManager]: "modal",
-  [RUNTIME_PANEL_IDS.commercialOutputs]: "modal"
+  [RUNTIME_PANEL_IDS.commercialOutputs]: "modal",
+  [RUNTIME_PANEL_IDS.help]: "modal"
 };
 
 const seedRuntimeLocations: Readonly<Record<string, RuntimePanelLocation>> = {
@@ -160,7 +163,8 @@ const seedRuntimeLocations: Readonly<Record<string, RuntimePanelLocation>> = {
   [RUNTIME_PANEL_IDS.projectManager]: "modal-layer",
   [RUNTIME_PANEL_IDS.libraryManager]: "modal-layer",
   [RUNTIME_PANEL_IDS.taxonomyManager]: "modal-layer",
-  [RUNTIME_PANEL_IDS.commercialOutputs]: "modal-layer"
+  [RUNTIME_PANEL_IDS.commercialOutputs]: "modal-layer",
+  [RUNTIME_PANEL_IDS.help]: "modal-layer"
 };
 
 const seededDescriptors: readonly RuntimePanelDescriptor[] = platformPanelSeedDefinitions.map((definition) => ({

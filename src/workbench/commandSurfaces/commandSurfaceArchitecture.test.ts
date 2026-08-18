@@ -49,6 +49,7 @@ describe("P1-C command surface architecture", () => {
       "@pdf-lib/fontkit",
       "fflate",
       "idb",
+      "lucide-react",
       "pdf-lib",
       "react",
       "react-dom"

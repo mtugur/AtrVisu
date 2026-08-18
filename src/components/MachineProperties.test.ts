@@ -83,6 +83,17 @@ const getButtonMarkup = (markup: string, label: string) => {
 };
 
 describe("MachineProperties ATARA diagnostics", () => {
+  it("uses the placed-instance display name while retaining the canonical definition", () => {
+    const machine = {
+      ...createPlacedMachine(baseDefinition),
+      displayName: "Machine - Line 2"
+    };
+    const markup = renderSelectedMachineProperties(machine);
+
+    expect(markup).toContain("Machine - Line 2");
+    expect(machine.definition.name).toBe("Machine");
+  });
+
   it("reads ATARA data from the definition snapshot first", () => {
     const machine = createPlacedMachine({
       ...baseDefinition,

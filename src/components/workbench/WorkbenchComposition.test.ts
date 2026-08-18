@@ -1,4 +1,7 @@
-import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from "react";
+// @vitest-environment jsdom
+
+import { act, Children, createElement, isValidElement, type ReactElement, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { PlatformEntity, SelectionState } from "../../platform/contracts";
@@ -96,7 +99,7 @@ describe("final workbench composition contracts", () => {
     expect(onActivate).toHaveBeenCalledWith("panel.layoutExplorer");
   });
 
-  it("projects real entities and forwards replace or toggle selection without local authority", () => {
+  it("projects real entities and forwards replace or toggle selection without local authority", async () => {
     const onSelectEntity = vi.fn();
     const selection: SelectionState = {
       ids: ["machine:packer", "machine:conveyor"],
@@ -120,19 +123,20 @@ describe("final workbench composition contracts", () => {
     expect(markup).not.toContain('role="tree"');
     expect(markup).not.toContain('role="treeitem"');
 
-    const tree = LayoutExplorer(props);
-    findButton(tree, "layout-explorer-entity-machine:packer").props.onClick?.({
-      ctrlKey: false,
-      metaKey: false,
-      shiftKey: false
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createElement(LayoutExplorer, props));
     });
-    findButton(tree, "layout-explorer-entity-machine:conveyor").props.onClick?.({
-      ctrlKey: true,
-      metaKey: false,
-      shiftKey: false
+    const packer = container.querySelector<HTMLButtonElement>('[data-testid="layout-explorer-entity-machine:packer"]');
+    const conveyor = container.querySelector<HTMLButtonElement>('[data-testid="layout-explorer-entity-machine:conveyor"]');
+    await act(async () => {
+      packer?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      conveyor?.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
     });
     expect(onSelectEntity).toHaveBeenNthCalledWith(1, "machine:packer", "replace");
     expect(onSelectEntity).toHaveBeenNthCalledWith(2, "machine:conveyor", "toggle");
+    await act(async () => root.unmount());
   });
 
   it("renders contextual contributions only when visible and exposes controlled collapse", () => {

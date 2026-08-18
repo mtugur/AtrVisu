@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CommandSurfaceItem } from "../../workbench/commandSurfaces";
+import { WorkbenchIcon } from "../../workbench/icons";
 
 export type WorkbenchCommandBarProps = {
   items: readonly CommandSurfaceItem[];
@@ -113,6 +114,7 @@ export function WorkbenchCommandBar({
           type="button"
           className="workbench-command-button"
           data-command-id={item.commandId}
+          data-icon-id={item.iconId}
           data-workspace-emphasized={emphasizedCommandIds.includes(item.commandId)
             ? "true"
             : undefined}
@@ -125,7 +127,10 @@ export function WorkbenchCommandBar({
           onFocus={() => setFocusedCommandId(item.commandId)}
           onClick={() => onExecute(item.commandId)}
         >
-          {item.pending ? `${item.label}...` : item.label}
+          {item.iconId ? <WorkbenchIcon iconId={item.iconId} /> : null}
+          <span className="visually-hidden">
+            {item.pending ? `${item.label}...` : item.label}
+          </span>
         </button>
       ))}
     </div>

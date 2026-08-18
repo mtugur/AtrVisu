@@ -303,4 +303,32 @@ describe("layout serialization", () => {
       verticalWorldSpan: 16
     });
   });
+
+  it("round-trips a machine instance display name without changing canonical definition identity", () => {
+    const source = {
+      ...createMachine(),
+      displayName: "Forklift Test - Line 2"
+    };
+    const layout = createLayoutSnapshotFromMachines([source], "2026-08-18T00:00:00.000Z");
+    const [restored] = placedMachinesFromLayout(JSON.parse(JSON.stringify(layout)));
+
+    expect(layout.objects[0]).toMatchObject({
+      displayName: "Forklift Test - Line 2",
+      machineDefinitionId: "forklift-test",
+      name: "Forklift Test"
+    });
+    expect(restored).toMatchObject({
+      displayName: "Forklift Test - Line 2",
+      machineDefinitionId: "forklift-test"
+    });
+    expect(restored?.definition.name).toBe("Forklift Test");
+  });
+
+  it("preserves the canonical fallback for older layouts without an instance display name", () => {
+    const layout = createLayoutSnapshotFromMachines([createMachine()]);
+    const [restored] = placedMachinesFromLayout(layout);
+
+    expect(restored?.displayName).toBeUndefined();
+    expect(restored?.definition.name).toBe("Forklift Test");
+  });
 });

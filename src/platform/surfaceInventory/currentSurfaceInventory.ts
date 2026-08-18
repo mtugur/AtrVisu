@@ -35,17 +35,34 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "project.restorePrompt",
       "edit.undo",
       "edit.redo",
+      "edit.renameSelected",
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.viewpoints",
       "view.toggleConnectionPoints",
       "view.showMeasurements",
+      "arrange.alignLeft",
+      "arrange.alignRight",
+      "arrange.alignFront",
+      "arrange.alignBack",
+      "arrange.alignCenterX",
+      "arrange.alignCenterY",
+      "arrange.distributeHorizontal",
+      "arrange.distributeVertical",
+      "arrange.equalGapX",
+      "arrange.equalGapY",
+      "assembly.createGroup",
+      "assembly.ungroup",
+      "arrange.alignmentTools",
       "library.manager",
       "library.taxonomyManager",
       "collision.check",
       "performance.benchmark",
-      "simulation.controls"
+      "simulation.controls",
+      "help.quickStart",
+      "help.keyboardShortcuts",
+      "help.about"
     ],
     featureIds: [
       "project.save",
@@ -55,18 +72,21 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "project.commercialOutputs",
       "edit.undo",
       "edit.redo",
+      "entity.rename",
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.viewpoints",
       "connectionPoints.toggle",
       "measurements.show",
+      "arrange.quickActions",
       "library.manager",
       "library.taxonomyManager",
       "collision.check",
-      "performance.benchmark"
+      "performance.benchmark",
+      "help.productGuidance"
     ],
-    notes: "File/Edit/View/Tools commands execute through existing runtime bridges. project.importJson reuses the single persistent App-owned file acquisition provider."
+    notes: "File/Edit/View/Insert/Arrange/Tools/Help commands execute through existing runtime bridges. project.importJson reuses the single persistent App-owned file acquisition provider."
   },
   {
     surfaceId: "surface.workbenchCommandBar",
@@ -79,6 +99,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
     ],
     commandIds: [
+      "project.save",
       "edit.undo",
       "edit.redo",
       "edit.duplicateSelected",
@@ -98,7 +119,33 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "connectionPoints.toggle",
       "view.viewpoints"
     ],
-    notes: "One-row registry-backed command projection with live enablement, pending, disabled-reason and pressed-state presentation."
+    notes: "One-row icon-only registry-backed command projection with live enablement, pending, disabled-reason and pressed-state presentation."
+  },
+  {
+    surfaceId: "surface.help",
+    surfaceType: "modal",
+    label: "AtrVisu Help",
+    owner: "platform",
+    sourceFiles: [
+      "src/App.tsx",
+      "src/components/HelpModal.tsx",
+      "src/components/common/useModalFocus.ts"
+    ],
+    commandIds: ["help.quickStart", "help.keyboardShortcuts", "help.about"],
+    panelIds: ["panel.help"],
+    featureIds: ["help.productGuidance", "panel.help"],
+    notes: "The registered Help commands select a section in one accessible modal surface with focus trapping, Escape close, and opener focus restoration."
+  },
+  {
+    surfaceId: "surface.emptyProjectWelcome",
+    surfaceType: "manager",
+    label: "Empty Project Welcome",
+    owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/EmptyProjectWelcome.tsx"],
+    commandIds: ["project.manager"],
+    panelIds: ["panel.projectManager"],
+    featureIds: ["project.manager"],
+    notes: "A presentation-only Editor Host overlay routes create/open entry through the existing Project Manager authority and does not replace the Babylon canvas."
   },
   {
     surfaceId: "surface.machineLibrary",
@@ -116,9 +163,10 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Layout Explorer",
     owner: "platform",
     sourceFiles: ["src/App.tsx", "src/components/workbench/LayoutExplorer.tsx"],
+    commandIds: ["edit.renameSelected"],
     panelIds: ["panel.layoutExplorer"],
-    featureIds: ["panel.layoutExplorer", "selection.singleSelect", "selection.multiSelect"],
-    notes: "Projects current PlatformEntity adapters and writes through the canonical Runtime Selection Bridge."
+    featureIds: ["panel.layoutExplorer", "selection.singleSelect", "selection.multiSelect", "entity.rename"],
+    notes: "Projects current PlatformEntity adapters, writes through canonical Runtime Selection, and commits rename through the history-backed runtime command."
   },
   {
     surfaceId: "surface.sceneViewport",

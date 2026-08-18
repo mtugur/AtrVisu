@@ -12,6 +12,7 @@ import {
   projectAtaraMachineProperties
 } from "../propertySchema";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { commitRotationAngle } from "../utils/placement";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
 import {
@@ -253,14 +254,14 @@ export function MachineProperties({
     <section className="properties-section" aria-label="Selected machine properties">
       <header className="section-header">
         <span>Selection</span>
-        <strong>{selectedMachine ? selectedMachine.definition.name : "None"}</strong>
+        <strong>{selectedMachine ? getPlacedMachineDisplayName(selectedMachine) : "None"}</strong>
       </header>
 
       {selectedMachine ? (
         <div className="properties-body">
           <div className="property-readout">
             <span>Name</span>
-            <strong>{selectedMachine.definition.name}</strong>
+            <strong>{getPlacedMachineDisplayName(selectedMachine)}</strong>
           </div>
           <div className="property-readout">
             <span>Category</span>

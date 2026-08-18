@@ -148,6 +148,18 @@ describe("layout history", () => {
     ]);
   });
 
+  it("records one machine instance rename transaction and restores it through undo and redo", () => {
+    const initial = [machine("a", 0)];
+    const renamed = [{ ...initial[0], displayName: "Machine - Line 2" }];
+    const history = pushHistorySnapshot(createLayoutHistory(), initial);
+
+    expect(history.undoStack).toHaveLength(1);
+    const undone = undoHistory(history, renamed);
+    expect(undone?.machines[0].displayName).toBeUndefined();
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone?.machines[0].displayName).toBe("Machine - Line 2");
+  });
+
   it("restores a deleted selected machine through undo and redo", () => {
     const initial = [machine("a", 0), machine("b", 1000)];
     const afterDelete = [machine("b", 1000)];

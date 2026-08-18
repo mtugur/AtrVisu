@@ -31,6 +31,7 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   viewpoints: "view.viewpoints",
   toggleConnectionPoints: "view.toggleConnectionPoints",
   showMeasurements: "view.showMeasurements",
+  renameSelected: "edit.renameSelected",
   addMachine: "library.addMachine",
   libraryManager: "library.manager",
   taxonomyManager: "library.taxonomyManager",
@@ -42,11 +43,25 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   addRestrictedZone: "civil.addRestrictedZone",
   addReferenceZone: "civil.addReferenceZone",
   alignSelection: "alignment.alignSelection",
+  alignLeft: "arrange.alignLeft",
+  alignRight: "arrange.alignRight",
+  alignFront: "arrange.alignFront",
+  alignBack: "arrange.alignBack",
+  alignCenterX: "arrange.alignCenterX",
+  alignCenterY: "arrange.alignCenterY",
+  distributeHorizontal: "arrange.distributeHorizontal",
+  distributeVertical: "arrange.distributeVertical",
+  equalGapX: "arrange.equalGapX",
+  equalGapY: "arrange.equalGapY",
+  alignmentTools: "arrange.alignmentTools",
   rotationSnap: "snap.rotation",
   connectionPointSnap: "snap.connectionPoint",
   collisionCheck: "collision.check",
   performanceBenchmark: "performance.benchmark",
-  simulationControls: "simulation.controls"
+  simulationControls: "simulation.controls",
+  helpQuickStart: "help.quickStart",
+  helpKeyboardShortcuts: "help.keyboardShortcuts",
+  helpAbout: "help.about"
 } as const;
 
 export type RuntimeFeatureCommandId =

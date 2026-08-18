@@ -19,6 +19,7 @@ export type CommandSurfaceItem = Readonly<{
   placement: CommandSurfacePlacement;
   label: string;
   tooltip: string;
+  iconId?: string;
   shortcut?: string;
   disabled: boolean;
   disabledReason?: string;
@@ -27,8 +28,8 @@ export type CommandSurfaceItem = Readonly<{
 }>;
 
 export type CommandSurfaceMenu = Readonly<{
-  id: "file" | "edit" | "insert" | "view" | "tools";
-  labelKey: `menu.${"file" | "edit" | "insert" | "view" | "tools"}`;
+  id: "file" | "edit" | "view" | "insert" | "arrange" | "tools" | "help";
+  labelKey: `menu.${"file" | "edit" | "view" | "insert" | "arrange" | "tools" | "help"}`;
   fallbackLabel: string;
   items: readonly CommandSurfaceItem[];
 }>;
@@ -70,6 +71,8 @@ export type RuntimeCommandSurfaceBridge = Readonly<{
   ) => RuntimeCommandOperationResult | Promise<RuntimeCommandOperationResult>;
 }>;
 
+export type AssemblyCommandSurfaceBridge = RuntimeCommandSurfaceBridge;
+
 export type CommandSurfaceImportRequest = Readonly<{
   request: (onResult: (result: RuntimeCommandOperationResult) => void) => boolean;
   isPending: () => boolean;
@@ -79,6 +82,7 @@ export type CommandSurfaceAdapterOptions = Readonly<{
   metadataRegistry: CommandMetadataRegistry;
   coreBridge: CoreCommandSurfaceBridge;
   runtimeBridge: RuntimeCommandSurfaceBridge;
+  assemblyBridge: AssemblyCommandSurfaceBridge;
   getContext: () => CommandContext;
   getPressed?: (commandId: CommandId) => boolean | undefined;
   importRequest?: CommandSurfaceImportRequest;
@@ -92,7 +96,7 @@ export type CommandSurfaceAdapter = Readonly<{
     commandId: CommandId,
     placement: CommandSurfacePlacement
   ) => CommandSurfaceItem | undefined;
-  execute: (commandId: CommandId) => Promise<RuntimeCommandOperationResult>;
+  execute: (commandId: CommandId, payload?: unknown) => Promise<RuntimeCommandOperationResult>;
   subscribe: (listener: () => void) => () => void;
   getRevision: () => number;
 }>;
