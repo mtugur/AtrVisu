@@ -202,6 +202,9 @@ export function ProjectManager({
       target?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     };
     focusEntryTarget();
+    if (entryIntent !== null) {
+      return;
+    }
     const frame = window.requestAnimationFrame(focusEntryTarget);
     return () => window.cancelAnimationFrame(frame);
   }, [entryIntent, projects.length]);
