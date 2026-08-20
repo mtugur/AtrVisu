@@ -67,9 +67,13 @@ describe("Arrange runtime command bindings", () => {
     expect(three[RUNTIME_FEATURE_COMMAND_IDS.equalGapX]?.getEnableState(context).enabled).toBe(true);
   });
 
-  it("rejects all Arrange movement and advanced entry when atomic lock evaluation fails", () => {
+  it("rejects Arrange mutations while keeping the non-mutating Selection Tools entry reachable", () => {
     const bindings = createHarness(3, false).bindings;
-    Object.values(bindings).forEach((binding) => {
+    Object.entries(bindings).forEach(([commandId, binding]) => {
+      if (commandId === RUNTIME_FEATURE_COMMAND_IDS.alignmentTools) {
+        expect(binding?.getEnableState(context)).toEqual({ enabled: true });
+        return;
+      }
       expect(binding?.getEnableState(context)).toMatchObject({
         enabled: false,
         reason: expect.stringContaining("unlocked")

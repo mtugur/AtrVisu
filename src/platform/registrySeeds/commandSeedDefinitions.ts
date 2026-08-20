@@ -73,7 +73,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("arrange.distributeVertical", "arrange", "Distribute Vertically", "Distribute at least three selected entities by vertical center.", true),
   createCommandSeed("arrange.equalGapX", "arrange", "Equal Gap X", "Equalize horizontal gaps between at least three selected entities.", true),
   createCommandSeed("arrange.equalGapY", "arrange", "Equal Gap Y", "Equalize vertical gaps between at least three selected entities.", true),
-  createCommandSeed("arrange.alignmentTools", "arrange", "Alignment Tools...", "Open advanced alignment and anchor tools."),
+  createCommandSeed("arrange.alignmentTools", "arrange", "Selection Tools...", "Open advanced selection alignment and connection-point tools.", false, undefined, "selection-tools"),
   createCommandSeed("snap.rotation", "arrange", "Rotation Snap", "Toggle or configure rotation snapping."),
   createCommandSeed("snap.connectionPoint", "arrange", "Connection Point Snap", "Toggle or configure connection point snapping."),
 

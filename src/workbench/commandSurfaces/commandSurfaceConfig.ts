@@ -51,7 +51,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
       RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
       RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
-      RUNTIME_FEATURE_COMMAND_IDS.showMeasurements
+      RUNTIME_FEATURE_COMMAND_IDS.showMeasurements,
+      RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
     ]
   },
   {
@@ -116,12 +117,23 @@ export const COMMAND_BAR_COMMAND_IDS = [
   RUNTIME_FEATURE_COMMAND_IDS.projectSave,
   CORE_EDITOR_COMMAND_IDS.undo,
   CORE_EDITOR_COMMAND_IDS.redo,
+  RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
   CORE_EDITOR_COMMAND_IDS.duplicateSelected,
   CORE_EDITOR_COMMAND_IDS.deleteSelected,
   RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
   RUNTIME_FEATURE_COMMAND_IDS.showMeasurements,
   RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
-  RUNTIME_FEATURE_COMMAND_IDS.viewpoints
+  RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
+  RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
+] as const;
+
+export const COMMAND_BAR_GROUP_DEFINITIONS = [
+  { id: "project", label: "Project", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.projectSave] },
+  { id: "history", label: "History", commandIds: [CORE_EDITOR_COMMAND_IDS.undo, CORE_EDITOR_COMMAND_IDS.redo] },
+  { id: "selection", label: "Selection", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.renameSelected, CORE_EDITOR_COMMAND_IDS.duplicateSelected, CORE_EDITOR_COMMAND_IDS.deleteSelected] },
+  { id: "display", label: "Display", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels, RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints, RUNTIME_FEATURE_COMMAND_IDS.viewpoints] },
+  { id: "precision", label: "Precision", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements] },
+  { id: "arrange", label: "Arrange", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools] }
 ] as const;
 
 export type CommandSurfaceCoreCommandId = CoreEditorCommandId;

@@ -64,7 +64,7 @@
 
   --av-workbench-application-bar-height: 36px;
   --av-workbench-menu-bar-height: 32px;
-  --av-workbench-command-bar-height: 44px;
+  --av-workbench-command-bar-height: 60px;
   --av-workbench-top-inset: calc(
     var(--av-workbench-application-bar-height)
     + var(--av-workbench-menu-bar-height)

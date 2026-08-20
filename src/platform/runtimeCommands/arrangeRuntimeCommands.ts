@@ -63,7 +63,7 @@ export const createArrangeRuntimeCommandBindings = (
     [RUNTIME_FEATURE_COMMAND_IDS.equalGapX]: { getEnableState: distributeEnableState, execute: equalGap("gapX") },
     [RUNTIME_FEATURE_COMMAND_IDS.equalGapY]: { getEnableState: distributeEnableState, execute: equalGap("gapY") },
     [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools]: {
-      getEnableState: alignEnableState,
+      getEnableState: () => ({ enabled: true }),
       execute: options.openAlignmentTools
     }
   };

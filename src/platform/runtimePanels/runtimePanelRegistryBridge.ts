@@ -186,7 +186,7 @@ const runtimeOnlyDescriptors: readonly RuntimePanelDescriptor[] = [
   panel(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, "Performance Benchmark Launcher", "unbound", "modal/tool-surface", "unbound"),
   panel(RUNTIME_PANEL_IDS.simulationControls, "Simulation Controls", "modal", "modal/tool-surface", "modal-layer"),
   panel(RUNTIME_PANEL_IDS.precisionPlacement, "Precision Placement", "contextual", "required-runtime", "secondary-dock"),
-  panel(RUNTIME_PANEL_IDS.alignmentTools, "Alignment Tools", "contextual", "required-runtime", "secondary-dock"),
+  panel(RUNTIME_PANEL_IDS.alignmentTools, "Selection Tools", "section", "required-runtime", "bottom-dock"),
   panel(RUNTIME_PANEL_IDS.connectionPointSnap, "Connection Point Snap", "contextual", "required-runtime", "secondary-dock"),
   panel(RUNTIME_PANEL_IDS.displayOverlayControls, "Display / Overlay Controls", "modal", "modal/tool-surface", "modal-layer")
 ];

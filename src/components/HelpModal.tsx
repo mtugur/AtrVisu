@@ -57,15 +57,16 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
               <article>
                 <h3>Quick Start</h3>
                 <ol>
-                  <li>Create a new layout or open an existing project from File.</li>
+                  <li>Use the central Start surface to create or open a layout. When recovery exists, resume or explicitly discard it there.</li>
                   <li>Add equipment from Library, then place it in the scene.</li>
-                  <li>Select objects in the scene or Explorer and edit them in Inspector.</li>
-                  <li>Use placement and snap controls for precise positioning.</li>
-                  <li>Use Arrange for alignment, distribution, grouping, and advanced alignment tools.</li>
+                  <li>Select objects in the scene or Explorer, press F2 to rename, and edit their properties in Inspector.</li>
+                  <li>Use the grouped Engineering Command Strip for frequent Project, History, Selection, Display, Precision, and Arrange commands.</li>
+                  <li>Use Arrange for common alignment and grouping; open Selection Tools for advanced alignment, distribution, equal-gap, and connection-point snap work.</li>
                   <li>Open Measurement Helpers for distance and placement readouts.</li>
-                  <li>Capture review states in Viewpoints.</li>
+                  <li>Use Viewpoints to open, close, or restore the saved-viewpoint Bottom Dock.</li>
                   <li>Create BOM, PDF, and PNG deliverables from Commercial Outputs.</li>
                 </ol>
+                <p>Product rule: every user-visible command, workflow, or shortcut change must update Help in the same pull request.</p>
               </article>
             ) : null}
             {section === "shortcuts" ? (

@@ -38,4 +38,39 @@ describe("EmptyProjectWelcome", () => {
     expect(onCreateNewLayout).toHaveBeenCalledTimes(1);
     expect(onOpenExistingProject).toHaveBeenCalledTimes(1);
   });
+
+  it("renders one integrated recovery decision and routes each explicit intent", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const handlers = {
+      onCreateNewLayout: vi.fn(),
+      onOpenExistingProject: vi.fn(),
+      onResumeRecovery: vi.fn(),
+      onDiscardRecovery: vi.fn()
+    };
+    await act(async () => root.render(createElement(EmptyProjectWelcome, {
+      ...handlers,
+      recoveryAvailable: true
+    })));
+
+    expect(container.querySelectorAll('[data-testid="empty-project-welcome"]')).toHaveLength(1);
+    expect(container.textContent).toContain("Unsaved work found");
+    expect(container.textContent).not.toContain("Dismiss");
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>("button")];
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+      "Resume Unsaved Layout",
+      "Open Existing Project",
+      "Create New Layout",
+      "Discard Unsaved Recovery"
+    ]);
+    for (const button of buttons) {
+      await act(async () => button.click());
+    }
+    expect(handlers.onResumeRecovery).toHaveBeenCalledOnce();
+    expect(handlers.onOpenExistingProject).toHaveBeenCalledOnce();
+    expect(handlers.onCreateNewLayout).toHaveBeenCalledOnce();
+    expect(handlers.onDiscardRecovery).toHaveBeenCalledOnce();
+  });
 });

@@ -9,6 +9,7 @@ import {
   Redo2,
   Ruler,
   Save,
+  SlidersHorizontal,
   Tag,
   Trash2,
   Undo2,
@@ -26,6 +27,7 @@ export const WORKBENCH_ICON_IDS = [
   "connection-points",
   "viewpoints",
   "rename",
+  "selection-tools",
   "help",
   "keyboard",
   "info"
@@ -44,6 +46,7 @@ const iconById = Object.freeze({
   "connection-points": Plug,
   viewpoints: Camera,
   rename: Pencil,
+  "selection-tools": SlidersHorizontal,
   help: CircleHelp,
   keyboard: Keyboard,
   info: Info

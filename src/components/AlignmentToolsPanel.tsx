@@ -18,6 +18,7 @@ type AlignmentToolsPanelProps = {
   onPairAlign: (action: PairAlignmentAction, gapMm?: number) => void;
   onPairAnchorSnap: (primaryAnchor: FootprintAnchor, secondaryAnchor: FootprintAnchor) => void;
   onChangeNudgeSettings: (settings: NudgeSettings) => void;
+  movementAllowed?: boolean;
 };
 
 const toPositiveNumber = (value: string, fallback: number) => {
@@ -46,7 +47,8 @@ export function AlignmentToolsPanel({
   onEqualGap,
   onPairAlign,
   onPairAnchorSnap,
-  onChangeNudgeSettings
+  onChangeNudgeSettings,
+  movementAllowed = true
 }: AlignmentToolsPanelProps) {
   const [pairGapXMm, setPairGapXMm] = useState(100);
   const [pairGapYMm, setPairGapYMm] = useState(100);
@@ -66,22 +68,22 @@ export function AlignmentToolsPanel({
           <div className="alignment-group">
             <strong>Align to Primary</strong>
             <div className="alignment-button-grid">
-              <button type="button" data-testid="align-left-button" onClick={() => onAlign("left")}>
+              <button type="button" disabled={!movementAllowed} data-testid="align-left-button" onClick={() => onAlign("left")}>
                 Left
               </button>
-              <button type="button" onClick={() => onAlign("right")}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onAlign("right")}>
                 Right
               </button>
-              <button type="button" onClick={() => onAlign("front")}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onAlign("front")}>
                 Front
               </button>
-              <button type="button" onClick={() => onAlign("back")}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onAlign("back")}>
                 Back
               </button>
-              <button type="button" onClick={() => onAlign("centerX")}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onAlign("centerX")}>
                 Center X
               </button>
-              <button type="button" onClick={() => onAlign("centerY")}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onAlign("centerY")}>
                 Center Y
               </button>
             </div>
@@ -89,16 +91,16 @@ export function AlignmentToolsPanel({
           <div className="alignment-group">
             <strong>Distribute</strong>
             <div className="alignment-button-grid">
-              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onDistribute("horizontal")}>
+              <button type="button" disabled={!movementAllowed || selectedEntityCount < 3} onClick={() => onDistribute("horizontal")}>
                 Horizontal
               </button>
-              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onDistribute("vertical")}>
+              <button type="button" disabled={!movementAllowed || selectedEntityCount < 3} onClick={() => onDistribute("vertical")}>
                 Vertical
               </button>
-              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onEqualGap("gapX")}>
+              <button type="button" disabled={!movementAllowed || selectedEntityCount < 3} onClick={() => onEqualGap("gapX")}>
                 Equal Gap X
               </button>
-              <button type="button" disabled={selectedEntityCount < 3} onClick={() => onEqualGap("gapY")}>
+              <button type="button" disabled={!movementAllowed || selectedEntityCount < 3} onClick={() => onEqualGap("gapY")}>
                 Equal Gap Y
               </button>
             </div>
@@ -107,36 +109,36 @@ export function AlignmentToolsPanel({
             <div className="alignment-group">
               <strong>Pair Alignment - primary moves, secondary stays fixed</strong>
               <div className="alignment-button-grid">
-                <button type="button" onClick={() => onPairAlign("leftToRight")}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("leftToRight")}>
                   Primary left edge to secondary right edge
                 </button>
-                <button type="button" onClick={() => onPairAlign("rightToLeft")}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("rightToLeft")}>
                   Primary right edge to secondary left edge
                 </button>
-                <button type="button" onClick={() => onPairAlign("frontToBack")}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("frontToBack")}>
                   Primary front edge to secondary back edge
                 </button>
-                <button type="button" onClick={() => onPairAlign("backToFront")}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("backToFront")}>
                   Primary back edge to secondary front edge
                 </button>
-                <button type="button" onClick={() => onPairAlign("centerX")}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("centerX")}>
                   Match Center X
                 </button>
-                <button type="button" onClick={() => onPairAlign("centerY")}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("centerY")}>
                   Match Center Y
                 </button>
               </div>
               <div className="alignment-button-grid">
-                <button type="button" onClick={() => onPairAlign("leftToRight", 0)}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("leftToRight", 0)}>
                   Zero Gap X: left to right
                 </button>
-                <button type="button" onClick={() => onPairAlign("rightToLeft", 0)}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("rightToLeft", 0)}>
                   Zero Gap X: right to left
                 </button>
-                <button type="button" onClick={() => onPairAlign("frontToBack", 0)}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("frontToBack", 0)}>
                   Zero Gap Y: front to back
                 </button>
-                <button type="button" onClick={() => onPairAlign("backToFront", 0)}>
+                <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("backToFront", 0)}>
                   Zero Gap Y: back to front
                 </button>
               </div>
@@ -150,7 +152,7 @@ export function AlignmentToolsPanel({
                   onChange={(event) => setPairGapXMm(Math.max(0, Number(event.target.value) || 0))}
                 />
               </label>
-              <button type="button" onClick={() => onPairAlign("gapX", pairGapXMm)}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("gapX", pairGapXMm)}>
                 Set Gap X
               </button>
               <label className="property-field">
@@ -163,7 +165,7 @@ export function AlignmentToolsPanel({
                   onChange={(event) => setPairGapYMm(Math.max(0, Number(event.target.value) || 0))}
                 />
               </label>
-              <button type="button" onClick={() => onPairAlign("gapY", pairGapYMm)}>
+              <button type="button" disabled={!movementAllowed} onClick={() => onPairAlign("gapY", pairGapYMm)}>
                 Set Gap Y
               </button>
               <div className="pair-anchor-grid" data-testid="pair-anchor-snap-section">
@@ -193,7 +195,11 @@ export function AlignmentToolsPanel({
                     ))}
                   </select>
                 </label>
-                <button type="button" onClick={() => onPairAnchorSnap(primaryAnchor, secondaryAnchor)}>
+                <button
+                  type="button"
+                  disabled={!movementAllowed}
+                  onClick={() => onPairAnchorSnap(primaryAnchor, secondaryAnchor)}
+                >
                   Snap Primary Anchor to Secondary Anchor
                 </button>
               </div>

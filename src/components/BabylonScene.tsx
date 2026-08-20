@@ -66,6 +66,7 @@ import {
   type MachineDragState
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
+import { drawMachineLabelText } from "./babylonScene/machineLabelLifecycle";
 import {
   captureOrthographicFraming,
   getOrthographicBoundsForViewport,
@@ -238,7 +239,7 @@ const getCivilColor = (item: CivilReferenceItem) => {
 };
 
 const drawLabelText = (texture: DynamicTexture, text: string) => {
-  texture.drawText(text, null, 78, "bold 42px Arial", TECHNICAL_CSS_COLORS.labelText, TECHNICAL_CSS_COLORS.transparent, true, true);
+  drawMachineLabelText(texture, text, TECHNICAL_CSS_COLORS.labelText);
 };
 
 const createLabel = (scene: Scene, textureKey: string, text: string, y: number) => {
@@ -1064,6 +1065,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.machineScreenBounds;
         delete canvas.dataset.machinePlanPositions;
         delete canvas.dataset.civilPlanPositions;
+        delete canvas.dataset.machineSceneLabels;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -2027,6 +2029,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             yMm: item.positionMm.yMm
           }])
         ));
+        canvas.dataset.machineSceneLabels = JSON.stringify(scene.meshes
+          .filter((mesh) => typeof mesh.metadata?.machineLabelInstanceId === "string")
+          .map((mesh) => {
+            const instanceId = mesh.metadata.machineLabelInstanceId as string;
+            return {
+              instanceId,
+              meshName: mesh.name,
+              text: machineNodesRef.current.get(instanceId)?.labelText ?? null,
+              visible: mesh.isVisible
+            };
+          }));
       }
       scene.render();
       if (onPerformanceMetricsChangeRef.current) {
@@ -2174,6 +2187,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       box.visibility = 0;
 
       const { label, texture } = createLabel(scene, instanceId, displayName, dimensions.height + 0.85);
+      label.metadata = {
+        machineLabelInstanceId: instanceId,
+        platformEntityId: createLegacyPlatformEntityId("machine", instanceId)
+      };
       label.position.x = renderCenter.x;
       label.position.z = renderCenter.z;
       label.isVisible = overlaySettingsRef.current.showLabels;

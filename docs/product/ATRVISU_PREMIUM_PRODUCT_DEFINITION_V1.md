@@ -35,15 +35,23 @@ The canonical application menu is:
 
 `File / Edit / View / Insert / Arrange / Tools / Help`
 
-The frequent command bar is icon-led. It preserves Save, Undo, Redo,
-Duplicate, Delete, Measurement Helpers, Labels, Connection Points, and
-Viewpoints. Textual project, layout, revision, and dirty-state context remains
-in the Application Bar.
+The engineering command strip is icon-led and grouped in the canonical order
+Project, History, Selection, Display, Precision, and Arrange. It preserves
+Save, Undo, Redo, Rename, Duplicate, Delete, Measurement Helpers, Labels,
+Connection Points, Viewpoints, and Selection Tools. Group captions and subtle
+separators provide engineering hierarchy without moving project, layout,
+revision, or dirty-state context out of the Application Bar. At narrow widths,
+Project and History remain immediately reachable and the remaining groups move
+into one deterministic More surface rather than compressing the desktop strip.
 
 Arrange exposes common alignment, distribution, equal-gap, grouping, and
-ungrouping commands. Pair alignment and other detailed settings remain in
-Alignment Tools. Help is a real registered product surface with Quick Start,
-real keyboard shortcuts, and restrained product/version information.
+ungrouping commands. Pair alignment, advanced alignment, nudge settings, and
+connection-point snap configuration live in one registered Selection Tools
+Bottom Dock contribution. The Inspector remains property and context oriented;
+it does not own operational alignment, distribution, snap, duplicate, delete,
+or clear-selection button stacks. Help is a real registered product surface
+with Quick Start, real keyboard shortcuts, and restrained product/version
+information.
 
 ## Semantic Decisions
 
@@ -58,6 +66,18 @@ real keyboard shortcuts, and restrained product/version information.
   Their ephemeral entry intent focuses the relevant create or existing-project
   workflow without mutating project data; neutral Project Manager entry remains
   available and no second project model or demo entity is created.
+- Startup and autosave recovery share one central decision surface. A valid
+  recovery replaces the normal start prompt with Resume Unsaved Layout, Open
+  Existing Project, Create New Layout, and the explicit destructive action
+  Discard Unsaved Recovery. No second recovery banner may compete with it.
+- Viewpoints is a truthful panel toggle: it opens or activates Viewpoints,
+  collapses an already active Bottom Dock, and reopens with the persisted
+  explicit dock size. Its pressed state is derived from actual panel state.
+- Machine scene-label identity is the placed machine instance. Renaming,
+  Undo/Redo, cancellation, visibility changes, duplicate, delete, and restore
+  must leave exactly one live label representation per labeled instance.
+- Help is a living product contract. Every pull request that changes a visible
+  command, workflow, or shortcut updates Help in the same change set.
 
 ## Product Finish Sequence
 

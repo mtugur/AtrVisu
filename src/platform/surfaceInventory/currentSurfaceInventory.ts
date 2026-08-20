@@ -518,21 +518,21 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   },
   {
     surfaceId: "surface.connectionPointSnap",
-    surfaceType: "property-editor",
+    surfaceType: "panel",
     label: "Connection Point Snap",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/ConnectionPointSnapPanel.tsx", "src/utils/connectionPointSnap.ts"],
+    sourceFiles: ["src/App.tsx", "src/components/SelectionToolsPanel.tsx", "src/components/ConnectionPointSnapPanel.tsx", "src/utils/connectionPointSnap.ts"],
     commandIds: ["snap.connectionPoint"],
     panelIds: ["panel.connectionPointSnap"],
     featureIds: ["snap.connectionPoint", "panel.connectionPointSnap"]
   },
   {
     surfaceId: "surface.alignment",
-    surfaceType: "property-editor",
-    label: "Alignment",
+    surfaceType: "panel",
+    label: "Selection Tools",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
-    commandIds: ["alignment.alignSelection"],
+    sourceFiles: ["src/App.tsx", "src/components/SelectionToolsPanel.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
+    commandIds: ["alignment.alignSelection", "arrange.alignmentTools"],
     panelIds: ["panel.alignmentTools"],
     featureIds: ["alignment.alignSelection", "panel.alignmentTools"]
   },

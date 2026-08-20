@@ -58,6 +58,7 @@ export const createDefaultWorkbenchUiPreferences = (): WorkbenchUiPreferences =>
       ? "primary-dock"
       : entry.panelId === RUNTIME_PANEL_IDS.bottomDockShell
         || entry.panelId === RUNTIME_PANEL_IDS.viewpoints
+        || entry.panelId === RUNTIME_PANEL_IDS.alignmentTools
         || entry.panelId === RUNTIME_PANEL_IDS.statusBar
         ? "bottom-dock"
         : "secondary-dock"

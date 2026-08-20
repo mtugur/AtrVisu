@@ -272,6 +272,33 @@ describe("RightPanelUtilityStrip", () => {
 });
 
 describe("WorkbenchCommandBar", () => {
+  it("renders the canonical engineering groups in professional work order", async () => {
+    const commandIds = [
+      "project.save",
+      "edit.undo",
+      "edit.redo",
+      "edit.renameSelected",
+      "edit.duplicateSelected",
+      "edit.deleteSelected",
+      "view.toggleLabels",
+      "view.toggleConnectionPoints",
+      "view.viewpoints",
+      "view.showMeasurements",
+      "arrange.alignmentTools"
+    ];
+    const container = await mount(createElement(WorkbenchCommandBar, {
+      items: commandIds.map((commandId) => item(commandId, "command-bar")),
+      onExecute: vi.fn()
+    }));
+
+    expect([...container.querySelectorAll(".workbench-command-group-label")]
+      .map((label) => label.textContent)).toEqual([
+      "Project", "History", "Selection", "Display", "Precision", "Arrange"
+    ]);
+    expect(container.querySelectorAll('[role="group"]')).toHaveLength(6);
+    expect(container.querySelectorAll("button[data-command-id]")).toHaveLength(commandIds.length);
+  });
+
   it("renders toolbar semantics, pressed state, and roving keyboard focus", async () => {
     const items = [
       item("edit.undo", "command-bar", { label: "Undo", iconId: "undo" }),

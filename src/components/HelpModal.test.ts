@@ -39,6 +39,10 @@ describe("HelpModal", () => {
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(dialog.textContent).toContain("Library");
     expect(dialog.textContent).toContain("Arrange");
+    expect(dialog.textContent).toContain("Selection Tools");
+    expect(dialog.textContent).toContain("Engineering Command Strip");
+    expect(dialog.textContent).toContain("recovery");
+    expect(dialog.textContent).toContain("Viewpoints");
     expect(dialog.textContent).toContain("Commercial Outputs");
     expect(dialog.contains(document.activeElement)).toBe(true);
 

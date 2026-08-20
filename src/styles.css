@@ -554,11 +554,40 @@ select:disabled {
 
 .workbench-command-bar {
   height: var(--av-workbench-command-bar-height);
-  gap: var(--av-spacing-xs);
-  padding: 0 var(--av-spacing-sm);
-  overflow-x: auto;
-  overflow-y: hidden;
+  align-items: stretch;
+  gap: 0;
+  padding: var(--av-spacing-2xs) var(--av-spacing-sm) 0;
+  overflow: visible;
   white-space: nowrap;
+}
+
+.workbench-command-group {
+  display: grid;
+  min-width: 0;
+  grid-template-rows: minmax(0, 1fr) 14px;
+  align-items: center;
+  padding: 0 var(--av-spacing-xs);
+  border-right: 1px solid var(--av-border-subtle);
+}
+
+.workbench-command-group:first-child {
+  padding-left: 0;
+}
+
+.workbench-command-group-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--av-spacing-2xs);
+}
+
+.workbench-command-group-label {
+  overflow: hidden;
+  color: var(--av-text-muted);
+  font-size: var(--av-font-size-xs);
+  line-height: 14px;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
 }
 
 .workbench-command-button {
@@ -568,6 +597,70 @@ select:disabled {
   flex: 0 0 auto;
   place-items: center;
   padding: 0;
+}
+
+.workbench-command-overflow {
+  position: relative;
+  display: grid;
+  align-items: center;
+  margin-left: var(--av-spacing-xs);
+}
+
+.workbench-command-overflow > summary {
+  display: grid;
+  min-width: 58px;
+  height: var(--av-control-height-md);
+  place-items: center;
+  padding: 0 var(--av-spacing-sm);
+  border: 1px solid var(--av-border-interactive);
+  border-radius: var(--av-control-radius-sm);
+  background: var(--av-surface-control);
+  cursor: pointer;
+  list-style: none;
+}
+
+.workbench-command-overflow > summary::-webkit-details-marker {
+  display: none;
+}
+
+.workbench-command-overflow-menu {
+  position: absolute;
+  top: calc(100% - var(--av-spacing-2xs));
+  right: 0;
+  z-index: var(--av-z-popover);
+  display: grid;
+  width: min(280px, calc(100vw - (2 * var(--av-spacing-sm))));
+  gap: var(--av-spacing-sm);
+  padding: var(--av-spacing-sm);
+  border: 1px solid var(--av-border-default);
+  background: var(--av-surface-overlay);
+  box-shadow: var(--av-elevation-panel);
+}
+
+.workbench-command-overflow-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--av-spacing-2xs);
+}
+
+.workbench-command-overflow-group > strong {
+  grid-column: 1 / -1;
+  color: var(--av-text-muted);
+  font-size: var(--av-font-size-xs);
+  text-transform: uppercase;
+}
+
+.workbench-command-overflow-group .workbench-command-button {
+  width: 100%;
+  grid-template-columns: 22px minmax(0, 1fr);
+  justify-items: start;
+  gap: var(--av-spacing-xs);
+  padding: 0 var(--av-spacing-xs);
+}
+
+.workbench-command-overflow-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .workbench-command-button svg {
@@ -669,6 +762,56 @@ select:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: var(--av-spacing-sm);
+}
+
+.empty-project-welcome-actions .tertiary-action {
+  color: var(--av-text-muted);
+  background: transparent;
+}
+
+.selection-tools-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: var(--av-spacing-md);
+  padding: var(--av-spacing-sm);
+  overflow: auto;
+}
+
+.selection-tools-panel > .contextual-panel {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .workbench-command-bar {
+    padding-inline: var(--av-spacing-xs);
+  }
+
+  .workbench-command-group {
+    padding-inline: var(--av-spacing-2xs);
+  }
+
+  .workbench-command-button {
+    width: var(--av-control-height-sm);
+    height: var(--av-control-height-sm);
+  }
+}
+
+@media (max-width: 720px) {
+  .workbench-command-bar {
+    justify-content: flex-start;
+  }
+
+  .workbench-command-group {
+    flex: 0 0 auto;
+  }
+
+  .workbench-command-overflow {
+    margin-left: auto;
+  }
+
+  .selection-tools-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .help-dialog {

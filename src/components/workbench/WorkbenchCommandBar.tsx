@@ -1,5 +1,6 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CommandSurfaceItem } from "../../workbench/commandSurfaces";
+import { COMMAND_BAR_GROUP_DEFINITIONS } from "../../workbench/commandSurfaces/commandSurfaceConfig";
 import { WorkbenchIcon } from "../../workbench/icons";
 
 export type WorkbenchCommandBarProps = {
@@ -53,6 +54,10 @@ export function WorkbenchCommandBar({
     firstEnabledIndex >= 0 ? items[firstEnabledIndex]?.commandId : undefined
   );
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [compactOverflow, setCompactOverflow] = useState(() =>
+    typeof window !== "undefined" && Boolean(window.matchMedia?.("(max-width: 720px)").matches)
+  );
+  const [overflowOpen, setOverflowOpen] = useState(false);
   const currentItemIndex = items.findIndex((item) => item.commandId === focusedCommandId);
   const focusIndex = currentItemIndex >= 0 && !items[currentItemIndex]?.disabled
     ? currentItemIndex
@@ -70,6 +75,36 @@ export function WorkbenchCommandBar({
       setFocusedCommandId(nextCommandId);
     }
   }, [currentItemIndex, focusIndex, focusedCommandId, items]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    const query = window.matchMedia("(max-width: 720px)");
+    const update = () => {
+      setCompactOverflow(query.matches);
+      if (!query.matches) {
+        setOverflowOpen(false);
+      }
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  const groupedItems = COMMAND_BAR_GROUP_DEFINITIONS.map((group) => ({
+    ...group,
+    items: group.commandIds.flatMap((commandId) => {
+      const index = items.findIndex((item) => item.commandId === commandId);
+      return index >= 0 ? [{ item: items[index], index }] : [];
+    })
+  })).filter((group) => group.items.length > 0);
+  const primaryGroups = compactOverflow
+    ? groupedItems.filter((group) => group.id === "project" || group.id === "history")
+    : groupedItems;
+  const overflowGroups = compactOverflow
+    ? groupedItems.filter((group) => group.id !== "project" && group.id !== "history")
+    : [];
 
   const focusAt = (index: number) => {
     if (index < 0 || items[index]?.disabled) {
@@ -98,6 +133,36 @@ export function WorkbenchCommandBar({
     }
   };
 
+  const renderCommandButton = (item: CommandSurfaceItem, index: number, overflow = false) => (
+    <button
+      key={item.commandId}
+      ref={(node) => { buttonRefs.current[index] = node; }}
+      type="button"
+      className="workbench-command-button"
+      data-command-id={item.commandId}
+      data-icon-id={item.iconId}
+      data-workspace-emphasized={emphasizedCommandIds.includes(item.commandId)
+        ? "true"
+        : undefined}
+      disabled={item.disabled}
+      title={[item.tooltip, item.shortcut, item.disabledReason].filter(Boolean).join(" | ")}
+      aria-label={item.disabledReason ? `${item.label}: ${item.disabledReason}` : item.label}
+      aria-pressed={item.pressed}
+      aria-busy={item.pending || undefined}
+      tabIndex={index === focusIndex && !item.disabled ? 0 : -1}
+      onFocus={() => setFocusedCommandId(item.commandId)}
+      onClick={() => {
+        onExecute(item.commandId);
+        if (overflow) setOverflowOpen(false);
+      }}
+    >
+      {item.iconId ? <WorkbenchIcon iconId={item.iconId} /> : null}
+      <span className={overflow ? "workbench-command-overflow-label" : "visually-hidden"}>
+        {item.pending ? `${item.label}...` : item.label}
+      </span>
+    </button>
+  );
+
   return (
     <div
       className="workbench-command-bar"
@@ -107,32 +172,36 @@ export function WorkbenchCommandBar({
       data-app-shell-zone="top-toolbar"
       onKeyDown={handleKeyDown}
     >
-      {items.map((item, index) => (
-        <button
-          key={item.commandId}
-          ref={(node) => { buttonRefs.current[index] = node; }}
-          type="button"
-          className="workbench-command-button"
-          data-command-id={item.commandId}
-          data-icon-id={item.iconId}
-          data-workspace-emphasized={emphasizedCommandIds.includes(item.commandId)
-            ? "true"
-            : undefined}
-          disabled={item.disabled}
-          title={[item.tooltip, item.shortcut, item.disabledReason].filter(Boolean).join(" | ")}
-          aria-label={item.disabledReason ? `${item.label}: ${item.disabledReason}` : item.label}
-          aria-pressed={item.pressed}
-          aria-busy={item.pending || undefined}
-          tabIndex={index === focusIndex && !item.disabled ? 0 : -1}
-          onFocus={() => setFocusedCommandId(item.commandId)}
-          onClick={() => onExecute(item.commandId)}
-        >
-          {item.iconId ? <WorkbenchIcon iconId={item.iconId} /> : null}
-          <span className="visually-hidden">
-            {item.pending ? `${item.label}...` : item.label}
-          </span>
-        </button>
+      {primaryGroups.map((group) => (
+        <div className="workbench-command-group" role="group" aria-label={group.label} key={group.id}>
+          <div className="workbench-command-group-actions">
+            {group.items.map(({ item, index }) => renderCommandButton(item, index))}
+          </div>
+          <span className="workbench-command-group-label" aria-hidden="true">{group.label}</span>
+        </div>
       ))}
+      {overflowGroups.length > 0 ? (
+        <details className="workbench-command-overflow" open={overflowOpen}>
+          <summary
+            aria-label="More engineering commands"
+            aria-expanded={overflowOpen}
+            onClick={(event) => {
+              event.preventDefault();
+              setOverflowOpen((current) => !current);
+            }}
+          >
+            More
+          </summary>
+          <div className="workbench-command-overflow-menu">
+            {overflowGroups.map((group) => (
+              <div className="workbench-command-overflow-group" role="group" aria-label={group.label} key={group.id}>
+                <strong>{group.label}</strong>
+                {group.items.map(({ item, index }) => renderCommandButton(item, index, true))}
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

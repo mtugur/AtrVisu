@@ -21,6 +21,22 @@ describe("runtime panel registry bridge", () => {
     );
   });
 
+  it("registers Selection Tools as the canonical Bottom Dock utility surface", () => {
+    const bridge = createRuntimePanelRegistryBridge(() => ({}));
+    const descriptor = runtimePanelDescriptors.find(
+      (candidate) => candidate.definition.id === RUNTIME_PANEL_IDS.alignmentTools
+    );
+
+    expect(bridge.registry.get(RUNTIME_PANEL_IDS.alignmentTools)).toMatchObject({
+      title: "Selection Tools"
+    });
+    expect(descriptor).toMatchObject({
+      classification: "required-runtime",
+      surfaceKind: "section",
+      runtimeLocation: "bottom-dock"
+    });
+  });
+
   it("rejects duplicate runtime panel ids during deterministic registration", () => {
     const definition: PanelDefinition = {
       id: "panel.duplicate",
