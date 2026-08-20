@@ -1,5 +1,6 @@
 import type { PlanBounds } from "../types/alignment";
 import type { PlacedMachine } from "../types/machine";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { calculateReferencePointMeasurementBetweenMachines } from "../utils/placement";
 import { formatLength } from "../utils/units";
 
@@ -36,7 +37,7 @@ export function MultiSelectionProperties({
         ) : null}
         <div className="property-readout">
           <span>Primary</span>
-          <strong>{primarySelectedMachine?.definition.name ?? primarySelectedMachine?.instanceId ?? "None"}</strong>
+          <strong>{primarySelectedMachine ? getPlacedMachineDisplayName(primarySelectedMachine) : "None"}</strong>
         </div>
         <div className="multi-selection-list" aria-label="Selected objects">
           {selectedMachines.map((machine) => (
@@ -44,7 +45,7 @@ export function MultiSelectionProperties({
               className={machine.instanceId === primarySelectedMachine?.instanceId ? "multi-selection-item is-primary" : "multi-selection-item"}
               key={machine.instanceId}
             >
-              <span>{machine.definition.name}</span>
+              <span>{getPlacedMachineDisplayName(machine)}</span>
               {machine.instanceId === primarySelectedMachine?.instanceId ? <strong>Primary</strong> : null}
             </div>
           ))}

@@ -1571,6 +1571,49 @@ test("PF-1 Explorer F2 rename preserves canonical identity and history", async (
   expect(errors).toEqual([]);
 });
 
+test("PF-1 placed-instance rename stays consistent in multi-selection history", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await waitForMachineDiagnostics(page, 2);
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const explorer = page.getByTestId("layout-explorer");
+  const flowPackRow = explorer.locator('[data-entity-id^="machine:"]').filter({ hasText: "Flow Pack Machine" }).first();
+  const conveyorRow = explorer.locator('[data-entity-id^="machine:"]').filter({ hasText: "Belt Conveyor" }).first();
+  await flowPackRow.click();
+  await page.keyboard.press("F2");
+  const renameInput = explorer.getByRole("textbox", { name: "Rename Flow Pack Machine" });
+  await renameInput.fill("Line 1 Flow Pack");
+  await renameInput.press("Enter");
+
+  const propertiesSection = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
+    await propertiesSection.click();
+  }
+  await expect(page.getByLabel("Selected machine properties")).toContainText("Line 1 Flow Pack");
+
+  await page.keyboard.down("Control");
+  await conveyorRow.click();
+  await page.keyboard.up("Control");
+  const multiSelectionSection = page.getByRole("button", { name: /Multi-Selection/i });
+  if ((await multiSelectionSection.getAttribute("aria-expanded")) !== "true") {
+    await multiSelectionSection.click();
+  }
+  const multiSelectionPanel = page.getByTestId("multi-selection-panel");
+  await expect(multiSelectionPanel.locator(".property-readout").filter({ hasText: "Primary" })).toContainText("Line 1 Flow Pack");
+  await expect(multiSelectionPanel.locator(".multi-selection-item.is-primary")).toContainText("Line 1 Flow Pack");
+  await expect(multiSelectionPanel).toContainText("Belt Conveyor");
+
+  await getCommandBarCommand(page, "edit.undo").click();
+  await expect(multiSelectionPanel).not.toContainText("Line 1 Flow Pack");
+  await expect(multiSelectionPanel.locator(".multi-selection-item.is-primary")).toContainText("Flow Pack Machine");
+  await getCommandBarCommand(page, "edit.redo").click();
+  await expect(multiSelectionPanel.locator(".multi-selection-item.is-primary")).toContainText("Line 1 Flow Pack");
+  expect(errors).toEqual([]);
+});
+
 test("View-owned display controls update the persisted overlay authority without remounting the editor", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);

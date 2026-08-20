@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
+import { renameProjectEntity } from "../utils/entityRename";
+import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "../utils/layoutHistory";
 import { MultiSelectionProperties } from "./MultiSelectionProperties";
 
 const definition: MachineDefinition = {
@@ -68,5 +70,37 @@ describe("MultiSelectionProperties", () => {
 
     expect(markup).toContain("Packaging module");
     expect(markup).not.toContain("button");
+  });
+
+  it("keeps placed-instance names consistent through multi-selection undo and redo", () => {
+    const initialMachines = [
+      machine("flow-pack", "Flow Pack Machine"),
+      machine("conveyor", "Belt Conveyor")
+    ];
+    const history = pushHistorySnapshot(createLayoutHistory(), initialMachines);
+    const renamed = renameProjectEntity({
+      entityId: "machine:flow-pack",
+      name: "Line 1 Flow Pack",
+      machines: initialMachines,
+      civilReferences: [],
+      groups: []
+    });
+
+    const renamedMarkup = renderPanel([...renamed.machines]);
+    expect(renamedMarkup.match(/Line 1 Flow Pack/g)).toHaveLength(2);
+    expect(renamedMarkup).toContain("Belt Conveyor");
+    expect(renamed.machines[0]?.definition.name).toBe("Flow Pack Machine");
+
+    const undone = undoHistory(history, [...renamed.machines]);
+    expect(undone).not.toBeNull();
+    const undoneMarkup = renderPanel([...(undone?.machines ?? [])]);
+    expect(undoneMarkup).not.toContain("Line 1 Flow Pack");
+    expect(undoneMarkup.match(/Flow Pack Machine/g)).toHaveLength(2);
+
+    const redone = undone ? redoHistory(undone.history, undone.machines) : null;
+    expect(redone).not.toBeNull();
+    const redoneMarkup = renderPanel([...(redone?.machines ?? [])]);
+    expect(redoneMarkup.match(/Line 1 Flow Pack/g)).toHaveLength(2);
+    expect(redone?.machines[0]?.definition.name).toBe("Flow Pack Machine");
   });
 });
