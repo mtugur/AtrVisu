@@ -7,7 +7,7 @@ export const DEFAULT_PLACEMENT_SETTINGS: PlacementSettings = {
   gridSnapStepMm: 100,
   rotationSnapEnabled: true,
   rotationSnapStepDeg: 15,
-  showMeasurementHelpers: true
+  showMeasurementHelpers: false
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {

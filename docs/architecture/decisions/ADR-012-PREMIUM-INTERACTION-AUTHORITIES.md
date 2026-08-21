@@ -41,13 +41,40 @@ product model has text rather than a separate display-name concept.
 Commercial instance rows use the placed display name. BOM grouping and BOM
 names continue to use canonical library/definition identity.
 
+All project-facing placed-machine presentation resolves through
+`getPlacedMachineDisplayName()`. This includes Explorer and scene labels,
+single- and multi-selection Inspector content, precision measurement labels,
+connection-snap roles, assembly members, annotation attachment targets,
+collision presentation, and delete confirmation. Library, taxonomy,
+definition snapshots, serialization identity, and BOM grouping continue to
+read canonical definition data directly.
+
+### Contextual measurement command
+
+`view.showMeasurements` remains the only command authority for the existing
+`PlacementSettings.showMeasurementHelpers` value. It is available only with
+exactly one supported selected machine. Enabling it opens the existing
+`panel.precisionPlacement` contribution and reveals its helper controls;
+disabling it hides those controls without requiring the contribution itself to
+close. No second panel or measurement state is introduced.
+
+### Compact command navigation
+
+At compact width, toolbar roving focus covers only directly visible History
+commands. The native More disclosure remains an ordinary tab stop, and its
+command buttons enter tab order only while the disclosure is open. Desktop
+roving behavior remains unchanged.
+
 ## Consequences
 
 - Command and workbench metadata remains serializable and platform-safe.
 - Toolbars can be icon-only while retaining accessible names and tooltips.
 - Explorer, scene labels, Inspector, persistence, Undo/Redo, and commercial
-  instance output reconcile through one project-owned value.
+  instance output reconcile through one project-owned value; contextual tools,
+  collision feedback, annotations, and confirmation copy use the same resolver.
 - Older layouts require no migration because the field is optional and retain
   canonical fallback behavior.
+- Measurement Helpers cannot report a pressed state without a selected-machine
+  contribution capable of rendering its visible effect.
 - PF-2 may extend instance data deliberately, but cannot move definition
   identity into the project display-name authority.

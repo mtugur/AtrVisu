@@ -20,6 +20,7 @@ const roots: Root[] = [];
 afterEach(async () => {
   await act(async () => roots.splice(0).forEach((root) => root.unmount()));
   document.body.replaceChildren();
+  vi.unstubAllGlobals();
 });
 
 const item = (
@@ -272,6 +273,53 @@ describe("RightPanelUtilityStrip", () => {
 });
 
 describe("WorkbenchCommandBar", () => {
+  it("keeps compact roving focus on visible History commands and exposes overflow through More", async () => {
+    const mediaListeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 720px)",
+      onchange: null,
+      addEventListener: (_event: string, listener: () => void) => mediaListeners.add(listener),
+      removeEventListener: (_event: string, listener: () => void) => mediaListeners.delete(listener),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    })));
+    const container = await mount(createElement(WorkbenchCommandBar, {
+      items: [
+        item("edit.undo", "command-bar", { label: "Undo" }),
+        item("edit.redo", "command-bar", { label: "Redo" }),
+        item("view.toggleLabels", "command-bar", { label: "Labels" }),
+        item("view.showMeasurements", "command-bar", { label: "Measurement Helpers", disabled: true })
+      ],
+      onExecute: vi.fn()
+    }));
+    const direct = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="direct"]')];
+    const overflow = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="overflow"]')];
+    const summary = container.querySelector("summary") as HTMLElement;
+
+    expect(direct.map((button) => button.dataset.commandId)).toEqual(["edit.undo", "edit.redo"]);
+    expect(direct.map((button) => button.tabIndex)).toEqual([0, -1]);
+    expect(overflow.map((button) => button.tabIndex)).toEqual([-1, -1]);
+    expect(summary.tabIndex).toBe(0);
+
+    direct[0].focus();
+    await press(direct[0], "ArrowRight");
+    expect(document.activeElement).toBe(direct[1]);
+    await press(direct[1], "ArrowRight");
+    expect(document.activeElement).toBe(direct[0]);
+
+    await act(async () => summary.click());
+    expect(container.querySelector("details")?.hasAttribute("open")).toBe(true);
+    expect(overflow.map((button) => button.tabIndex)).toEqual([0, -1]);
+
+    overflow[0].focus();
+    await press(overflow[0], "Escape");
+    expect(container.querySelector("details")?.hasAttribute("open")).toBe(false);
+    expect(document.activeElement).toBe(summary);
+    expect(overflow.map((button) => button.tabIndex)).toEqual([-1, -1]);
+  });
+
   it("renders the canonical engineering groups in professional work order", async () => {
     const commandIds = [
       "edit.undo",

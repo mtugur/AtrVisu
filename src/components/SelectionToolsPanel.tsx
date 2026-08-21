@@ -65,12 +65,8 @@ export function SelectionToolsPanel({
         onPairAnchorSnap={onPairAnchorSnap}
         movementAllowed={movementAllowed}
       />
-      <WorkbenchContextContribution panelId={RUNTIME_PANEL_IDS.connectionPointSnap} title="Connection Point Snap" visible={connectionPointSnapVisible} expanded={connectionPointSnapExpanded} onExpandedChange={onConnectionPointSnapExpandedChange}>
-        {connectionPointSnapAvailable ? (
-          <ConnectionPointSnapPanel selectedMachines={selectedMachines} primarySelectedMachine={primarySelectedMachine} onSnap={onConnectionPointSnap} onClearSelection={onClearSelection} />
-        ) : (
-          <p className="empty-selection">Select two compatible machines to configure a connection snap.</p>
-        )}
+      <WorkbenchContextContribution panelId={RUNTIME_PANEL_IDS.connectionPointSnap} title="Connection Point Snap" visible={connectionPointSnapVisible && connectionPointSnapAvailable} expanded={connectionPointSnapExpanded} onExpandedChange={onConnectionPointSnapExpandedChange}>
+        <ConnectionPointSnapPanel selectedMachines={selectedMachines} primarySelectedMachine={primarySelectedMachine} onSnap={onConnectionPointSnap} onClearSelection={onClearSelection} />
       </WorkbenchContextContribution>
     </div>
   );

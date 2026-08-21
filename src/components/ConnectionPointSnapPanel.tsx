@@ -14,6 +14,7 @@ import {
   getConnectionPointSnapDelta,
   type ConnectionPointSnapSelection
 } from "../utils/connectionPointSnap";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 
 type ConnectionPointSnapPanelProps = {
   selectedMachines: PlacedMachine[];
@@ -111,13 +112,13 @@ export function ConnectionPointSnapPanel({
     <section className="precision-section connection-snap-panel" data-testid="connection-point-snap-panel" aria-label="Connection point snap">
       <div className="property-readout">
         <span>Moving Object</span>
-        <strong>{movingMachine?.definition.name ?? "Primary selected object"}</strong>
+        <strong>{movingMachine ? getPlacedMachineDisplayName(movingMachine) : "Primary selected object"}</strong>
       </div>
       <div className="property-readout">
         <span>Fixed Object</span>
-        <strong>{fixedMachine?.definition.name ?? "Secondary selected object"}</strong>
+        <strong>{fixedMachine ? getPlacedMachineDisplayName(fixedMachine) : "Secondary selected object"}</strong>
       </div>
-      <p className="collision-note">v0.1 moves the selected machine; it does not automatically rotate it.</p>
+      <p className="collision-note">Connection snap moves the selected machine without changing its rotation.</p>
       {movingPoints.length === 0 || fixedPoints.length === 0 ? (
         <p className="manager-validation">Selected objects do not have compatible connection points.</p>
       ) : (

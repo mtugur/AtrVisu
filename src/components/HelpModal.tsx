@@ -90,7 +90,7 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
               <article><h3>Arrange &amp; Snap</h3><p>Use Arrange commands for common edge, center, distribution, and equal-gap operations.</p><p>Selection Tools provides compact multi-object controls, advanced pair alignment, and Connection Point Snap when compatible machines are selected.</p></article>
             ) : null}
             {section === "measurements" ? (
-              <article><h3>Measurements</h3><p>Measurement Helpers compares two machines using center distance, plan-axis deltas, and an approximate footprint gap when available.</p><p>Keyboard Nudge step settings are available in Placement Settings while Measurement Helpers is enabled.</p></article>
+              <article><h3>Measurements</h3><p>Select one machine, then activate Measurement Helpers to reveal the helper controls in Placement Settings.</p><p>Choose two machines there to compare center distance, plan-axis deltas, and an approximate footprint gap. Keyboard Nudge step settings are available in the same section.</p></article>
             ) : null}
             {section === "viewpoints" ? (
               <article><h3>Viewpoints</h3><p>Capture the current camera and display state, then Apply, Update, Rename, or Delete the selected viewpoint. Previous and Next move through saved viewpoints.</p><p>The Viewpoints command opens and closes its Bottom Dock contribution.</p></article>

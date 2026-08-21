@@ -9,6 +9,7 @@ import {
   getRotationNudgeStepDeg,
   getMachinePlanPositionMm
 } from "../utils/placement";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { formatLength, mmToMeters } from "../utils/units";
 
 type PrecisionPlacementPanelProps = {
@@ -53,7 +54,7 @@ export function PrecisionPlacementPanel({
     return placedMachines
       .filter((machine) => machine.instanceId !== selectedMachine.instanceId)
       .map((machine) => ({
-        name: machine.definition.name,
+        name: getPlacedMachineDisplayName(machine),
         distanceMm: distanceBetweenPlanPositionsMm(selectedPosition, getMachinePlanPositionMm(machine))
       }))
       .sort((a, b) => a.distanceMm - b.distanceMm)[0] ?? null;
@@ -207,7 +208,7 @@ export function PrecisionPlacementPanel({
               <option value="">Select object</option>
               {placedMachines.map((machine) => (
                 <option key={machine.instanceId} value={machine.instanceId}>
-                  {machine.definition.name}
+                  {getPlacedMachineDisplayName(machine)}
                 </option>
               ))}
             </select>
@@ -218,7 +219,7 @@ export function PrecisionPlacementPanel({
               <option value="">Select object</option>
               {placedMachines.map((machine) => (
                 <option key={machine.instanceId} value={machine.instanceId}>
-                  {machine.definition.name}
+                  {getPlacedMachineDisplayName(machine)}
                 </option>
               ))}
             </select>

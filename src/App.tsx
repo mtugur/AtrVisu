@@ -691,6 +691,8 @@ export function App() {
     isHelpOpen,
     connectionPointSnapAvailable: false,
     connectionPointSnapReason: "Select exactly two explicit machines.",
+    measurementHelpersAvailable: false,
+    measurementHelpersReason: "Select one machine to use Measurement Helpers.",
     propertiesContext: "none"
   });
 
@@ -1539,7 +1541,14 @@ export function App() {
         toggle: () => setIsSimulationControlsOpen((current) => !current)
       },
       [RUNTIME_PANEL_IDS.annotations]: sectionBinding(RUNTIME_PANEL_IDS.annotations),
-      [RUNTIME_PANEL_IDS.precisionPlacement]: sectionBinding(RUNTIME_PANEL_IDS.precisionPlacement),
+      [RUNTIME_PANEL_IDS.precisionPlacement]: sectionBinding(
+        RUNTIME_PANEL_IDS.precisionPlacement,
+        () => ({
+          available: runtimePanelStateRef.current.measurementHelpersAvailable,
+          reason: runtimePanelStateRef.current.measurementHelpersReason,
+          context: runtimePanelStateRef.current.measurementHelpersAvailable ? "selected-machine" : "unavailable"
+        })
+      ),
       [RUNTIME_PANEL_IDS.alignmentTools]: bottomPanelBinding(RUNTIME_PANEL_IDS.alignmentTools),
       [RUNTIME_PANEL_IDS.connectionPointSnap]: {
         getState: () => {
@@ -1663,6 +1672,10 @@ export function App() {
   const connectionPointSnapReason = connectionPointSnapContext.available
     ? ""
     : getConnectionPointSnapContextMessage(connectionPointSnapContext.reason);
+  const measurementHelpersAvailable = runtimeSelection.ids.length === 1 && Boolean(singleSelectedMachine);
+  const measurementHelpersReason = measurementHelpersAvailable
+    ? ""
+    : "Select one machine to use Measurement Helpers.";
 
   useLayoutEffect(() => {
     runtimePanelStateRef.current = {
@@ -1686,6 +1699,8 @@ export function App() {
       isHelpOpen,
       connectionPointSnapAvailable,
       connectionPointSnapReason,
+      measurementHelpersAvailable,
+      measurementHelpersReason,
       propertiesContext: editingAnnotationId ? "annotation" : propertiesPanelContext
     };
   }, [
@@ -1706,6 +1721,8 @@ export function App() {
     isSimulationControlsOpen,
     isPrimaryDockCollapsed,
     isTaxonomyManagerOpen,
+    measurementHelpersAvailable,
+    measurementHelpersReason,
     panelSectionExpansion,
     panelSectionVisibility,
     panelWidth,
@@ -3117,7 +3134,7 @@ export function App() {
       return createUnavailableRuntimeCommandResult("No selected machine is available for deletion.");
     }
 
-    const selectedNames = deletableMachines.map((machine) => machine.definition.name);
+    const selectedNames = deletableMachines.map(getPlacedMachineDisplayName);
     const label = deletableMachines.length === 1
       ? selectedNames[0] ?? "the selected object"
       : `${deletableMachines.length} selected objects`;
@@ -3430,16 +3447,20 @@ export function App() {
       }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements]: {
-      getEnableState: () => ({ enabled: true }),
+      getEnableState: () => measurementHelpersAvailable
+        ? { enabled: true }
+        : { enabled: false, reason: measurementHelpersReason },
       execute: (context) => {
-        if (isPlacementSettings(context.payload)) {
-          setPlacementSettings(context.payload);
-          return createExecutedRuntimeFeatureCommandResult();
+        const nextSettings = isPlacementSettings(context.payload)
+          ? context.payload
+          : {
+              ...placementSettingsRef.current,
+              showMeasurementHelpers: !placementSettingsRef.current.showMeasurementHelpers
+            };
+        setPlacementSettings(nextSettings);
+        if (nextSettings.showMeasurementHelpers) {
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.precisionPlacement);
         }
-        setPlacementSettings((current) => ({
-          ...current,
-          showMeasurementHelpers: !current.showMeasurementHelpers
-        }));
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
@@ -3655,6 +3676,8 @@ export function App() {
     projectRuntimeCommandBindings,
     openHelpSection,
     renameEnableState,
+    measurementHelpersAvailable,
+    measurementHelpersReason,
     requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,

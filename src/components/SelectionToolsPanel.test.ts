@@ -1,7 +1,29 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import { SelectionToolsPanel } from "./SelectionToolsPanel";
+
+const definition: MachineDefinition = {
+  id: "machine",
+  name: "Machine",
+  category: "Test",
+  width: 1,
+  depth: 1,
+  height: 1,
+  defaultColor: "#ffffff",
+  connectionPoints: []
+};
+
+const selectedMachines: PlacedMachine[] = ["machine-1", "machine-2"].map((instanceId) => ({
+  instanceId,
+  machineDefinitionId: definition.id,
+  definition,
+  definitionSnapshot: definition,
+  position: { x: 0, z: 0 },
+  rotationY: 0,
+  flowDirection: "forward"
+}));
 
 const props = {
   selectedEntityCount: 2,
@@ -36,7 +58,7 @@ describe("SelectionToolsPanel", () => {
     expect(markup).not.toContain("Keyboard Nudge");
   });
 
-  it("shows common tools for two objects and keeps pair controls collapsed", () => {
+  it("shows common tools for two objects and keeps unavailable connection snap absent", () => {
     const markup = renderPanel(2);
 
     expect(markup).toContain(">Align<");
@@ -44,8 +66,21 @@ describe("SelectionToolsPanel", () => {
     expect(markup).toContain("Select three or more objects to distribute.");
     expect(markup).toContain('data-testid="selection-tools-advanced"');
     expect(markup).not.toContain('data-testid="selection-tools-advanced" open');
-    expect(markup).toContain("Connection Point Snap");
+    expect(markup).not.toContain("Connection Point Snap");
     expect(markup).not.toContain("Keyboard Nudge");
+  });
+
+  it("shows connection snap only for an eligible exact-two-machine context", () => {
+    const markup = renderToStaticMarkup(createElement(SelectionToolsPanel, {
+      ...props,
+      selectedMachines,
+      primarySelectedMachine: selectedMachines[0],
+      connectionPointSnapAvailable: true
+    }));
+
+    expect(markup).toContain("Connection Point Snap");
+    expect(markup).toContain("Connection snap moves the selected machine without changing its rotation.");
+    expect(markup).not.toContain("v0.1");
   });
 
   it("enables distribution for three selected objects", () => {
@@ -56,6 +91,7 @@ describe("SelectionToolsPanel", () => {
     expect(horizontalButton).not.toContain("disabled");
     expect(markup).not.toContain("Select three or more objects to distribute.");
     expect(markup).not.toContain('data-testid="selection-tools-advanced"');
+    expect(markup).not.toContain("Connection Point Snap");
   });
 
   it("honors the canonical connection-snap panel visibility preference", () => {

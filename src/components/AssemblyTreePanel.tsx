@@ -2,6 +2,7 @@ import type { ObjectGroup } from "../types/groups";
 import type { PlacedMachine } from "../types/machine";
 import type { CivilReferenceItem } from "../types/civil";
 import { getCivilTypeLabel } from "../utils/civil";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 
 type AssemblyTreePanelProps = {
   groups: ObjectGroup[];
@@ -73,7 +74,7 @@ export function AssemblyTreePanel({
             }
             const machineId = objectId.replace(/^(object|machine):/, "");
             const machine = machinesById.get(machineId);
-            return machine ? [{ id: objectId, name: machine.definition.name, typeLabel: machine.definition.category }] : [];
+            return machine ? [{ id: objectId, name: getPlacedMachineDisplayName(machine), typeLabel: machine.definition.category }] : [];
           });
           return (
             <article

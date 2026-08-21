@@ -52,17 +52,33 @@ export function WorkbenchCommandBar({
   emphasizedCommandIds = [],
   onExecute
 }: WorkbenchCommandBarProps) {
-  const firstEnabledIndex = items.findIndex((item) => !item.disabled);
-  const [focusedCommandId, setFocusedCommandId] = useState<string | undefined>(
-    firstEnabledIndex >= 0 ? items[firstEnabledIndex]?.commandId : undefined
-  );
-  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [compactOverflow, setCompactOverflow] = useState(() =>
     typeof window !== "undefined" && Boolean(window.matchMedia?.("(max-width: 720px)").matches)
   );
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const currentItemIndex = items.findIndex((item) => item.commandId === focusedCommandId);
-  const focusIndex = currentItemIndex >= 0 && !items[currentItemIndex]?.disabled
+  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const overflowSummaryRef = useRef<HTMLElement | null>(null);
+  const groupedItems = COMMAND_BAR_GROUP_DEFINITIONS.map((group) => ({
+    ...group,
+    items: group.commandIds.flatMap((commandId) => {
+      const index = items.findIndex((item) => item.commandId === commandId);
+      return index >= 0 ? [{ item: items[index], index }] : [];
+    })
+  })).filter((group) => group.items.length > 0);
+  const primaryGroups = compactOverflow
+    ? groupedItems.filter((group) => group.id === "history")
+    : groupedItems;
+  const overflowGroups = compactOverflow
+    ? groupedItems.filter((group) => group.id !== "history")
+    : [];
+  const directEntries = primaryGroups.flatMap((group) => group.items);
+  const directItems = directEntries.map(({ item }) => item);
+  const firstEnabledIndex = directItems.findIndex((item) => !item.disabled);
+  const [focusedCommandId, setFocusedCommandId] = useState<string | undefined>(
+    firstEnabledIndex >= 0 ? directItems[firstEnabledIndex]?.commandId : undefined
+  );
+  const currentItemIndex = directItems.findIndex((item) => item.commandId === focusedCommandId);
+  const focusIndex = currentItemIndex >= 0 && !directItems[currentItemIndex]?.disabled
     ? currentItemIndex
     : -1;
 
@@ -71,13 +87,13 @@ export function WorkbenchCommandBar({
       return;
     }
     const nextIndex = currentItemIndex >= 0
-      ? getNearestEnabledIndex(items, currentItemIndex)
-      : items.findIndex((item) => !item.disabled);
-    const nextCommandId = nextIndex >= 0 ? items[nextIndex]?.commandId : undefined;
+      ? getNearestEnabledIndex(directItems, currentItemIndex)
+      : directItems.findIndex((item) => !item.disabled);
+    const nextCommandId = nextIndex >= 0 ? directItems[nextIndex]?.commandId : undefined;
     if (nextCommandId !== focusedCommandId) {
       setFocusedCommandId(nextCommandId);
     }
-  }, [currentItemIndex, focusIndex, focusedCommandId, items]);
+  }, [currentItemIndex, directItems, focusIndex, focusedCommandId]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) {
@@ -95,43 +111,44 @@ export function WorkbenchCommandBar({
     return () => query.removeEventListener("change", update);
   }, []);
 
-  const groupedItems = COMMAND_BAR_GROUP_DEFINITIONS.map((group) => ({
-    ...group,
-    items: group.commandIds.flatMap((commandId) => {
-      const index = items.findIndex((item) => item.commandId === commandId);
-      return index >= 0 ? [{ item: items[index], index }] : [];
-    })
-  })).filter((group) => group.items.length > 0);
-  const primaryGroups = compactOverflow
-    ? groupedItems.filter((group) => group.id === "history")
-    : groupedItems;
-  const overflowGroups = compactOverflow
-    ? groupedItems.filter((group) => group.id !== "history")
-    : [];
-
   const focusAt = (index: number) => {
-    if (index < 0 || items[index]?.disabled) {
+    const entry = directEntries[index];
+    if (!entry || entry.item.disabled) {
       return;
     }
-    setFocusedCommandId(items[index]?.commandId);
-    buttonRefs.current[index]?.focus();
+    setFocusedCommandId(entry.item.commandId);
+    buttonRefs.current[entry.index]?.focus();
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (items.length === 0) {
+    const target = event.target as HTMLElement;
+    if (event.key === "Escape" && overflowOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOverflowOpen(false);
+      overflowSummaryRef.current?.focus();
+      return;
+    }
+    if (compactOverflow && !target.closest('[data-command-placement="direct"]')) {
+      if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (directItems.length === 0) {
       return;
     }
     if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
       event.preventDefault();
       event.stopPropagation();
-      focusAt(getEnabledIndex(items, focusIndex, event.key === "ArrowRight" ? 1 : -1));
+      focusAt(getEnabledIndex(directItems, focusIndex, event.key === "ArrowRight" ? 1 : -1));
     } else if (event.key === "Home" || event.key === "End") {
       event.preventDefault();
       event.stopPropagation();
-      const scan = event.key === "Home" ? items : [...items].reverse();
+      const scan = event.key === "Home" ? directItems : [...directItems].reverse();
       const offset = scan.findIndex((item) => !item.disabled);
       if (offset >= 0) {
-        focusAt(event.key === "Home" ? offset : items.length - 1 - offset);
+        focusAt(event.key === "Home" ? offset : directItems.length - 1 - offset);
       }
     }
   };
@@ -143,6 +160,7 @@ export function WorkbenchCommandBar({
       type="button"
       className="workbench-command-button"
       data-command-id={item.commandId}
+      data-command-placement={overflow ? "overflow" : "direct"}
       data-icon-id={item.iconId}
       data-workspace-emphasized={emphasizedCommandIds.includes(item.commandId)
         ? "true"
@@ -152,11 +170,16 @@ export function WorkbenchCommandBar({
       aria-label={item.disabledReason ? `${item.label}: ${item.disabledReason}` : item.label}
       aria-pressed={item.pressed}
       aria-busy={item.pending || undefined}
-      tabIndex={index === focusIndex && !item.disabled ? 0 : -1}
+      tabIndex={overflow
+        ? overflowOpen && !item.disabled ? 0 : -1
+        : item.commandId === focusedCommandId && !item.disabled ? 0 : -1}
       onFocus={() => setFocusedCommandId(item.commandId)}
       onClick={() => {
         onExecute(item.commandId);
-        if (overflow) setOverflowOpen(false);
+        if (overflow) {
+          setOverflowOpen(false);
+          overflowSummaryRef.current?.focus();
+        }
       }}
     >
       {item.iconId ? <WorkbenchIcon iconId={item.iconId} /> : null}
@@ -188,6 +211,7 @@ export function WorkbenchCommandBar({
       {overflowGroups.length > 0 ? (
         <details className="workbench-command-overflow" open={overflowOpen}>
           <summary
+            ref={overflowSummaryRef}
             aria-label="More engineering commands"
             aria-expanded={overflowOpen}
             onClick={(event) => {

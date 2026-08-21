@@ -24,6 +24,9 @@ PF-3, and PF-Exit.
 - History remains immediately reachable at 640 px; Selection, Display,
   Precision, and Arrange move into one deterministic More surface without
   duplicate command instances or document-level horizontal overflow.
+- Compact roving focus covers only visible History commands. More remains a
+  native keyboard-reachable disclosure; enabled overflow commands enter tab
+  order only while open, and Escape restores focus to More.
 - Serializable command metadata carries `iconId`; the presentation-only icon
   registry resolves Lucide components.
 - Save/Undo/Redo/Rename/Duplicate/Delete/Labels/Measurement Helpers/Connection
@@ -31,6 +34,10 @@ PF-3, and PF-Exit.
   command surfaces.
 - Measurement wording describes the real precision-placement helper and does
   not claim scene dimension graphics.
+- Measurement Helpers is disabled without exactly one supported machine and
+  exposes the reason `Select one machine to use Measurement Helpers.`. Enabling
+  it expands the existing Placement Settings contribution and disabling it
+  hides the helpers through the same PlacementSettings authority.
 
 ## Arrange
 
@@ -57,9 +64,10 @@ with Viewpoints preserves truthful pressed state and the explicit dock height.
 The panel does not auto-open on selection. Fewer than two alignable objects show
 one compact context state. Two or more expose common alignment; distribution is
 disabled with a reason below three objects; pair alignment and gap/anchor controls
-are collapsed under Advanced. Connection Point Snap remains contextual. Keyboard
-Nudge settings moved to Precision Placement / Measurement Helpers using the same
-`NudgeSettings` state and unchanged keyboard behavior.
+are collapsed under Advanced. Connection Point Snap is rendered only for an
+eligible exact-two-machine context and is absent for mixed, one, or three-plus
+selection. Keyboard Nudge settings moved to Precision Placement / Measurement
+Helpers using the same `NudgeSettings` state and unchanged keyboard behavior.
 
 ## Rename
 
@@ -73,6 +81,12 @@ Machine definition identity remains immutable. Layout JSON round-trip,
 PlatformEntity projection, scene label text, Inspector identity, and commercial
 instance name use the same fallback helper. BOM grouping and name remain
 canonical.
+
+Precision measurement selectors/readouts, Connection Point Snap roles,
+assembly members, annotation attachment targets, collision footprints, and
+delete confirmation now use that same placed-instance helper. The bounded
+source audit preserves direct definition-name reads only where canonical
+Library/BOM/definition identity or non-customer diagnostics require them.
 
 ## Startup, Recovery, And Help
 
@@ -170,26 +184,39 @@ Help into a customer-facing eight-section product center. All changes reuse the
 accepted Project, Panel, Command, Selection, History, UI Preference, EditorHost,
 and scene lifecycle authorities.
 
+## PF-1C Evidence
+
+Independent exact-head review `4992891484` identified the final semantic and
+keyboard consistency gaps. The correction routes every confirmed
+project-facing placed-machine surface through the existing display-name
+authority, makes Measurement Helpers a truthful selected-machine contextual
+command, progressively discloses Connection Point Snap only for eligible
+exact-two-machine selection, removes customer-facing version terminology, and
+keeps compact keyboard focus out of closed overflow content. It introduces no
+new naming, measurement, selection, panel, command, or scene authority.
+
 ## Validation Evidence
 
-- Focused PF-1B component/platform regressions: PASS, 9 files / 58 tests.
-- Focused PF-1B Chromium regressions: PASS, including command IA, Start /
-  Recovery, Viewpoints and Selection Tools toggles, progressive arrange
-  content, workspace panel authority, assembly restrictions, Help focus, and
-  responsive Viewpoints coverage.
+- Focused PF-1C component regressions: PASS, 8 files / 62 tests, covering
+  placed-instance naming, contextual measurement defaults, exact-two
+  connection disclosure, collision presentation, and compact command focus.
+- Focused PF-1C Chromium regressions: PASS, including Measurement Helpers
+  enable/open/toggle/lifecycle behavior, two-versus-three-machine connection
+  disclosure, delete confirmation naming, 640 px keyboard overflow, runtime
+  feature observation, and live command-surface execution.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 251 maintained files.
 - Production build: PASS, 4,123 modules transformed.
-- Full unit suite: PASS, 146 files / 1,233 tests.
-- Full Chromium suite: PASS, 70 tests.
+- Full unit suite: PASS, 148 files / 1,241 tests.
+- Full Chromium suite: PASS, 72 tests.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.
 
 The existing Vite large-chunk warning remains visible and non-blocking: the PDF
-serializer is approximately 2.66 MB and the main bundle approximately 5.52 MB
-before gzip. PF-1A does not perform unrelated bundle splitting.
+serializer is approximately 2.66 MB and the main bundle approximately 5.53 MB
+before gzip. PF-1C does not perform unrelated bundle splitting.
 
 Decision: **READY FOR FINAL MANUAL VISUAL ACCEPTANCE AFTER GREEN EXACT-HEAD CI.**
 

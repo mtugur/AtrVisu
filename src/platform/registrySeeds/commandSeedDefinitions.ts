@@ -51,7 +51,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("view.toggleLabels", "view", "Labels", "Show or hide layout labels.", false, undefined, "labels"),
   createCommandSeed("view.viewpoints", "view", "Viewpoints", "Open or manage saved viewpoint states.", false, undefined, "viewpoints"),
   createCommandSeed("view.toggleConnectionPoints", "view", "Connection Points", "Show or hide connection point overlays.", false, undefined, "connection-points"),
-  createCommandSeed("view.showMeasurements", "view", "Measurement Helpers", "Open distance and placement measurement tools.", false, undefined, "measurement"),
+  createCommandSeed("view.showMeasurements", "view", "Measurement Helpers", "Show or hide distance and placement measurement helpers for the selected machine.", false, undefined, "measurement"),
 
   createCommandSeed("library.addMachine", "insert", "Machine From Library", "Add a machine from the machine library.", true),
   createCommandSeed("annotations.create", "insert", "Create Annotation", "Create a layout annotation.", true),

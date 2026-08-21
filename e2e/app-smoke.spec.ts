@@ -866,6 +866,8 @@ test("runtime feature access complete gate is bound to observed visible command 
   await observe("view.toggleConnectionPoints", () =>
     getCommandBarCommand(page, "view.toggleConnectionPoints").click()
   );
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
   await observe("view.showMeasurements", () =>
     getCommandBarCommand(page, "view.showMeasurements").click()
   );
@@ -877,7 +879,6 @@ test("runtime feature access complete gate is bound to observed visible command 
   await page.getByRole("button", { name: "Close Display / Overlay Controls" }).click();
   await expect(page.getByTestId("display-overlay-tool-surface")).toHaveCount(0);
 
-  const machineIds = await getMachineIds(page);
   await clickSceneMachine(page, machineIds[0]);
   if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
     await propertiesSection.click();
@@ -1254,8 +1255,10 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   await expectOneRuntimeCommandExecution(page, "view.toggleConnectionPoints", () =>
     getCommandBarCommand(page, "view.toggleConnectionPoints").click()
   );
-  await expectOneRuntimeCommandExecution(page, "view.showMeasurements", () =>
-    getCommandBarCommand(page, "view.showMeasurements").click()
+  await expect(getCommandBarCommand(page, "view.showMeasurements")).toBeDisabled();
+  await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveAttribute(
+    "aria-label",
+    /Select one machine to use Measurement Helpers\./
   );
 
   const toolsMenu = await openWorkbenchMenu(page, "Tools");
@@ -1369,11 +1372,29 @@ test("PF-1 premium command information architecture is accessible and responsive
     await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
     if (viewport.width === 640) {
       await expect(page.getByRole("group", { name: "History" })).toBeVisible();
-      await expect(page.getByLabel("More engineering commands")).toBeVisible();
-      await page.getByLabel("More engineering commands").click();
+      const more = page.getByLabel("More engineering commands");
+      await expect(more).toBeVisible();
+      await more.focus();
+      await page.keyboard.press("Shift+Tab");
+      await expect(more).not.toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(more).toBeFocused();
+      await page.keyboard.press("Enter");
       await expect(page.locator(".workbench-command-overflow-menu")).toBeVisible();
       await expect(getCommandBarCommand(page, "edit.renameSelected")).toBeVisible();
-      await page.getByLabel("More engineering commands").click();
+      await page.keyboard.press("Tab");
+      const focusedOverflowPlacement = await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.dataset.commandPlacement ?? null
+      );
+      expect(focusedOverflowPlacement).toBe("overflow");
+      await page.keyboard.press("Escape");
+      await expect(more).toBeFocused();
+      await expect(page.locator(".workbench-command-overflow-menu")).not.toBeVisible();
+      expect(await page.locator('[data-command-placement="overflow"]').evaluateAll((buttons) =>
+        buttons.every((button) => (button as HTMLButtonElement).tabIndex === -1)
+      )).toBe(true);
+      await page.keyboard.press("ArrowRight");
+      await expect(more).toBeFocused();
       const welcomeLeft = await welcome.evaluate((element) => element.getBoundingClientRect().left);
       const primaryDockRight = await page.locator(".workbench-primary-dock")
         .evaluate((element) => element.getBoundingClientRect().right);
@@ -1606,8 +1627,14 @@ test("PF-1 Explorer F2 rename preserves canonical identity and history", async (
   await getCommandBarCommand(page, "edit.duplicateSelected").click();
   await waitForMachineDiagnostics(page, 2);
   await expectOneSceneLabelPerMachine(page, ["Flow Pack Machine - Line 2", "Flow Pack Machine - Line 2"]);
-  page.once("dialog", (dialog) => dialog.accept());
+  let deleteConfirmation = "";
+  page.once("dialog", async (dialog) => {
+    deleteConfirmation = dialog.message();
+    await dialog.accept();
+  });
   await getCommandBarCommand(page, "edit.deleteSelected").click();
+  expect(deleteConfirmation).toContain("Flow Pack Machine - Line 2");
+  expect(deleteConfirmation).not.toContain("Delete Flow Pack Machine from the layout?");
   await expectOneSceneLabelPerMachine(page, ["Flow Pack Machine - Line 2"]);
   await getCommandBarCommand(page, "edit.undo").click();
   await expectOneSceneLabelPerMachine(page, ["Flow Pack Machine - Line 2", "Flow Pack Machine - Line 2"]);
@@ -1678,6 +1705,71 @@ test("PF-1 placed-instance rename stays consistent in multi-selection history", 
   await expect(multiSelectionPanel.locator(".multi-selection-item.is-primary")).toContainText("Flow Pack Machine");
   await getCommandBarCommand(page, "edit.redo").click();
   await expect(multiSelectionPanel.locator(".multi-selection-item.is-primary")).toContainText("Line 1 Flow Pack");
+  expect(errors).toEqual([]);
+});
+
+test("PF-1C Measurement Helpers follows selected-machine context without remounting the scene", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const command = getCommandBarCommand(page, "view.showMeasurements");
+
+  await expect(command).toBeDisabled();
+  await expect(command).toHaveAttribute("aria-label", /Select one machine to use Measurement Helpers\./);
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  await expect(command).toBeEnabled();
+  await expect(command).toHaveAttribute("aria-pressed", "false");
+
+  await command.click();
+  await expect(command).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("contextual-panel-panel.precisionPlacement")).toBeVisible();
+  await expect(page.getByTestId("contextual-panel-toggle-panel.precisionPlacement"))
+    .toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator('.measurement-section[aria-label="Measurement helpers"]')).toBeVisible();
+
+  await command.click();
+  await expect(command).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator('.measurement-section[aria-label="Measurement helpers"]')).toHaveCount(0);
+  await expect(page.getByTestId("contextual-panel-panel.precisionPlacement")).toBeVisible();
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("PF-1C Connection Point Snap is disclosed only for two eligible machines", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const machineCard = page.locator(".machine-card").first();
+
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 1);
+  await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toHaveCount(0);
+
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 2);
+  let machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await getCommandBarCommand(page, "arrange.alignmentTools").click();
+  await expect(page.getByTestId("selection-tools-panel")).toBeVisible();
+  await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toBeVisible();
+  await expect(page.getByTestId("connection-point-snap-panel")).not.toContainText("v0.1");
+
+  await machineCard.click();
+  await waitForMachineDiagnostics(page, 3);
+  machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
@@ -2250,6 +2342,8 @@ test("command bar toggles and tool commands use live runtime surfaces", async ({
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const before = await waitForRuntimeViewport(page);
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
 
   for (const commandId of [
     "view.toggleLabels",
@@ -4659,8 +4753,7 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   const beforeSingleContextVisibility = await getRuntimeViewportSnapshot(page);
   const precisionContribution = page.getByTestId("contextual-panel-panel.precisionPlacement");
   await expect(precisionContribution).toBeVisible();
-  await expect(page.getByTestId("precision-nudge-settings")).toBeVisible();
-  await expect(page.getByTestId("precision-nudge-settings")).toContainText("Keyboard Nudge");
+  await expect(page.getByTestId("precision-nudge-settings")).toHaveCount(0);
   const precisionHeader = page.getByTestId(
     "contextual-panel-toggle-panel.precisionPlacement"
   );
