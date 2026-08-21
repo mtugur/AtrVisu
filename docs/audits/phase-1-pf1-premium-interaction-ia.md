@@ -195,6 +195,14 @@ exact-two-machine selection, removes customer-facing version terminology, and
 keeps compact keyboard focus out of closed overflow content. It introduces no
 new naming, measurement, selection, panel, command, or scene authority.
 
+Follow-up review `4993793573` identified a legacy persistence path that could
+restore Measurement Helpers as visible before its contextual command was used.
+Placement-setting load now preserves grid and rotation preferences while
+forcing helper visibility off for every new session, and rewrites legacy
+stored `true` values to `false`. Saving placement preferences likewise stores
+the transient visibility field as false. Explicit command activation remains
+the only way to reveal helpers during the current session.
+
 ## Validation Evidence
 
 - Focused PF-1C component regressions: PASS, 8 files / 62 tests, covering
@@ -204,12 +212,15 @@ new naming, measurement, selection, panel, command, or scene authority.
   enable/open/toggle/lifecycle behavior, two-versus-three-machine connection
   disclosure, delete confirmation naming, 640 px keyboard overflow, runtime
   feature observation, and live command-surface execution.
+- Focused legacy visibility migration regressions: PASS, 2 files / 20 unit
+  tests plus Chromium coverage for preserved 250 mm grid and 30 degree rotation
+  preferences, initial inactive state, explicit activation, and reload reset.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 251 maintained files.
 - Production build: PASS, 4,123 modules transformed.
-- Full unit suite: PASS, 148 files / 1,241 tests.
+- Full unit suite: PASS, 149 files / 1,243 tests.
 - Full Chromium suite: PASS, 72 tests.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.

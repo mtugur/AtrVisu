@@ -1710,13 +1710,38 @@ test("PF-1 placed-instance rename stays consistent in multi-selection history", 
 
 test("PF-1C Measurement Helpers follows selected-machine context without remounting the scene", async ({ page }) => {
   const errors = collectPageErrors(page);
-  await openCleanApp(page);
+  const legacySettings = {
+    gridSnapEnabled: false,
+    gridSnapStepMm: 250,
+    rotationSnapEnabled: true,
+    rotationSnapStepDeg: 30,
+    showMeasurementHelpers: true
+  };
+  await page.addInitScript((settings) => {
+    if (window.sessionStorage.getItem("atrvisu.e2e.legacyPlacementSeeded") === "true") {
+      return;
+    }
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem("atrvisu.placementSettings", JSON.stringify(settings));
+    window.sessionStorage.setItem("atrvisu.e2e.legacyPlacementSeeded", "true");
+  }, legacySettings);
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(page.getByTestId("machine-library-panel")).toBeVisible();
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
   const command = getCommandBarCommand(page, "view.showMeasurements");
 
   await expect(command).toBeDisabled();
+  await expect(command).toHaveAttribute("aria-pressed", "false");
   await expect(command).toHaveAttribute("aria-label", /Select one machine to use Measurement Helpers\./);
+  await expect.poll(() => page.evaluate(() => JSON.parse(
+    window.localStorage.getItem("atrvisu.placementSettings") ?? "null"
+  ))).toEqual({
+    ...legacySettings,
+    showMeasurementHelpers: false
+  });
 
   await page.locator(".machine-card").first().click();
   await waitForMachineDiagnostics(page, 1);
@@ -1728,15 +1753,33 @@ test("PF-1C Measurement Helpers follows selected-machine context without remount
   await expect(page.getByTestId("contextual-panel-panel.precisionPlacement")).toBeVisible();
   await expect(page.getByTestId("contextual-panel-toggle-panel.precisionPlacement"))
     .toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator('.measurement-section[aria-label="Measurement helpers"]')).toBeVisible();
+  const precisionPanel = page.getByTestId("precision-placement-panel");
+  await expect(precisionPanel.locator('.measurement-section[aria-label="Measurement helpers"]')).toBeVisible();
+  await expect(precisionPanel.getByRole("checkbox", { name: "Grid Snap", exact: true })).not.toBeChecked();
+  await expect(precisionPanel.getByLabel("Grid Snap Step", { exact: true })).toHaveValue("250");
+  await expect(precisionPanel.getByRole("checkbox", { name: "Rotation Snap", exact: true })).toBeChecked();
+  await expect(precisionPanel.getByLabel("Rotation Snap Step", { exact: true })).toHaveValue("30");
 
   await command.click();
   await expect(command).toHaveAttribute("aria-pressed", "false");
-  await expect(page.locator('.measurement-section[aria-label="Measurement helpers"]')).toHaveCount(0);
+  await expect(precisionPanel.locator('.measurement-section[aria-label="Measurement helpers"]')).toHaveCount(0);
   await expect(page.getByTestId("contextual-panel-panel.precisionPlacement")).toBeVisible();
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await expect(getCommandBarCommand(page, "view.showMeasurements")).toBeDisabled();
+  await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveAttribute("aria-pressed", "false");
+  expect(await page.evaluate(() => JSON.parse(
+    window.localStorage.getItem("atrvisu.placementSettings") ?? "null"
+  ))).toEqual({
+    ...legacySettings,
+    showMeasurementHelpers: false
+  });
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   expect(errors).toEqual([]);
 });
 

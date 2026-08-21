@@ -11,6 +11,7 @@
 | Duplicate Save removal | PASS | Application Bar and File menu retain `project.save`; Engineering Command Strip contains no second Save projection |
 | Narrow command overflow | PASS | History-only visible roving scope; native tab-reachable More; overflow commands tabbable only while open; Escape restores More; no duplicate commands or page overflow |
 | Truthful measurement semantics | PASS | Disabled without one supported machine and a truthful reason; first activation opens existing Placement Settings helpers; second activation hides helpers through the same state |
+| Session-transient measurement visibility | PASS | Legacy persisted `true` converges to `false` on load; grid/rotation preferences survive; reload starts inactive until explicit command activation (`4993793573`) |
 | Arrange command productization | PASS | Existing alignment and Assembly authorities; no duplicate algorithm; Selection Tools registered through the current Runtime Panel authority |
 | Arrange thresholds and lock policy | PASS | Two/three selection rules and atomic movement evaluation |
 | Arrange history/dirty | PASS | Existing mutation callbacks record one snapshot per action |
@@ -40,7 +41,7 @@
 | Dependency tree | PASS | `npm ls --all` completed; only expected optional dependencies are absent |
 | Design-token governance | PASS | 251 maintained files checked |
 | Build | PASS | 4,123 modules transformed; existing bundle warning remains documented |
-| Full unit suite | PASS | 148 files / 1,241 tests |
+| Full unit suite | PASS | 149 files / 1,243 tests |
 | Full Chromium suite | PASS | 72 Chromium tests |
 | Diff check | PASS | `git diff --check` |
 | Exact-head GitHub Quality Gate | PR GATE | Required before manual acceptance |

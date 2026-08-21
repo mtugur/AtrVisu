@@ -45,15 +45,33 @@ export const normalizePlacementSettings = (value: unknown): PlacementSettings =>
   };
 };
 
+const toPersistedPlacementSettings = (settings: PlacementSettings): PlacementSettings => ({
+  ...settings,
+  showMeasurementHelpers: false
+});
+
 export const loadPlacementSettings = (): PlacementSettings => {
   try {
     const raw = window.localStorage.getItem(PLACEMENT_SETTINGS_STORAGE_KEY);
-    return raw ? normalizePlacementSettings(JSON.parse(raw)) : DEFAULT_PLACEMENT_SETTINGS;
+    if (!raw) {
+      return DEFAULT_PLACEMENT_SETTINGS;
+    }
+
+    const settings = toPersistedPlacementSettings(normalizePlacementSettings(JSON.parse(raw)));
+    try {
+      window.localStorage.setItem(PLACEMENT_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch {
+      // Preference convergence is best-effort; the current session is still safe.
+    }
+    return settings;
   } catch {
     return DEFAULT_PLACEMENT_SETTINGS;
   }
 };
 
 export const savePlacementSettings = (settings: PlacementSettings) => {
-  window.localStorage.setItem(PLACEMENT_SETTINGS_STORAGE_KEY, JSON.stringify(normalizePlacementSettings(settings)));
+  window.localStorage.setItem(
+    PLACEMENT_SETTINGS_STORAGE_KEY,
+    JSON.stringify(toPersistedPlacementSettings(normalizePlacementSettings(settings)))
+  );
 };
