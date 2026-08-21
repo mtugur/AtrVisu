@@ -35,19 +35,25 @@ The canonical application menu is:
 
 `File / Edit / View / Insert / Arrange / Tools / Help`
 
-The engineering command strip is icon-led and grouped in the canonical order
-Project, History, Selection, Display, Precision, and Arrange. It preserves
-Save, Undo, Redo, Rename, Duplicate, Delete, Measurement Helpers, Labels,
-Connection Points, Viewpoints, and Selection Tools. Group captions and subtle
-separators provide engineering hierarchy without moving project, layout,
-revision, or dirty-state context out of the Application Bar. At narrow widths,
-Project and History remain immediately reachable and the remaining groups move
-into one deterministic More surface rather than compressing the desktop strip.
+The Application Bar owns the visible Save Project action and the File menu
+retains its registered Save route. The Engineering Command Strip does not
+duplicate Save. It begins with History and is grouped in the canonical order
+History, Selection, Display, Precision, and Arrange. At desktop widths commands
+may use an icon plus a concise human label when that improves immediate
+recognition; icon-only presentation is not a dogmatic requirement. The full
+accessible label and tooltip remain authoritative. Group captions, shared
+group chrome, and subtle separators provide engineering hierarchy without
+moving project, layout, revision, or dirty-state context out of the Application
+Bar. At narrow widths, History remains immediately reachable and the remaining
+groups move into one deterministic More surface.
 
 Arrange exposes common alignment, distribution, equal-gap, grouping, and
-ungrouping commands. Pair alignment, advanced alignment, nudge settings, and
-connection-point snap configuration live in one registered Selection Tools
-Bottom Dock contribution. The Inspector remains property and context oriented;
+ungrouping commands. Selection Tools is a true Bottom Dock toggle and uses
+selection-aware progressive disclosure: a compact context state for fewer than
+two objects, common align/distribute controls for valid selections, connection
+snap when compatible, and collapsed advanced pair controls. Keyboard Nudge
+step settings live with Precision Placement and Measurement Helpers while
+retaining the existing nudge authority. The Inspector remains property and context oriented;
 it does not own operational alignment, distribution, snap, duplicate, delete,
 or clear-selection button stacks. Help is a real registered product surface
 with Quick Start, real keyboard shortcuts, and restrained product/version
@@ -61,15 +67,17 @@ information.
   never `MachineDefinition.name` or its stable library/BOM identity.
 - Explorer, scene labels, Inspector, persistence, and commercial instance rows
   resolve the same placed-instance name with canonical definition fallback.
-- A genuinely empty editor offers Create New Layout and Open Existing Project
+- A genuinely empty editor offers New Layout and Open Project
   through the existing `project.manager` command and Project Manager authority.
   Their ephemeral entry intent focuses the relevant create or existing-project
   workflow without mutating project data; neutral Project Manager entry remains
   available and no second project model or demo entity is created.
-- Startup and autosave recovery share one central decision surface. A valid
-  recovery replaces the normal start prompt with Resume Unsaved Layout, Open
-  Existing Project, Create New Layout, and the explicit destructive action
-  Discard Unsaved Recovery. No second recovery banner may compete with it.
+- Startup and autosave recovery share one central decision surface. Recovery
+  availability and the current-session startup decision are separate concerns:
+  persisted recovery may remain available after a project or layout is loaded,
+  but it cannot re-overlay an accepted working layout. A valid recovery changes
+  the surface to Resume, Open Project, New Layout, and the visually separated
+  destructive action Discard recovery. No second recovery banner may compete.
 - Viewpoints is a truthful panel toggle: it opens or activates Viewpoints,
   collapses an already active Bottom Dock, and reopens with the persisted
   explicit dock size. Its pressed state is derived from actual panel state.
@@ -77,7 +85,8 @@ information.
   Undo/Redo, cancellation, visibility changes, duplicate, delete, and restore
   must leave exactly one live label representation per labeled instance.
 - Help is a living product contract. Every pull request that changes a visible
-  command, workflow, or shortcut updates Help in the same change set.
+  command, workflow, or shortcut updates Help in the same change set. This is
+  an engineering delivery rule and must not appear in customer-facing Help.
 
 ## Product Finish Sequence
 

@@ -37,13 +37,9 @@ describe("HelpModal", () => {
 
     const dialog = container.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog.getAttribute("aria-modal")).toBe("true");
-    expect(dialog.textContent).toContain("Library");
-    expect(dialog.textContent).toContain("Arrange");
-    expect(dialog.textContent).toContain("Selection Tools");
-    expect(dialog.textContent).toContain("Engineering Command Strip");
-    expect(dialog.textContent).toContain("recovery");
-    expect(dialog.textContent).toContain("Viewpoints");
-    expect(dialog.textContent).toContain("Commercial Outputs");
+    expect(dialog.querySelectorAll(".help-task-card")).toHaveLength(4);
+    expect(dialog.textContent).toContain("Start or open a layout");
+    expect(dialog.textContent).toContain("Present and export");
     expect(dialog.contains(document.activeElement)).toBe(true);
 
     const focusable = [...dialog.querySelectorAll<HTMLElement>(
@@ -72,7 +68,7 @@ describe("HelpModal", () => {
     expect(document.activeElement).toBe(opener);
   });
 
-  it("shows only current real shortcuts and the shared application version", async () => {
+  it("provides all product help sections without internal development language", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -81,10 +77,31 @@ describe("HelpModal", () => {
       initialSection: "shortcuts",
       onClose: vi.fn()
     })));
+    const expectedSections = [
+      "Quick Start",
+      "Workbench",
+      "Arrange & Snap",
+      "Measurements",
+      "Viewpoints",
+      "Outputs",
+      "Keyboard Shortcuts",
+      "About"
+    ];
+    const sectionButtons = [...container.querySelectorAll<HTMLButtonElement>(".help-dialog-nav button")];
+    expect(sectionButtons.map((button) => button.textContent?.trim())).toEqual(expectedSections);
+    expect(container.querySelectorAll("kbd").length).toBeGreaterThan(0);
     expect(container.textContent).toContain("F2");
-    expect(container.textContent).toContain("Ctrl/Cmd+D");
-    const about = [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "About AtrVisu");
+    expect(container.textContent).toContain("Arrow keys");
+
+    for (const button of sectionButtons) {
+      await act(async () => button.click());
+      const visibleText = container.querySelector(".help-dialog-content")?.textContent?.toLowerCase() ?? "";
+      for (const forbidden of ["pull request", "product rule", "canonical", "registry", "phase", "pf-"]) {
+        expect(visibleText).not.toContain(forbidden);
+      }
+    }
+
+    const about = sectionButtons.find((button) => button.textContent?.trim() === "About");
     await act(async () => about?.click());
     expect(container.textContent).toContain("Version 0.1.0");
   });

@@ -274,7 +274,6 @@ describe("RightPanelUtilityStrip", () => {
 describe("WorkbenchCommandBar", () => {
   it("renders the canonical engineering groups in professional work order", async () => {
     const commandIds = [
-      "project.save",
       "edit.undo",
       "edit.redo",
       "edit.renameSelected",
@@ -293,10 +292,11 @@ describe("WorkbenchCommandBar", () => {
 
     expect([...container.querySelectorAll(".workbench-command-group-label")]
       .map((label) => label.textContent)).toEqual([
-      "Project", "History", "Selection", "Display", "Precision", "Arrange"
+      "History", "Selection", "Display", "Precision", "Arrange"
     ]);
-    expect(container.querySelectorAll('[role="group"]')).toHaveLength(6);
+    expect(container.querySelectorAll('[role="group"]')).toHaveLength(5);
     expect(container.querySelectorAll("button[data-command-id]")).toHaveLength(commandIds.length);
+    expect(container.querySelector('[data-command-id="project.save"]')).toBeNull();
   });
 
   it("renders toolbar semantics, pressed state, and roving keyboard focus", async () => {
@@ -322,7 +322,8 @@ describe("WorkbenchCommandBar", () => {
     expect(buttons.map((button) => button.dataset.iconId)).toEqual(["undo", "redo", "labels"]);
     expect(buttons.every((button) => button.querySelector("svg") !== null)).toBe(true);
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual(["Undo", "Redo", "Labels"]);
-    expect(buttons.every((button) => button.querySelector(".visually-hidden") !== null)).toBe(true);
+    expect(buttons.map((button) => button.querySelector(".workbench-command-label")?.textContent))
+      .toEqual(["Undo", "Redo", "Labels"]);
     expect(buttons[0].dataset.workspaceEmphasized).toBe("true");
     expect(buttons[2].dataset.workspaceEmphasized).toBeUndefined();
     buttons[0].focus();

@@ -16,10 +16,12 @@ PF-3, and PF-Exit.
 ## Canonical Surfaces
 
 - Menu order is exactly File, Edit, View, Insert, Arrange, Tools, Help.
-- The engineering command strip is grouped as Project, History, Selection,
-  Display, Precision, and Arrange, with one accessible icon button per command,
-  compact group captions, and token-governed separators.
-- Save/Undo/Redo remain immediately reachable at 640 px; Selection, Display,
+- The Application Bar owns visible Save Project and File retains the same
+  command route; the Engineering Command Strip does not duplicate Save.
+- The strip is grouped as History, Selection, Display, Precision, and Arrange,
+  with accessible icon-plus-concise-label desktop controls, compact group
+  captions, shared group chrome, and token-governed separators.
+- History remains immediately reachable at 640 px; Selection, Display,
   Precision, and Arrange move into one deterministic More surface without
   duplicate command instances or document-level horizontal overflow.
 - Serializable command metadata carries `iconId`; the presentation-only icon
@@ -49,11 +51,15 @@ delete, clear-selection, and connection-snap stacks are absent from the active
 Inspector composition.
 
 One `panel.alignmentTools` Runtime Panel contribution is presented as Selection
-Tools in the Bottom Dock. Arrange and the View panel hierarchy reach the same
-panel authority. The panel does not auto-open on selection, reuses the existing
-alignment and connection-point command callbacks, honors panel visibility and
-collapse preferences, and blocks all movement actions when atomic movement
-evaluation rejects the selection.
+Tools in the Bottom Dock. Arrange and the View panel hierarchy toggle the same
+panel authority. A second activation collapses the active contribution; switching
+with Viewpoints preserves truthful pressed state and the explicit dock height.
+The panel does not auto-open on selection. Fewer than two alignable objects show
+one compact context state. Two or more expose common alignment; distribution is
+disabled with a reason below three objects; pair alignment and gap/anchor controls
+are collapsed under Advanced. Connection Point Snap remains contextual. Keyboard
+Nudge settings moved to Precision Placement / Measurement Helpers using the same
+`NudgeSettings` state and unchanged keyboard behavior.
 
 ## Rename
 
@@ -71,19 +77,21 @@ canonical.
 ## Startup, Recovery, And Help
 
 The empty Editor Host keeps its Babylon canvas mounted and overlays exactly one
-startup decision surface. Without recovery it offers Create New Layout and Open
-Existing Project. With a valid autosave it instead offers Resume Unsaved Layout,
-Open Existing Project, Create New Layout, and Discard Unsaved Recovery. Resume
-uses the canonical restore command; create/open retain their Project Manager
-entry intents; discard removes only the recovery authority. The former competing
-recovery banner is not rendered.
+startup decision surface only until the session accepts a working layout.
+Recovery availability remains a separate persisted fact and cannot keep Start
+mounted after successful create, revision load, or resume. Without recovery the
+surface offers New Layout and Open Project. With valid recovery it offers Resume,
+Open Project, New Layout, and a separated Discard recovery action. Resume uses
+the existing restore command; create/open retain Project Manager entry intents;
+discard removes only recovery. Cancelling Project Manager without loading keeps
+Start available.
 
-Help is a registered modal panel with Quick Start, actual keyboard shortcuts,
-shared application version, dialog semantics, focus trap, Escape close, and
-opener focus restoration. It documents startup/recovery, the grouped command
-strip, Arrange, Selection Tools, the true Viewpoints toggle, and Explorer F2
-rename. The permanent delivery rule requires Help updates in the same pull
-request as any future visible command, workflow, or shortcut change.
+Help is one registered modal panel with Quick Start, Workbench, Arrange & Snap,
+Measurements, Viewpoints, Outputs, Keyboard Shortcuts, and About. It uses task
+cards, semantic keycaps, real product behavior, the shared application version,
+dialog semantics, focus trap, Escape close, and opener focus restoration. No
+development or governance terminology is exposed. The permanent delivery rule
+remains in product documentation only.
 
 ## Viewpoints Toggle
 
@@ -151,17 +159,31 @@ registry-backed Selection Tools, truthful Viewpoints toggling, actual Babylon
 label identity/lifecycle, Help content, responsive overflow, and EditorHost /
 canvas lifecycle invariance.
 
+## PF-1B Evidence
+
+Manual review `4991067599` identified the final bounded shell and semantic
+corrections. The implementation separates startup decision state from persisted
+recovery, removes duplicate Save from the frequent strip, uses concise desktop
+labels and shared group chrome, makes Selection Tools a canonical toggle with
+progressive content, relocates Nudge settings to Measurement Helpers, and turns
+Help into a customer-facing eight-section product center. All changes reuse the
+accepted Project, Panel, Command, Selection, History, UI Preference, EditorHost,
+and scene lifecycle authorities.
+
 ## Validation Evidence
 
-- Focused PF-1A component/platform tests: PASS, 8 files / 39 tests.
-- Focused PF-1A Chromium and migrated-surface regressions: PASS.
+- Focused PF-1B component/platform regressions: PASS, 9 files / 58 tests.
+- Focused PF-1B Chromium regressions: PASS, including command IA, Start /
+  Recovery, Viewpoints and Selection Tools toggles, progressive arrange
+  content, workspace panel authority, assembly restrictions, Help focus, and
+  responsive Viewpoints coverage.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 251 maintained files.
 - Production build: PASS, 4,123 modules transformed.
-- Full unit suite: PASS, 145 files / 1,227 tests.
-- Full Chromium suite: PASS, 68 tests.
+- Full unit suite: PASS, 146 files / 1,233 tests.
+- Full Chromium suite: PASS, 70 tests.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.
 
@@ -169,6 +191,6 @@ The existing Vite large-chunk warning remains visible and non-blocking: the PDF
 serializer is approximately 2.66 MB and the main bundle approximately 5.52 MB
 before gzip. PF-1A does not perform unrelated bundle splitting.
 
-Decision: **READY FOR FINAL MANUAL ACCEPTANCE AFTER GREEN EXACT-HEAD CI.**
+Decision: **READY FOR FINAL MANUAL VISUAL ACCEPTANCE AFTER GREEN EXACT-HEAD CI.**
 
 This decision does not mean `PHASE 1 CLOSED`.

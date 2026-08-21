@@ -13,7 +13,7 @@ export type ArrangeRuntimeCommandOptions = Readonly<{
   align: (action: AlignmentAction) => void;
   distribute: (action: DistributionAction) => void;
   equalGap: (action: EqualGapAction) => void;
-  openAlignmentTools: () => RuntimeFeatureCommandOperationResult;
+  toggleAlignmentTools: () => RuntimeFeatureCommandOperationResult;
 }>;
 
 const enableFor = (
@@ -64,7 +64,7 @@ export const createArrangeRuntimeCommandBindings = (
     [RUNTIME_FEATURE_COMMAND_IDS.equalGapY]: { getEnableState: distributeEnableState, execute: equalGap("gapY") },
     [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools]: {
       getEnableState: () => ({ enabled: true }),
-      execute: options.openAlignmentTools
+      execute: options.toggleAlignmentTools
     }
   };
 };

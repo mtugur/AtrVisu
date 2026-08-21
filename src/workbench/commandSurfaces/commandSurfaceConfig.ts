@@ -114,7 +114,6 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
 ] as const;
 
 export const COMMAND_BAR_COMMAND_IDS = [
-  RUNTIME_FEATURE_COMMAND_IDS.projectSave,
   CORE_EDITOR_COMMAND_IDS.undo,
   CORE_EDITOR_COMMAND_IDS.redo,
   RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
@@ -128,13 +127,25 @@ export const COMMAND_BAR_COMMAND_IDS = [
 ] as const;
 
 export const COMMAND_BAR_GROUP_DEFINITIONS = [
-  { id: "project", label: "Project", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.projectSave] },
   { id: "history", label: "History", commandIds: [CORE_EDITOR_COMMAND_IDS.undo, CORE_EDITOR_COMMAND_IDS.redo] },
   { id: "selection", label: "Selection", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.renameSelected, CORE_EDITOR_COMMAND_IDS.duplicateSelected, CORE_EDITOR_COMMAND_IDS.deleteSelected] },
   { id: "display", label: "Display", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels, RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints, RUNTIME_FEATURE_COMMAND_IDS.viewpoints] },
   { id: "precision", label: "Precision", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements] },
   { id: "arrange", label: "Arrange", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools] }
 ] as const;
+
+export const COMMAND_BAR_SHORT_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  [CORE_EDITOR_COMMAND_IDS.undo]: "Undo",
+  [CORE_EDITOR_COMMAND_IDS.redo]: "Redo",
+  [RUNTIME_FEATURE_COMMAND_IDS.renameSelected]: "Rename",
+  [CORE_EDITOR_COMMAND_IDS.duplicateSelected]: "Duplicate",
+  [CORE_EDITOR_COMMAND_IDS.deleteSelected]: "Delete",
+  [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels]: "Labels",
+  [RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints]: "Points",
+  [RUNTIME_FEATURE_COMMAND_IDS.viewpoints]: "Viewpoints",
+  [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements]: "Measure",
+  [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools]: "Selection Tools"
+});
 
 export type CommandSurfaceCoreCommandId = CoreEditorCommandId;
 export type CommandSurfaceRuntimeCommandId = RuntimeFeatureCommandId;

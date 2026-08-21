@@ -12,7 +12,7 @@ const createHarness = (selectedCount: number, movementAllowed = true) => {
   const align = vi.fn();
   const distribute = vi.fn();
   const equalGap = vi.fn();
-  const openAlignmentTools = vi.fn(() => createExecutedRuntimeFeatureCommandResult());
+  const toggleAlignmentTools = vi.fn(() => createExecutedRuntimeFeatureCommandResult());
   return {
     bindings: createArrangeRuntimeCommandBindings({
       selectedCount,
@@ -20,12 +20,12 @@ const createHarness = (selectedCount: number, movementAllowed = true) => {
       align,
       distribute,
       equalGap,
-      openAlignmentTools
+      toggleAlignmentTools
     }),
     align,
     distribute,
     equalGap,
-    openAlignmentTools
+    toggleAlignmentTools
   };
 };
 
@@ -51,7 +51,7 @@ describe("Arrange runtime command bindings", () => {
     ]);
     expect(harness.distribute.mock.calls.map(([action]) => action)).toEqual(["horizontal", "vertical"]);
     expect(harness.equalGap.mock.calls.map(([action]) => action)).toEqual(["gapX", "gapY"]);
-    expect(harness.openAlignmentTools).toHaveBeenCalledTimes(1);
+    expect(harness.toggleAlignmentTools).toHaveBeenCalledTimes(1);
   });
 
   it("enforces two-entity alignment and three-entity distribution thresholds", () => {

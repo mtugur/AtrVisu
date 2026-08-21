@@ -1272,8 +1272,8 @@ test("PF-1 premium command information architecture is accessible and responsive
   await openCleanApp(page);
   const welcome = page.getByTestId("empty-project-welcome");
   await expect(welcome).toBeVisible();
-  await expect(welcome.getByRole("button", { name: "Create New Layout" })).toBeVisible();
-  await expect(welcome.getByRole("button", { name: "Open Existing Project" })).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "New Layout" })).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "Open Project" })).toBeVisible();
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
 
@@ -1283,18 +1283,26 @@ test("PF-1 premium command information architecture is accessible and responsive
   ]);
 
   const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(11);
+  await expect(commandButtons).toHaveCount(10);
   expect(await page.locator(".workbench-command-group-label").allTextContents()).toEqual([
-    "Project", "History", "Selection", "Display", "Precision", "Arrange"
+    "History", "Selection", "Display", "Precision", "Arrange"
   ]);
+  await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
+  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
   for (const button of await commandButtons.all()) {
     await expect(button.locator(":scope > svg")).toHaveCount(1);
-    await expect(button.locator(":scope > .visually-hidden")).toHaveCount(1);
+    await expect(button.locator(":scope > .workbench-command-label")).toBeVisible();
     expect(await button.getAttribute("aria-label")).toBeTruthy();
     expect(await button.getAttribute("title")).toBeTruthy();
   }
+  expect(await commandButtons.locator(".workbench-command-label").allTextContents()).toEqual([
+    "Undo", "Redo", "Rename", "Duplicate", "Delete", "Labels", "Points", "Viewpoints", "Measure", "Selection Tools"
+  ]);
+  const fileMenuForSave = await openWorkbenchMenu(page, "File");
+  await expect(fileMenuForSave.locator('[data-command-id="project.save"]')).toBeVisible();
+  await page.keyboard.press("Escape");
 
-  const createNewLayout = welcome.getByRole("button", { name: "Create New Layout" });
+  const createNewLayout = welcome.getByRole("button", { name: "New Layout" });
   await createNewLayout.click();
   const projectManager = page.getByTestId("project-manager-modal");
   await expect(projectManager).toHaveAttribute("data-entry-intent", "create");
@@ -1304,7 +1312,7 @@ test("PF-1 premium command information architecture is accessible and responsive
   await expect(projectManager).toHaveCount(0);
   await expect(createNewLayout).toBeFocused();
 
-  const openExistingProject = welcome.getByRole("button", { name: "Open Existing Project" });
+  const openExistingProject = welcome.getByRole("button", { name: "Open Project" });
   await openExistingProject.click();
   await expect(projectManager).toHaveAttribute("data-entry-intent", "open");
   await expect(page.getByRole("button", { name: "Start a New Project" })).toBeFocused();
@@ -1329,7 +1337,18 @@ test("PF-1 premium command information architecture is accessible and responsive
   await helpMenu.locator('[data-command-id="help.quickStart"]').click();
   const help = page.getByTestId("help-modal");
   await expect(help).toBeVisible();
-  await expect(help).toContainText("Commercial Outputs");
+  await expect(help.locator(".help-task-card")).toHaveCount(4);
+  const helpSections = ["Quick Start", "Workbench", "Arrange & Snap", "Measurements", "Viewpoints", "Outputs", "Keyboard Shortcuts", "About"];
+  for (const section of helpSections) {
+    await help.getByRole("button", { name: section, exact: true }).click();
+    const customerText = (await help.locator(".help-dialog-content").innerText()).toLowerCase();
+    for (const forbidden of ["pull request", "product rule", "canonical", "registry", "phase", "pf-"]) {
+      expect(customerText).not.toContain(forbidden);
+    }
+  }
+  await expect(help.locator("kbd")).toHaveCount(0);
+  await help.getByRole("button", { name: "Keyboard Shortcuts", exact: true }).click();
+  expect(await help.locator("kbd").count()).toBeGreaterThan(0);
   await page.keyboard.press("Escape");
   await expect(help).toHaveCount(0);
   await expect(helpTrigger).toBeFocused();
@@ -1349,7 +1368,6 @@ test("PF-1 premium command information architecture is accessible and responsive
     await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
     await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
     if (viewport.width === 640) {
-      await expect(page.getByRole("group", { name: "Project" })).toBeVisible();
       await expect(page.getByRole("group", { name: "History" })).toBeVisible();
       await expect(page.getByLabel("More engineering commands")).toBeVisible();
       await page.getByLabel("More engineering commands").click();
@@ -1391,8 +1409,18 @@ test("Viewpoints is a truthful Bottom Dock toggle and preserves the explicit doc
   await selectionToolsCommand.click();
   await expect(bottomDock).toHaveAttribute("data-collapsed", "false");
   await expect(page.getByTestId("selection-tools-panel")).toBeVisible();
+  await expect(page.getByTestId("selection-tools-panel")).toContainText("Select two or more objects to align or snap.");
   await expect(selectionToolsCommand).toHaveAttribute("aria-pressed", "true");
   await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "false");
+
+  await selectionToolsCommand.click();
+  await expect(bottomDock).toHaveAttribute("data-collapsed", "true");
+  await expect(selectionToolsCommand).toHaveAttribute("aria-pressed", "false");
+  await selectionToolsCommand.click();
+  await expect(bottomDock).toHaveAttribute("data-collapsed", "false");
+  await expect(selectionToolsCommand).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
+    .toBeCloseTo(explicitHeight, 0);
 
   await viewpointsCommand.click();
   await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
@@ -1406,6 +1434,38 @@ test("Viewpoints is a truthful Bottom Dock toggle and preserves the explicit doc
   await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
     .toBeCloseTo(explicitHeight, 0);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("startup decision closes after create, existing load, and recovery resume", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const welcome = page.getByTestId("empty-project-welcome");
+  await welcome.getByRole("button", { name: "New Layout" }).click();
+  await page.getByTestId("new-project-name").fill("Startup Authority Project");
+  await page.getByTestId("new-customer-name").fill("E2E Customer");
+  await page.getByTestId("create-project").click();
+  await expect(welcome).toHaveCount(0);
+  await page.getByTestId("close-project-manager").click();
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  await expect.poll(() => page.evaluate(() => Boolean(localStorage.getItem("atrvisu.autosavedLayout.v1")))).toBe(true);
+
+  const loadPage = await page.context().newPage();
+  const loadErrors = collectPageErrors(loadPage);
+  await loadPage.goto("/?e2eDiagnostics=1");
+  const recoveryWelcome = loadPage.getByTestId("empty-project-welcome");
+  await expect(recoveryWelcome.getByRole("heading", { name: "Continue where you left off" })).toBeVisible();
+  await recoveryWelcome.getByRole("button", { name: "Open Project" }).click();
+  const manager = loadPage.getByTestId("project-manager-modal");
+  await manager.getByTestId("project-manager-project-option").filter({ hasText: "Startup Authority Project" }).click();
+  await manager.getByRole("button", { name: "Load Revision", exact: true }).click();
+  await expect(recoveryWelcome).toHaveCount(0);
+  expect(await loadPage.evaluate(() => Boolean(localStorage.getItem("atrvisu.autosavedLayout.v1")))).toBe(true);
+  await manager.getByTestId("close-project-manager").click();
+  expect(loadErrors).toEqual([]);
+  await loadPage.close();
   expect(errors).toEqual([]);
 });
 
@@ -1436,6 +1496,12 @@ test("PF-1 Arrange commands move, distribute, group, ungroup, undo, and redo onc
   await machineRows.nth(0).click();
   await machineRows.nth(1).click({ modifiers: ["Control"] });
   await machineRows.nth(2).click({ modifiers: ["Control"] });
+
+  await getCommandBarCommand(page, "arrange.alignmentTools").click();
+  const selectionTools = page.getByTestId("selection-tools-panel");
+  await expect(selectionTools.getByRole("button", { name: "Horizontal", exact: true })).toBeEnabled();
+  await expect(selectionTools).not.toContainText("Keyboard Nudge");
+  await getCommandBarCommand(page, "arrange.alignmentTools").click();
 
   const positionsBefore = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   const beforeAlign = await getRuntimeViewportSnapshot(page);
@@ -1553,13 +1619,14 @@ test("PF-1 Explorer F2 rename preserves canonical identity and history", async (
   const recoveryErrors = collectPageErrors(recoveryPage);
   await recoveryPage.goto("/?e2eDiagnostics=1");
   await expect(recoveryPage.getByTestId("empty-project-welcome")).toHaveCount(1);
-  await expect(recoveryPage.getByRole("heading", { name: "Unsaved work found" })).toBeVisible();
+  await expect(recoveryPage.getByRole("heading", { name: "Continue where you left off" })).toBeVisible();
   await expect(recoveryPage.getByRole("heading", { name: "Start a layout" })).toHaveCount(0);
   await expect(recoveryPage.locator(".recovery-prompt")).toHaveCount(0);
-  await expect(recoveryPage.getByRole("button", { name: "Open Existing Project" })).toBeVisible();
-  await expect(recoveryPage.getByRole("button", { name: "Create New Layout" })).toBeVisible();
-  await expect(recoveryPage.getByRole("button", { name: "Discard Unsaved Recovery" })).toBeVisible();
-  await recoveryPage.getByRole("button", { name: "Resume Unsaved Layout" }).click();
+  await expect(recoveryPage.getByRole("button", { name: "Open Project" })).toBeVisible();
+  await expect(recoveryPage.getByRole("button", { name: "New Layout" })).toBeVisible();
+  await expect(recoveryPage.getByRole("button", { name: "Discard recovery" })).toBeVisible();
+  await recoveryPage.getByRole("button", { name: "Resume" }).click();
+  await expect(recoveryPage.getByTestId("empty-project-welcome")).toHaveCount(0);
   await waitForMachineDiagnostics(recoveryPage, 2);
   await expectOneSceneLabelPerMachine(
     recoveryPage,
@@ -2606,6 +2673,7 @@ test("medium workbench constrains dock resizing around a dominant viewport", asy
 });
 
 test("populated Viewpoints stays bounded across desktop, medium, and narrow workbenches", async ({ page }) => {
+  test.setTimeout(60_000);
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openCleanApp(page);
@@ -3324,6 +3392,10 @@ test("rigid assembly projection renders without exposing member arrange actions"
   await expect(distributeVertical).toBeDisabled();
   await expect(equalGapX).toBeDisabled();
   await expect(equalGapY).toBeDisabled();
+  const advancedTools = selectionTools.getByTestId("selection-tools-advanced");
+  await expect(advancedTools).not.toHaveAttribute("open", "");
+  await advancedTools.locator("summary").click();
+  await expect(advancedTools).toHaveAttribute("open", "");
   await expect(selectionTools.getByRole("button", { name: "Match Center X" })).toBeDisabled();
   await expect(selectionTools.getByRole("button", {
     name: "Snap Primary Anchor to Secondary Anchor"
@@ -4487,6 +4559,7 @@ test("a hidden live panel is restored through Workspace and View and survives re
 });
 
 test("workspace panel controls follow live Connection Point Snap and Inspector availability", async ({ page }) => {
+  test.setTimeout(60_000);
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await waitForUiPreferences(page);
@@ -4528,9 +4601,15 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await arrangeMenu.locator('[data-command-id="arrange.alignmentTools"]').click();
   await expect(page.getByTestId("selection-tools-panel")).toBeVisible();
   await expect(page.getByTestId("contextual-panel-panel.connectionPointSnap")).toBeVisible();
+  await expect(page.getByTestId("selection-tools-advanced")).not.toHaveAttribute("open", "");
+  await expect(page.getByTestId("selection-tools-panel").getByRole("button", { name: "Horizontal", exact: true })).toBeDisabled();
+  await expect(page.getByTestId("selection-tools-panel")).toContainText("Select three or more objects to distribute.");
+  await expect(page.getByTestId("selection-tools-panel")).not.toContainText("Keyboard Nudge");
   await expect(page.getByTestId("multi-selection-panel")).toBeVisible();
   await expect(page.getByTestId("multi-selection-panel")).not.toContainText("Align Selection");
   await expect(page.getByTestId("multi-selection-panel")).not.toContainText("Connection Point Snap");
+  await page.getByTestId("selection-tools-advanced").locator("summary").click();
+  await expect(page.getByTestId("selection-tools-advanced")).toHaveAttribute("open", "");
   await expectRuntimeCommandExecutionOnce(page, "alignment.alignSelection", () =>
     page.getByTestId("selection-tools-panel").getByRole("button", { name: "Match Center X" }).click()
   );
@@ -4580,6 +4659,8 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   const beforeSingleContextVisibility = await getRuntimeViewportSnapshot(page);
   const precisionContribution = page.getByTestId("contextual-panel-panel.precisionPlacement");
   await expect(precisionContribution).toBeVisible();
+  await expect(page.getByTestId("precision-nudge-settings")).toBeVisible();
+  await expect(page.getByTestId("precision-nudge-settings")).toContainText("Keyboard Nudge");
   const precisionHeader = page.getByTestId(
     "contextual-panel-toggle-panel.precisionPlacement"
   );

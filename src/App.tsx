@@ -538,6 +538,7 @@ export function App() {
   const [activeBottomPanelId, setActiveBottomPanelId] = useState<PanelId>(RUNTIME_PANEL_IDS.viewpoints);
   const [annotationSelectionSignal, setAnnotationSelectionSignal] = useState(0);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
+  const [hasAcceptedWorkingLayout, setHasAcceptedWorkingLayout] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
@@ -1190,6 +1191,7 @@ export function App() {
       recordLayoutHistory();
     }
     if (!isBenchmarkModeRef.current) {
+      setHasAcceptedWorkingLayout(true);
       setHasUnsavedProjectChanges((current) => current || true);
     }
   }, [recordLayoutHistory]);
@@ -2549,6 +2551,7 @@ export function App() {
     setCurrentProjectId(projectId);
     setCurrentLayoutId(layoutId);
     setCurrentRevisionId(revisionId);
+    setHasAcceptedWorkingLayout(true);
     void refreshProjects();
     setHasUnsavedProjectChanges(false);
     clearLayoutHistory();
@@ -3209,6 +3212,7 @@ export function App() {
     }
 
     importLayout(recoveryLayout);
+    setHasAcceptedWorkingLayout(true);
     setRecoveryLayout(null);
     setAutosaveReady(true);
   }, [importLayout, recoveryLayout]);
@@ -3267,6 +3271,7 @@ export function App() {
         setCurrentProjectId(projectId);
         setCurrentLayoutId(layoutId);
         setCurrentRevisionId(revisionId);
+        setHasAcceptedWorkingLayout(true);
         setHasUnsavedProjectChanges(false);
       },
       prompt: (message, defaultValue) => window.prompt(message, defaultValue)
@@ -3569,8 +3574,8 @@ export function App() {
       align: applyAlignmentAction,
       distribute: applyDistributionAction,
       equalGap: applyEqualGapAction,
-      openAlignmentTools: () => mapPanelOperationToRuntimeCommandResult(
-        runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.alignmentTools)
+      toggleAlignmentTools: () => mapPanelOperationToRuntimeCommandResult(
+        runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.alignmentTools)
       )
     }),
     [RUNTIME_FEATURE_COMMAND_IDS.rotationSnap]: {
@@ -4519,12 +4524,7 @@ export function App() {
             onPerformanceMetricsChange={setLatestPerformanceMetrics}
           />
           {!isProjectStorageLoading
-          && (Boolean(recoveryLayout) || (
-            !currentLayoutId
-            && placedMachines.length === 0
-            && civilReferences.length === 0
-            && annotations.length === 0
-          )) ? (
+          && !hasAcceptedWorkingLayout ? (
             <EmptyProjectWelcome
               recoveryAvailable={Boolean(recoveryLayout)}
               onResumeRecovery={() => {
@@ -5072,6 +5072,7 @@ export function App() {
               settings={placementSettings}
               placedMachines={placedMachines}
               selectedMachine={singleSelectedMachine}
+              nudgeSettings={nudgeSettings}
               onChangeSettings={(settings) => {
                 const rotationChanged =
                   settings.rotationSnapEnabled !== placementSettings.rotationSnapEnabled
@@ -5086,6 +5087,7 @@ export function App() {
                   setPlacementSettings(settings);
                 }
               }}
+              onChangeNudgeSettings={setNudgeSettings}
               onUpdateMachine={updateMachine}
             />
           </PanelSection>
@@ -5098,7 +5100,6 @@ export function App() {
             <AlignmentToolsPanel
               selectedEntityCount={selectedAlignableEntities.length}
               primarySelectionLabel={primarySelectedAlignable?.label}
-              nudgeSettings={nudgeSettings}
               onAlign={(action) => executeRuntimeFeatureCommand(
                 RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
                 { kind: "align", action } satisfies RuntimeAlignmentPayload
@@ -5119,7 +5120,6 @@ export function App() {
                 RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
                 { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
               )}
-              onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
           {connectionPointSnapAvailable ? (
@@ -5282,7 +5282,9 @@ export function App() {
                     settings={placementSettings}
                     placedMachines={placedMachines}
                     selectedMachine={singleSelectedMachine}
+                    nudgeSettings={nudgeSettings}
                     onChangeSettings={setPlacementSettings}
+                    onChangeNudgeSettings={setNudgeSettings}
                     onUpdateMachine={updateMachine}
                   />
                 </WorkbenchContextContribution>
@@ -5403,7 +5405,6 @@ export function App() {
                 <SelectionToolsPanel
                   selectedEntityCount={selectedAlignableEntities.length}
                   primarySelectionLabel={primarySelectedAlignable?.label}
-                  nudgeSettings={nudgeSettings}
                   selectedMachines={selectedMachines}
                   primarySelectedMachine={selectedMachine}
                   connectionPointSnapAvailable={connectionPointSnapAvailable}
@@ -5437,7 +5438,6 @@ export function App() {
                     RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
                     { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
                   )}
-                  onChangeNudgeSettings={setNudgeSettings}
                   onConnectionPointSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
                     RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
                     { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
@@ -5508,6 +5508,7 @@ export function App() {
                 setCurrentProjectId(projectId);
                 setCurrentLayoutId(layoutId);
                 setCurrentRevisionId(revisionId);
+                setHasAcceptedWorkingLayout(true);
                 void refreshProjects();
                 setHasUnsavedProjectChanges(false);
               }}

@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { CommandSurfaceItem } from "../../workbench/commandSurfaces";
-import { COMMAND_BAR_GROUP_DEFINITIONS } from "../../workbench/commandSurfaces/commandSurfaceConfig";
+import {
+  COMMAND_BAR_GROUP_DEFINITIONS,
+  COMMAND_BAR_SHORT_LABELS
+} from "../../workbench/commandSurfaces/commandSurfaceConfig";
 import { WorkbenchIcon } from "../../workbench/icons";
 
 export type WorkbenchCommandBarProps = {
@@ -100,10 +103,10 @@ export function WorkbenchCommandBar({
     })
   })).filter((group) => group.items.length > 0);
   const primaryGroups = compactOverflow
-    ? groupedItems.filter((group) => group.id === "project" || group.id === "history")
+    ? groupedItems.filter((group) => group.id === "history")
     : groupedItems;
   const overflowGroups = compactOverflow
-    ? groupedItems.filter((group) => group.id !== "project" && group.id !== "history")
+    ? groupedItems.filter((group) => group.id !== "history")
     : [];
 
   const focusAt = (index: number) => {
@@ -157,8 +160,10 @@ export function WorkbenchCommandBar({
       }}
     >
       {item.iconId ? <WorkbenchIcon iconId={item.iconId} /> : null}
-      <span className={overflow ? "workbench-command-overflow-label" : "visually-hidden"}>
-        {item.pending ? `${item.label}...` : item.label}
+      <span className={overflow ? "workbench-command-overflow-label" : "workbench-command-label"}>
+        {item.pending
+          ? `${overflow ? item.label : COMMAND_BAR_SHORT_LABELS[item.commandId] ?? item.label}...`
+          : overflow ? item.label : COMMAND_BAR_SHORT_LABELS[item.commandId] ?? item.label}
       </span>
     </button>
   );

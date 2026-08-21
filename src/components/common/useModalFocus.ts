@@ -9,7 +9,10 @@ const FOCUSABLE = [
   "[tabindex]:not([tabindex='-1'])"
 ].join(",");
 
-export const useModalFocus = <T extends HTMLElement>(onClose: () => void): RefObject<T> => {
+export const useModalFocus = <T extends HTMLElement>(
+  onClose: () => void,
+  getFallbackFocus?: () => HTMLElement | null
+): RefObject<T> => {
   const dialogRef = useRef<T>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -51,7 +54,8 @@ export const useModalFocus = <T extends HTMLElement>(onClose: () => void): RefOb
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      openerRef.current?.focus();
+      const opener = openerRef.current;
+      (opener?.isConnected ? opener : getFallbackFocus?.())?.focus();
     };
   }, []);
 

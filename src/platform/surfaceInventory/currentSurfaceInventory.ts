@@ -99,27 +99,30 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
     ],
     commandIds: [
-      "project.save",
       "edit.undo",
       "edit.redo",
+      "edit.renameSelected",
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
-      "view.showMeasurements",
       "view.toggleConnectionPoints",
-      "view.viewpoints"
+      "view.viewpoints",
+      "view.showMeasurements",
+      "arrange.alignmentTools"
     ],
     featureIds: [
       "edit.undo",
       "edit.redo",
+      "entity.rename",
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
       "measurements.show",
       "connectionPoints.toggle",
-      "view.viewpoints"
+      "view.viewpoints",
+      "alignment.alignSelection"
     ],
-    notes: "One-row icon-only registry-backed command projection with live enablement, pending, disabled-reason and pressed-state presentation."
+    notes: "Registry-backed History, Selection, Display, Precision, and Arrange groups use icons plus concise desktop labels, live enablement, pending, disabled-reason and pressed-state presentation. Save Project remains in the Application Bar and File menu instead of being duplicated here."
   },
   {
     surfaceId: "surface.help",
@@ -134,7 +137,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     commandIds: ["help.quickStart", "help.keyboardShortcuts", "help.about"],
     panelIds: ["panel.help"],
     featureIds: ["help.productGuidance", "panel.help"],
-    notes: "The registered Help commands select a section in one accessible modal surface with focus trapping, Escape close, and opener focus restoration."
+    notes: "The registered Help commands open one accessible product help center with task guidance, workbench, arrange/snap, measurements, viewpoints, outputs, semantic keyboard shortcuts, product information, focus trapping, Escape close, and opener focus restoration."
   },
   {
     surfaceId: "surface.emptyProjectWelcome",
@@ -145,7 +148,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     commandIds: ["project.manager"],
     panelIds: ["panel.projectManager"],
     featureIds: ["project.manager"],
-    notes: "A presentation-only Editor Host overlay routes create/open entry through the existing Project Manager authority and does not replace the Babylon canvas."
+    notes: "A presentation-only Editor Host overlay separates recovery availability from the current-session startup decision. It disappears after a working layout is accepted while routing create/open/resume/discard through existing authorities without replacing the Babylon canvas."
   },
   {
     surfaceId: "surface.machineLibrary",

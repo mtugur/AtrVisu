@@ -32,7 +32,9 @@ describe("EmptyProjectWelcome", () => {
       onOpenExistingProject
     })));
     const buttons = [...container.querySelectorAll<HTMLButtonElement>("button")];
-    expect(buttons.map((button) => button.textContent)).toEqual(["Create New Layout", "Open Existing Project"]);
+    expect(container.textContent).toContain("AtrVisu");
+    expect(container.textContent).toContain("Start a layout");
+    expect(buttons.map((button) => button.textContent)).toEqual(["New Layout", "Open Project"]);
     await act(async () => buttons[0]?.click());
     await act(async () => buttons[1]?.click());
     expect(onCreateNewLayout).toHaveBeenCalledTimes(1);
@@ -56,15 +58,18 @@ describe("EmptyProjectWelcome", () => {
     })));
 
     expect(container.querySelectorAll('[data-testid="empty-project-welcome"]')).toHaveLength(1);
-    expect(container.textContent).toContain("Unsaved work found");
+    expect(container.textContent).toContain("Continue where you left off");
+    expect(container.textContent).toContain("Unsaved layout available");
     expect(container.textContent).not.toContain("Dismiss");
     const buttons = [...container.querySelectorAll<HTMLButtonElement>("button")];
     expect(buttons.map((button) => button.textContent?.trim())).toEqual([
-      "Resume Unsaved Layout",
-      "Open Existing Project",
-      "Create New Layout",
-      "Discard Unsaved Recovery"
+      "Resume",
+      "Open Project",
+      "New Layout",
+      "Discard recovery"
     ]);
+    expect(buttons[0]?.classList.contains("primary-action")).toBe(true);
+    expect(buttons[3]?.closest(".empty-project-destructive-action")).not.toBeNull();
     for (const button of buttons) {
       await act(async () => button.click());
     }
