@@ -105,9 +105,9 @@ describe("command surface adapter", () => {
       commandId: "view.displayOverlayControls",
       label: "Display / Overlay Controls"
     });
-    expect(adapter.getItem("view.showMeasurements", "command-bar")).toMatchObject({
-      label: "Measurement Helpers",
-      tooltip: expect.stringContaining("distance and placement")
+    expect(adapter.getItem("view.showMeasurements", "command-palette")).toMatchObject({
+      label: "Precision Placement Helpers",
+      tooltip: expect.stringContaining("precision placement")
     });
   });
 

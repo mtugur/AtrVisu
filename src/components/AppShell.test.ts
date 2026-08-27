@@ -118,6 +118,6 @@ describe("AppShell render contract", () => {
 
     expect(styles).toMatch(/\.scene-viewport-host\s*{[^}]*top:\s*var\(--av-shell-top-inset\)/s);
     expect(styles).toMatch(/\.machine-panel\s*{[^}]*top:\s*var\(--av-shell-top-inset\)[^}]*height:\s*calc\(100% - var\(--av-shell-top-inset\)\)/s);
-    expect(styles).toMatch(/@media \(max-width: 720px\)\s*{[\s\S]*?\.machine-panel\s*{[^}]*top:\s*auto;[^}]*bottom:\s*(?:28px|0)(?:\s*!important)?;[^}]*height:\s*min\(44vh, 360px\)(?:\s*!important)?/);
+    expect(styles).toMatch(/@media \(max-width: 720px\)\s*{[\s\S]*?\.machine-panel\s*{[^}]*top:\s*auto;[^}]*bottom:\s*var\(--av-workbench-status-bar-height\)(?:\s*!important)?;[^}]*height:\s*min\(44vh, 360px\)(?:\s*!important)?/);
   });
 });

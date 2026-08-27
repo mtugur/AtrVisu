@@ -38,7 +38,7 @@ describe("ConnectionPointSnapPanel", () => {
 
     expect(markup).toContain("Line 1 Packer");
     expect(markup).toContain("Flow Pack Machine");
-    expect(markup).toContain("Connection snap moves the selected machine without changing its rotation.");
+    expect(markup).toContain("Connect &amp; Snap moves the selected machine without changing its rotation.");
     expect(markup).not.toContain("v0.1");
     expect(definition.name).toBe("Flow Pack Machine");
   });

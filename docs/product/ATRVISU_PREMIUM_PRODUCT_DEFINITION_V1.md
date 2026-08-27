@@ -35,25 +35,23 @@ The canonical application menu is:
 
 `File / Edit / View / Insert / Arrange / Tools / Help`
 
-The Application Bar owns the visible Save Project action and the File menu
-retains its registered Save route. The Engineering Command Strip does not
-duplicate Save. It begins with History and is grouped in the canonical order
-History, Selection, Display, Precision, and Arrange. At desktop widths commands
-may use an icon plus a concise human label when that improves immediate
-recognition; icon-only presentation is not a dogmatic requirement. The full
-accessible label and tooltip remain authoritative. Group captions, shared
-group chrome, and subtle separators provide engineering hierarchy without
-moving project, layout, revision, or dirty-state context out of the Application
-Bar. At narrow widths, History remains immediately reachable and the remaining
-groups move into one deterministic More surface.
+The Application Bar is context-oriented: product identity, workspace,
+project/layout/revision, command search, units, and saved state. Save Project is
+projected once in the compact Quick Toolbar and remains available from File.
+The toolbar is icon-only at desktop width, uses accessible names and tooltips,
+and separates frequent commands without permanent group captions or card
+chrome. At narrow widths Save, Undo, and Redo remain direct while the remaining
+frequent commands move into one deterministic More surface. Escape closes the
+surface and restores focus to its opener.
 
 Arrange exposes common alignment, distribution, equal-gap, grouping, and
-ungrouping commands. Selection Tools is a true Bottom Dock toggle and uses
-selection-aware progressive disclosure: a compact context state for fewer than
-two objects, common align/distribute controls for valid selections, connection
-snap when compatible, and collapsed advanced pair controls. Keyboard Nudge
-step settings live with Precision Placement and Measurement Helpers while
-retaining the existing nudge authority. The Inspector remains property and context oriented;
+ungrouping commands. With two or more eligible entities selected, common
+operations appear in a compact viewport context bar. An exact compatible pair
+adds Connect & Snap and opens its existing selectors in a transient popover.
+Advanced pair/anchor operations remain available through Arrange > Advanced
+Alignment. Viewpoints is the only Phase-1 Bottom Dock contribution. Keyboard
+Nudge and placement-helper settings live with Precision Placement while
+retaining the existing placement authority. The Inspector remains property and context oriented;
 it does not own operational alignment, distribution, snap, duplicate, delete,
 or clear-selection button stacks. Help is a real registered product surface
 with Quick Start, real keyboard shortcuts, and restrained product/version
@@ -61,8 +59,12 @@ information.
 
 ## Semantic Decisions
 
-- `Measurement Helpers` is the truthful Phase 1 label for the existing
-  precision-placement measurements. Scene dimension graphics are not implied.
+- `Precision Placement Helpers` is the truthful label for the existing
+  placement assistance. It is reached through Tools/Inspector and does not
+  imply scene dimension graphics. A real viewport Measure tool remains PF-3
+  work and is absent from the Quick Toolbar.
+- `Ctrl+K` / `Cmd+K` opens a search projection of the existing Command Registry;
+  the palette owns no commands or execution authority of its own.
 - Renaming a placed machine changes its optional project-instance display name,
   never `MachineDefinition.name` or its stable library/BOM identity.
 - Explorer, scene labels, Inspector, persistence, and commercial instance rows

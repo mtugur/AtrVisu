@@ -83,14 +83,15 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
                 <div><dt>Explorer</dt><dd>Review layout items and control the current selection.</dd></div>
                 <div><dt>Viewport</dt><dd>Navigate and edit the 3D layout.</dd></div>
                 <div><dt>Inspector</dt><dd>Edit properties for the current object or selection.</dd></div>
-                <div><dt>Bottom Dock</dt><dd>Open Viewpoints or Selection Tools without covering the layout.</dd></div>
+                <div><dt>Bottom Dock</dt><dd>Open Viewpoints and other persistent review utilities without covering the layout.</dd></div>
+                <div><dt>Command Palette</dt><dd>Press Ctrl+K or Cmd+K to search available commands from anywhere in the workbench.</dd></div>
               </dl></article>
             ) : null}
             {section === "arrange-snap" ? (
-              <article><h3>Arrange &amp; Snap</h3><p>Use Arrange commands for common edge, center, distribution, and equal-gap operations.</p><p>Selection Tools provides compact multi-object controls, advanced pair alignment, and Connection Point Snap when compatible machines are selected.</p></article>
+              <article><h3>Arrange &amp; Snap</h3><p>Select two or more alignable objects to reveal the compact Arrange bar in the viewport. Use it for common edge, center, distribution, equal-gap, and grouping operations.</p><p>Advanced pair and anchor controls remain under Arrange &gt; Advanced Alignment. When exactly two compatible machines are selected, Connect &amp; Snap opens beside the Arrange bar.</p></article>
             ) : null}
             {section === "measurements" ? (
-              <article><h3>Measurements</h3><p>Select one machine, then activate Measurement Helpers to reveal the helper controls in Placement Settings.</p><p>Choose two machines there to compare center distance, plan-axis deltas, and an approximate footprint gap. Keyboard Nudge step settings are available in the same section.</p></article>
+              <article><h3>Measurements</h3><p>Precision Placement provides exact position, rotation, snap, and keyboard nudge settings in the Inspector and Tools menu.</p><p>Precision Placement is not the viewport Measure tool. Spatial measurement graphics are not yet available in this release.</p></article>
             ) : null}
             {section === "viewpoints" ? (
               <article><h3>Viewpoints</h3><p>Capture the current camera and display state, then Apply, Update, Rename, or Delete the selected viewpoint. Previous and Next move through saved viewpoints.</p><p>The Viewpoints command opens and closes its Bottom Dock contribution.</p></article>
@@ -110,6 +111,7 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
                 <Shortcut action="Delete selected"><kbd>Delete</kbd></Shortcut>
                 <Shortcut action="Rename selected"><kbd>F2</kbd></Shortcut>
                 <Shortcut action="Clear selection"><kbd>Escape</kbd></Shortcut>
+                <Shortcut action="Search commands"><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>K</kbd></Shortcut>
                 <Shortcut action="Nudge selection"><kbd>Arrow keys</kbd></Shortcut>
               </dl></article>
             ) : null}

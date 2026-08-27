@@ -8,8 +8,11 @@ import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
 import { HelpModal, type HelpSection } from "./components/HelpModal";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import {
+  CommandPalette,
+  ViewportArrangeBar,
   WorkbenchApplicationBar,
   WorkbenchCommandBar,
+  WorkbenchDockCollapseButton,
   WorkbenchMenuBar,
   WorkspacePreferencesControl
 } from "./components/workbench";
@@ -33,7 +36,6 @@ import { MachineLibrary } from "./components/MachineLibrary";
 import type { LibraryManagerRuntimeController } from "./components/LibraryManager";
 import { MachineProperties } from "./components/MachineProperties";
 import { MultiSelectionProperties } from "./components/MultiSelectionProperties";
-import { SelectionToolsPanel } from "./components/SelectionToolsPanel";
 import { PanelSection } from "./components/PanelSection";
 import { PrecisionPlacementPanel } from "./components/PrecisionPlacementPanel";
 import { PerformanceBenchmarkModal } from "./components/PerformanceBenchmarkModal";
@@ -299,7 +301,7 @@ const PRIMARY_DOCK_PANEL_IDS = [
   RUNTIME_PANEL_IDS.layers,
   RUNTIME_PANEL_IDS.groups
 ] as const;
-const STATUS_BAR_HEIGHT = 28;
+const STATUS_BAR_HEIGHT = 25;
 const COLLAPSED_BOTTOM_DOCK_HEIGHT = 34;
 const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   nudgeStepMm: 100,
@@ -567,6 +569,9 @@ export function App() {
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
   const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isAdvancedAlignmentOpen, setIsAdvancedAlignmentOpen] = useState(false);
+  const [isConnectionPointSnapOpen, setIsConnectionPointSnapOpen] = useState(false);
   const [helpSection, setHelpSection] = useState<HelpSection>("quick-start");
   const [renameRequest, setRenameRequest] = useState<{ entityId: string; version: number } | null>(null);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
@@ -689,10 +694,12 @@ export function App() {
     isLibraryManagerOpen,
     isTaxonomyManagerOpen,
     isHelpOpen,
+    isAdvancedAlignmentOpen,
+    isConnectionPointSnapOpen,
     connectionPointSnapAvailable: false,
     connectionPointSnapReason: "Select exactly two explicit machines.",
     measurementHelpersAvailable: false,
-    measurementHelpersReason: "Select one machine to use Measurement Helpers.",
+    measurementHelpersReason: "Select one machine to use Precision Placement helpers.",
     propertiesContext: "none"
   });
 
@@ -1549,48 +1556,30 @@ export function App() {
           context: runtimePanelStateRef.current.measurementHelpersAvailable ? "selected-machine" : "unavailable"
         })
       ),
-      [RUNTIME_PANEL_IDS.alignmentTools]: bottomPanelBinding(RUNTIME_PANEL_IDS.alignmentTools),
+      [RUNTIME_PANEL_IDS.alignmentTools]: {
+        getState: () => modalState(runtimePanelStateRef.current.isAdvancedAlignmentOpen),
+        open: () => setIsAdvancedAlignmentOpen(true),
+        close: () => setIsAdvancedAlignmentOpen(false),
+        toggle: () => setIsAdvancedAlignmentOpen((current) => !current)
+      },
       [RUNTIME_PANEL_IDS.connectionPointSnap]: {
         getState: () => {
           const state = runtimePanelStateRef.current;
           const available = state.connectionPointSnapAvailable;
-          const rootOpen = !state.isBottomDockCollapsed
-            && state.activeBottomPanelId === RUNTIME_PANEL_IDS.alignmentTools;
           const visible = state.panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false;
-          const expanded = state.panelSectionExpansion[RUNTIME_PANEL_IDS.connectionPointSnap];
           return {
-            isVisible: rootOpen && visible,
-            isOpen: rootOpen && visible && expanded && available,
+            isVisible: visible && available,
+            isOpen: visible && available && state.isConnectionPointSnapOpen,
             available,
-            isExpanded: expanded,
             reason: available ? undefined : state.connectionPointSnapReason,
-            context: available ? "selection-tools" : "unavailable"
+            context: available ? "viewport-context" : "unavailable"
           };
         },
-        open: () => {
-          setPanelSectionExpanded(RUNTIME_PANEL_IDS.connectionPointSnap, true);
-          setPanelSectionExpanded(RUNTIME_PANEL_IDS.alignmentTools, true);
-          setActiveBottomPanelId(RUNTIME_PANEL_IDS.alignmentTools);
-          setBottomDockCollapsed(false);
-        },
-        close: () => setPanelSectionExpansionPreservingVisibility(
-          RUNTIME_PANEL_IDS.connectionPointSnap,
-          false
-        ),
-        toggle: () => {
-          const state = runtimePanelStateRef.current;
-          const isOpen = !state.isBottomDockCollapsed
-            && state.activeBottomPanelId === RUNTIME_PANEL_IDS.alignmentTools
-            && state.panelSectionExpansion[RUNTIME_PANEL_IDS.connectionPointSnap];
-          if (isOpen) {
-            setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.connectionPointSnap, false);
-          } else {
-            setPanelSectionExpanded(RUNTIME_PANEL_IDS.connectionPointSnap, true);
-            setPanelSectionExpanded(RUNTIME_PANEL_IDS.alignmentTools, true);
-            setActiveBottomPanelId(RUNTIME_PANEL_IDS.alignmentTools);
-            setBottomDockCollapsed(false);
-          }
-        }
+        open: () => setIsConnectionPointSnapOpen(true),
+        close: () => setIsConnectionPointSnapOpen(false),
+        toggle: () => setIsConnectionPointSnapOpen(
+          !runtimePanelStateRef.current.isConnectionPointSnapOpen
+        )
       },
       [RUNTIME_PANEL_IDS.displayOverlayControls]: {
         getState: () => modalState(runtimePanelStateRef.current.isDisplayOverlayControlsOpen),
@@ -1672,10 +1661,15 @@ export function App() {
   const connectionPointSnapReason = connectionPointSnapContext.available
     ? ""
     : getConnectionPointSnapContextMessage(connectionPointSnapContext.reason);
+  useEffect(() => {
+    if (!connectionPointSnapAvailable) {
+      setIsConnectionPointSnapOpen(false);
+    }
+  }, [connectionPointSnapAvailable]);
   const measurementHelpersAvailable = runtimeSelection.ids.length === 1 && Boolean(singleSelectedMachine);
   const measurementHelpersReason = measurementHelpersAvailable
     ? ""
-    : "Select one machine to use Measurement Helpers.";
+    : "Select one machine to use Precision Placement helpers.";
 
   useLayoutEffect(() => {
     runtimePanelStateRef.current = {
@@ -1697,6 +1691,8 @@ export function App() {
       isLibraryManagerOpen,
       isTaxonomyManagerOpen,
       isHelpOpen,
+      isAdvancedAlignmentOpen,
+      isConnectionPointSnapOpen,
       connectionPointSnapAvailable,
       connectionPointSnapReason,
       measurementHelpersAvailable,
@@ -1714,6 +1710,9 @@ export function App() {
     isCommercialOutputsOpen,
     isLayoutControlsOpen,
     isLibraryManagerOpen,
+    isHelpOpen,
+    isAdvancedAlignmentOpen,
+    isConnectionPointSnapOpen,
     isBottomDockCollapsed,
     isPanelCollapsed,
     isPerformanceBenchmarkOpen,
@@ -4156,7 +4155,15 @@ export function App() {
   const commandSurfaceMetadataRegistry = useMemo(() => ({
     get: (commandId: string) => runtimeCommandBridge.registry.get(commandId)
       ?? runtimeFeatureCommandBridge.registry.get(commandId)
-      ?? assemblyCommandBridge.registry.get(commandId)
+      ?? assemblyCommandBridge.registry.get(commandId),
+    list: () => {
+      const definitions = [
+        ...runtimeCommandBridge.registry.list(),
+        ...runtimeFeatureCommandBridge.registry.list(),
+        ...assemblyCommandBridge.registry.list()
+      ];
+      return [...new Map(definitions.map((definition) => [definition.id, definition])).values()];
+    }
   }), [assemblyCommandBridge, runtimeCommandBridge, runtimeFeatureCommandBridge]);
 
   const commandSurfaceCoreBridge = useMemo(() => ({
@@ -4231,9 +4238,7 @@ export function App() {
         && state.activeBottomPanelId === RUNTIME_PANEL_IDS.viewpoints;
     }
     if (commandId === RUNTIME_FEATURE_COMMAND_IDS.alignmentTools) {
-      const state = runtimePanelStateRef.current;
-      return !state.isBottomDockCollapsed
-        && state.activeBottomPanelId === RUNTIME_PANEL_IDS.alignmentTools;
+      return runtimePanelStateRef.current.isAdvancedAlignmentOpen;
     }
     return undefined;
   }, []);
@@ -4267,7 +4272,7 @@ export function App() {
 
   const commandSurfaceMenus = commandSurfaceAdapter.getMenus();
   const commandBarItems = commandSurfaceAdapter.getCommandBarItems();
-  const applicationSaveItem = commandSurfaceAdapter.getApplicationSaveItem();
+  const commandPaletteItems = commandSurfaceAdapter.getCommandPaletteItems();
   const executeCommandSurfaceItem = useCallback((commandId: string) => {
     void commandSurfaceAdapter.execute(commandId);
   }, [commandSurfaceAdapter]);
@@ -4398,6 +4403,20 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest("input, textarea, select, [contenteditable='true']")
+          && document.querySelector('[role="dialog"][aria-modal="true"]') === null) {
+          event.preventDefault();
+          setIsCommandPaletteOpen(true);
+        }
+        return;
+      }
+      if (event.key === "Escape" && isConnectionPointSnapOpen) {
+        event.preventDefault();
+        runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap);
+        return;
+      }
       const action = resolveEditorShortcut({
         key: event.key,
         target: event.target,
@@ -4488,11 +4507,13 @@ export function App() {
     clearSelection,
     executeCoreEditorCommand,
     executeRuntimeFeatureCommand,
+    isConnectionPointSnapOpen,
     moveSelectedByDelta,
     nudgeSettings,
     runtimeSelection.ids.length,
     runtimeSelectionMovementEvaluation.allowed,
     runtimeFeatureCommandBridge,
+    runtimePanelBridge,
     selectedAlignableEntities.length
   ]);
 
@@ -4546,6 +4567,45 @@ export function App() {
             onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
             onPerformanceMetricsChange={setLatestPerformanceMetrics}
           />
+          <div className="workbench-viewport-context-layer" aria-live="polite">
+            <ViewportArrangeBar
+              selectionCount={selectedAlignableEntities.length}
+              movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
+              canDistribute={selectedAlignableEntities.length >= 3}
+              canGroup={!selectedGroup && selectedAlignableEntities.length >= 2}
+              connectAndSnapAvailable={connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false}
+              connectAndSnapOpen={isConnectionPointSnapOpen}
+              onAlign={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "align", action } satisfies RuntimeAlignmentPayload
+              )}
+              onDistribute={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "distribute", action } satisfies RuntimeAlignmentPayload
+              )}
+              onEqualGap={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
+              )}
+              onGroup={() => executeCommandSurfaceItem(ASSEMBLY_COMMAND_IDS.createGroup)}
+              onToggleConnectAndSnap={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}
+            />
+            {isConnectionPointSnapOpen && connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false ? (
+              <div className="viewport-connect-popover" role="dialog" aria-label="Connect & Snap" data-testid="connect-and-snap-popover">
+                <header><strong>Connect &amp; Snap</strong><button type="button" aria-label="Close Connect & Snap" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}>Close</button></header>
+                <ConnectionPointSnapPanel
+                  selectedMachines={selectedMachines}
+                  primarySelectedMachine={selectedMachine}
+                  onSnap={(selection, movingPoint, fixedPoint) => {
+                    void executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
+                      { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
+                    ).then(() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap));
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
           {!isProjectStorageLoading
           && !hasAcceptedWorkingLayout ? (
             <EmptyProjectWelcome
@@ -4607,10 +4667,14 @@ export function App() {
   }, [activePrimaryPanelId, panelSectionVisibility]);
 
   useEffect(() => {
+    if (activeBottomPanelId !== RUNTIME_PANEL_IDS.viewpoints) {
+      setActiveBottomPanelId(RUNTIME_PANEL_IDS.viewpoints);
+      return;
+    }
     if (panelSectionVisibility[activeBottomPanelId as PanelSectionId] !== false) {
       return;
     }
-    const nextPanelId = [RUNTIME_PANEL_IDS.viewpoints, RUNTIME_PANEL_IDS.alignmentTools]
+    const nextPanelId = [RUNTIME_PANEL_IDS.viewpoints]
       .find((panelId) => panelSectionVisibility[panelId] !== false);
     if (nextPanelId) {
       setActiveBottomPanelId(nextPanelId);
@@ -4634,8 +4698,6 @@ export function App() {
       workspaceInspectorMode={workspaceProjection.inspectorMode}
       applicationBar={(
         <WorkbenchApplicationBar
-          saveItem={applicationSaveItem}
-          emphasizedCommandIds={workspaceProjection.emphasizedCommandIds}
           workspaceControl={(
             <WorkspacePreferencesControl
               activeWorkspaceId={workspaceProjection.activeWorkspaceId}
@@ -4680,7 +4742,7 @@ export function App() {
             layout: currentLayout?.layoutName ?? "No layout",
             revision: currentRevision?.revisionCode ?? "No revision"
           }}
-          onExecute={executeCommandSurfaceItem}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
       )}
       menuBar={(
@@ -4815,15 +4877,14 @@ export function App() {
         />
       )}
       secondaryDock={isPanelCollapsed ? (
-        <button
-          className="panel-reopen-tab"
-          type="button"
-          aria-label="Open Inspector"
-          data-app-shell-zone="machine-properties"
-          onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.rightPanelShell)}
-        >
-          Inspector
-        </button>
+        <div className="panel-reopen-tab" data-app-shell-zone="machine-properties">
+          <WorkbenchDockCollapseButton
+            side="right"
+            collapsed
+            onToggle={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.rightPanelShell)}
+            testId="right-dock-collapse-toggle"
+          />
+        </div>
       ) : (
         <aside
           className="machine-panel"
@@ -4844,13 +4905,12 @@ export function App() {
           />
           <header className="workbench-inspector-header">
             <strong>Inspector</strong>
-            <button
-              type="button"
-              aria-label="Collapse Inspector"
-              onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
-            >
-              Collapse
-            </button>
+            <WorkbenchDockCollapseButton
+              side="right"
+              collapsed={false}
+              onToggle={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
+              testId="right-dock-collapse-toggle"
+            />
           </header>
           {showLegacyCompatibilityStack ? (
             <>
@@ -5419,55 +5479,6 @@ export function App() {
                   onStepViewpoint={stepViewpoint}
                 />
               )
-            }]),
-            ...(panelSectionVisibility[RUNTIME_PANEL_IDS.alignmentTools] === false ? [] : [{
-              panelId: RUNTIME_PANEL_IDS.alignmentTools,
-              label: "Selection Tools",
-              badge: selectedAlignableEntities.length > 0 ? `${selectedAlignableEntities.length}` : undefined,
-              content: (
-                <SelectionToolsPanel
-                  selectedEntityCount={selectedAlignableEntities.length}
-                  primarySelectionLabel={primarySelectedAlignable?.label}
-                  selectedMachines={selectedMachines}
-                  primarySelectedMachine={selectedMachine}
-                  connectionPointSnapAvailable={connectionPointSnapAvailable}
-                  movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
-                  connectionPointSnapVisible={panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false}
-                  connectionPointSnapExpanded={panelSectionExpansion[RUNTIME_PANEL_IDS.connectionPointSnap]}
-                  onConnectionPointSnapExpandedChange={(expanded) => {
-                    if (expanded) {
-                      runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.connectionPointSnap);
-                    } else {
-                      runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap);
-                    }
-                  }}
-                  onAlign={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "align", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onDistribute={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "distribute", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onEqualGap={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload
-                  )}
-                  onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
-                  )}
-                  onConnectionPointSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
-                    { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
-                  )}
-                  onClearSelection={clearSelection}
-                />
-              )
             }])
           ]}
           activePanelId={activeBottomPanelId}
@@ -5509,6 +5520,35 @@ export function App() {
             accept="application/json,.json"
             onChange={handleProjectImportFileChange}
           />
+          {isCommandPaletteOpen ? (
+            <CommandPalette
+              items={commandPaletteItems}
+              onExecute={executeCommandSurfaceItem}
+              onClose={() => setIsCommandPaletteOpen(false)}
+            />
+          ) : null}
+          {isAdvancedAlignmentOpen ? (
+            <div className="manager-backdrop" data-testid="advanced-alignment-tool-surface">
+              <section className="manager-dialog workbench-tool-dialog" role="dialog" aria-modal="true" aria-label="Advanced Alignment">
+                <header className="manager-header">
+                  <div><span>Arrange</span><h2>Advanced Alignment</h2></div>
+                  <button type="button" aria-label="Close Advanced Alignment" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.alignmentTools)}>Close</button>
+                </header>
+                <div className="workbench-tool-dialog-body">
+                  <AlignmentToolsPanel
+                    selectedEntityCount={selectedAlignableEntities.length}
+                    primarySelectionLabel={primarySelectedAlignable?.label}
+                    movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
+                    onAlign={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "align", action } satisfies RuntimeAlignmentPayload)}
+                    onDistribute={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "distribute", action } satisfies RuntimeAlignmentPayload)}
+                    onEqualGap={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload)}
+                    onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload)}
+                    onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload)}
+                  />
+                </div>
+              </section>
+            </div>
+          ) : null}
           {isProjectManagerOpen ? (
             <ProjectManager
               entryIntent={projectManagerEntryIntent}

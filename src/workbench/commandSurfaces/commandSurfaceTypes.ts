@@ -9,7 +9,9 @@ import type { RuntimeCommandOperationResult } from "../../platform/runtimeComman
 export const COMMAND_SURFACE_PLACEMENTS = [
   "application-bar",
   "menu-bar",
-  "command-bar"
+  "command-bar",
+  "command-palette",
+  "context-bar"
 ] as const;
 
 export type CommandSurfacePlacement = typeof COMMAND_SURFACE_PLACEMENTS[number];
@@ -18,6 +20,7 @@ export type CommandSurfaceItem = Readonly<{
   commandId: CommandId;
   placement: CommandSurfacePlacement;
   label: string;
+  group?: string;
   tooltip: string;
   iconId?: string;
   shortcut?: string;
@@ -36,6 +39,7 @@ export type CommandSurfaceMenu = Readonly<{
 
 export type CommandMetadataRegistry = Readonly<{
   get: (commandId: CommandId) => CommandDefinition | undefined;
+  list?: () => readonly CommandDefinition[];
 }>;
 
 export type CoreCommandSurfaceBridge = Readonly<{
@@ -92,6 +96,7 @@ export type CommandSurfaceAdapter = Readonly<{
   getApplicationSaveItem: () => CommandSurfaceItem | undefined;
   getMenus: () => readonly CommandSurfaceMenu[];
   getCommandBarItems: () => readonly CommandSurfaceItem[];
+  getCommandPaletteItems: () => readonly CommandSurfaceItem[];
   getItem: (
     commandId: CommandId,
     placement: CommandSurfacePlacement

@@ -1,14 +1,20 @@
 import {
   Camera,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   CircleHelp,
   Copy,
   Info,
   Keyboard,
+  MoreHorizontal,
   Pencil,
   Plug,
   Redo2,
   Ruler,
   Save,
+  Search,
   SlidersHorizontal,
   Tag,
   Trash2,
@@ -30,7 +36,13 @@ export const WORKBENCH_ICON_IDS = [
   "selection-tools",
   "help",
   "keyboard",
-  "info"
+  "info",
+  "search",
+  "more",
+  "chevron-left",
+  "chevron-right",
+  "chevron-up",
+  "chevron-down"
 ] as const;
 
 export type WorkbenchIconId = typeof WORKBENCH_ICON_IDS[number];
@@ -49,7 +61,13 @@ const iconById = Object.freeze({
   "selection-tools": SlidersHorizontal,
   help: CircleHelp,
   keyboard: Keyboard,
-  info: Info
+  info: Info,
+  search: Search,
+  more: MoreHorizontal,
+  "chevron-left": ChevronLeft,
+  "chevron-right": ChevronRight,
+  "chevron-up": ChevronUp,
+  "chevron-down": ChevronDown
 } satisfies Record<WorkbenchIconId, LucideIcon>);
 
 export const isWorkbenchIconId = (iconId: string): iconId is WorkbenchIconId =>

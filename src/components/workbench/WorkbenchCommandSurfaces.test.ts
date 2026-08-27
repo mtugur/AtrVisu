@@ -53,55 +53,29 @@ const press = async (element: Element, key: string) => {
 };
 
 describe("WorkbenchApplicationBar", () => {
-  it("shows identity, dirty state, read-only context, and invokes project.save", async () => {
-    const onExecute = vi.fn();
+  it("shows context and opens command search without duplicating Save", async () => {
+    const onOpenCommandPalette = vi.fn();
     const container = await mount(
       createElement(WorkbenchApplicationBar, {
-        saveItem: item("project.save", "application-bar", { label: "Save Project" }),
-        emphasizedCommandIds: ["project.save"],
         hasUnsavedChanges: true,
         projectContext: { project: "Factory", layout: "Line 1", revision: "R03" },
-        onExecute
+        onOpenCommandPalette
       })
     );
 
     expect(container.textContent).toContain("AtrVisu");
+    expect(container.textContent).toContain("Industrial Layout Workbench");
     expect(container.textContent).toContain("Unsaved");
     expect(container.textContent).toContain("Factory");
     const projectSession = container.querySelector(".workbench-project-session") as HTMLElement;
-    const saveCluster = projectSession.querySelector(".workbench-save-cluster") as HTMLElement;
-    const saveButton = saveCluster.querySelector('[data-command-id="project.save"]') as HTMLButtonElement;
     expect(projectSession.getAttribute("aria-label")).toBe("Project session");
-    expect(saveCluster.querySelector(".workbench-save-state")?.textContent).toBe("Unsaved");
-    expect(container.querySelectorAll('[data-command-id="project.save"]')).toHaveLength(1);
-    expect(saveButton.dataset.workspaceEmphasized).toBe("true");
+    expect(projectSession.querySelector(".workbench-save-state")?.textContent).toBe("Unsaved");
+    expect(container.querySelector('[data-command-id="project.save"]')).toBeNull();
     expect(projectSession.querySelector(".workbench-project-context")?.textContent)
       .toContain("Factory");
-    await act(async () => saveButton.click());
-    expect(onExecute).toHaveBeenCalledWith("project.save");
-    expect(container.textContent).not.toContain("Theme");
-  });
-
-  it("does not execute disabled Save and exposes its reason", async () => {
-    const onExecute = vi.fn();
-    const container = await mount(
-      createElement(WorkbenchApplicationBar, {
-        saveItem: item("project.save", "application-bar", {
-          label: "Save Project",
-          disabled: true,
-          disabledReason: "No active project."
-        }),
-        hasUnsavedChanges: false,
-        projectContext: { project: "No project", layout: "No layout", revision: "No revision" },
-        onExecute
-      })
-    );
-    const button = container.querySelector("button") as HTMLButtonElement;
-
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-label")).toContain("No active project.");
-    await act(async () => button.click());
-    expect(onExecute).not.toHaveBeenCalled();
+    const search = container.querySelector('[aria-label="Search commands"]') as HTMLButtonElement;
+    await act(async () => search.click());
+    expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -273,7 +247,7 @@ describe("RightPanelUtilityStrip", () => {
 });
 
 describe("WorkbenchCommandBar", () => {
-  it("keeps compact roving focus on visible History commands and exposes overflow through More", async () => {
+  it("keeps compact frequent commands visible and exposes deterministic overflow", async () => {
     const mediaListeners = new Set<() => void>();
     vi.stubGlobal("matchMedia", vi.fn(() => ({
       matches: true,
@@ -287,64 +261,52 @@ describe("WorkbenchCommandBar", () => {
     })));
     const container = await mount(createElement(WorkbenchCommandBar, {
       items: [
+        item("project.save", "command-bar", { label: "Save" }),
         item("edit.undo", "command-bar", { label: "Undo" }),
         item("edit.redo", "command-bar", { label: "Redo" }),
         item("view.toggleLabels", "command-bar", { label: "Labels" }),
-        item("view.showMeasurements", "command-bar", { label: "Measurement Helpers", disabled: true })
+        item("view.viewpoints", "command-bar", { label: "Viewpoints", disabled: true })
       ],
       onExecute: vi.fn()
     }));
     const direct = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="direct"]')];
-    const overflow = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="overflow"]')];
-    const summary = container.querySelector("summary") as HTMLElement;
+    const more = container.querySelector('[aria-label="More commands"]') as HTMLButtonElement;
 
-    expect(direct.map((button) => button.dataset.commandId)).toEqual(["edit.undo", "edit.redo"]);
-    expect(direct.map((button) => button.tabIndex)).toEqual([0, -1]);
-    expect(overflow.map((button) => button.tabIndex)).toEqual([-1, -1]);
-    expect(summary.tabIndex).toBe(0);
+    expect(direct.map((button) => button.dataset.commandId)).toEqual(["project.save", "edit.undo", "edit.redo"]);
+    expect(direct.map((button) => button.tabIndex)).toEqual([0, -1, -1]);
 
     direct[0].focus();
     await press(direct[0], "ArrowRight");
     expect(document.activeElement).toBe(direct[1]);
     await press(direct[1], "ArrowRight");
-    expect(document.activeElement).toBe(direct[0]);
+    expect(document.activeElement).toBe(direct[2]);
 
-    await act(async () => summary.click());
-    expect(container.querySelector("details")?.hasAttribute("open")).toBe(true);
-    expect(overflow.map((button) => button.tabIndex)).toEqual([0, -1]);
-
-    overflow[0].focus();
-    await press(overflow[0], "Escape");
-    expect(container.querySelector("details")?.hasAttribute("open")).toBe(false);
-    expect(document.activeElement).toBe(summary);
-    expect(overflow.map((button) => button.tabIndex)).toEqual([-1, -1]);
+    await act(async () => more.click());
+    const overflow = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="overflow"]')];
+    expect(overflow.map((button) => button.dataset.commandId)).toEqual(["view.toggleLabels", "view.viewpoints"]);
   });
 
-  it("renders the canonical engineering groups in professional work order", async () => {
+  it("renders the canonical flat quick toolbar without false or grouped surfaces", async () => {
     const commandIds = [
+      "project.save",
       "edit.undo",
       "edit.redo",
-      "edit.renameSelected",
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.toggleConnectionPoints",
-      "view.viewpoints",
-      "view.showMeasurements",
-      "arrange.alignmentTools"
+      "view.viewpoints"
     ];
     const container = await mount(createElement(WorkbenchCommandBar, {
       items: commandIds.map((commandId) => item(commandId, "command-bar")),
       onExecute: vi.fn()
     }));
 
-    expect([...container.querySelectorAll(".workbench-command-group-label")]
-      .map((label) => label.textContent)).toEqual([
-      "History", "Selection", "Display", "Precision", "Arrange"
-    ]);
-    expect(container.querySelectorAll('[role="group"]')).toHaveLength(5);
+    expect(container.querySelectorAll(".workbench-command-group-label")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Selection Tools");
+    expect(container.textContent).not.toContain("Measure");
     expect(container.querySelectorAll("button[data-command-id]")).toHaveLength(commandIds.length);
-    expect(container.querySelector('[data-command-id="project.save"]')).toBeNull();
+    expect(container.querySelector('[data-command-id="project.save"]')).not.toBeNull();
   });
 
   it("renders toolbar semantics, pressed state, and roving keyboard focus", async () => {
@@ -370,8 +332,7 @@ describe("WorkbenchCommandBar", () => {
     expect(buttons.map((button) => button.dataset.iconId)).toEqual(["undo", "redo", "labels"]);
     expect(buttons.every((button) => button.querySelector("svg") !== null)).toBe(true);
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual(["Undo", "Redo", "Labels"]);
-    expect(buttons.map((button) => button.querySelector(".workbench-command-label")?.textContent))
-      .toEqual(["Undo", "Redo", "Labels"]);
+    expect(buttons.every((button) => button.querySelector(".visually-hidden") !== null)).toBe(true);
     expect(buttons[0].dataset.workspaceEmphasized).toBe("true");
     expect(buttons[2].dataset.workspaceEmphasized).toBeUndefined();
     buttons[0].focus();

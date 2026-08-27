@@ -51,7 +51,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("view.toggleLabels", "view", "Labels", "Show or hide layout labels.", false, undefined, "labels"),
   createCommandSeed("view.viewpoints", "view", "Viewpoints", "Open or manage saved viewpoint states.", false, undefined, "viewpoints"),
   createCommandSeed("view.toggleConnectionPoints", "view", "Connection Points", "Show or hide connection point overlays.", false, undefined, "connection-points"),
-  createCommandSeed("view.showMeasurements", "view", "Measurement Helpers", "Show or hide distance and placement measurement helpers for the selected machine.", false, undefined, "measurement"),
+  createCommandSeed("view.showMeasurements", "tools", "Precision Placement Helpers", "Show or hide precision placement helpers for the selected machine.", false, undefined, "measurement"),
 
   createCommandSeed("library.addMachine", "insert", "Machine From Library", "Add a machine from the machine library.", true),
   createCommandSeed("annotations.create", "insert", "Create Annotation", "Create a layout annotation.", true),
@@ -73,7 +73,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("arrange.distributeVertical", "arrange", "Distribute Vertically", "Distribute at least three selected entities by vertical center.", true),
   createCommandSeed("arrange.equalGapX", "arrange", "Equal Gap X", "Equalize horizontal gaps between at least three selected entities.", true),
   createCommandSeed("arrange.equalGapY", "arrange", "Equal Gap Y", "Equalize vertical gaps between at least three selected entities.", true),
-  createCommandSeed("arrange.alignmentTools", "arrange", "Selection Tools...", "Open advanced selection alignment and connection-point tools.", false, undefined, "selection-tools"),
+  createCommandSeed("arrange.alignmentTools", "arrange", "Advanced Alignment...", "Open advanced pair and anchor alignment controls.", false, undefined, "selection-tools"),
   createCommandSeed("snap.rotation", "arrange", "Rotation Snap", "Toggle or configure rotation snapping."),
   createCommandSeed("snap.connectionPoint", "arrange", "Connection Point Snap", "Toggle or configure connection point snapping."),
 

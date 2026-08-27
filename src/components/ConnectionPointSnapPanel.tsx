@@ -118,7 +118,7 @@ export function ConnectionPointSnapPanel({
         <span>Fixed Object</span>
         <strong>{fixedMachine ? getPlacedMachineDisplayName(fixedMachine) : "Secondary selected object"}</strong>
       </div>
-      <p className="collision-note">Connection snap moves the selected machine without changing its rotation.</p>
+      <p className="collision-note">Connect &amp; Snap moves the selected machine without changing its rotation.</p>
       {movingPoints.length === 0 || fixedPoints.length === 0 ? (
         <p className="manager-validation">Selected objects do not have compatible connection points.</p>
       ) : (
@@ -197,7 +197,7 @@ export function ConnectionPointSnapPanel({
                 }
               }}
             >
-              Snap Connection Points
+              Connect &amp; Snap
             </button>
           </div>
         </>

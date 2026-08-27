@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { CommandSurfaceItem } from "../../workbench/commandSurfaces";
 
 export type WorkbenchProjectContext = Readonly<{
   project: string;
@@ -8,23 +7,18 @@ export type WorkbenchProjectContext = Readonly<{
 }>;
 
 export type WorkbenchApplicationBarProps = {
-  saveItem?: CommandSurfaceItem;
   workspaceControl?: ReactNode;
-  emphasizedCommandIds?: readonly string[];
   hasUnsavedChanges: boolean;
   projectContext: WorkbenchProjectContext;
-  onExecute: (commandId: string) => void;
+  onOpenCommandPalette: () => void;
 };
 
 export function WorkbenchApplicationBar({
-  saveItem,
   workspaceControl,
-  emphasizedCommandIds = [],
   hasUnsavedChanges,
   projectContext,
-  onExecute
+  onOpenCommandPalette
 }: WorkbenchApplicationBarProps) {
-  const saveTitle = saveItem?.disabledReason ?? saveItem?.tooltip;
   return (
     <header
       className="workbench-application-bar"
@@ -32,35 +26,9 @@ export function WorkbenchApplicationBar({
       data-testid="workbench-application-bar"
     >
       <strong className="workbench-product-name">AtrVisu</strong>
+      <span className="workbench-product-context">Industrial Layout Workbench</span>
       {workspaceControl}
       <div className="workbench-project-session" aria-label="Project session">
-        <div className="workbench-save-cluster">
-          <span
-            className="workbench-save-state"
-            data-dirty={hasUnsavedChanges ? "true" : "false"}
-          >
-            {hasUnsavedChanges ? "Unsaved" : "Saved"}
-          </span>
-          {saveItem ? (
-            <button
-              type="button"
-              className="workbench-save-command"
-              data-command-id={saveItem.commandId}
-              data-workspace-emphasized={emphasizedCommandIds.includes(saveItem.commandId)
-                ? "true"
-                : undefined}
-              disabled={saveItem.disabled}
-              aria-busy={saveItem.pending || undefined}
-              aria-label={saveItem.disabledReason
-                ? `${saveItem.label}: ${saveItem.disabledReason}`
-                : saveItem.label}
-              title={saveTitle}
-              onClick={() => onExecute(saveItem.commandId)}
-            >
-              {saveItem.pending ? "Saving..." : saveItem.label}
-            </button>
-          ) : null}
-        </div>
         <div className="workbench-project-context" aria-label="Active project context">
           <span>{projectContext.project}</span>
           <span aria-hidden="true">/</span>
@@ -68,6 +36,20 @@ export function WorkbenchApplicationBar({
           <span aria-hidden="true">/</span>
           <span>{projectContext.revision}</span>
         </div>
+        <button
+          className="workbench-command-search"
+          type="button"
+          onClick={onOpenCommandPalette}
+          aria-label="Search commands"
+          title="Search commands (Ctrl/Cmd+K)"
+        >
+          <span>Search commands</span>
+          <kbd>Ctrl+K</kbd>
+        </button>
+        <span className="workbench-unit-indicator">mm</span>
+        <span className="workbench-save-state" data-dirty={hasUnsavedChanges ? "true" : "false"}>
+          {hasUnsavedChanges ? "Unsaved" : "Saved"}
+        </span>
       </div>
     </header>
   );

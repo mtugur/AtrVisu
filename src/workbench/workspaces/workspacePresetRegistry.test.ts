@@ -76,7 +76,7 @@ describe("canonical workspace preset registry", () => {
       densityPreference: "compact",
       initiallyVisiblePanelIds: [
         "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints", "panel.layers",
-        "panel.groups", "panel.annotations", "panel.precisionPlacement", "panel.alignmentTools",
+        "panel.groups", "panel.annotations", "panel.precisionPlacement",
         "panel.connectionPointSnap", "panel.inspector"
       ],
       emphasizedCommandIds: [

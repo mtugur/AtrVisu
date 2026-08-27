@@ -10,7 +10,6 @@ import {
   type RuntimeCommandOperationResult
 } from "../../platform/runtimeCommands/runtimeCommandOperation";
 import {
-  APPLICATION_BAR_COMMAND_IDS,
   COMMAND_BAR_COMMAND_IDS,
   COMMAND_SURFACE_MENU_DEFINITIONS,
   getCommandSurfaceRuntimeRoute
@@ -136,6 +135,7 @@ export const createCommandSurfaceAdapter = (
       commandId,
       placement,
       label: metadata.label,
+      group: metadata.group,
       tooltip: metadata.tooltip,
       ...(metadata.shortcut ? { shortcut: metadata.shortcut } : {}),
       ...(metadata.iconId ? { iconId: metadata.iconId } : {}),
@@ -205,7 +205,7 @@ export const createCommandSurfaceAdapter = (
   };
 
   return {
-    getApplicationSaveItem: () => getItem(APPLICATION_BAR_COMMAND_IDS[0], "application-bar"),
+    getApplicationSaveItem: () => undefined,
     getMenus: () => COMMAND_SURFACE_MENU_DEFINITIONS.map((menu) => ({
       id: menu.id,
       labelKey: menu.labelKey,
@@ -217,6 +217,10 @@ export const createCommandSurfaceAdapter = (
     getCommandBarItems: () => COMMAND_BAR_COMMAND_IDS
       .map((commandId) => getItem(commandId, "command-bar"))
       .filter((item): item is CommandSurfaceItem => Boolean(item)),
+    getCommandPaletteItems: () => (options.metadataRegistry.list?.() ?? [])
+      .map((definition) => getItem(definition.id, "command-palette"))
+      .filter((item): item is CommandSurfaceItem => Boolean(item))
+      .sort((left, right) => left.label.localeCompare(right.label)),
     getItem,
     execute,
     subscribe: (listener) => {

@@ -11,9 +11,7 @@ import {
   type AssemblyCommandId
 } from "../../platform/runtimeCommands/assemblyRuntimeCommands";
 
-export const APPLICATION_BAR_COMMAND_IDS = [
-  RUNTIME_FEATURE_COMMAND_IDS.projectSave
-] as const;
+export const APPLICATION_BAR_COMMAND_IDS = [] as const;
 
 export const COMMAND_SURFACE_MENU_DEFINITIONS = [
   {
@@ -50,9 +48,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.displayOverlayControls,
       RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
       RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
-      RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
-      RUNTIME_FEATURE_COMMAND_IDS.showMeasurements,
-      RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
+      RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints
     ]
   },
   {
@@ -98,7 +94,8 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
       RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager,
       RUNTIME_FEATURE_COMMAND_IDS.collisionCheck,
       RUNTIME_FEATURE_COMMAND_IDS.performanceBenchmark,
-      RUNTIME_FEATURE_COMMAND_IDS.simulationControls
+      RUNTIME_FEATURE_COMMAND_IDS.simulationControls,
+      RUNTIME_FEATURE_COMMAND_IDS.showMeasurements
     ]
   },
   {
@@ -114,24 +111,14 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
 ] as const;
 
 export const COMMAND_BAR_COMMAND_IDS = [
+  RUNTIME_FEATURE_COMMAND_IDS.projectSave,
   CORE_EDITOR_COMMAND_IDS.undo,
   CORE_EDITOR_COMMAND_IDS.redo,
-  RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
   CORE_EDITOR_COMMAND_IDS.duplicateSelected,
   CORE_EDITOR_COMMAND_IDS.deleteSelected,
   RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
-  RUNTIME_FEATURE_COMMAND_IDS.showMeasurements,
   RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
-  RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
-  RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
-] as const;
-
-export const COMMAND_BAR_GROUP_DEFINITIONS = [
-  { id: "history", label: "History", commandIds: [CORE_EDITOR_COMMAND_IDS.undo, CORE_EDITOR_COMMAND_IDS.redo] },
-  { id: "selection", label: "Selection", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.renameSelected, CORE_EDITOR_COMMAND_IDS.duplicateSelected, CORE_EDITOR_COMMAND_IDS.deleteSelected] },
-  { id: "display", label: "Display", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels, RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints, RUNTIME_FEATURE_COMMAND_IDS.viewpoints] },
-  { id: "precision", label: "Precision", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements] },
-  { id: "arrange", label: "Arrange", commandIds: [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools] }
+  RUNTIME_FEATURE_COMMAND_IDS.viewpoints
 ] as const;
 
 export const COMMAND_BAR_SHORT_LABELS: Readonly<Record<string, string>> = Object.freeze({
@@ -142,9 +129,7 @@ export const COMMAND_BAR_SHORT_LABELS: Readonly<Record<string, string>> = Object
   [CORE_EDITOR_COMMAND_IDS.deleteSelected]: "Delete",
   [RUNTIME_FEATURE_COMMAND_IDS.toggleLabels]: "Labels",
   [RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints]: "Points",
-  [RUNTIME_FEATURE_COMMAND_IDS.viewpoints]: "Viewpoints",
-  [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements]: "Measure",
-  [RUNTIME_FEATURE_COMMAND_IDS.alignmentTools]: "Selection Tools"
+  [RUNTIME_FEATURE_COMMAND_IDS.viewpoints]: "Viewpoints"
 });
 
 export type CommandSurfaceCoreCommandId = CoreEditorCommandId;

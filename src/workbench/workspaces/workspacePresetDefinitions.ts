@@ -47,7 +47,6 @@ export const workspacePresetDefinitions = Object.freeze([
       RUNTIME_PANEL_IDS.groups,
       RUNTIME_PANEL_IDS.annotations,
       RUNTIME_PANEL_IDS.precisionPlacement,
-      RUNTIME_PANEL_IDS.alignmentTools,
       RUNTIME_PANEL_IDS.connectionPointSnap,
       RUNTIME_PANEL_IDS.inspector
     ]),

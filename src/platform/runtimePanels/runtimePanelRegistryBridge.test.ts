@@ -21,19 +21,19 @@ describe("runtime panel registry bridge", () => {
     );
   });
 
-  it("registers Selection Tools as the canonical Bottom Dock utility surface", () => {
+  it("registers Advanced Alignment as a bounded modal tool surface", () => {
     const bridge = createRuntimePanelRegistryBridge(() => ({}));
     const descriptor = runtimePanelDescriptors.find(
       (candidate) => candidate.definition.id === RUNTIME_PANEL_IDS.alignmentTools
     );
 
     expect(bridge.registry.get(RUNTIME_PANEL_IDS.alignmentTools)).toMatchObject({
-      title: "Selection Tools"
+      title: "Advanced Alignment"
     });
     expect(descriptor).toMatchObject({
       classification: "required-runtime",
-      surfaceKind: "section",
-      runtimeLocation: "bottom-dock"
+      surfaceKind: "modal",
+      runtimeLocation: "modal-layer"
     });
   });
 

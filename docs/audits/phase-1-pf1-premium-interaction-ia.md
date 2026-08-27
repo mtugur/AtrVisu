@@ -16,40 +16,45 @@ PF-3, and PF-Exit.
 ## Canonical Surfaces
 
 - Menu order is exactly File, Edit, View, Insert, Arrange, Tools, Help.
-- The Application Bar owns visible Save Project and File retains the same
-  command route; the Engineering Command Strip does not duplicate Save.
-- The strip is grouped as History, Selection, Display, Precision, and Arrange,
-  with accessible icon-plus-concise-label desktop controls, compact group
-  captions, shared group chrome, and token-governed separators.
-- History remains immediately reachable at 640 px; Selection, Display,
-  Precision, and Arrange move into one deterministic More surface without
-  duplicate command instances or document-level horizontal overflow.
-- Compact roving focus covers only visible History commands. More remains a
+- The Application Bar contains context, command search, units, and saved state;
+  it has no duplicate Save projection. Quick Toolbar and File route the same
+  registered Save command.
+- The Quick Toolbar is a flat, icon-only projection of Save, Undo, Redo,
+  Duplicate, Delete, Labels, Connection Points, and Viewpoints. Permanent group
+  captions, Selection Tools, and false Measure controls are absent. Fit View is
+  omitted because no safe live camera-command authority exists yet.
+- Save, Undo, and Redo remain immediately reachable at 640 px; the remaining
+  frequent commands move into one deterministic More surface without duplicate
+  command instances or document-level horizontal overflow.
+- Compact roving focus covers only visible direct commands. More remains a
   native keyboard-reachable disclosure; enabled overflow commands enter tab
   order only while open, and Escape restores focus to More.
 - Serializable command metadata carries `iconId`; the presentation-only icon
   registry resolves Lucide components.
-- Save/Undo/Redo/Rename/Duplicate/Delete/Labels/Measurement Helpers/Connection
-  Points/Viewpoints/Selection Tools remain reachable through registered
-  command surfaces.
-- Measurement wording describes the real precision-placement helper and does
+- Save/Undo/Redo/Duplicate/Delete/Labels/Connection Points/Viewpoints remain
+  reachable in the Quick Toolbar. Rename and all less-frequent commands remain
+  reachable through registered menus and the Command Palette.
+- Precision Placement wording describes the real placement helper and does
   not claim scene dimension graphics.
-- Measurement Helpers is disabled without exactly one supported machine and
-  exposes the reason `Select one machine to use Measurement Helpers.`. Enabling
+- Precision Placement Helpers is disabled without exactly one supported machine and
+  exposes the reason `Select one machine to use Precision Placement helpers.`. Enabling
   it expands the existing Placement Settings contribution and disabling it
   hides the helpers through the same PlacementSettings authority.
+- Ctrl/Cmd+K and the Application Bar search affordance open an accessible search
+  projection of existing registered commands; disabled commands retain their
+  canonical unavailable reason.
 
 ## Arrange
 
 Align Left/Right/Front/Back/Center X/Center Y, horizontal/vertical distribution,
-Equal Gap X/Y, Group, Ungroup, and Selection Tools are registered commands.
+Equal Gap X/Y, Group, Ungroup, and Advanced Alignment are registered commands.
 The Arrange binding factory delegates to the existing alignment helpers,
 Assembly Runtime bridge, and Runtime Panel bridge. It applies two-entity and
 three-entity thresholds and rejects the complete selected set when atomic lock
 evaluation fails. Existing mutation callbacks retain their one-snapshot
 history/dirty behavior.
 
-## Inspector And Selection Tools
+## Inspector And Contextual Arrange
 
 The Inspector now reports what the current selection is: identity, primary
 selection, selected items, bounds, assembly context, and pair reference-point
@@ -57,17 +62,16 @@ measurement. Operational alignment, distribution, equal-gap, duplicate,
 delete, clear-selection, and connection-snap stacks are absent from the active
 Inspector composition.
 
-One `panel.alignmentTools` Runtime Panel contribution is presented as Selection
-Tools in the Bottom Dock. Arrange and the View panel hierarchy toggle the same
-panel authority. A second activation collapses the active contribution; switching
-with Viewpoints preserves truthful pressed state and the explicit dock height.
-The panel does not auto-open on selection. Fewer than two alignable objects show
-one compact context state. Two or more expose common alignment; distribution is
-disabled with a reason below three objects; pair alignment and gap/anchor controls
-are collapsed under Advanced. Connection Point Snap is rendered only for an
-eligible exact-two-machine context and is absent for mixed, one, or three-plus
-selection. Keyboard Nudge settings moved to Precision Placement / Measurement
-Helpers using the same `NudgeSettings` state and unchanged keyboard behavior.
+Selection Tools is retired from normal Bottom Dock presentation. Viewpoints is
+the only Phase-1 Bottom Dock contribution. Two or more alignable entities expose
+one compact viewport context bar whose Align, Distribute, Equal Gap, and Group
+actions delegate to existing runtime commands. An exact compatible machine pair
+adds Connect & Snap and reuses the existing selectors and snap command in a
+transient popover; the action is absent for mixed or three-plus selection.
+Advanced pair/anchor controls remain available through Arrange > Advanced
+Alignment in the registered modal tool surface. Keyboard Nudge settings remain
+in Precision Placement using the same `NudgeSettings` state and unchanged
+keyboard behavior.
 
 ## Rename
 
@@ -129,12 +133,12 @@ autosave recovery with exactly one live label per instance.
 
 ## Lifecycle And Domain Invariance
 
-Menu, icon, tooltip, Help, startup/recovery, panel toggles, Selection Tools
+Menu, icon, tooltip, Help, startup/recovery, panel toggles, contextual Arrange
 visibility, and responsive operations leave camera, selection, transforms,
 history, dirty state, and workspace unchanged unless an explicit existing
 engineering command is executed. Chromium verifies one EditorHost, one Babylon
 canvas, and stable scene lifecycle generation through Help, Viewpoints toggles,
-Selection Tools visibility, label rename/history, and 1440x900, 1024x768, and
+Arrange/Connect popovers, label rename/history, and 1440x900, 1024x768, and
 640x800 resizing.
 
 ## Branch Hygiene
@@ -203,6 +207,32 @@ stored `true` values to `false`. Saving placement preferences likewise stores
 the transient visibility field as false. Explicit command activation remains
 the only way to reveal helpers during the current session.
 
+## Canonical v3 Reconciliation Evidence
+
+The reconciliation package is governed by
+`docs/product/ATRVISU_PHASE1_PRODUCT_UI_DESIGN_SPEC_V1.md` and the exact reuse
+decision in `docs/audits/ATRVISU_PR110_REUSE_DELTA_AUDIT_V1.md`.
+
+- The grouped Engineering Command Strip and duplicate Application Bar Save are
+  retired. The Quick Toolbar is icon-only and responsive; no false Measure or
+  Selection Tools command is present.
+- Selection Tools is no longer registered as a Bottom Dock contribution.
+  Viewpoints remains the sole persistent Phase-1 Bottom Dock utility.
+- Common Arrange operations use the temporary viewport bar. Exact compatible
+  pairs expose Connect & Snap through the existing command/panel authority, and
+  Advanced Alignment remains a registered modal tool surface.
+- Precision Placement Helpers remain a transient projection of existing
+  placement settings. PF-3 owns the true viewport Measure product.
+- Command Palette searches and executes the existing Command Registry through
+  the command-surface adapter; no palette-local command or state authority was
+  introduced.
+- Primary Dock, Inspector, and Bottom Dock use one shared collapse component.
+- Shell reference sizes are token-governed at 38/28/42/25 px with 292 px left,
+  326 px right, and a 132 px default Viewpoints dock.
+- Fit View remains omitted because the current product has no safe registered
+  camera command binding. Presentation Mode remains later Phase-1 work; no dead
+  control is shown.
+
 ## Validation Evidence
 
 - Focused PF-1C component regressions: PASS, 8 files / 62 tests, covering
@@ -215,12 +245,21 @@ the only way to reveal helpers during the current session.
 - Focused legacy visibility migration regressions: PASS, 2 files / 20 unit
   tests plus Chromium coverage for preserved 250 mm grid and 30 degree rotation
   preferences, initial inactive state, explicit activation, and reload reset.
+- Focused canonical v3 reconciliation regressions: PASS, 8 files / 54 tests,
+  covering the registry-projected Command Palette, contextual Arrange and
+  Connect & Snap surfaces, compact Quick Toolbar, runtime panel authority,
+  workspace presets, shared dock collapse contract, and status-bar inset.
+- Executed real-runtime evidence: PASS, recovery/start, normal workbench,
+  single selection, contextual Arrange, Connect & Snap, Command Palette,
+  Viewpoints, Help, 1024x768, and 640x800 captured under
+  `C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-reconciliation/`;
+  no document-level overflow was observed at the responsive evidence sizes.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
-- Design-token governance: PASS, 251 maintained files.
-- Production build: PASS, 4,123 modules transformed.
-- Full unit suite: PASS, 149 files / 1,243 tests.
+- Design-token governance: PASS, 254 maintained files.
+- Production build: PASS, 4,125 modules transformed.
+- Full unit suite: PASS, 150 files / 1,248 tests.
 - Full Chromium suite: PASS, 72 tests.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.

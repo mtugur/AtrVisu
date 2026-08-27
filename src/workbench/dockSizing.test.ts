@@ -27,8 +27,8 @@ describe("workbench dock sizing", () => {
     const desktop = getBottomDockHeightBounds(900);
     const medium = getBottomDockHeightBounds(600);
 
-    expect(DEFAULT_BOTTOM_DOCK_HEIGHT).toBeGreaterThanOrEqual(100);
-    expect(DEFAULT_BOTTOM_DOCK_HEIGHT).toBeLessThanOrEqual(108);
+    expect(DEFAULT_BOTTOM_DOCK_HEIGHT).toBeGreaterThanOrEqual(120);
+    expect(DEFAULT_BOTTOM_DOCK_HEIGHT).toBeLessThanOrEqual(140);
     expect(desktop).toEqual({ min: MIN_BOTTOM_DOCK_HEIGHT, max: MAX_BOTTOM_DOCK_HEIGHT });
     expect(medium).toEqual({ min: MIN_BOTTOM_DOCK_HEIGHT, max: 288 });
     expect(clampDockSize(40, desktop)).toBe(MIN_BOTTOM_DOCK_HEIGHT);

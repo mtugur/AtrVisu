@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { CSSProperties } from "react";
 import type { PanelId } from "../../platform/contracts";
 import { WorkbenchDockResizeHandle } from "./WorkbenchDockResizeHandle";
+import { WorkbenchDockCollapseButton } from "./WorkbenchDockCollapseButton";
 
 export type WorkbenchBottomDockContribution = Readonly<{
   panelId: PanelId;
@@ -80,13 +81,12 @@ export function WorkbenchBottomDock({
             </button>
           ))}
         </nav>
-        <button
-          type="button"
-          aria-label={collapsed ? "Expand Bottom Dock" : "Collapse Bottom Dock"}
-          onClick={onToggleCollapsed}
-        >
-          {collapsed ? "Open" : "Close"}
-        </button>
+        <WorkbenchDockCollapseButton
+          side="bottom"
+          collapsed={collapsed}
+          onToggle={onToggleCollapsed}
+          testId="bottom-dock-collapse-toggle"
+        />
       </header>
       <div className="workbench-bottom-dock-content" hidden={collapsed}>
         {contributions.map((contribution) => (

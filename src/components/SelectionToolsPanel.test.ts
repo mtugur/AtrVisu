@@ -79,7 +79,7 @@ describe("SelectionToolsPanel", () => {
     }));
 
     expect(markup).toContain("Connection Point Snap");
-    expect(markup).toContain("Connection snap moves the selected machine without changing its rotation.");
+    expect(markup).toContain("Connect &amp; Snap moves the selected machine without changing its rotation.");
     expect(markup).not.toContain("v0.1");
   });
 
