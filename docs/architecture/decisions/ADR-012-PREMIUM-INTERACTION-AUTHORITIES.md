@@ -81,9 +81,21 @@ It introduces no palette-only command authority.
 Common multi-selection alignment, distribution, equal-gap, and grouping
 operations are projected into a transient viewport context bar. Exact
 compatible machine pairs expose Connect & Snap through the existing Runtime
-Panel and command authorities. Advanced alignment remains a registered modal
-tool surface. These operations are not Bottom Dock contributions; Viewpoints
-is the only Phase-1 Bottom Dock utility.
+Panel and command authorities. Premium compatibility means an eligible exact
+two-machine selection with a deterministic `product-out -> product-in` pair;
+same-type, load-only, and utility-only connectors remain outside the premium
+surface. The existing snap mutation authority is unchanged. For two selected
+objects the context bar omits distribution and equal-gap controls entirely;
+those controls appear at three or more eligible objects. Advanced alignment
+remains a registered modal tool surface. These operations are not Bottom Dock
+contributions; Viewpoints is the only Phase-1 Bottom Dock utility.
+
+At the 1024-class breakpoint, Inspector collapse is responsive presentation
+state rather than a persisted UI preference. The Inspector starts out of the
+way, may be opened explicitly for the current responsive presentation, and
+restores the actual persisted desktop state when the viewport returns wide.
+The absent-preset presentation label is `Custom Workspace`; the underlying
+workspace identity and override policy remain unchanged.
 
 ## Consequences
 

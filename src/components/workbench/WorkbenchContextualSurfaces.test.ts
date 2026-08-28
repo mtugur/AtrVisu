@@ -138,7 +138,22 @@ describe("ViewportArrangeBar", () => {
     expect(handlers.onAlign).toHaveBeenCalledWith("left");
     expect(handlers.onGroup).toHaveBeenCalledTimes(1);
     expect(handlers.onToggleConnectAndSnap).toHaveBeenCalledTimes(1);
-    expect([...container.querySelectorAll("summary")].map((summary) => summary.textContent)).toEqual(["Align", "Distribute", "Equal Gap"]);
+    expect([...container.querySelectorAll("summary")].map((summary) => summary.textContent)).toEqual(["Align"]);
+  });
+
+  it("reveals distribution and equal-gap menus only for three or more eligible objects", async () => {
+    const container = await mount(createElement(ViewportArrangeBar, {
+      selectionCount: 3,
+      movementAllowed: true,
+      canDistribute: true,
+      canGroup: true,
+      connectAndSnapAvailable: false,
+      connectAndSnapOpen: false,
+      ...callbacks()
+    }));
+
+    expect([...container.querySelectorAll("summary")].map((summary) => summary.textContent))
+      .toEqual(["Align", "Distribute", "Equal Gap"]);
   });
 });
 

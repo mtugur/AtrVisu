@@ -43,7 +43,10 @@ export function WorkbenchApplicationBar({
           aria-label="Search commands"
           title="Search commands (Ctrl/Cmd+K)"
         >
-          <span>Search commands</span>
+          <span className="workbench-command-search-label">
+            <span className="workbench-command-search-label-full">Search commands</span>
+            <span className="workbench-command-search-label-compact" aria-hidden="true">Search</span>
+          </span>
           <kbd>Ctrl+K</kbd>
         </button>
         <span className="workbench-unit-indicator">mm</span>

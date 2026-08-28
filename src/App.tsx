@@ -21,6 +21,10 @@ import { WorkbenchBottomDock } from "./components/workbench/WorkbenchBottomDock"
 import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDock";
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
+import {
+  isResponsiveInspectorPresentation,
+  resolveInspectorPresentationCollapsed
+} from "./components/workbench/responsivePresentation";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
@@ -100,7 +104,7 @@ import { isRenameableProjectEntityId, renameProjectEntity } from "./utils/entity
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
 import {
   applyConnectionPointSnap,
-  evaluateConnectionPointSnapContext,
+  evaluatePremiumConnectionPointSnapContext,
   executeGuardedConnectionPointSnap,
   getConnectionPointSnapContextMessage,
   type ConnectionPointSnapSelection
@@ -444,9 +448,18 @@ export function App() {
     width: window.innerWidth,
     height: window.innerHeight
   }));
+  const [isResponsiveInspectorOpen, setIsResponsiveInspectorOpen] = useState(false);
+  const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
+  const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
+  const isInspectorPresentationCollapsed = resolveInspectorPresentationCollapsed({
+    viewportWidth: workbenchViewportSize.width,
+    persistedCollapsed: isPanelCollapsed,
+    responsiveInspectorOpen: isResponsiveInspectorOpen
+  });
+  const inspectorPresentationCollapsedRef = useRef(isInspectorPresentationCollapsed);
   const primaryDockWidthBounds = getPrimaryDockWidthBounds(
     workbenchViewportSize.width,
-    isPanelCollapsed ? 0 : panelWidth
+    isInspectorPresentationCollapsed ? 0 : panelWidth
   );
   const bottomDockHeightBounds = getBottomDockHeightBounds(workbenchViewportSize.height);
   const effectivePrimaryDockWidth = clampDockSize(primaryDockWidth, primaryDockWidthBounds);
@@ -473,6 +486,27 @@ export function App() {
       collapsed
     });
   }, [uiPreferencesStore]);
+  const openInspectorPresentation = useCallback(() => {
+    if (responsiveInspectorPresentationRef.current) {
+      setIsResponsiveInspectorOpen(true);
+      return;
+    }
+    setIsPanelCollapsed(false);
+  }, [setIsPanelCollapsed]);
+  const closeInspectorPresentation = useCallback(() => {
+    if (responsiveInspectorPresentationRef.current) {
+      setIsResponsiveInspectorOpen(false);
+      return;
+    }
+    setIsPanelCollapsed(true);
+  }, [setIsPanelCollapsed]);
+  const toggleInspectorPresentation = useCallback(() => {
+    if (responsiveInspectorPresentationRef.current) {
+      setIsResponsiveInspectorOpen((current) => !current);
+      return;
+    }
+    setIsPanelCollapsed((current) => !current);
+  }, [setIsPanelCollapsed]);
   const setPanelWidth = useCallback((next: number | ((current: number) => number)) => {
     const currentShell = uiPreferencesStore.getSnapshot().preferences.panels.find(
       (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
@@ -488,7 +522,11 @@ export function App() {
     const rightPanel = currentPreferences.find(
       (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
     );
-    const rightInset = !rightPanel?.visible || rightPanel.collapsed ? 0 : rightPanel.size ?? 360;
+    const rightInset = inspectorPresentationCollapsedRef.current
+      || !rightPanel?.visible
+      || rightPanel.collapsed
+      ? 0
+      : rightPanel.size ?? 360;
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
       size: clampDockSize(
         requested,
@@ -668,7 +706,7 @@ export function App() {
     simulationSpeed: 1
   });
   const previousViewportShellStateRef = useRef({
-    isPanelCollapsed,
+    isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
     isPrimaryDockCollapsed,
     primaryDockWidth: effectivePrimaryDockWidth,
@@ -682,7 +720,7 @@ export function App() {
     activeBottomPanelId,
     isPrimaryDockCollapsed,
     isBottomDockCollapsed,
-    isPanelCollapsed,
+    isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
     isProjectManagerOpen,
     isPerformanceBenchmarkOpen,
@@ -743,11 +781,12 @@ export function App() {
     () => projectExplicitRuntimeSelection(runtimeSelection, platformEntities),
     [platformEntities, runtimeSelection]
   );
-  const connectionPointSnapContext = useMemo(() => evaluateConnectionPointSnapContext({
+  const connectionPointSnapContext = useMemo(() => evaluatePremiumConnectionPointSnapContext({
     selection: runtimeSelection,
     entities: platformEntities,
+    machines: placedMachines,
     activeGroupEditId
-  }), [activeGroupEditId, platformEntities, runtimeSelection]);
+  }), [activeGroupEditId, placedMachines, platformEntities, runtimeSelection]);
   const {
     selectedMachineIds,
     primarySelectedMachineId,
@@ -1356,7 +1395,7 @@ export function App() {
         };
       },
       open: () => {
-        setIsPanelCollapsed(false);
+        openInspectorPresentation();
         setPanelSectionExpanded(panelId, true);
       },
       close: () => {
@@ -1372,7 +1411,7 @@ export function App() {
         if (isOpen && beforeClose && !beforeClose()) {
           return false;
         }
-        setIsPanelCollapsed(false);
+        openInspectorPresentation();
         setPanelSectionExpanded(panelId, !isOpen);
         return true;
       }
@@ -1501,9 +1540,9 @@ export function App() {
           available: true,
           context: `${runtimePanelStateRef.current.panelWidth}px`
         }),
-        open: () => setIsPanelCollapsed(false),
-        close: () => setIsPanelCollapsed(true),
-        toggle: () => setIsPanelCollapsed((current) => !current)
+        open: openInspectorPresentation,
+        close: closeInspectorPresentation,
+        toggle: toggleInspectorPresentation
       },
       [RUNTIME_PANEL_IDS.bottomDockShell]: {
         getState: () => ({
@@ -1640,12 +1679,15 @@ export function App() {
     openTaxonomyManager,
     refreshProjects,
     requestLibraryManagerClose,
+    closeInspectorPresentation,
     effectiveBottomDockHeight,
     effectivePrimaryDockWidth,
+    openInspectorPresentation,
     setBottomDockCollapsed,
     setPrimaryDockCollapsed,
     setPanelSectionExpanded,
-    setPanelSectionExpansionPreservingVisibility
+    setPanelSectionExpansionPreservingVisibility,
+    toggleInspectorPresentation
   ]);
 
   const propertiesPanelContext = selectedGroup
@@ -1679,7 +1721,7 @@ export function App() {
       activeBottomPanelId,
       isPrimaryDockCollapsed,
       isBottomDockCollapsed,
-      isPanelCollapsed,
+      isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
       isProjectManagerOpen,
       isPerformanceBenchmarkOpen,
@@ -1714,7 +1756,7 @@ export function App() {
     isAdvancedAlignmentOpen,
     isConnectionPointSnapOpen,
     isBottomDockCollapsed,
-    isPanelCollapsed,
+    isInspectorPresentationCollapsed,
     isPerformanceBenchmarkOpen,
     isProjectManagerOpen,
     isSimulationControlsOpen,
@@ -1751,7 +1793,7 @@ export function App() {
   useLayoutEffect(() => {
     const previous = previousViewportShellStateRef.current;
     const next = {
-      isPanelCollapsed,
+      isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
       isPrimaryDockCollapsed,
       primaryDockWidth: effectivePrimaryDockWidth,
@@ -1779,7 +1821,7 @@ export function App() {
     effectiveBottomDockHeight,
     effectivePrimaryDockWidth,
     isBottomDockCollapsed,
-    isPanelCollapsed,
+    isInspectorPresentationCollapsed,
     isPrimaryDockCollapsed,
     panelWidth,
     runtimeViewportBridge
@@ -1893,6 +1935,17 @@ export function App() {
       isMounted = false;
     };
   }, []);
+  useLayoutEffect(() => {
+    responsiveInspectorPresentationRef.current = responsiveInspectorPresentation;
+  }, [responsiveInspectorPresentation]);
+  useLayoutEffect(() => {
+    inspectorPresentationCollapsedRef.current = isInspectorPresentationCollapsed;
+  }, [isInspectorPresentationCollapsed]);
+  useEffect(() => {
+    if (!responsiveInspectorPresentation) {
+      setIsResponsiveInspectorOpen(false);
+    }
+  }, [responsiveInspectorPresentation]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -1960,18 +2013,18 @@ export function App() {
       source: "scene"
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
-    setIsPanelCollapsed(false);
+    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [setPanelSectionExpansionPreservingVisibility]);
+  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
-    setIsPanelCollapsed(false);
+    openInspectorPresentation();
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, []);
+  }, [openInspectorPresentation]);
 
   const selectPlatformEntityForEditing = useCallback((entityId: EntityId, mode: SelectionMode = "replace") => {
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
@@ -1983,8 +2036,8 @@ export function App() {
       setAnnotationSelectionSignal((current) => current + 1);
       setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
-    setIsPanelCollapsed(false);
-  }, [setPanelSectionExpansionPreservingVisibility]);
+    openInspectorPresentation();
+  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
     const orderedIds = primaryId
@@ -2895,7 +2948,10 @@ export function App() {
       entities: platformEntitiesRef.current,
       activeGroupEditId: activeGroupEditIdRef.current,
       movingMachineId: selection.movingMachineId,
-      fixedMachineId: selection.fixedMachineId
+      fixedMachineId: selection.fixedMachineId,
+      movingPoint,
+      fixedPoint,
+      requireProductFlowPair: true
     }, () => {
       const currentMachines = placedMachinesRef.current;
       const nextMachines = applyConnectionPointSnap(currentMachines, selection, movingPoint, fixedPoint);
@@ -2921,8 +2977,8 @@ export function App() {
     setRuntimeSelection(replaceRuntimeSelection([
       createLegacyPlatformEntityId("civil", item.id)
     ], "inspector"));
-    setIsPanelCollapsed(false);
-  }, [markLayoutChanged]);
+    openInspectorPresentation();
+  }, [markLayoutChanged, openInspectorPresentation]);
 
   const updateSelectedCivilReference = useCallback((
     id: string,
@@ -3049,9 +3105,9 @@ export function App() {
       createLegacyPlatformEntityId("annotation", annotation.id)
     ], "inspector"));
     setAnnotationSelectionSignal((current) => current + 1);
-    setIsPanelCollapsed(false);
+    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [markLayoutChanged, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
+  }, [markLayoutChanged, openInspectorPresentation, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
@@ -4596,6 +4652,7 @@ export function App() {
                 <ConnectionPointSnapPanel
                   selectedMachines={selectedMachines}
                   primarySelectedMachine={selectedMachine}
+                  productFlowOnly
                   onSnap={(selection, movingPoint, fixedPoint) => {
                     void executeRuntimeFeatureCommand(
                       RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
@@ -4629,7 +4686,7 @@ export function App() {
 
   const activeWorkspaceLabel = workspaceProjection.activeWorkspaceId
     ? workspaceFallbackLabels[workspaceProjection.activeWorkspaceId]
-    : "Current arrangement";
+    : "Custom Workspace";
   const workspacePanelOptions = useMemo(() => {
     const reachabilityById = new Map(
       workspacePanelReachability.map((panel) => [panel.panelId, panel])
@@ -4867,7 +4924,7 @@ export function App() {
         />
       )}
       editorLeftInset={primaryDockInset}
-      editorRightInset={isPanelCollapsed ? 0 : panelWidth}
+      editorRightInset={isInspectorPresentationCollapsed ? 0 : panelWidth}
       editorBottomInset={bottomDockInset}
       editorHost={(
         <EditorHost
@@ -4876,12 +4933,12 @@ export function App() {
           runtimeRegistry={editorRuntimeRegistry}
         />
       )}
-      secondaryDock={isPanelCollapsed ? (
+      secondaryDock={isInspectorPresentationCollapsed ? (
         <div className="panel-reopen-tab" data-app-shell-zone="machine-properties">
           <WorkbenchDockCollapseButton
             side="right"
             collapsed
-            onToggle={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.rightPanelShell)}
+            onToggle={openInspectorPresentation}
             testId="right-dock-collapse-toggle"
           />
         </div>
@@ -4908,7 +4965,7 @@ export function App() {
             <WorkbenchDockCollapseButton
               side="right"
               collapsed={false}
-              onToggle={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
+              onToggle={closeInspectorPresentation}
               testId="right-dock-collapse-toggle"
             />
           </header>
@@ -5215,6 +5272,7 @@ export function App() {
               <ConnectionPointSnapPanel
                 selectedMachines={selectedMachines}
                 primarySelectedMachine={selectedMachine}
+                productFlowOnly
                 onSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
                   RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
                   { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
@@ -5488,7 +5546,7 @@ export function App() {
           maxHeight={bottomDockHeightBounds.max}
           resizeEnabled={dockResizeEnabled}
           leftInset={primaryDockInset}
-          rightInset={isPanelCollapsed ? 0 : panelWidth}
+          rightInset={isInspectorPresentationCollapsed ? 0 : panelWidth}
           onActivate={(panelId) => {
             setActiveBottomPanelId(panelId);
             setBottomDockCollapsed(false);

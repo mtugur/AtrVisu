@@ -235,6 +235,31 @@ decision in `docs/audits/ATRVISU_PR110_REUSE_DELTA_AUDIT_V1.md`.
 
 ## Validation Evidence
 
+### Executed evidence correction
+
+Independent screenshot review `5449251603` identified three bounded semantic
+gaps and two responsive presentation gaps. The corrected premium Connect &
+Snap route now requires an eligible exact-two-machine selection with an actual
+`product-out -> product-in` pair, automatically resolves the moving/fixed
+orientation, and rejects load-only, same-type, utility-only, or missing-flow
+pairs through the existing snap guard. Two-object Arrange hides Distribute and
+Equal Gap; three-plus selection reveals them.
+
+At 1024 px the Inspector is collapsed by presentation state without writing to
+the persisted desktop panel preference. Explicit responsive open remains
+available, returning wide restores the persisted state, and the stable callback
+boundary preserves one EditorHost, Babylon scene, and canvas. Application Bar
+search uses a single-line compact label at this breakpoint. The user-facing
+absent-preset label is `Custom Workspace`, while Sales Layout and Layout
+Engineering remain the two canonical presets.
+
+Executed evidence uses Flow Pack Machine, Belt Conveyor, Robot Palletizer,
+Floor Area, Wall, and Walkway. The compatible connection screenshot uses Flow
+Pack Machine Product Out to Belt Conveyor Product In. Ten exact-branch captures
+cover recovery, Sales, Engineering single selection, contextual Arrange,
+compatible snap, Command Palette, Viewpoints, Help, 1024, and 640 layouts under
+`C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-reconciliation-evidence/`.
+
 - Focused PF-1C component regressions: PASS, 8 files / 62 tests, covering
   placed-instance naming, contextual measurement defaults, exact-two
   connection disclosure, collision presentation, and compact command focus.
@@ -257,10 +282,10 @@ decision in `docs/audits/ATRVISU_PR110_REUSE_DELTA_AUDIT_V1.md`.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
-- Design-token governance: PASS, 254 maintained files.
-- Production build: PASS, 4,125 modules transformed.
-- Full unit suite: PASS, 150 files / 1,248 tests.
-- Full Chromium suite: PASS, 72 tests.
+- Design-token governance: PASS, 255 maintained files.
+- Production build: PASS, 4,126 modules transformed.
+- Full unit suite: PASS, 151 files / 1,261 tests.
+- Full Chromium suite: PASS, 73 tests.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.
 

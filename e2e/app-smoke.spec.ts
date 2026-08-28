@@ -26,7 +26,14 @@ const openCleanApp = async (page: Page) => {
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
   await expect(page.getByTestId("primary-dock")).toBeVisible();
-  await expect(page.getByTestId("right-panel")).toHaveCount(1);
+  if ((page.viewportSize()?.width ?? 1440) <= 1100) {
+    await expect(page.getByTestId("right-panel")).toHaveCount(0);
+    if ((page.viewportSize()?.width ?? 1440) > 720) {
+      await expect(page.getByRole("button", { name: "Expand Inspector" })).toBeVisible();
+    }
+  } else {
+    await expect(page.getByTestId("right-panel")).toHaveCount(1);
+  }
   await expect(page.getByTestId("machine-library-panel")).toBeVisible();
 };
 
@@ -906,7 +913,12 @@ test("runtime feature access complete gate is bound to observed visible command 
   await page.getByRole("button", { name: "Close Display / Overlay Controls" }).click();
   await expect(page.getByTestId("display-overlay-tool-surface")).toHaveCount(0);
 
-  await clickSceneMachine(page, machineIds[0]);
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await waitForMachineDiagnostics(page, 5);
+
+  const snapMachineIds = await getMachineIds(page);
+  await clickSceneMachine(page, snapMachineIds[3]);
   if ((await propertiesSection.getAttribute("aria-expanded")) !== "true") {
     await propertiesSection.click();
   }
@@ -914,7 +926,7 @@ test("runtime feature access complete gate is bound to observed visible command 
   await machineProperties.getByLabel("Plan X").blur();
   await expect(machineProperties.getByLabel("Plan X")).toHaveValue("-10000");
   await page.keyboard.down("Control");
-  await clickSceneMachine(page, machineIds[2]);
+  await clickSceneMachine(page, snapMachineIds[4]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
   await page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }).click();
@@ -1817,21 +1829,37 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await page.keyboard.up("Control");
   const arrangeBar = page.getByTestId("viewport-arrange-bar");
   await expect(arrangeBar).toBeVisible();
+  await expect(arrangeBar.getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
+  await expect(arrangeBar.getByText("Distribute", { exact: true })).toHaveCount(0);
+  await expect(arrangeBar.getByText("Equal Gap", { exact: true })).toHaveCount(0);
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await waitForMachineDiagnostics(page, 4);
+  machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[3]);
+  await page.keyboard.up("Control");
   await arrangeBar.getByRole("button", { name: "Connect & Snap" }).click();
   await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
-  await expect(page.getByTestId("connection-point-snap-panel")).not.toContainText("v0.1");
+  const snapPanel = page.getByTestId("connection-point-snap-panel");
+  await expect(snapPanel).toHaveAttribute("data-snap-mode", "product-flow");
+  await expect(snapPanel.getByTestId("moving-connection-point-select")).toHaveValue(/.+/);
+  await expect(snapPanel.getByTestId("fixed-connection-point-select")).toHaveValue(/.+/);
+  await expect(snapPanel.getByTestId("connection-point-snap-button")).toBeEnabled();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
   await arrangeBar.getByRole("button", { name: "Connect & Snap" }).click();
   await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
 
-  await machineCard.click();
-  await waitForMachineDiagnostics(page, 3);
+  await addCanonicalAtaraMachine(page, "Robot Palletizer", ["Palletizing", "Robot Palletizers"]);
+  await waitForMachineDiagnostics(page, 5);
   machineIds = await getMachineIds(page);
-  await clickSceneMachine(page, machineIds[0]);
-  await page.keyboard.down("Control");
-  await clickSceneMachine(page, machineIds[1]);
   await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[3]);
+  await clickSceneMachine(page, machineIds[4]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
   await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
@@ -2112,9 +2140,12 @@ test("workbench chrome keyboard and responsive geometry preserve the editor life
     await expect.poll(async () => (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? 0)
       .toBeGreaterThan(0);
     const geometry = await page.evaluate(() => {
-      const rect = (selector: string) => {
+      const rect = (selector: string, optional = false) => {
         const element = document.querySelector(selector);
-        if (!element) throw new Error(`Missing geometry element: ${selector}`);
+        if (!element) {
+          if (optional) return null;
+          throw new Error(`Missing geometry element: ${selector}`);
+        }
         const box = element.getBoundingClientRect();
         return { top: box.top, bottom: box.bottom, width: box.width, height: box.height };
       };
@@ -2123,14 +2154,20 @@ test("workbench chrome keyboard and responsive geometry preserve the editor life
         menu: rect('[data-testid="workbench-menu-bar"]'),
         command: rect('[data-testid="workbench-command-bar"]'),
         viewport: rect('[data-app-shell-zone="scene-viewport"]'),
-        panel: rect('[data-testid="right-panel"]'),
+        panel: rect('[data-testid="right-panel"]', true),
         noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth
       };
     });
     expect(geometry.application.bottom).toBeLessThanOrEqual(geometry.menu.top + 1);
     expect(geometry.menu.bottom).toBeLessThanOrEqual(geometry.command.top + 1);
     expect(geometry.command.bottom).toBeLessThanOrEqual(geometry.viewport.top + 1);
-    expect(geometry.command.bottom).toBeLessThanOrEqual(geometry.panel.top + 1);
+    if (width <= 1100) {
+      expect(geometry.panel).toBeNull();
+      await expect(page.getByRole("button", { name: "Expand Inspector" })).toBeVisible();
+    } else {
+      expect(geometry.panel).not.toBeNull();
+      expect(geometry.command.bottom).toBeLessThanOrEqual((geometry.panel?.top ?? 0) + 1);
+    }
     expect(geometry.viewport.width).toBeGreaterThan(0);
     expect(geometry.viewport.height).toBeGreaterThan(0);
     expect(geometry.noHorizontalOverflow).toBe(true);
@@ -2173,6 +2210,7 @@ test("visual acceptance chrome remains readable and lifecycle-stable", async ({ 
   await page.setViewportSize({ width: 1024, height: 768 });
   await openCleanApp(page);
   const before = await waitForRuntimeViewport(page);
+  await page.getByRole("button", { name: "Expand Inspector" }).click();
 
   const editMenu = await openWorkbenchMenu(page, "Edit");
   const redo = editMenu.locator('[data-command-id="edit.redo"]');
@@ -2304,8 +2342,9 @@ test("640x800 workbench preserves chrome and mobile bottom-panel geometry", asyn
   await expect(page.getByTestId("bottom-dock-resize-handle")).toHaveCount(0);
   const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
-  await expect(rightPanel).toBeHidden();
+  await expect(rightPanel).toHaveCount(0);
   await page.getByRole("button", { name: "Collapse Primary Dock" }).click();
+  await page.getByRole("button", { name: "Expand Inspector" }).click();
   await expect(rightPanel).toBeVisible();
   const geometry = await page.evaluate(() => {
     const rect = (selector: string) => {
@@ -2640,7 +2679,7 @@ test("orthographic framing survives panel and browser aspect-ratio changes after
   expectOrthographicFramingEquivalent(before, reopened);
   expect(reopened.invariants).toEqual(before.invariants);
 
-  await page.setViewportSize({ width: 1100, height: 850 });
+  await page.setViewportSize({ width: 1180, height: 850 });
   await expect.poll(async () => {
     const runtimeHeight = (await getRuntimeViewportSnapshot(page)).viewport?.cssHeight;
     const renderedHeight = await page.locator('[data-app-shell-zone="scene-viewport"]')
@@ -2816,13 +2855,13 @@ test("medium workbench constrains dock resizing around a dominant viewport", asy
 
   const primaryDock = page.getByTestId("primary-dock");
   const resizeHandle = page.getByTestId("primary-dock-resize-handle");
-  await expect(resizeHandle).toHaveAttribute("aria-valuemax", "344");
+  await expect(resizeHandle).toHaveAttribute("aria-valuemax", "480");
   await resizeHandle.focus();
-  for (let index = 0; index < 8; index += 1) {
+  for (let index = 0; index < 20; index += 1) {
     await resizeHandle.press("ArrowRight");
   }
   await expect.poll(() => primaryDock.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
-    .toBe(344);
+    .toBe(480);
   await getCommandBarCommand(page, "view.viewpoints").click();
   await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
   expect(await page.locator('[data-app-shell-zone="scene-viewport"]').evaluate((element) =>
@@ -3254,10 +3293,9 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
-  const machineCard = page.locator(".machine-card").first();
-  await machineCard.click();
-  await machineCard.click();
-  await machineCard.click();
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await addCanonicalAtaraMachine(page, "Robot Palletizer", ["Palletizing", "Robot Palletizers"]);
   await waitForMachineDiagnostics(page, 3);
   const machineIds = await getMachineIds(page);
 
@@ -3292,7 +3330,7 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ visible: true, open: false });
   await page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }).click();
   await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
-  await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
+  await expect(page.getByTestId("connection-point-snap-panel")).toHaveAttribute("data-snap-mode", "product-flow");
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ visible: true });
 
   const positionsBeforeSnap = await readCanvasRecord<PlanPosition>(
@@ -3822,13 +3860,8 @@ test("group edit mode moves one member and restores rigid scene selection on exi
   await clickSceneMachine(page, machineIds[1]);
   await page.keyboard.up("Control");
   await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
-  await page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }).click();
-  await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
-  await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
-  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(true);
-
-  await page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }).click();
-  await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
+  await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(false);
   await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[1]);
   await page.keyboard.up("Control");
@@ -4547,7 +4580,7 @@ test("corrupt preference storage degrades safely and diagnostics remain guarded"
   await normalPage.close();
 });
 
-test("P1-D1 preferences start as Current arrangement without an implicit Sales reset", async ({ page }) => {
+test("P1-D1 preferences start as Custom Workspace without an implicit Sales reset", async ({ page }) => {
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   const seed = createE2EUiPreferences({
@@ -4563,7 +4596,7 @@ test("P1-D1 preferences start as Current arrangement without an implicit Sales r
   await page.goto("/?e2eDiagnostics=1");
   await waitForUiPreferences(page);
 
-  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Custom Workspace");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "light");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
   await expect(page.getByTestId("right-panel")).toHaveCSS("width", "420px");
@@ -4577,7 +4610,7 @@ test("P1-D1 preferences start as Current arrangement without an implicit Sales r
   await expect(disclosureRows).toHaveCount(4);
   await expect(control.popover.locator("input")).toHaveCount(0);
   await expect(control.popover.getByTestId("workspace-preferences-workspace-trigger"))
-    .toContainText("Current arrangement");
+    .toContainText("Custom Workspace");
   await expect(control.popover.getByTestId("workspace-preferences-theme-trigger"))
     .toContainText("Light");
   await expect(control.popover.getByTestId("workspace-preferences-density-trigger"))
@@ -4652,7 +4685,7 @@ test("Sales and Engineering workspaces persist while domain and scene invariants
   expect(errors).toEqual([]);
 });
 
-test("theme retains workspace identity and density override returns to Current arrangement", async ({ page }) => {
+test("theme retains workspace identity and density override returns to Custom Workspace", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await waitForUiPreferences(page);
@@ -4682,9 +4715,9 @@ test("theme retains workspace identity and density override returns to Current a
   await expect(densityBranch.surface).toBeVisible();
   await expect(densityBranch.branchTrigger).toContainText("Compact");
   await expect(page.getByTestId("workspace-preferences-workspace-trigger"))
-    .toContainText("Current arrangement");
+    .toContainText("Custom Workspace");
   await expect(page.getByTestId("workspace-preferences-trigger"))
-    .toContainText("Current arrangement");
+    .toContainText("Custom Workspace");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
 
   const after = await getRuntimeViewportSnapshot(page);
@@ -4698,7 +4731,7 @@ test("theme retains workspace identity and density override returns to Current a
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
   await page.reload();
   await waitForUiPreferences(page);
-  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Custom Workspace");
   await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-density", "compact");
   expect(errors).toEqual([]);
 });
@@ -4712,7 +4745,7 @@ test("a hidden live panel is restored through Workspace and View and survives re
 
   let panels = await openVisiblePanels(page);
   await panels.surface.getByLabel("Layers", { exact: true }).uncheck();
-  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Current arrangement");
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Custom Workspace");
   await expect(page.getByTestId("primary-dock-tab-panel.layers")).toHaveCount(0);
 
   panels = await openVisiblePanels(page);
@@ -4753,9 +4786,8 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
 
-  const machineCard = page.locator(".machine-card").first();
-  await machineCard.click();
-  await machineCard.click();
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
   await waitForMachineDiagnostics(page, 2);
   const machineIds = await getMachineIds(page);
   await clickSceneMachine(page, machineIds[0]);
@@ -4791,7 +4823,7 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   await expect(snapToggle).toBeEnabled();
   await expect(snapToggle).toBeChecked();
   await snapToggle.uncheck();
-  await expect(control.trigger).toContainText("Current arrangement");
+  await expect(control.trigger).toContainText("Custom Workspace");
   await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({
     visible: false,
@@ -4838,7 +4870,7 @@ test("workspace panel controls follow live Connection Point Snap and Inspector a
   const precisionToggle = panels.surface.getByLabel("Precision Placement", { exact: true });
   await expect(precisionToggle).toBeEnabled();
   await precisionToggle.uncheck();
-  await expect(control.trigger).toContainText("Current arrangement");
+  await expect(control.trigger).toContainText("Custom Workspace");
   await expect(precisionContribution).toHaveCount(0);
   expect(await getRuntimePanel(page, "panel.precisionPlacement")).toMatchObject({
     visible: false,
@@ -5117,6 +5149,53 @@ test("workspace preferences are keyboard complete and stay inside responsive app
   await expect(getCommandBarCommand(page, "project.save")).toBeVisible();
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test("1024 responsive presentation preserves viewport dominance and the persisted desktop Inspector state", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const persistedInspector = async () => page.evaluate(() =>
+    window.__atrvisuUiPreferences?.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === "panel.rightPanelShell"
+    )
+  );
+
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  const wideOpenPreference = await persistedInspector();
+  expect(wideOpenPreference).toMatchObject({ visible: true, collapsed: false });
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expect(page.getByTestId("right-dock-collapse-toggle")).toHaveAttribute("aria-label", "Expand Inspector");
+  expect(await persistedInspector()).toEqual(wideOpenPreference);
+  const search = page.getByRole("button", { name: "Search commands" });
+  await expect(search).toBeVisible();
+  expect(await search.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
+  await expect(search.locator(".workbench-command-search-label-compact")).toBeVisible();
+  await expect(search.locator(".workbench-command-search-label-full")).toBeHidden();
+
+  await page.getByTestId("right-dock-collapse-toggle").click();
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  expect(await persistedInspector()).toEqual(wideOpenPreference);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+
+  await page.getByTestId("right-dock-collapse-toggle").click();
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  const wideCollapsedPreference = await persistedInspector();
+  expect(wideCollapsedPreference).toMatchObject({ visible: true, collapsed: true });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.getByTestId("right-dock-collapse-toggle").click();
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  expect(await persistedInspector()).toEqual(wideCollapsedPreference);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
 

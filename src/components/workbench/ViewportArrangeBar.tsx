@@ -35,12 +35,16 @@ export function ViewportArrangeBar(props: ViewportArrangeBarProps) {
         { label: "Left", value: "left" }, { label: "Center X", value: "centerX" }, { label: "Right", value: "right" },
         { label: "Front", value: "front" }, { label: "Center Y", value: "centerY" }, { label: "Back", value: "back" }
       ]} />
-      <ActionMenu label="Distribute" disabled={!props.movementAllowed || !props.canDistribute} onAction={props.onDistribute} actions={[
-        { label: "Horizontal", value: "horizontal" }, { label: "Vertical", value: "vertical" }
-      ]} />
-      <ActionMenu label="Equal Gap" disabled={!props.movementAllowed || !props.canDistribute} onAction={props.onEqualGap} actions={[
-        { label: "Gap X", value: "gapX" }, { label: "Gap Y", value: "gapY" }
-      ]} />
+      {props.canDistribute ? (
+        <>
+          <ActionMenu label="Distribute" disabled={!props.movementAllowed} onAction={props.onDistribute} actions={[
+            { label: "Horizontal", value: "horizontal" }, { label: "Vertical", value: "vertical" }
+          ]} />
+          <ActionMenu label="Equal Gap" disabled={!props.movementAllowed} onAction={props.onEqualGap} actions={[
+            { label: "Gap X", value: "gapX" }, { label: "Gap Y", value: "gapY" }
+          ]} />
+        </>
+      ) : null}
       {props.canGroup ? <button type="button" disabled={!props.movementAllowed} onClick={props.onGroup}>Group</button> : null}
       {props.connectAndSnapAvailable ? <button type="button" aria-expanded={props.connectAndSnapOpen} onClick={props.onToggleConnectAndSnap}>Connect &amp; Snap</button> : null}
     </div>

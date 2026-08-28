@@ -4233,7 +4233,7 @@ body.is-resizing-workbench-dock {
   }
 
   .app-shell:has(.workbench-primary-dock:not(.is-collapsed)) .empty-project-welcome {
-    left: 260px;
+    left: clamp(260px, calc(100vw - 320px), 480px);
   }
 
   .app-shell:has(.workbench-primary-dock.is-collapsed) .empty-project-welcome {
@@ -4535,6 +4535,11 @@ body.is-resizing-workbench-dock {
   color: var(--av-text-muted);
   background: var(--av-surface-control);
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.workbench-command-search-label-compact {
+  display: none;
 }
 
 .workbench-command-search:hover,
@@ -4886,7 +4891,15 @@ body.is-resizing-workbench-dock {
   }
 
   .workbench-command-search {
-    min-width: 150px;
+    min-width: 112px;
+  }
+
+  .workbench-command-search-label-full {
+    display: none;
+  }
+
+  .workbench-command-search-label-compact {
+    display: inline;
   }
 }
 

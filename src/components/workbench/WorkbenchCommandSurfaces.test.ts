@@ -74,6 +74,8 @@ describe("WorkbenchApplicationBar", () => {
     expect(projectSession.querySelector(".workbench-project-context")?.textContent)
       .toContain("Factory");
     const search = container.querySelector('[aria-label="Search commands"]') as HTMLButtonElement;
+    expect(search.querySelector(".workbench-command-search-label-full")?.textContent).toBe("Search commands");
+    expect(search.querySelector(".workbench-command-search-label-compact")?.textContent).toBe("Search");
     await act(async () => search.click());
     expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
   });

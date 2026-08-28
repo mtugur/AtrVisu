@@ -6,9 +6,11 @@ import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import {
   applyConnectionPointSnap,
   evaluateConnectionPointSnapContext,
+  evaluatePremiumConnectionPointSnapContext,
   evaluateConnectionPointSnapRuntimeAccess,
   evaluateConnectionPointSnapCandidate,
   executeGuardedConnectionPointSnap,
+  findProductFlowConnectionPointPair,
   formatConnectionPointSelectorLabel,
   getConnectionPointCompatibility,
   getConnectionPointSnapContextMessage,
@@ -259,6 +261,88 @@ describe("connection point snap helpers", () => {
       movingMachineId: "moving",
       fixedMachineId: "fixed"
     })).toEqual({ allowed: true });
+  });
+
+  it("exposes premium snap only for a deterministic product-out to product-in pair", () => {
+    const flowPack = machine("flow-pack", 0, 0, 0, [movingOut]);
+    const conveyor = machine("conveyor", 5000, 0, 0, [fixedIn]);
+    const selection = replaceRuntimeSelection(["machine:flow-pack", "machine:conveyor"], "scene");
+    const entities = [platformMachine("flow-pack"), platformMachine("conveyor")];
+
+    expect(findProductFlowConnectionPointPair([flowPack, conveyor])).toMatchObject({
+      movingMachineId: "flow-pack",
+      fixedMachineId: "conveyor",
+      movingPoint: { id: "CP-OUT" },
+      fixedPoint: { id: "CP-IN" }
+    });
+    expect(evaluatePremiumConnectionPointSnapContext({
+      selection,
+      entities,
+      machines: [flowPack, conveyor]
+    })).toMatchObject({
+      available: true,
+      productFlowPair: {
+        movingMachineId: "flow-pack",
+        fixedMachineId: "conveyor"
+      }
+    });
+  });
+
+  it("swaps moving and fixed machine order to obtain a valid product-flow pair", () => {
+    const conveyor = machine("conveyor", 5000, 0, 0, [fixedIn]);
+    const flowPack = machine("flow-pack", 0, 0, 0, [movingOut]);
+
+    expect(findProductFlowConnectionPointPair([conveyor, flowPack])).toMatchObject({
+      movingMachineId: "flow-pack",
+      fixedMachineId: "conveyor",
+      movingPoint: { type: "product-out" },
+      fixedPoint: { type: "product-in" }
+    });
+  });
+
+  it.each([
+    ["two load-only pallets", point("LOAD-A", "other", 0, 0, "z+"), point("LOAD-B", "other", 0, 0, "z-")],
+    ["same product-in points", fixedIn, fixedIn],
+    ["same product-out points", movingOut, movingOut],
+    ["utility-only points", point("POWER", "electrical", 0, 0, "x+"), point("AIR", "pneumatic", 0, 0, "x-")]
+  ])("rejects %s from the premium contextual snap surface", (_label, firstPoint, secondPoint) => {
+    const first = machine("first", 0, 0, 0, [firstPoint]);
+    const second = machine("second", 5000, 0, 0, [secondPoint]);
+    const selection = replaceRuntimeSelection(["machine:first", "machine:second"], "scene");
+
+    expect(evaluatePremiumConnectionPointSnapContext({
+      selection,
+      entities: [platformMachine("first"), platformMachine("second")],
+      machines: [first, second]
+    })).toEqual({ available: false, reason: "no-product-flow-pair" });
+  });
+
+  it("keeps premium command execution inside the guarded snap authority", () => {
+    const mutate = vi.fn();
+    const selection = replaceRuntimeSelection(["machine:moving", "machine:fixed"], "scene");
+    const entities = [platformMachine("moving"), platformMachine("fixed")];
+
+    expect(executeGuardedConnectionPointSnap({
+      selection,
+      entities,
+      movingMachineId: "moving",
+      fixedMachineId: "fixed",
+      movingPoint: movingOut,
+      fixedPoint: movingOut,
+      requireProductFlowPair: true
+    }, mutate)).toEqual({ allowed: false, reason: "no-product-flow-pair" });
+    expect(mutate).not.toHaveBeenCalled();
+
+    expect(executeGuardedConnectionPointSnap({
+      selection,
+      entities,
+      movingMachineId: "moving",
+      fixedMachineId: "fixed",
+      movingPoint: movingOut,
+      fixedPoint: fixedIn,
+      requireProductFlowPair: true
+    }, mutate)).toEqual({ allowed: true });
+    expect(mutate).toHaveBeenCalledTimes(1);
   });
 
   it("rejects two machines with any additional authoritative entity", () => {

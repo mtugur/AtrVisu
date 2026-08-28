@@ -9,9 +9,11 @@ import {
 import {
   formatConnectionPointSelectorLabel,
   formatConnectionPointSnapSummary,
+  findProductFlowConnectionPointPair,
   getConnectionPointById,
   getConnectionPointCompatibility,
   getConnectionPointSnapDelta,
+  isProductFlowConnectionPointPair,
   type ConnectionPointSnapSelection
 } from "../utils/connectionPointSnap";
 import { getPlacedMachineDisplayName } from "../utils/entityNames";
@@ -25,6 +27,7 @@ type ConnectionPointSnapPanelProps = {
     fixedPoint: MachineConnectionPoint
   ) => void;
   onClearSelection?: () => void;
+  productFlowOnly?: boolean;
 };
 
 const pointPriority = (point: MachineConnectionPoint, preferred: MachineConnectionPoint["type"]) =>
@@ -37,14 +40,23 @@ export function ConnectionPointSnapPanel({
   selectedMachines,
   primarySelectedMachine,
   onSnap,
-  onClearSelection
+  onClearSelection,
+  productFlowOnly = false
 }: ConnectionPointSnapPanelProps) {
-  const defaultMoving = primarySelectedMachine ?? selectedMachines[0];
-  const defaultFixed = selectedMachines.find((machine) => machine.instanceId !== defaultMoving?.instanceId);
+  const productFlowPair = useMemo(
+    () => productFlowOnly ? findProductFlowConnectionPointPair(selectedMachines) : null,
+    [productFlowOnly, selectedMachines]
+  );
+  const defaultMoving = productFlowPair
+    ? selectedMachines.find((machine) => machine.instanceId === productFlowPair.movingMachineId)
+    : primarySelectedMachine ?? selectedMachines[0];
+  const defaultFixed = productFlowPair
+    ? selectedMachines.find((machine) => machine.instanceId === productFlowPair.fixedMachineId)
+    : selectedMachines.find((machine) => machine.instanceId !== defaultMoving?.instanceId);
   const [movingMachineId, setMovingMachineId] = useState(defaultMoving?.instanceId ?? "");
   const [fixedMachineId, setFixedMachineId] = useState(defaultFixed?.instanceId ?? "");
-  const [movingPointId, setMovingPointId] = useState("");
-  const [fixedPointId, setFixedPointId] = useState("");
+  const [movingPointId, setMovingPointId] = useState(productFlowPair?.movingPoint.id ?? "");
+  const [fixedPointId, setFixedPointId] = useState(productFlowPair?.fixedPoint.id ?? "");
   const [gapMm, setGapMm] = useState(0);
 
   useEffect(() => {
@@ -54,10 +66,19 @@ export function ConnectionPointSnapPanel({
 
   const movingMachine = selectedMachines.find((machine) => machine.instanceId === movingMachineId);
   const fixedMachine = selectedMachines.find((machine) => machine.instanceId === fixedMachineId);
-  const movingPoints = useMemo(() => movingMachine ? getConnectionPointsForObject(movingMachine) : [], [movingMachine]);
-  const fixedPoints = useMemo(() => fixedMachine ? getConnectionPointsForObject(fixedMachine) : [], [fixedMachine]);
+  const movingPoints = useMemo(() => movingMachine
+    ? getConnectionPointsForObject(movingMachine).filter((point) => !productFlowOnly || point.type === "product-out")
+    : [], [movingMachine, productFlowOnly]);
+  const fixedPoints = useMemo(() => fixedMachine
+    ? getConnectionPointsForObject(fixedMachine).filter((point) => !productFlowOnly || point.type === "product-in")
+    : [], [fixedMachine, productFlowOnly]);
 
   useEffect(() => {
+    if (productFlowOnly) {
+      setMovingPointId(productFlowPair?.movingPoint.id ?? "");
+      setFixedPointId(productFlowPair?.fixedPoint.id ?? "");
+      return;
+    }
     const movingProductOut = movingPoints.find((point) => point.type === "product-out");
     const fixedProductIn = fixedPoints.find((point) => point.type === "product-in");
     const movingProductIn = movingPoints.find((point) => point.type === "product-in");
@@ -79,7 +100,7 @@ export function ConnectionPointSnapPanel({
     setFixedPointId((current) =>
       fixedPoints.some((point) => point.id === current) ? current : nextFixedPoint?.id ?? ""
     );
-  }, [fixedPoints, movingPoints]);
+  }, [fixedPoints, movingPoints, productFlowOnly, productFlowPair]);
 
   if (selectedMachines.length !== 2) {
     return (
@@ -99,7 +120,18 @@ export function ConnectionPointSnapPanel({
     ...(movingMachine ? validateConnectionPointsForObject(movingMachine).warnings : []),
     ...(fixedMachine ? validateConnectionPointsForObject(fixedMachine).warnings : [])
   ];
-  const canSnap = Boolean(movingMachine && fixedMachine && movingPoint && fixedPoint);
+  const canSnap = Boolean(
+    movingMachine
+    && fixedMachine
+    && movingPoint
+    && fixedPoint
+    && (!productFlowOnly || isProductFlowConnectionPointPair(movingPoint, fixedPoint))
+  );
+  const reverseProductFlowPair = movingMachine && fixedMachine
+    ? findProductFlowConnectionPointPair([fixedMachine, movingMachine])
+    : null;
+  const canSwap = !productFlowOnly
+    || reverseProductFlowPair?.movingMachineId === fixedMachine?.instanceId;
 
   const swapMovingFixed = () => {
     setMovingMachineId(fixedMachineId);
@@ -109,7 +141,12 @@ export function ConnectionPointSnapPanel({
   };
 
   return (
-    <section className="precision-section connection-snap-panel" data-testid="connection-point-snap-panel" aria-label="Connection point snap">
+    <section
+      className="precision-section connection-snap-panel"
+      data-testid="connection-point-snap-panel"
+      data-snap-mode={productFlowOnly ? "product-flow" : "engineering"}
+      aria-label="Connection point snap"
+    >
       <div className="property-readout">
         <span>Moving Object</span>
         <strong>{movingMachine ? getPlacedMachineDisplayName(movingMachine) : "Primary selected object"}</strong>
@@ -174,7 +211,7 @@ export function ConnectionPointSnapPanel({
             {diagnostics.length > 0 ? <span>{diagnostics.join(" ")}</span> : null}
           </div>
           <div className="alignment-button-grid">
-            <button type="button" onClick={swapMovingFixed}>
+            <button type="button" disabled={!canSwap} onClick={swapMovingFixed}>
               Swap Moving/Fixed
             </button>
             <button
