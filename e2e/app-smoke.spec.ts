@@ -1856,14 +1856,16 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await expect(arrangeBar).toBeVisible();
   const compactArrangeGeometry = await arrangeBar.evaluate((element) => {
     const box = element.getBoundingClientRect();
+    const primaryDock = document.querySelector('[data-testid="primary-dock"]')?.getBoundingClientRect();
     return {
       left: box.left,
       right: box.right,
+      primaryDockRight: primaryDock?.right ?? 0,
       viewportWidth: window.innerWidth,
       documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth
     };
   });
-  expect(compactArrangeGeometry.left).toBeGreaterThanOrEqual(0);
+  expect(compactArrangeGeometry.left).toBeGreaterThanOrEqual(compactArrangeGeometry.primaryDockRight);
   expect(compactArrangeGeometry.right).toBeLessThanOrEqual(compactArrangeGeometry.viewportWidth);
   expect(compactArrangeGeometry.documentFits).toBe(true);
   await arrangeBar.locator("summary").filter({ hasText: "Align" }).scrollIntoViewIfNeeded();

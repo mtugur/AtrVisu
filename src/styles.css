@@ -4957,7 +4957,8 @@ body.is-resizing-workbench-dock {
 
   .workbench-viewport-context-layer {
     top: var(--av-spacing-xs);
-    width: calc(100% - 16px);
+    left: calc(50% + 32px);
+    width: calc(100% - 80px);
   }
 
   .viewport-arrange-bar {
