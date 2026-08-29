@@ -23,10 +23,10 @@
 | Cross-surface naming | PASS | PlatformEntity, scene, Inspectors, precision, connection snap, assembly, annotation target, collision, delete confirmation, and commercial instance fallback share one resolver |
 | BOM identity stability | PASS | Definition/library grouping and canonical BOM name unchanged |
 | Unified startup/recovery | PASS | Session acceptance is separate from persisted recovery; create/load/resume dismiss Start without silently deleting recovery; cancel retains Start |
-| Viewpoints Bottom Dock authority | PASS | Viewpoints alone opens/closes through the Bottom Dock/Panel/UI Preference authorities and restores the explicit 120–140 px class height |
+| Viewpoints Bottom Dock authority | PASS | Fresh/start/recovery presentation is closed; explicit Viewpoints activation opens/closes through Bottom Dock/Panel/UI Preference authorities and restores the governed explicit height without overwriting user preference |
 | Inspector responsibility | PASS | Multi-selection Inspector contains property/context summaries and no Alignment/Distribution/Snap or selection action stack |
 | Contextual Arrange utility | PASS | Hidden below two eligible entities; common 2+ operations; truthful 3-object distribution threshold; no Inspector or Bottom Dock action stack |
-| Connect & Snap utility | PASS | Eligible exact-two machines plus deterministic product-out to product-in pair only; load/same-type/utility pairs excluded; existing Runtime Panel/command authority retained |
+| Connect & Snap utility | PASS | Eligible exact-two machines plus deterministic product-out to product-in pair only; load/same-type/utility pairs excluded; bounded body scrolling keeps Close and the primary action visible at 1440x900 and 1024x768 |
 | Keyboard Nudge placement | PASS | Nudge settings use the existing `NudgeSettings` state in Precision Placement and do not appear in contextual Arrange |
 | Command Palette | PASS | Ctrl/Cmd+K registry projection, filtering, keyboard navigation, disabled reasons, Enter execution, Escape/outside close, and no palette-only authority |
 | Collapse standard | PASS | Primary Dock, Inspector, and Bottom Dock share `WorkbenchDockCollapseButton` hit target, icon, tooltip, focus, and direction grammar |
@@ -35,20 +35,21 @@
 | Help living contract | PASS | Future visible command, workflow, or shortcut changes update Help in the same PR |
 | Feature Access and inventory | PASS | Rename, Arrange, Help, command bar, Explorer, and welcome mapped |
 | Release-surface hygiene | PASS | Existing technical surfaces inventoried for PF-2; no new leak |
-| Responsive contract | PASS | 1024 Inspector presentation defaults collapsed without persisting the transition, explicit open is available, desktop state restores wide, compact search stays one line, and 640 has no document overflow |
+| Responsive contract | PASS | 1024 Inspector and <=720 Primary Dock presentation collapse without persisting the transition; explicit reopen is available, desktop state restores wide, the 640 viewport dominates, contextual Arrange remains reachable, and document overflow is absent |
 | Lifecycle/domain invariance | PASS | One EditorHost/canvas and stable scene generation through UI-only surfaces and label updates |
 | Branch topology | PASS | PF-1 required head was 0 behind / 3 ahead of current main; no stale historical commit recovered; PR #109 audit head excluded |
 | PF-1B review evidence | PASS | Manual review `4991067599`; bounded Start, strip, toggle, progressive Selection Tools, Nudge relocation, and Help corrections |
 | PF-1C review evidence | PASS | Independent review `4992891484`; placed-name, contextual Measurement Helpers, exact-two connection disclosure, customer copy, and compact keyboard corrections |
 | Canonical v3 reconciliation | PASS | Quick Toolbar, contextual Arrange, Connect & Snap popover, Command Palette, shared dock collapse control, Help, and responsive shell use existing authorities |
 | Executed evidence correction | PASS | Review `5449251603`; Flow Pack/Belt Conveyor/Robot Palletizer plus Floor/Wall/Walkway; ten real-app screenshots cover recovery through 640 responsive presentation |
-| Focused validation | PASS | Product-flow snap, two-versus-three Arrange, responsive Inspector preference invariance, compact search, Custom Workspace wording, and scene lifecycle stability |
+| Final bounded visual correction | PASS | Review `5462166673`; fixed Connect & Snap action geometry, truthful closed Bottom Dock evidence, transient narrow Primary Dock, composed Inspector headers, and real PF-1 Review / Packaging Line / R01 evidence context |
+| Focused validation | PASS | Product-flow snap, 1440/1024 action geometry, Bottom Dock default/toggle, responsive Inspector and Primary Dock preference invariance, 640 Arrange reachability, Inspector machine/civil/multi header geometry, and scene lifecycle stability |
 | Dependency audit | PASS | `npm audit --audit-level=low`: 0 vulnerabilities |
 | Dependency tree | PASS | `npm ls --all` completed; only expected optional dependencies are absent |
 | Design-token governance | PASS | 255 maintained files checked |
 | Build | PASS | 4,126 modules transformed; existing bundle warning remains documented |
-| Full unit suite | PASS | 151 files / 1,261 tests |
-| Full Chromium suite | PASS | 73 Chromium tests |
+| Full unit suite | PASS | 151 files / 1,264 tests |
+| Full Chromium suite | PASS | 74 Chromium tests |
 | Diff check | PASS | `git diff --check` |
 | Exact-head GitHub Quality Gate | PR GATE | Required before manual acceptance |
 | Final manual visual acceptance | REQUIRED | Integrated startup, compact toolbar, contextual Arrange/Connect & Snap, Command Palette, Viewpoints, Inspector, Help, and responsive views require user acceptance |

@@ -1754,19 +1754,33 @@ body.is-resizing-workbench-dock {
 .panel-section-header strong,
 .panel-section-header small {
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .panel-section-header strong {
+  overflow: hidden;
   color: var(--av-text-primary);
   font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-section-header small {
+  max-width: 42%;
+  overflow: hidden;
   color: color-mix(in srgb, var(--av-text-primary) 58%, transparent);
   font-size: 0.72rem;
   font-weight: 700;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-section-disclosure {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  white-space: nowrap;
 }
 
 .panel-section-body {
@@ -2070,6 +2084,19 @@ body.is-resizing-workbench-dock {
 
 .connection-snap-panel {
   gap: 10px;
+}
+
+.connection-snap-panel-body,
+.connection-snap-panel-actions {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.connection-snap-panel-actions {
+  padding-top: var(--av-spacing-xs);
+  border-top: 1px solid var(--av-border-subtle);
+  background: var(--av-surface-overlay);
 }
 
 .connection-snap-summary,
@@ -4772,10 +4799,12 @@ body.is-resizing-workbench-dock {
 }
 
 .viewport-connect-popover {
+  display: grid;
   width: min(420px, calc(100vw - 24px));
   max-height: min(62vh, 560px);
+  grid-template-rows: auto minmax(0, 1fr);
   margin-top: var(--av-spacing-xs);
-  overflow-y: auto;
+  overflow: hidden;
   padding: var(--av-spacing-sm);
   border: 1px solid var(--av-border-default);
   border-radius: var(--av-control-radius-md);
@@ -4791,6 +4820,23 @@ body.is-resizing-workbench-dock {
   justify-content: space-between;
   border-bottom: 1px solid var(--av-border-subtle);
   padding-bottom: var(--av-spacing-xs);
+}
+
+.viewport-connect-popover > .connection-snap-panel {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+  padding: var(--av-spacing-xs) 0 0;
+  border: 0;
+  background: transparent;
+}
+
+.viewport-connect-popover .connection-snap-panel-body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: var(--av-spacing-2xs);
+  overscroll-behavior: contain;
 }
 
 .command-palette-backdrop {
@@ -4915,8 +4961,11 @@ body.is-resizing-workbench-dock {
   }
 
   .viewport-arrange-bar {
+    width: 100%;
     max-width: 100%;
+    justify-content: flex-start;
     overflow-x: auto;
+    overscroll-behavior-inline: contain;
   }
 
   .panel-reopen-tab {

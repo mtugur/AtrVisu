@@ -23,7 +23,9 @@ import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
 import {
   isResponsiveInspectorPresentation,
-  resolveInspectorPresentationCollapsed
+  isResponsivePrimaryDockPresentation,
+  resolveInspectorPresentationCollapsed,
+  resolvePrimaryDockPresentationCollapsed
 } from "./components/workbench/responsivePresentation";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
@@ -449,14 +451,22 @@ export function App() {
     height: window.innerHeight
   }));
   const [isResponsiveInspectorOpen, setIsResponsiveInspectorOpen] = useState(false);
+  const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
   const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
+  const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
   const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
+  const responsivePrimaryDockPresentationRef = useRef(responsivePrimaryDockPresentation);
   const isInspectorPresentationCollapsed = resolveInspectorPresentationCollapsed({
     viewportWidth: workbenchViewportSize.width,
     persistedCollapsed: isPanelCollapsed,
     responsiveInspectorOpen: isResponsiveInspectorOpen
   });
   const inspectorPresentationCollapsedRef = useRef(isInspectorPresentationCollapsed);
+  const isPrimaryDockPresentationCollapsed = resolvePrimaryDockPresentationCollapsed({
+    viewportWidth: workbenchViewportSize.width,
+    persistedCollapsed: isPrimaryDockCollapsed,
+    responsivePrimaryDockOpen: isResponsivePrimaryDockOpen
+  });
   const primaryDockWidthBounds = getPrimaryDockWidthBounds(
     workbenchViewportSize.width,
     isInspectorPresentationCollapsed ? 0 : panelWidth
@@ -545,6 +555,13 @@ export function App() {
       collapsed
     });
   }, [uiPreferencesStore]);
+  const setPrimaryDockPresentationCollapsed = useCallback((collapsed: boolean) => {
+    if (responsivePrimaryDockPresentationRef.current) {
+      setIsResponsivePrimaryDockOpen(!collapsed);
+      return;
+    }
+    setPrimaryDockCollapsed(collapsed);
+  }, [setPrimaryDockCollapsed]);
   const setBottomDockCollapsed = useCallback((collapsed: boolean) => {
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
       visible: true,
@@ -708,7 +725,7 @@ export function App() {
   const previousViewportShellStateRef = useRef({
     isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
-    isPrimaryDockCollapsed,
+    isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
     primaryDockWidth: effectivePrimaryDockWidth,
     isBottomDockCollapsed,
     bottomDockHeight: effectiveBottomDockHeight
@@ -718,7 +735,7 @@ export function App() {
     panelSectionVisibility,
     activePrimaryPanelId,
     activeBottomPanelId,
-    isPrimaryDockCollapsed,
+    isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
     isBottomDockCollapsed,
     isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
@@ -1353,12 +1370,12 @@ export function App() {
     requestLibraryManagerClose,
     closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
     openLibraryManager: () => {
-      setPrimaryDockCollapsed(false);
+      setPrimaryDockPresentationCollapsed(false);
       setActivePrimaryPanelId(RUNTIME_PANEL_IDS.machineLibrary);
       setIsLibraryManagerOpen(true);
     },
     openTaxonomyManager: () => setIsTaxonomyManagerOpen(true)
-  }), [requestLibraryManagerClose, setPrimaryDockCollapsed]);
+  }), [requestLibraryManagerClose, setPrimaryDockPresentationCollapsed]);
 
   const openTaxonomyManager = useCallback(() => openMachineLibraryManagerExclusively("taxonomy", {
     libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
@@ -1368,11 +1385,11 @@ export function App() {
     closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
     openLibraryManager: () => setIsLibraryManagerOpen(true),
     openTaxonomyManager: () => {
-      setPrimaryDockCollapsed(false);
+      setPrimaryDockPresentationCollapsed(false);
       setActivePrimaryPanelId(RUNTIME_PANEL_IDS.machineLibrary);
       setIsTaxonomyManagerOpen(true);
     }
-  }), [requestLibraryManagerClose, setPrimaryDockCollapsed]);
+  }), [requestLibraryManagerClose, setPrimaryDockPresentationCollapsed]);
 
   const runtimePanelBindings = useMemo<RuntimePanelBindings>(() => {
     const sectionBinding = (
@@ -1433,7 +1450,7 @@ export function App() {
         };
       },
       open: () => {
-        setPrimaryDockCollapsed(false);
+        setPrimaryDockPresentationCollapsed(false);
         setActivePrimaryPanelId(panelId);
         setPanelSectionExpanded(panelId, true);
       },
@@ -1443,7 +1460,7 @@ export function App() {
         }
         if (runtimePanelStateRef.current.activePrimaryPanelId === panelId) {
           setPanelSectionExpanded(panelId, false);
-          setPrimaryDockCollapsed(true);
+          setPrimaryDockPresentationCollapsed(true);
         }
         return true;
       },
@@ -1454,9 +1471,9 @@ export function App() {
             return false;
           }
           setPanelSectionExpanded(panelId, false);
-          setPrimaryDockCollapsed(true);
+          setPrimaryDockPresentationCollapsed(true);
         } else {
-          setPrimaryDockCollapsed(false);
+          setPrimaryDockPresentationCollapsed(false);
           setActivePrimaryPanelId(panelId);
           setPanelSectionExpanded(panelId, true);
         }
@@ -1517,19 +1534,19 @@ export function App() {
           available: true,
           context: `${effectivePrimaryDockWidth}px`
         }),
-        open: () => setPrimaryDockCollapsed(false),
+        open: () => setPrimaryDockPresentationCollapsed(false),
         close: () => {
           if (!closeMachineLibraryManagers()) {
             return false;
           }
-          setPrimaryDockCollapsed(true);
+          setPrimaryDockPresentationCollapsed(true);
           return true;
         },
         toggle: () => {
           if (!runtimePanelStateRef.current.isPrimaryDockCollapsed && !closeMachineLibraryManagers()) {
             return false;
           }
-          setPrimaryDockCollapsed(!runtimePanelStateRef.current.isPrimaryDockCollapsed);
+          setPrimaryDockPresentationCollapsed(!runtimePanelStateRef.current.isPrimaryDockCollapsed);
           return true;
         }
       },
@@ -1684,7 +1701,7 @@ export function App() {
     effectivePrimaryDockWidth,
     openInspectorPresentation,
     setBottomDockCollapsed,
-    setPrimaryDockCollapsed,
+    setPrimaryDockPresentationCollapsed,
     setPanelSectionExpanded,
     setPanelSectionExpansionPreservingVisibility,
     toggleInspectorPresentation
@@ -1719,7 +1736,7 @@ export function App() {
       panelSectionVisibility,
       activePrimaryPanelId,
       activeBottomPanelId,
-      isPrimaryDockCollapsed,
+      isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
       isBottomDockCollapsed,
       isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
@@ -1760,7 +1777,7 @@ export function App() {
     isPerformanceBenchmarkOpen,
     isProjectManagerOpen,
     isSimulationControlsOpen,
-    isPrimaryDockCollapsed,
+    isPrimaryDockPresentationCollapsed,
     isTaxonomyManagerOpen,
     measurementHelpersAvailable,
     measurementHelpersReason,
@@ -1795,7 +1812,7 @@ export function App() {
     const next = {
       isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
-      isPrimaryDockCollapsed,
+      isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
       primaryDockWidth: effectivePrimaryDockWidth,
       isBottomDockCollapsed,
       bottomDockHeight: effectiveBottomDockHeight
@@ -1822,7 +1839,7 @@ export function App() {
     effectivePrimaryDockWidth,
     isBottomDockCollapsed,
     isInspectorPresentationCollapsed,
-    isPrimaryDockCollapsed,
+    isPrimaryDockPresentationCollapsed,
     panelWidth,
     runtimeViewportBridge
   ]);
@@ -1939,6 +1956,9 @@ export function App() {
     responsiveInspectorPresentationRef.current = responsiveInspectorPresentation;
   }, [responsiveInspectorPresentation]);
   useLayoutEffect(() => {
+    responsivePrimaryDockPresentationRef.current = responsivePrimaryDockPresentation;
+  }, [responsivePrimaryDockPresentation]);
+  useLayoutEffect(() => {
     inspectorPresentationCollapsedRef.current = isInspectorPresentationCollapsed;
   }, [isInspectorPresentationCollapsed]);
   useEffect(() => {
@@ -1946,6 +1966,11 @@ export function App() {
       setIsResponsiveInspectorOpen(false);
     }
   }, [responsiveInspectorPresentation]);
+  useEffect(() => {
+    if (!responsivePrimaryDockPresentation) {
+      setIsResponsivePrimaryDockOpen(false);
+    }
+  }, [responsivePrimaryDockPresentation]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -4743,7 +4768,7 @@ export function App() {
   const primarySelectionEntity = runtimeSelection.primaryId
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
-  const primaryDockInset = isPrimaryDockCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
+  const primaryDockInset = isPrimaryDockPresentationCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
   const bottomDockInset = STATUS_BAR_HEIGHT + (
     isBottomDockCollapsed ? COLLAPSED_BOTTOM_DOCK_HEIGHT : effectiveBottomDockHeight
   );
@@ -4910,7 +4935,7 @@ export function App() {
             }
           ].filter((item) => panelSectionVisibility[item.panelId] !== false)}
           activePanelId={activePrimaryPanelId}
-          collapsed={isPrimaryDockCollapsed}
+          collapsed={isPrimaryDockPresentationCollapsed}
           width={effectivePrimaryDockWidth}
           minWidth={primaryDockWidthBounds.min}
           maxWidth={primaryDockWidthBounds.max}

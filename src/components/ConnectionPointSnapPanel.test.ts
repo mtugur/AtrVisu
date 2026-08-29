@@ -93,6 +93,10 @@ describe("ConnectionPointSnapPanel", () => {
     expect(markup).toContain('value="OUT" selected=""');
     expect(markup).toContain('value="IN" selected=""');
     expect(markup).not.toContain('data-testid="connection-point-snap-button" disabled');
+    expect(markup).toContain('data-testid="connection-point-snap-body"');
+    expect(markup).toContain('data-testid="connection-point-snap-actions"');
+    expect(markup.indexOf('data-testid="connection-point-snap-actions"'))
+      .toBeLessThan(markup.indexOf('data-testid="connection-point-snap-button"'));
   });
 
   it("does not enable premium snapping for utility-only points", () => {

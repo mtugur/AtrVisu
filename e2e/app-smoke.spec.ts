@@ -34,7 +34,12 @@ const openCleanApp = async (page: Page) => {
   } else {
     await expect(page.getByTestId("right-panel")).toHaveCount(1);
   }
-  await expect(page.getByTestId("machine-library-panel")).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1440) <= 720) {
+    await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("machine-library-panel")).toBeAttached();
+  } else {
+    await expect(page.getByTestId("machine-library-panel")).toBeVisible();
+  }
 };
 
 const openPrimaryDockPanel = async (
@@ -1484,6 +1489,7 @@ test("startup decision closes after create, existing load, and recovery resume",
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const welcome = page.getByTestId("empty-project-welcome");
+  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "true");
   await welcome.getByRole("button", { name: "New Layout" }).click();
   await page.getByTestId("new-project-name").fill("Startup Authority Project");
   await page.getByTestId("new-customer-name").fill("E2E Customer");
@@ -1500,6 +1506,7 @@ test("startup decision closes after create, existing load, and recovery resume",
   await loadPage.goto("/?e2eDiagnostics=1");
   const recoveryWelcome = loadPage.getByTestId("empty-project-welcome");
   await expect(recoveryWelcome.getByRole("heading", { name: "Continue where you left off" })).toBeVisible();
+  await expect(loadPage.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "true");
   await recoveryWelcome.getByRole("button", { name: "Open Project" }).click();
   const manager = loadPage.getByTestId("project-manager-modal");
   await manager.getByTestId("project-manager-project-option").filter({ hasText: "Startup Authority Project" }).click();
@@ -1813,7 +1820,10 @@ test("PF-1C Precision Placement helpers follow selected-machine context without 
 
 test("PF-1C Connection Point Snap is disclosed only for two eligible machines", async ({ page }) => {
   const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await openCleanApp(page);
+  const sceneLifecycleGeneration = await page.locator("canvas.scene-canvas")
+    .getAttribute("data-scene-lifecycle-generation");
   const machineCard = page.locator(".machine-card").first();
 
   await machineCard.click();
@@ -1841,6 +1851,26 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[3]);
   await page.keyboard.up("Control");
+  await page.setViewportSize({ width: 640, height: 800 });
+  await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+  await expect(arrangeBar).toBeVisible();
+  const compactArrangeGeometry = await arrangeBar.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return {
+      left: box.left,
+      right: box.right,
+      viewportWidth: window.innerWidth,
+      documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    };
+  });
+  expect(compactArrangeGeometry.left).toBeGreaterThanOrEqual(0);
+  expect(compactArrangeGeometry.right).toBeLessThanOrEqual(compactArrangeGeometry.viewportWidth);
+  expect(compactArrangeGeometry.documentFits).toBe(true);
+  await arrangeBar.locator("summary").filter({ hasText: "Align" }).scrollIntoViewIfNeeded();
+  await expect(arrangeBar.locator("summary").filter({ hasText: "Align" })).toBeVisible();
+  await arrangeBar.getByRole("button", { name: "Connect & Snap" }).scrollIntoViewIfNeeded();
+  await expect(arrangeBar.getByRole("button", { name: "Connect & Snap" })).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
   await arrangeBar.getByRole("button", { name: "Connect & Snap" }).click();
   await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
   const snapPanel = page.getByTestId("connection-point-snap-panel");
@@ -1848,6 +1878,40 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await expect(snapPanel.getByTestId("moving-connection-point-select")).toHaveValue(/.+/);
   await expect(snapPanel.getByTestId("fixed-connection-point-select")).toHaveValue(/.+/);
   await expect(snapPanel.getByTestId("connection-point-snap-button")).toBeEnabled();
+  const expectSnapActionsInsideViewport = async () => {
+    const geometry = await page.evaluate(() => {
+      const bounds = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing Connect & Snap geometry: ${selector}`);
+        const box = element.getBoundingClientRect();
+        return { top: box.top, right: box.right, bottom: box.bottom, left: box.left };
+      };
+      const body = document.querySelector('[data-testid="connection-point-snap-body"]');
+      if (!body) throw new Error("Missing Connect & Snap body.");
+      return {
+        popover: bounds('[data-testid="connect-and-snap-popover"]'),
+        close: bounds('[aria-label="Close Connect & Snap"]'),
+        primary: bounds('[data-testid="connection-point-snap-button"]'),
+        bodyOverflowY: getComputedStyle(body).overflowY,
+        viewport: { width: window.innerWidth, height: window.innerHeight }
+      };
+    });
+    expect(geometry.popover.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.popover.right).toBeLessThanOrEqual(geometry.viewport.width);
+    expect(geometry.popover.bottom).toBeLessThanOrEqual(geometry.viewport.height);
+    expect(geometry.close.bottom).toBeLessThanOrEqual(geometry.popover.bottom);
+    expect(geometry.primary.top).toBeGreaterThanOrEqual(geometry.popover.top);
+    expect(geometry.primary.bottom).toBeLessThanOrEqual(geometry.popover.bottom);
+    expect(geometry.bodyOverflowY).toBe("auto");
+  };
+  await expectSnapActionsInsideViewport();
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
+  await expectSnapActionsInsideViewport();
+  await expect(page.locator("canvas.scene-canvas")).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    sceneLifecycleGeneration ?? ""
+  );
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
   await arrangeBar.getByRole("button", { name: "Connect & Snap" }).click();
@@ -2343,7 +2407,18 @@ test("640x800 workbench preserves chrome and mobile bottom-panel geometry", asyn
   const before = await waitForRuntimeViewport(page);
   const rightPanel = page.getByTestId("right-panel");
   await expect(rightPanel).toHaveCount(0);
+  const primaryDock = page.getByTestId("primary-dock");
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  const persistedPrimaryDock = await page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.primaryDockShell"));
+  expect(persistedPrimaryDock?.collapsed).toBe(false);
+  await page.getByRole("button", { name: "Expand Primary Dock" }).click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  expect((await page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.primaryDockShell")))?.collapsed)
+    .toBe(false);
   await page.getByRole("button", { name: "Collapse Primary Dock" }).click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
   await page.getByRole("button", { name: "Expand Inspector" }).click();
   await expect(rightPanel).toBeVisible();
   const geometry = await page.evaluate(() => {
@@ -2397,6 +2472,15 @@ test("640x800 workbench preserves chrome and mobile bottom-panel geometry", asyn
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
   await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  expect((await page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.primaryDockShell")))?.collapsed)
+    .toBe(false);
+  await expect(page.locator("canvas.scene-canvas")).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    String(before.viewport?.sceneLifecycleGeneration ?? "")
+  );
   expect(errors).toEqual([]);
 });
 
@@ -4237,6 +4321,65 @@ test("building civil references can be added and edited without red console erro
   );
   await expect(page.getByTestId("civil-reference-properties")).toHaveCount(0);
 
+  expect(errors).toEqual([]);
+});
+
+test("Inspector section headers keep disclosure, title, and badge composed at 1440", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const canvas = page.locator("canvas.scene-canvas");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  const expectComposedHeader = async (name: RegExp) => {
+    const header = page.getByRole("button", { name });
+    await expect(header).toBeVisible();
+    const geometry = await header.evaluate((element) => {
+      const disclosure = element.querySelector(".panel-section-disclosure")?.getBoundingClientRect();
+      const titleElement = element.querySelector("strong");
+      const title = titleElement?.getBoundingClientRect();
+      const badge = element.querySelector("small")?.getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
+      const titleStyle = titleElement ? getComputedStyle(titleElement) : null;
+      if (!disclosure || !title || !badge || !titleStyle) {
+        throw new Error("Inspector header geometry is incomplete.");
+      }
+      return {
+        bounds: { top: bounds.top, right: bounds.right, bottom: bounds.bottom },
+        disclosure: { top: disclosure.top, bottom: disclosure.bottom },
+        title: { right: title.right, height: title.height },
+        badge: { left: badge.left, right: badge.right },
+        lineHeight: Number.parseFloat(titleStyle.lineHeight) || Number.parseFloat(titleStyle.fontSize) * 1.2,
+        titleWhiteSpace: titleStyle.whiteSpace
+      };
+    });
+    expect(geometry.disclosure.top).toBeGreaterThanOrEqual(geometry.bounds.top);
+    expect(geometry.disclosure.bottom).toBeLessThanOrEqual(geometry.bounds.bottom);
+    expect(geometry.title.height).toBeLessThanOrEqual(geometry.lineHeight + 2);
+    expect(geometry.titleWhiteSpace).toBe("nowrap");
+    expect(geometry.title.right).toBeLessThanOrEqual(geometry.badge.left);
+    expect(geometry.badge.right).toBeLessThanOrEqual(geometry.bounds.right);
+  };
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  await expectComposedHeader(/Selected Object Properties/i);
+
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 2);
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+  await expectComposedHeader(/Multi-Selection/i);
+
+  const insertMenu = await openWorkbenchMenu(page, "Insert");
+  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
+  await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("civil");
+  await expectComposedHeader(/Civil Reference Properties/i);
+
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
 

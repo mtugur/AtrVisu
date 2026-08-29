@@ -94,6 +94,22 @@ At the 1024-class breakpoint, Inspector collapse is responsive presentation
 state rather than a persisted UI preference. The Inspector starts out of the
 way, may be opened explicitly for the current responsive presentation, and
 restores the actual persisted desktop state when the viewport returns wide.
+At 720 px and below, the Primary Dock follows the same authority split: it is
+presentation-collapsed by default, may be reopened for the current narrow
+session, and never overwrites the persisted desktop dock preference. Returning
+wide restores that persisted preference.
+
+The Connect & Snap popover owns a bounded scrolling body and a non-scrolling
+action zone. Close and the primary Connect & Snap action remain in the visible
+popover geometry while point selectors, gap, compatibility, and summary data
+scroll internally when vertical space is limited. The Bottom Dock remains
+closed by default and opens only through its existing runtime panel and UI
+preference authorities; executed evidence must not pre-open it except for the
+canonical Viewpoints state.
+
+Inspector `PanelSection` headers reserve independent disclosure, one-line title,
+and bounded badge columns. This presentation rule does not alter generic
+expansion accessibility or panel state authority.
 The absent-preset presentation label is `Custom Workspace`; the underlying
 workspace identity and override policy remain unchanged.
 
@@ -108,5 +124,9 @@ workspace identity and override policy remain unchanged.
   canonical fallback behavior.
 - Precision Placement Helpers cannot report a pressed state without a selected-machine
   contribution capable of rendering its visible effect.
+- Narrow Primary Dock and Inspector presentation changes do not mutate persisted
+  desktop dock preferences or editor lifecycle state.
+- Contextual Connect & Snap actions remain keyboard reachable at supported
+  desktop and medium viewport sizes.
 - PF-2 may extend instance data deliberately, but cannot move definition
   identity into the project display-name authority.

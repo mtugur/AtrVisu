@@ -40,4 +40,21 @@ describe("PanelSection controlled expansion", () => {
     expect(markup).toContain("controlled-content");
     expect(markup).toContain('aria-expanded="true"');
   });
+
+  it("keeps disclosure, title, and badge in distinct header slots", () => {
+    const markup = renderToStaticMarkup(createElement(PanelSection, {
+      title: "Machine Properties",
+      badge: "Line 1 Flow Pack Machine",
+      defaultExpanded: true,
+      expanded: true,
+      onExpandedChange: vi.fn(),
+      children: createElement("div", null, "properties")
+    }));
+
+    expect(markup).toContain('class="panel-section-disclosure"');
+    expect(markup).toContain("<strong>Machine Properties</strong>");
+    expect(markup).toContain("<small>Line 1 Flow Pack Machine</small>");
+    expect(markup.indexOf("panel-section-disclosure")).toBeLessThan(markup.indexOf("Machine Properties"));
+    expect(markup.indexOf("Machine Properties")).toBeLessThan(markup.indexOf("Line 1 Flow Pack Machine"));
+  });
 });

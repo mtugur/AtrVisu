@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   isResponsiveInspectorPresentation,
-  resolveInspectorPresentationCollapsed
+  isResponsivePrimaryDockPresentation,
+  resolveInspectorPresentationCollapsed,
+  resolvePrimaryDockPresentationCollapsed
 } from "./responsivePresentation";
 
 describe("responsive workbench presentation", () => {
@@ -34,5 +36,37 @@ describe("responsive workbench presentation", () => {
       persistedCollapsed: false,
       responsiveInspectorOpen: false
     })).toBe(false);
+  });
+
+  it("presentation-collapses the Primary Dock at 720px without changing its desktop preference", () => {
+    expect(isResponsivePrimaryDockPresentation(720)).toBe(true);
+    expect(resolvePrimaryDockPresentationCollapsed({
+      viewportWidth: 640,
+      persistedCollapsed: false,
+      responsivePrimaryDockOpen: false
+    })).toBe(true);
+    expect(resolvePrimaryDockPresentationCollapsed({
+      viewportWidth: 640,
+      persistedCollapsed: false,
+      responsivePrimaryDockOpen: true
+    })).toBe(false);
+    expect(resolvePrimaryDockPresentationCollapsed({
+      viewportWidth: 1440,
+      persistedCollapsed: false,
+      responsivePrimaryDockOpen: true
+    })).toBe(false);
+  });
+
+  it("restores a persisted collapsed Primary Dock after leaving narrow presentation", () => {
+    expect(resolvePrimaryDockPresentationCollapsed({
+      viewportWidth: 640,
+      persistedCollapsed: true,
+      responsivePrimaryDockOpen: true
+    })).toBe(false);
+    expect(resolvePrimaryDockPresentationCollapsed({
+      viewportWidth: 1440,
+      persistedCollapsed: true,
+      responsivePrimaryDockOpen: true
+    })).toBe(true);
   });
 });

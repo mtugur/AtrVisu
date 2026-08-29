@@ -277,3 +277,34 @@ Judge the whole product, not the package fragments.
 **Reason:** valuable semantic/authority work is present, but the current visible toolbar, Selection Tools Bottom Dock and measurement semantics do not match the accepted v3 design contract.
 
 The correct action is **reconcile, not restart**.
+
+---
+
+## H. Final bounded visual correction
+
+**Correction baseline:** `519a71f4ea4c5183f616b599edf25b6afa770aeb`
+**Executed-evidence review:** `5462166673`
+
+The executed screenshot review identified four bounded presentation defects;
+none required a new domain or persistence authority:
+
+- Connect & Snap now uses a bounded internal body scroller and a fixed action
+  zone, keeping Close and the primary action inside the popover at 1440x900 and
+  1024x768.
+- The product UI preference already defined Bottom Dock and Viewpoints as
+  closed by default. The prior open screenshots came from evidence setup, so
+  product workspace semantics remain unchanged and the corrected evidence opens
+  Viewpoints only in its explicit canonical state.
+- At 720 px and below, Primary Dock collapse is transient presentation state,
+  parallel to responsive Inspector behavior. Explicit narrow reopen remains
+  available; the persisted desktop preference is unchanged and restored wide.
+- Inspector section headers use fixed disclosure, non-wrapping title, and
+  bounded badge columns so machine, civil, and multi-selection headings remain
+  composed at 1440 px.
+
+The replacement evidence is created through normal project authorities with
+project `PF-1 Review`, layout `Packaging Line`, revision `R01`, and the accepted
+mixed representative scene. Evidence files remain outside the repository.
+
+**Post-correction status:** ready for final manual visual acceptance only after
+the corrected exact-head Quality Gate is green.

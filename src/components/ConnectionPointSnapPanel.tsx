@@ -147,19 +147,20 @@ export function ConnectionPointSnapPanel({
       data-snap-mode={productFlowOnly ? "product-flow" : "engineering"}
       aria-label="Connection point snap"
     >
-      <div className="property-readout">
-        <span>Moving Object</span>
-        <strong>{movingMachine ? getPlacedMachineDisplayName(movingMachine) : "Primary selected object"}</strong>
-      </div>
-      <div className="property-readout">
-        <span>Fixed Object</span>
-        <strong>{fixedMachine ? getPlacedMachineDisplayName(fixedMachine) : "Secondary selected object"}</strong>
-      </div>
-      <p className="collision-note">Connect &amp; Snap moves the selected machine without changing its rotation.</p>
-      {movingPoints.length === 0 || fixedPoints.length === 0 ? (
-        <p className="manager-validation">Selected objects do not have compatible connection points.</p>
-      ) : (
-        <>
+      <div className="connection-snap-panel-body" data-testid="connection-point-snap-body">
+        <div className="property-readout">
+          <span>Moving Object</span>
+          <strong>{movingMachine ? getPlacedMachineDisplayName(movingMachine) : "Primary selected object"}</strong>
+        </div>
+        <div className="property-readout">
+          <span>Fixed Object</span>
+          <strong>{fixedMachine ? getPlacedMachineDisplayName(fixedMachine) : "Secondary selected object"}</strong>
+        </div>
+        <p className="collision-note">Connect &amp; Snap moves the selected machine without changing its rotation.</p>
+        {movingPoints.length === 0 || fixedPoints.length === 0 ? (
+          <p className="manager-validation">Selected objects do not have compatible connection points.</p>
+        ) : (
+          <>
           <label className="property-field">
             <span>Moving Object Connection Point</span>
             <select
@@ -210,6 +211,11 @@ export function ConnectionPointSnapPanel({
             ))}
             {diagnostics.length > 0 ? <span>{diagnostics.join(" ")}</span> : null}
           </div>
+          </>
+        )}
+      </div>
+      <div className="connection-snap-panel-actions" data-testid="connection-point-snap-actions">
+        {movingPoints.length > 0 && fixedPoints.length > 0 ? (
           <div className="alignment-button-grid">
             <button type="button" disabled={!canSwap} onClick={swapMovingFixed}>
               Swap Moving/Fixed
@@ -237,13 +243,13 @@ export function ConnectionPointSnapPanel({
               Connect &amp; Snap
             </button>
           </div>
-        </>
-      )}
-      {onClearSelection ? (
-        <button type="button" className="secondary-action" onClick={onClearSelection}>
-          Clear Selection
-        </button>
-      ) : null}
+        ) : null}
+        {onClearSelection ? (
+          <button type="button" className="secondary-action" onClick={onClearSelection}>
+            Clear Selection
+          </button>
+        ) : null}
+      </div>
     </section>
   );
 }
