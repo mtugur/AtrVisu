@@ -56,9 +56,9 @@ These are considered valuable and should survive unless an exact defect is found
 ### Viewpoints authority
 
 - true open/close toggle;
-- Bottom Dock contribution authority;
-- persisted explicit height restore;
-- pressed state derived from real dock state.
+- Primary Dock contribution authority;
+- legacy Bottom Dock ownership normalization without dormant-size mutation;
+- pressed state derived from real Primary Dock and active-tab state.
 
 ### Lifecycle invariants
 
@@ -291,10 +291,10 @@ none required a new domain or persistence authority:
 - Connect & Snap now uses a bounded internal body scroller and a fixed action
   zone, keeping Close and the primary action inside the popover at 1440x900 and
   1024x768.
-- The product UI preference already defined Bottom Dock and Viewpoints as
-  closed by default. The prior open screenshots came from evidence setup, so
-  product workspace semantics remain unchanged and the corrected evidence opens
-  Viewpoints only in its explicit canonical state.
+- At that review head, the product UI preference still defined Bottom Dock and
+  Viewpoints as closed by default; the evidence therefore opened Viewpoints only
+  in its then-canonical explicit state. Section I records the later approved
+  Primary Dock ownership correction from review `5061150709`.
 - At 720 px and below, Primary Dock collapse is transient presentation state,
   parallel to responsive Inspector behavior. Explicit narrow reopen remains
   available; the persisted desktop preference is unchanged and restored wide.
@@ -308,3 +308,28 @@ mixed representative scene. Evidence files remain outside the repository.
 
 **Post-correction status:** ready for final manual visual acceptance only after
 the corrected exact-head Quality Gate is green.
+
+## I. PF-1 correction review 5061150709
+
+Review `5061150709` closed two remaining authority/presentation gaps without
+introducing new product state:
+
+- Viewpoints is now a first-class Primary Dock contribution. The existing
+  Runtime Panel binding, Viewpoints store, and UI Preference record remain the
+  only authorities. Command and rail activation share the same toggle behavior;
+  legacy Bottom Dock ownership converges to Primary Dock. Bottom Dock remains a
+  future architectural seam and renders no empty Phase-1 chrome or viewport
+  inset.
+- The contextual Arrange bar completes the existing command set: engineering
+  edge labels, two-plus Align/Group, three-plus Distribute/Equal Gap, exact-pair
+  Connect & Snap, registered Advanced Alignment, and assembly Ungroup. Locked
+  movement continues to use atomic runtime evaluation and no duplicate mutation
+  or history handler was added.
+
+The evidence package for this correction is executed at 1440x900 and 1024x768
+with normal Viewpoints, populated Viewpoints, exact-pair Arrange, three-object
+Arrange, and assembly states. The ten captures are retained outside the
+repository at
+`C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-review-5061150709/`.
+PF-3 visual-language standardization remains a separate Phase-1 exit blocker
+and is not implemented here.

@@ -1252,6 +1252,34 @@ body.is-resizing-workbench-dock {
   padding: var(--av-spacing-sm);
 }
 
+.workbench-primary-dock .viewpoints-panel {
+  align-content: start;
+}
+
+.workbench-primary-dock .viewpoints-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.workbench-primary-dock .viewpoint-step-actions {
+  grid-column: 1 / -1;
+}
+
+.workbench-primary-dock .viewpoints-results {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.workbench-primary-dock .viewpoint-context-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.workbench-primary-dock .viewpoint-list-item {
+  box-sizing: border-box;
+  flex: 0 0 min(168px, 100%);
+  width: min(168px, 100%);
+}
+
 .workbench-primary-panel[hidden],
 .workbench-primary-dock-content[hidden],
 .workbench-bottom-dock-content[hidden],
@@ -4798,6 +4826,13 @@ body.is-resizing-workbench-dock {
   cursor: not-allowed;
 }
 
+@media (max-width: 1100px) {
+  .viewport-arrange-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
 .viewport-connect-popover {
   display: grid;
   width: min(420px, calc(100vw - 24px));
@@ -4964,6 +4999,7 @@ body.is-resizing-workbench-dock {
   .viewport-arrange-bar {
     width: 100%;
     max-width: 100%;
+    flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
     overscroll-behavior-inline: contain;

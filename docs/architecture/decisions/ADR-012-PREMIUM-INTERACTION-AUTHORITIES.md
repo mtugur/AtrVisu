@@ -86,9 +86,19 @@ two-machine selection with a deterministic `product-out -> product-in` pair;
 same-type, load-only, and utility-only connectors remain outside the premium
 surface. The existing snap mutation authority is unchanged. For two selected
 objects the context bar omits distribution and equal-gap controls entirely;
-those controls appear at three or more eligible objects. Advanced alignment
-remains a registered modal tool surface. These operations are not Bottom Dock
-contributions; Viewpoints is the only Phase-1 Bottom Dock utility.
+those controls appear at three or more eligible objects. A selected assembly
+exposes Ungroup without exposing invalid alignment/distribution actions.
+Advanced Alignment is reachable from the context bar and Arrange menu through
+the same registered modal tool surface. These operations are not dock
+contributions.
+
+Viewpoints is owned by Primary Dock and uses the same Runtime Panel, Viewpoints,
+and UI Preference authorities as before. The command and Primary rail both
+toggle that binding: first activation opens/activates Viewpoints and repeated
+activation while active collapses Primary Dock. Legacy persisted Bottom Dock
+ownership normalizes to Primary Dock without rewriting dormant Bottom Dock size
+preferences. With no Phase-1 contribution, Bottom Dock renders no chrome or
+viewport inset while remaining an architectural seam for future utilities.
 
 At the 1024-class breakpoint, Inspector collapse is responsive presentation
 state rather than a persisted UI preference. The Inspector starts out of the
@@ -102,10 +112,8 @@ wide restores that persisted preference.
 The Connect & Snap popover owns a bounded scrolling body and a non-scrolling
 action zone. Close and the primary Connect & Snap action remain in the visible
 popover geometry while point selectors, gap, compatibility, and summary data
-scroll internally when vertical space is limited. The Bottom Dock remains
-closed by default and opens only through its existing runtime panel and UI
-preference authorities; executed evidence must not pre-open it except for the
-canonical Viewpoints state.
+scroll internally when vertical space is limited. Bottom Dock has no Phase-1
+runtime contribution and therefore does not render empty chrome.
 
 Inspector `PanelSection` headers reserve independent disclosure, one-line title,
 and bounded badge columns. This presentation rule does not alter generic

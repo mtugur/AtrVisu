@@ -37,6 +37,18 @@ describe("runtime panel registry bridge", () => {
     });
   });
 
+  it("registers Viewpoints as a first-class Primary Dock panel", () => {
+    const descriptor = runtimePanelDescriptors.find(
+      (candidate) => candidate.definition.id === RUNTIME_PANEL_IDS.viewpoints
+    );
+
+    expect(descriptor).toMatchObject({
+      classification: "required-runtime",
+      surfaceKind: "section",
+      runtimeLocation: "primary-dock"
+    });
+  });
+
   it("rejects duplicate runtime panel ids during deterministic registration", () => {
     const definition: PanelDefinition = {
       id: "panel.duplicate",

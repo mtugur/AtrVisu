@@ -60,7 +60,7 @@ export function WorkbenchPrimaryDock({
             className={item.panelId === activeItem?.panelId ? "is-active" : undefined}
             data-testid={`primary-dock-tab-${item.panelId}`}
             aria-label={item.label}
-            aria-pressed={item.panelId === activeItem?.panelId}
+            aria-pressed={!collapsed && item.panelId === activeItem?.panelId}
             title={item.label}
             onClick={() => onActivate(item.panelId)}
           >

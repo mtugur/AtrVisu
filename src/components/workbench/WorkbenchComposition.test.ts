@@ -53,7 +53,8 @@ describe("final workbench composition contracts", () => {
     const markup = renderToStaticMarkup(createElement(WorkbenchPrimaryDock, {
       items: [
         { panelId: "panel.machineLibrary", label: "Library", content: "library-content" },
-        { panelId: "panel.layoutExplorer", label: "Explorer", content: "explorer-content" }
+        { panelId: "panel.layoutExplorer", label: "Explorer", content: "explorer-content" },
+        { panelId: "panel.viewpoints", label: "Viewpoints", content: "viewpoints-content" }
       ],
       activePanelId: "panel.layoutExplorer",
       collapsed: false,
@@ -70,6 +71,9 @@ describe("final workbench composition contracts", () => {
     expect(markup).toContain('data-testid="primary-dock"');
     expect(markup).toContain('data-panel-id="panel.layoutExplorer"');
     expect(markup).toContain('data-panel-id="panel.machineLibrary" hidden=""');
+    expect(markup).toContain('data-panel-id="panel.viewpoints" hidden=""');
+    expect(markup).toMatch(/data-testid="primary-dock-tab-panel\.layoutExplorer"[^>]*aria-pressed="true"/);
+    expect(markup).toMatch(/data-testid="primary-dock-tab-panel\.viewpoints"[^>]*aria-pressed="false"/);
     expect(markup).toContain('aria-label="Resize Primary Dock"');
     expect(markup).toContain('aria-valuenow="304"');
     expect(markup).toContain('aria-label="Collapse Primary Dock"');
@@ -78,7 +82,8 @@ describe("final workbench composition contracts", () => {
     const tree = WorkbenchPrimaryDock({
       items: [
         { panelId: "panel.machineLibrary", label: "Library", content: "library-content" },
-        { panelId: "panel.layoutExplorer", label: "Explorer", content: "explorer-content" }
+        { panelId: "panel.layoutExplorer", label: "Explorer", content: "explorer-content" },
+        { panelId: "panel.viewpoints", label: "Viewpoints", content: "viewpoints-content" }
       ],
       activePanelId: "panel.machineLibrary",
       collapsed: false,
@@ -189,11 +194,11 @@ describe("final workbench composition contracts", () => {
     expect(onExpandedChange).toHaveBeenCalledWith(false);
   });
 
-  it("renders the generic Bottom Dock contribution and persistent status projection", () => {
+  it("retains the generic Bottom Dock seam for future contributions and the persistent status projection", () => {
     const onActivate = vi.fn();
     const bottomMarkup = renderToStaticMarkup(createElement(WorkbenchBottomDock, {
-      contributions: [{ panelId: "panel.viewpoints", label: "Viewpoints", content: "viewpoint-content" }],
-      activePanelId: "panel.viewpoints",
+      contributions: [{ panelId: "panel.futureTimeline", label: "Timeline", content: "timeline-content" }],
+      activePanelId: "panel.futureTimeline",
       collapsed: false,
       expandedHeight: 136,
       minHeight: 120,
@@ -212,8 +217,8 @@ describe("final workbench composition contracts", () => {
       dirty: true
     }));
 
-    expect(bottomMarkup).toContain('data-panel-id="panel.viewpoints"');
-    expect(bottomMarkup).toContain("viewpoint-content");
+    expect(bottomMarkup).toContain('data-panel-id="panel.futureTimeline"');
+    expect(bottomMarkup).toContain("timeline-content");
     expect(bottomMarkup).toContain('aria-label="Resize Bottom Dock"');
     expect(bottomMarkup).toContain('aria-valuenow="136"');
     expect(statusMarkup).toContain("Selected: 3");

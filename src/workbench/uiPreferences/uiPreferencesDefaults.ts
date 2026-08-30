@@ -55,9 +55,9 @@ export const createDefaultWorkbenchUiPreferences = (): WorkbenchUiPreferences =>
       || entry.panelId === RUNTIME_PANEL_IDS.layoutExplorer
       || entry.panelId === RUNTIME_PANEL_IDS.layers
       || entry.panelId === RUNTIME_PANEL_IDS.groups
+      || entry.panelId === RUNTIME_PANEL_IDS.viewpoints
       ? "primary-dock"
       : entry.panelId === RUNTIME_PANEL_IDS.bottomDockShell
-        || entry.panelId === RUNTIME_PANEL_IDS.viewpoints
         || entry.panelId === RUNTIME_PANEL_IDS.alignmentTools
         || entry.panelId === RUNTIME_PANEL_IDS.statusBar
         ? "bottom-dock"

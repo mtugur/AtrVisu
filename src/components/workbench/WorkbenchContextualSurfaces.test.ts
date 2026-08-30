@@ -102,6 +102,8 @@ describe("ViewportArrangeBar", () => {
     onDistribute: vi.fn(),
     onEqualGap: vi.fn(),
     onGroup: vi.fn(),
+    onUngroup: vi.fn(),
+    onOpenAdvancedAlignment: vi.fn(),
     onToggleConnectAndSnap: vi.fn()
   });
 
@@ -111,6 +113,8 @@ describe("ViewportArrangeBar", () => {
       movementAllowed: true,
       canDistribute: false,
       canGroup: false,
+      canUngroup: false,
+      canOpenAdvancedAlignment: false,
       connectAndSnapAvailable: false,
       connectAndSnapOpen: false,
       ...callbacks()
@@ -125,18 +129,23 @@ describe("ViewportArrangeBar", () => {
       movementAllowed: true,
       canDistribute: false,
       canGroup: true,
+      canUngroup: false,
+      canOpenAdvancedAlignment: true,
       connectAndSnapAvailable: true,
       connectAndSnapOpen: false,
       ...handlers
     }));
-    const align = [...container.querySelectorAll("button")].find((button) => button.textContent === "Left") as HTMLButtonElement;
+    const align = [...container.querySelectorAll("button")].find((button) => button.textContent === "Left edges") as HTMLButtonElement;
     const group = [...container.querySelectorAll("button")].find((button) => button.textContent === "Group") as HTMLButtonElement;
+    const advanced = [...container.querySelectorAll("button")].find((button) => button.textContent === "Advanced Alignment...") as HTMLButtonElement;
     const connect = [...container.querySelectorAll("button")].find((button) => button.textContent === "Connect & Snap") as HTMLButtonElement;
     await act(async () => align.click());
     await act(async () => group.click());
+    await act(async () => advanced.click());
     await act(async () => connect.click());
     expect(handlers.onAlign).toHaveBeenCalledWith("left");
     expect(handlers.onGroup).toHaveBeenCalledTimes(1);
+    expect(handlers.onOpenAdvancedAlignment).toHaveBeenCalledTimes(1);
     expect(handlers.onToggleConnectAndSnap).toHaveBeenCalledTimes(1);
     expect([...container.querySelectorAll("summary")].map((summary) => summary.textContent)).toEqual(["Align"]);
   });
@@ -147,6 +156,8 @@ describe("ViewportArrangeBar", () => {
       movementAllowed: true,
       canDistribute: true,
       canGroup: true,
+      canUngroup: false,
+      canOpenAdvancedAlignment: true,
       connectAndSnapAvailable: false,
       connectAndSnapOpen: false,
       ...callbacks()
@@ -154,6 +165,57 @@ describe("ViewportArrangeBar", () => {
 
     expect([...container.querySelectorAll("summary")].map((summary) => summary.textContent))
       .toEqual(["Align", "Distribute", "Equal Gap"]);
+  });
+
+  it("keeps locked movement actions inert while Advanced Alignment remains discoverable", async () => {
+    const handlers = callbacks();
+    const container = await mount(createElement(ViewportArrangeBar, {
+      selectionCount: 2,
+      movementAllowed: false,
+      canDistribute: false,
+      canGroup: true,
+      canUngroup: false,
+      canOpenAdvancedAlignment: true,
+      connectAndSnapAvailable: false,
+      connectAndSnapOpen: false,
+      ...handlers
+    }));
+
+    const leftEdges = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Left edges") as HTMLButtonElement;
+    const group = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Group") as HTMLButtonElement;
+    const advanced = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Advanced Alignment...") as HTMLButtonElement;
+    expect(leftEdges.disabled).toBe(true);
+    expect(group.disabled).toBe(true);
+    expect(advanced.disabled).toBe(false);
+    await act(async () => advanced.click());
+    expect(handlers.onAlign).not.toHaveBeenCalled();
+    expect(handlers.onGroup).not.toHaveBeenCalled();
+    expect(handlers.onOpenAdvancedAlignment).toHaveBeenCalledOnce();
+  });
+
+  it("exposes the existing Ungroup authority for an assembly without invalid alignment actions", async () => {
+    const handlers = callbacks();
+    const container = await mount(createElement(ViewportArrangeBar, {
+      selectionCount: 1,
+      movementAllowed: false,
+      canDistribute: false,
+      canGroup: false,
+      canUngroup: true,
+      canOpenAdvancedAlignment: false,
+      connectAndSnapAvailable: false,
+      connectAndSnapOpen: false,
+      ...handlers
+    }));
+
+    expect(container.querySelector("summary")).toBeNull();
+    const ungroup = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Ungroup") as HTMLButtonElement;
+    await act(async () => ungroup.click());
+    expect(handlers.onUngroup).toHaveBeenCalledOnce();
+    expect(handlers.onAlign).not.toHaveBeenCalled();
   });
 });
 

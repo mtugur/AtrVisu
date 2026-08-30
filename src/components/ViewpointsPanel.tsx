@@ -143,7 +143,13 @@ export function ViewpointsPanel({
       updateStripNavigation();
     });
     return () => window.cancelAnimationFrame(frameId);
-  }, [revealSelectedCard, selectedViewpointId, updateStripNavigation, viewpoints.length]);
+  }, [
+    revealSelectedCard,
+    selectedViewpointId,
+    stripNavigation.hasOverflow,
+    updateStripNavigation,
+    viewpoints.length
+  ]);
 
   return (
     <section className="viewpoints-panel" data-testid="viewpoints-panel" aria-label="Viewpoints">

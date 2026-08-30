@@ -17,7 +17,6 @@ import {
   WorkspacePreferencesControl
 } from "./components/workbench";
 import { LayoutExplorer } from "./components/workbench/LayoutExplorer";
-import { WorkbenchBottomDock } from "./components/workbench/WorkbenchBottomDock";
 import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDock";
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
@@ -279,12 +278,10 @@ import {
   LAYOUT_3D_EDITOR_ID
 } from "./workbench/layout3dEditorDefinition";
 import {
-  DEFAULT_BOTTOM_DOCK_HEIGHT,
   DEFAULT_PRIMARY_DOCK_WIDTH,
   DOCK_RESIZE_BREAKPOINT,
   PRIMARY_DOCK_RAIL_WIDTH,
   clampDockSize,
-  getBottomDockHeightBounds,
   getPrimaryDockWidthBounds
 } from "./workbench/dockSizing";
 import {
@@ -305,10 +302,10 @@ const PRIMARY_DOCK_PANEL_IDS = [
   RUNTIME_PANEL_IDS.machineLibrary,
   RUNTIME_PANEL_IDS.layoutExplorer,
   RUNTIME_PANEL_IDS.layers,
-  RUNTIME_PANEL_IDS.groups
+  RUNTIME_PANEL_IDS.groups,
+  RUNTIME_PANEL_IDS.viewpoints
 ] as const;
 const STATUS_BAR_HEIGHT = 25;
-const COLLAPSED_BOTTOM_DOCK_HEIGHT = 34;
 const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   nudgeStepMm: 100,
   largeNudgeStepMm: 1000,
@@ -443,9 +440,6 @@ export function App() {
   const primaryDockPreference = panelPreferences.get(RUNTIME_PANEL_IDS.primaryDockShell);
   const primaryDockWidth = primaryDockPreference?.size ?? DEFAULT_PRIMARY_DOCK_WIDTH;
   const isPrimaryDockCollapsed = !primaryDockPreference?.visible || Boolean(primaryDockPreference.collapsed);
-  const bottomDockPreference = panelPreferences.get(RUNTIME_PANEL_IDS.bottomDockShell);
-  const bottomDockHeight = bottomDockPreference?.size ?? DEFAULT_BOTTOM_DOCK_HEIGHT;
-  const isBottomDockCollapsed = !bottomDockPreference?.visible || Boolean(bottomDockPreference.collapsed);
   const [workbenchViewportSize, setWorkbenchViewportSize] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight
@@ -471,9 +465,7 @@ export function App() {
     workbenchViewportSize.width,
     isInspectorPresentationCollapsed ? 0 : panelWidth
   );
-  const bottomDockHeightBounds = getBottomDockHeightBounds(workbenchViewportSize.height);
   const effectivePrimaryDockWidth = clampDockSize(primaryDockWidth, primaryDockWidthBounds);
-  const effectiveBottomDockHeight = clampDockSize(bottomDockHeight, bottomDockHeightBounds);
   const dockResizeEnabled = workbenchViewportSize.width > DOCK_RESIZE_BREAKPOINT;
   const panelSectionExpansion = useMemo(() => Object.fromEntries(
     uiPreferences.panels
@@ -544,11 +536,6 @@ export function App() {
       )
     });
   }, [uiPreferencesStore]);
-  const setBottomDockHeight = useCallback((requested: number) => {
-    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
-      size: clampDockSize(requested, getBottomDockHeightBounds(window.innerHeight))
-    });
-  }, [uiPreferencesStore]);
   const setPrimaryDockCollapsed = useCallback((collapsed: boolean) => {
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
       visible: true,
@@ -562,12 +549,6 @@ export function App() {
     }
     setPrimaryDockCollapsed(collapsed);
   }, [setPrimaryDockCollapsed]);
-  const setBottomDockCollapsed = useCallback((collapsed: boolean) => {
-    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
-      visible: true,
-      collapsed
-    });
-  }, [uiPreferencesStore]);
   useEffect(() => {
     const handleWorkbenchResize = () => {
       setWorkbenchViewportSize({ width: window.innerWidth, height: window.innerHeight });
@@ -592,7 +573,6 @@ export function App() {
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
   const [runtimeSelection, setRuntimeSelection] = useState(() => createEmptyRuntimeSelection("scene"));
   const [activePrimaryPanelId, setActivePrimaryPanelId] = useState<PanelId>(RUNTIME_PANEL_IDS.machineLibrary);
-  const [activeBottomPanelId, setActiveBottomPanelId] = useState<PanelId>(RUNTIME_PANEL_IDS.viewpoints);
   const [annotationSelectionSignal, setAnnotationSelectionSignal] = useState(0);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
   const [hasAcceptedWorkingLayout, setHasAcceptedWorkingLayout] = useState(false);
@@ -727,16 +707,14 @@ export function App() {
     panelWidth,
     isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
     primaryDockWidth: effectivePrimaryDockWidth,
-    isBottomDockCollapsed,
-    bottomDockHeight: effectiveBottomDockHeight
+    isBottomDockCollapsed: true,
+    bottomDockHeight: 0
   });
   const runtimePanelStateRef = useRef({
     panelSectionExpansion,
     panelSectionVisibility,
     activePrimaryPanelId,
-    activeBottomPanelId,
     isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
-    isBottomDockCollapsed,
     isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
     isProjectManagerOpen,
@@ -1481,41 +1459,6 @@ export function App() {
       }
     });
 
-    const bottomPanelBinding = (panelId: PanelSectionId): RuntimePanelBinding => ({
-      getState: () => {
-        const state = runtimePanelStateRef.current;
-        const visible = state.panelSectionVisibility[panelId] !== false;
-        const active = state.activeBottomPanelId === panelId;
-        return {
-          isVisible: !state.isBottomDockCollapsed && visible && active,
-          isOpen: !state.isBottomDockCollapsed && visible && active,
-          available: true,
-          isExpanded: !state.isBottomDockCollapsed && active,
-          context: active ? "active-bottom-panel" : "inactive-bottom-panel"
-        };
-      },
-      open: () => {
-        setPanelSectionExpanded(panelId, true);
-        setActiveBottomPanelId(panelId);
-        setBottomDockCollapsed(false);
-      },
-      close: () => {
-        if (runtimePanelStateRef.current.activeBottomPanelId === panelId) {
-          setBottomDockCollapsed(true);
-        }
-      },
-      toggle: () => {
-        const state = runtimePanelStateRef.current;
-        if (!state.isBottomDockCollapsed && state.activeBottomPanelId === panelId) {
-          setBottomDockCollapsed(true);
-        } else {
-          setPanelSectionExpanded(panelId, true);
-          setActiveBottomPanelId(panelId);
-          setBottomDockCollapsed(false);
-        }
-      }
-    });
-
     const modalState = (
       open: boolean,
       reason?: string
@@ -1563,14 +1506,11 @@ export function App() {
       },
       [RUNTIME_PANEL_IDS.bottomDockShell]: {
         getState: () => ({
-          isVisible: true,
-          isOpen: !runtimePanelStateRef.current.isBottomDockCollapsed,
-          available: true,
-          context: `${effectiveBottomDockHeight}px`
-        }),
-        open: () => setBottomDockCollapsed(false),
-        close: () => setBottomDockCollapsed(true),
-        toggle: () => setBottomDockCollapsed(!runtimePanelStateRef.current.isBottomDockCollapsed)
+          isVisible: false,
+          isOpen: false,
+          available: false,
+          reason: "No Bottom Dock contributions are active in Phase 1."
+        })
       },
       [RUNTIME_PANEL_IDS.layoutControls]: {
         getState: () => modalState(runtimePanelStateRef.current.isLayoutControlsOpen),
@@ -1589,7 +1529,7 @@ export function App() {
         closeMachineLibraryManagers
       ),
       [RUNTIME_PANEL_IDS.layoutExplorer]: primaryPanelBinding(RUNTIME_PANEL_IDS.layoutExplorer),
-      [RUNTIME_PANEL_IDS.viewpoints]: bottomPanelBinding(RUNTIME_PANEL_IDS.viewpoints),
+      [RUNTIME_PANEL_IDS.viewpoints]: primaryPanelBinding(RUNTIME_PANEL_IDS.viewpoints),
       [RUNTIME_PANEL_IDS.layers]: primaryPanelBinding(RUNTIME_PANEL_IDS.layers),
       [RUNTIME_PANEL_IDS.civilReferences]: sectionBinding(RUNTIME_PANEL_IDS.civilReferences),
       [RUNTIME_PANEL_IDS.groups]: primaryPanelBinding(RUNTIME_PANEL_IDS.groups),
@@ -1697,10 +1637,8 @@ export function App() {
     refreshProjects,
     requestLibraryManagerClose,
     closeInspectorPresentation,
-    effectiveBottomDockHeight,
     effectivePrimaryDockWidth,
     openInspectorPresentation,
-    setBottomDockCollapsed,
     setPrimaryDockPresentationCollapsed,
     setPanelSectionExpanded,
     setPanelSectionExpansionPreservingVisibility,
@@ -1735,9 +1673,7 @@ export function App() {
       panelSectionExpansion,
       panelSectionVisibility,
       activePrimaryPanelId,
-      activeBottomPanelId,
       isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
-      isBottomDockCollapsed,
       isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
       isProjectManagerOpen,
@@ -1759,7 +1695,6 @@ export function App() {
       propertiesContext: editingAnnotationId ? "annotation" : propertiesPanelContext
     };
   }, [
-    activeBottomPanelId,
     activePrimaryPanelId,
     connectionPointSnapAvailable,
     connectionPointSnapReason,
@@ -1772,7 +1707,6 @@ export function App() {
     isHelpOpen,
     isAdvancedAlignmentOpen,
     isConnectionPointSnapOpen,
-    isBottomDockCollapsed,
     isInspectorPresentationCollapsed,
     isPerformanceBenchmarkOpen,
     isProjectManagerOpen,
@@ -1814,8 +1748,8 @@ export function App() {
       panelWidth,
       isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
       primaryDockWidth: effectivePrimaryDockWidth,
-      isBottomDockCollapsed,
-      bottomDockHeight: effectiveBottomDockHeight
+      isBottomDockCollapsed: true,
+      bottomDockHeight: 0
     };
     previousViewportShellStateRef.current = next;
     const reason = getRuntimeViewportShellResizeReason(previous, next);
@@ -1835,9 +1769,7 @@ export function App() {
       )
     );
   }, [
-    effectiveBottomDockHeight,
     effectivePrimaryDockWidth,
-    isBottomDockCollapsed,
     isInspectorPresentationCollapsed,
     isPrimaryDockPresentationCollapsed,
     panelWidth,
@@ -4315,8 +4247,8 @@ export function App() {
     }
     if (commandId === RUNTIME_FEATURE_COMMAND_IDS.viewpoints) {
       const state = runtimePanelStateRef.current;
-      return !state.isBottomDockCollapsed
-        && state.activeBottomPanelId === RUNTIME_PANEL_IDS.viewpoints;
+      return !state.isPrimaryDockCollapsed
+        && state.activePrimaryPanelId === RUNTIME_PANEL_IDS.viewpoints;
     }
     if (commandId === RUNTIME_FEATURE_COMMAND_IDS.alignmentTools) {
       return runtimePanelStateRef.current.isAdvancedAlignmentOpen;
@@ -4652,8 +4584,10 @@ export function App() {
             <ViewportArrangeBar
               selectionCount={selectedAlignableEntities.length}
               movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
-              canDistribute={selectedAlignableEntities.length >= 3}
+              canDistribute={!selectedGroup && selectedAlignableEntities.length >= 3}
               canGroup={!selectedGroup && selectedAlignableEntities.length >= 2}
+              canUngroup={Boolean(selectedGroup)}
+              canOpenAdvancedAlignment={!selectedGroup && selectedAlignableEntities.length >= 2}
               connectAndSnapAvailable={connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false}
               connectAndSnapOpen={isConnectionPointSnapOpen}
               onAlign={(action) => executeRuntimeFeatureCommand(
@@ -4669,6 +4603,10 @@ export function App() {
                 { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
               )}
               onGroup={() => executeCommandSurfaceItem(ASSEMBLY_COMMAND_IDS.createGroup)}
+              onUngroup={() => executeCommandSurfaceItem(ASSEMBLY_COMMAND_IDS.ungroup)}
+              onOpenAdvancedAlignment={() => executeCommandSurfaceItem(
+                RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
+              )}
               onToggleConnectAndSnap={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}
             />
             {isConnectionPointSnapOpen && connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false ? (
@@ -4748,30 +4686,11 @@ export function App() {
     }
   }, [activePrimaryPanelId, panelSectionVisibility]);
 
-  useEffect(() => {
-    if (activeBottomPanelId !== RUNTIME_PANEL_IDS.viewpoints) {
-      setActiveBottomPanelId(RUNTIME_PANEL_IDS.viewpoints);
-      return;
-    }
-    if (panelSectionVisibility[activeBottomPanelId as PanelSectionId] !== false) {
-      return;
-    }
-    const nextPanelId = [RUNTIME_PANEL_IDS.viewpoints]
-      .find((panelId) => panelSectionVisibility[panelId] !== false);
-    if (nextPanelId) {
-      setActiveBottomPanelId(nextPanelId);
-    } else {
-      setBottomDockCollapsed(true);
-    }
-  }, [activeBottomPanelId, panelSectionVisibility, setBottomDockCollapsed]);
-
   const primarySelectionEntity = runtimeSelection.primaryId
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
   const primaryDockInset = isPrimaryDockPresentationCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
-  const bottomDockInset = STATUS_BAR_HEIGHT + (
-    isBottomDockCollapsed ? COLLAPSED_BOTTOM_DOCK_HEIGHT : effectiveBottomDockHeight
-  );
+  const bottomDockInset = STATUS_BAR_HEIGHT;
   const layerNames = new Map(layers.map((layer) => [layer.id, layer.name]));
   const showLegacyCompatibilityStack = false;
 
@@ -4932,6 +4851,24 @@ export function App() {
                   onToggleGroupCollapsed={toggleGroupCollapsed}
                 />
               )
+            },
+            {
+              panelId: RUNTIME_PANEL_IDS.viewpoints,
+              label: "Viewpoints",
+              badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
+              content: (
+                <ViewpointsPanel
+                  viewpoints={viewpoints}
+                  selectedViewpointId={selectedViewpointId}
+                  onSelectViewpoint={setSelectedViewpointId}
+                  onCaptureViewpoint={captureViewpoint}
+                  onApplyViewpoint={applyViewpoint}
+                  onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
+                  onRenameViewpoint={renameViewpoint}
+                  onDeleteViewpoint={removeViewpoint}
+                  onStepViewpoint={stepViewpoint}
+                />
+              )
             }
           ].filter((item) => panelSectionVisibility[item.panelId] !== false)}
           activePanelId={activePrimaryPanelId}
@@ -4942,7 +4879,11 @@ export function App() {
           resizeEnabled={dockResizeEnabled}
           bottomInset={bottomDockInset}
           onActivate={(panelId) => {
-            runtimePanelBridge.openPanel(panelId);
+            if (panelId === RUNTIME_PANEL_IDS.viewpoints) {
+              runtimePanelBridge.togglePanel(panelId);
+            } else {
+              runtimePanelBridge.openPanel(panelId);
+            }
           }}
           onToggleCollapsed={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.primaryDockShell)}
           onResize={setPrimaryDockWidth}
@@ -5541,44 +5482,6 @@ export function App() {
             </PanelSection>
           ) : null}
         </aside>
-      )}
-      bottomDock={(
-        <WorkbenchBottomDock
-          contributions={[
-            ...(panelSectionVisibility[RUNTIME_PANEL_IDS.viewpoints] === false ? [] : [{
-              panelId: RUNTIME_PANEL_IDS.viewpoints,
-              label: "Viewpoints",
-              badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
-              content: (
-                <ViewpointsPanel
-                  viewpoints={viewpoints}
-                  selectedViewpointId={selectedViewpointId}
-                  onSelectViewpoint={setSelectedViewpointId}
-                  onCaptureViewpoint={captureViewpoint}
-                  onApplyViewpoint={applyViewpoint}
-                  onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
-                  onRenameViewpoint={renameViewpoint}
-                  onDeleteViewpoint={removeViewpoint}
-                  onStepViewpoint={stepViewpoint}
-                />
-              )
-            }])
-          ]}
-          activePanelId={activeBottomPanelId}
-          collapsed={isBottomDockCollapsed}
-          expandedHeight={effectiveBottomDockHeight}
-          minHeight={bottomDockHeightBounds.min}
-          maxHeight={bottomDockHeightBounds.max}
-          resizeEnabled={dockResizeEnabled}
-          leftInset={primaryDockInset}
-          rightInset={isInspectorPresentationCollapsed ? 0 : panelWidth}
-          onActivate={(panelId) => {
-            setActiveBottomPanelId(panelId);
-            setBottomDockCollapsed(false);
-          }}
-          onToggleCollapsed={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.bottomDockShell)}
-          onResize={setBottomDockHeight}
-        />
       )}
       statusBar={(
         <WorkbenchStatusBar

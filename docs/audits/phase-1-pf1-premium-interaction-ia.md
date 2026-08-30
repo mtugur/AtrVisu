@@ -62,14 +62,16 @@ measurement. Operational alignment, distribution, equal-gap, duplicate,
 delete, clear-selection, and connection-snap stacks are absent from the active
 Inspector composition.
 
-Selection Tools is retired from normal Bottom Dock presentation. Viewpoints is
-the only Phase-1 Bottom Dock contribution. Two or more alignable entities expose
-one compact viewport context bar whose Align, Distribute, Equal Gap, and Group
-actions delegate to existing runtime commands. An exact compatible machine pair
+Selection Tools is retired from normal presentation. Viewpoints is a first-class
+Primary Dock contribution and Phase 1 renders no Bottom Dock chrome. Two or more
+alignable entities expose one compact viewport context bar whose Align and Group
+actions delegate to existing runtime commands; Distribute and Equal Gap appear
+at three or more. An exact compatible machine pair
 adds Connect & Snap and reuses the existing selectors and snap command in a
 transient popover; the action is absent for mixed or three-plus selection.
-Advanced pair/anchor controls remain available through Arrange > Advanced
-Alignment in the registered modal tool surface. Keyboard Nudge settings remain
+Advanced pair/anchor controls remain available from the context bar and Arrange
+menu through the same registered modal tool surface. A selected assembly exposes
+Ungroup without invalid movement actions. Keyboard Nudge settings remain
 in Precision Placement using the same `NudgeSettings` state and unchanged
 keyboard behavior.
 
@@ -114,10 +116,12 @@ remains in product documentation only.
 ## Viewpoints Toggle
 
 `view.viewpoints` delegates to the Runtime Panel toggle operation. A collapsed
-Bottom Dock opens with Viewpoints active; another active contribution switches
-to Viewpoints; an active expanded Viewpoints contribution collapses; a later
-activation restores the persisted explicit dock height. Toolbar pressed state
-is derived from the same Bottom Dock and active-contribution state.
+Primary Dock opens with Viewpoints active; another active Primary contribution
+switches to Viewpoints; active expanded Viewpoints collapses on repeated
+activation. The Primary rail uses the same binding and toolbar pressed state is
+derived from Primary Dock plus active-tab state. Legacy `bottom-dock` ownership
+normalizes to `primary-dock`; dormant Bottom Dock sizing is preserved but no
+empty Phase-1 dock chrome or viewport inset is rendered.
 
 ## Scene Label Lifecycle
 
@@ -217,7 +221,8 @@ decision in `docs/audits/ATRVISU_PR110_REUSE_DELTA_AUDIT_V1.md`.
   retired. The Quick Toolbar is icon-only and responsive; no false Measure or
   Selection Tools command is present.
 - Selection Tools is no longer registered as a Bottom Dock contribution.
-  Viewpoints remains the sole persistent Phase-1 Bottom Dock utility.
+  Viewpoints is a first-class Primary Dock tab and Bottom Dock has no Phase-1
+  contribution or empty chrome.
 - Common Arrange operations use the temporary viewport bar. Exact compatible
   pairs expose Connect & Snap through the existing command/panel authority, and
   Advanced Alignment remains a registered modal tool surface.
@@ -226,9 +231,11 @@ decision in `docs/audits/ATRVISU_PR110_REUSE_DELTA_AUDIT_V1.md`.
 - Command Palette searches and executes the existing Command Registry through
   the command-surface adapter; no palette-local command or state authority was
   introduced.
-- Primary Dock, Inspector, and Bottom Dock use one shared collapse component.
-- Shell reference sizes are token-governed at 38/28/42/25 px with 292 px left,
-  326 px right, and a 132 px default Viewpoints dock.
+- Primary Dock and Inspector use one shared collapse component; the dormant
+  Bottom Dock seam renders no control without a contribution.
+- Shell reference sizes are token-governed at 38/28/42/25 px with 292 px left
+  and 326 px right; Viewpoints consumes the Primary Dock rather than viewport
+  height.
 - Fit View remains omitted because the current product has no safe registered
   camera command binding. Presentation Mode remains later Phase-1 work; no dead
   control is shown.
@@ -279,13 +286,18 @@ compatible snap, Command Palette, Viewpoints, Help, 1024, and 640 layouts under
   Viewpoints, Help, 1024x768, and 640x800 captured under
   `C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-reconciliation/`;
   no document-level overflow was observed at the responsive evidence sizes.
+- Review `5061150709` correction evidence: PASS at 1440x900 and 1024x768 for
+  the normal workbench without Bottom Dock chrome, populated Primary-Dock
+  Viewpoints, exact-pair Arrange, three-object Arrange, and assembly Ungroup
+  states. Evidence is retained outside the repository under
+  `C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-review-5061150709/`.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 255 maintained files.
-- Production build: PASS, 4,126 modules transformed.
-- Full unit suite: PASS, 151 files / 1,261 tests.
-- Full Chromium suite: PASS, 73 tests.
+- Production build: PASS, 4,125 modules transformed.
+- Full unit suite: PASS, 151 files / 1,269 tests.
+- Full Chromium suite: PASS, 74 tests.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.
 

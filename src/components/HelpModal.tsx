@@ -83,18 +83,19 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
                 <div><dt>Explorer</dt><dd>Review layout items and control the current selection.</dd></div>
                 <div><dt>Viewport</dt><dd>Navigate and edit the 3D layout.</dd></div>
                 <div><dt>Inspector</dt><dd>Edit properties for the current object or selection.</dd></div>
-                <div><dt>Bottom Dock</dt><dd>Open Viewpoints and other persistent review utilities without covering the layout.</dd></div>
+                <div><dt>Primary Dock</dt><dd>Switch between Library, Explorer, Layers, Groups, and Viewpoints without covering the layout.</dd></div>
+                <div><dt>Bottom Dock</dt><dd>Reserved for future timeline and results utilities; it stays absent when no utility contributes content.</dd></div>
                 <div><dt>Command Palette</dt><dd>Press Ctrl+K or Cmd+K to search available commands from anywhere in the workbench.</dd></div>
               </dl></article>
             ) : null}
             {section === "arrange-snap" ? (
-              <article><h3>Arrange &amp; Snap</h3><p>Select two or more alignable objects to reveal the compact Arrange bar in the viewport. Use it for common edge, center, distribution, equal-gap, and grouping operations.</p><p>Advanced pair and anchor controls remain under Arrange &gt; Advanced Alignment. When exactly two compatible machines are selected, Connect &amp; Snap opens beside the Arrange bar.</p></article>
+              <article><h3>Arrange &amp; Snap</h3><p>Select two or more alignable objects to reveal the compact Arrange bar in the viewport. Use it for common edge, center, distribution, equal-gap, grouping, and ungrouping operations.</p><p>Advanced Alignment opens registered pair and anchor controls without expanding the contextual bar. When exactly two compatible machines are selected, Connect &amp; Snap opens beside the Arrange bar.</p></article>
             ) : null}
             {section === "measurements" ? (
               <article><h3>Measurements</h3><p>Precision Placement provides exact position, rotation, snap, and keyboard nudge settings in the Inspector and Tools menu.</p><p>Precision Placement is not the viewport Measure tool. Spatial measurement graphics are not yet available in this release.</p></article>
             ) : null}
             {section === "viewpoints" ? (
-              <article><h3>Viewpoints</h3><p>Capture the current camera and display state, then Apply, Update, Rename, or Delete the selected viewpoint. Previous and Next move through saved viewpoints.</p><p>The Viewpoints command opens and closes its Bottom Dock contribution.</p></article>
+              <article><h3>Viewpoints</h3><p>Capture the current camera and display state, then Apply, Update, Rename, or Delete the selected viewpoint. Previous and Next move through saved viewpoints.</p><p>Use Viewpoints in the Primary Dock. The Viewpoints command opens that tab and closes the Primary Dock when the active tab is invoked again.</p></article>
             ) : null}
             {section === "outputs" ? (
               <article><h3>Outputs</h3><div className="help-task-grid">

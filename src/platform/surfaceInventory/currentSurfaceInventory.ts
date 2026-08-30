@@ -323,7 +323,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/App.tsx", "src/components/ViewpointsPanel.tsx", "src/utils/viewpoints.ts"],
     commandIds: ["view.viewpoints"],
     panelIds: ["panel.viewpoints"],
-    featureIds: ["view.viewpoints", "panel.viewpoints"]
+    featureIds: ["view.viewpoints", "panel.viewpoints"],
+    notes: "Viewpoints is a first-class Primary Dock tab; Quick Toolbar and rail activation share the Runtime Panel authority."
   },
   {
     surfaceId: "surface.measurements",
@@ -531,13 +532,14 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   },
   {
     surfaceId: "surface.alignment",
-    surfaceType: "panel",
-    label: "Selection Tools",
+    surfaceType: "toolbar-action",
+    label: "Contextual Arrange Bar",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/SelectionToolsPanel.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
-    commandIds: ["alignment.alignSelection", "arrange.alignmentTools"],
+    sourceFiles: ["src/App.tsx", "src/components/workbench/ViewportArrangeBar.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
+    commandIds: ["alignment.alignSelection", "arrange.alignmentTools", "assembly.createGroup", "assembly.ungroup"],
     panelIds: ["panel.alignmentTools"],
-    featureIds: ["alignment.alignSelection", "panel.alignmentTools"]
+    featureIds: ["alignment.alignSelection", "arrange.quickActions", "assembly.createGroup", "assembly.ungroup", "panel.alignmentTools"],
+    notes: "Two-plus selections expose plan alignment and valid grouping, three-plus progressively disclose distribution/equal-gap, assemblies expose Ungroup, and Advanced Alignment opens the registered modal."
   },
   {
     surfaceId: "surface.layoutControls",

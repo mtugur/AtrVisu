@@ -129,10 +129,11 @@ export const platformFeatureAccessMatrix = [
     panelIds: ["panel.displayOverlayControls"],
     requiresSurfaceExecutionEvidence: true
   }),
-  feature("view.viewpoints", "Viewpoints", ["panel"], {
+  feature("view.viewpoints", "Viewpoints", ["toolbar", "panel"], {
     commandIds: ["view.viewpoints"],
     panelIds: ["panel.viewpoints"],
-    runtimeRequirements: ["viewport"]
+    runtimeRequirements: ["viewport"],
+    notes: "The command truthfully toggles the Viewpoints contribution in Primary Dock."
   }),
   feature("connectionPoints.toggle", "Toggle connection points", ["menu", "toolbar", "modal"], {
     commandIds: ["view.toggleConnectionPoints"],
@@ -230,7 +231,7 @@ export const platformFeatureAccessMatrix = [
     runtimeRequirements: ["selection", "entity"],
     requiresSurfaceExecutionEvidence: true
   }),
-  feature("arrange.quickActions", "Arrange selection actions", ["menu", "panel"], {
+  feature("arrange.quickActions", "Arrange selection actions", ["menu", "toolbar", "modal"], {
     commandIds: [
       "arrange.alignLeft",
       "arrange.alignRight",
@@ -308,7 +309,7 @@ export const platformFeatureAccessMatrix = [
     runtimeRequirements: ["selection", "entity"],
     requiresSurfaceExecutionEvidence: true
   }),
-  feature("assembly.ungroup", "Ungroup", ["panel"], {
+  feature("assembly.ungroup", "Ungroup", ["toolbar", "panel"], {
     commandIds: ["assembly.ungroup"],
     panelIds: ["panel.groups"],
     runtimeRequirements: ["selection", "entity"],

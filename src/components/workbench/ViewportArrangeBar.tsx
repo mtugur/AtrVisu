@@ -5,12 +5,16 @@ export type ViewportArrangeBarProps = {
   movementAllowed: boolean;
   canDistribute: boolean;
   canGroup: boolean;
+  canUngroup: boolean;
+  canOpenAdvancedAlignment: boolean;
   connectAndSnapAvailable: boolean;
   connectAndSnapOpen: boolean;
   onAlign: (action: AlignmentAction) => void;
   onDistribute: (action: DistributionAction) => void;
   onEqualGap: (action: EqualGapAction) => void;
   onGroup: () => void;
+  onUngroup: () => void;
+  onOpenAdvancedAlignment: () => void;
   onToggleConnectAndSnap: () => void;
 };
 
@@ -27,14 +31,16 @@ const ActionMenu = <T extends string>({ label, disabled, actions, onAction }: {
 );
 
 export function ViewportArrangeBar(props: ViewportArrangeBarProps) {
-  if (props.selectionCount < 2) return null;
+  if (props.selectionCount < 2 && !props.canUngroup) return null;
   return (
     <div className="viewport-arrange-bar" role="toolbar" aria-label="Arrange selected objects" data-testid="viewport-arrange-bar">
       <span>{props.selectionCount} selected</span>
-      <ActionMenu label="Align" disabled={!props.movementAllowed} onAction={props.onAlign} actions={[
-        { label: "Left", value: "left" }, { label: "Center X", value: "centerX" }, { label: "Right", value: "right" },
-        { label: "Front", value: "front" }, { label: "Center Y", value: "centerY" }, { label: "Back", value: "back" }
-      ]} />
+      {props.selectionCount >= 2 && !props.canUngroup ? (
+        <ActionMenu label="Align" disabled={!props.movementAllowed} onAction={props.onAlign} actions={[
+          { label: "Left edges", value: "left" }, { label: "Center X", value: "centerX" }, { label: "Right edges", value: "right" },
+          { label: "Front edges", value: "front" }, { label: "Center Y", value: "centerY" }, { label: "Back edges", value: "back" }
+        ]} />
+      ) : null}
       {props.canDistribute ? (
         <>
           <ActionMenu label="Distribute" disabled={!props.movementAllowed} onAction={props.onDistribute} actions={[
@@ -46,6 +52,10 @@ export function ViewportArrangeBar(props: ViewportArrangeBarProps) {
         </>
       ) : null}
       {props.canGroup ? <button type="button" disabled={!props.movementAllowed} onClick={props.onGroup}>Group</button> : null}
+      {props.canUngroup ? <button type="button" onClick={props.onUngroup}>Ungroup</button> : null}
+      {props.canOpenAdvancedAlignment ? (
+        <button type="button" onClick={props.onOpenAdvancedAlignment}>Advanced Alignment...</button>
+      ) : null}
       {props.connectAndSnapAvailable ? <button type="button" aria-expanded={props.connectAndSnapOpen} onClick={props.onToggleConnectAndSnap}>Connect &amp; Snap</button> : null}
     </div>
   );

@@ -43,7 +43,7 @@ The UI must read as a desktop engineering application even though the runtime is
 | Status Bar | 25 px |
 | Left Dock default | 292 px |
 | Right Inspector default | 326 px |
-| Bottom Dock default | closed; Viewpoints ~120–140 px when open |
+| Bottom Dock default | no Phase-1 contribution; no reserved chrome or inset |
 | Viewport | all remaining space; visually dominant |
 
 These are reference dimensions, not magic constants. Implementation may vary by a few pixels to accommodate the existing token system, but proportions and density are normative.
@@ -117,7 +117,7 @@ Status values are concise and live. The status bar is not a message log.
 
 Canonical tabs:
 
-**Library | Explorer | Layers | Groups**
+**Library | Explorer | Layers | Groups | Viewpoints**
 
 One left-dock container. One collapse control standard.
 
@@ -133,11 +133,9 @@ It does **not** become a miscellaneous operations toolbox.
 
 ### 3.3 Bottom Dock
 
-Bottom Dock is reserved for **persistent temporal/list/result/review utilities**.
-
-Phase-1 allowed contribution:
-
-- Viewpoints.
+Bottom Dock is an architectural seam reserved for future **persistent temporal/result utilities**.
+Phase 1 has no Bottom Dock contribution, so the shell renders no empty dock
+chrome, resize handle, or viewport inset.
 
 Future examples:
 
@@ -202,7 +200,7 @@ The placement of a feature is determined by its interaction class.
 | Multi-selection operation | Viewport context bar / Arrange menu | Align, Distribute, Group |
 | Two-object relation action | Context popover | Connect & Snap |
 | Viewport tool | Viewport mode/overlay | Measure |
-| Persistent list/review utility | Bottom Dock | Viewpoints |
+| Persistent saved-view utility | Primary Dock | Viewpoints |
 | Rare/global discoverable command | Command Palette/Menu | managers, presentation, utilities |
 | Destructive confirmation | Modal/popover | discard recovery, delete project |
 
@@ -392,6 +390,8 @@ Canonical actions:
 - Distribute ▾
 - Equal Gap ▾
 - Group (where meaningful)
+- Ungroup (for a selected assembly)
+- Advanced Alignment… (existing registered modal tool)
 
 When exactly two compatible machines are selected, additionally show:
 
@@ -407,20 +407,25 @@ Connection details open as a small contextual popover that shows:
 
 No large Selection Tools Bottom Dock is permitted in the final Phase-1 design.
 
-Advanced pair/anchor alignment, if retained, belongs behind `Arrange > Advanced Alignment…` or another bounded advanced surface.
+Advanced pair/anchor alignment is available from the same contextual bar and
+`Arrange > Advanced Alignment…`; both routes open the existing registered modal
+tool surface.
 
 ---
 
 ## 12. Viewpoints
 
-Viewpoints is the canonical Phase-1 Bottom Dock utility.
+Viewpoints is a first-class Primary Dock tab alongside Library, Explorer,
+Layers, and Groups. It continues to use the existing Viewpoints store, Runtime
+Panel binding, and UI Preference record.
 
 Behavior:
 
-- first activation opens Viewpoints;
-- second activation closes it;
-- previous explicit user height is restored;
-- switching contribution behavior remains canonical if future contributions appear.
+- first command or rail activation opens Primary Dock with Viewpoints active;
+- repeated activation while Viewpoints is active collapses Primary Dock;
+- selecting another Primary tab preserves that tab's existing authority;
+- legacy persisted `bottom-dock` ownership is normalized to `primary-dock`;
+- Bottom Dock sizing preferences remain dormant and are not rewritten.
 
 Final presentation target:
 

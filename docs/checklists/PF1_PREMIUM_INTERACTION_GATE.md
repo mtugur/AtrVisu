@@ -13,8 +13,8 @@
 | Narrow command overflow | PASS | Save/Undo/Redo visible roving scope; native tab-reachable More; overflow commands tabbable only while open; Escape restores More; no duplicate commands or page overflow |
 | Truthful measurement semantics | PASS | Tools exposes Precision Placement Helpers only; disabled without one supported machine; real viewport Measure remains absent until PF-3 |
 | Session-transient measurement visibility | PASS | Legacy persisted `true` converges to `false` on load; grid/rotation preferences survive; reload starts inactive until explicit command activation (`4993793573`) |
-| Arrange command productization | PASS | Existing alignment and Assembly authorities; common actions use the viewport context bar and Advanced Alignment uses the registered modal tool surface |
-| Arrange thresholds and lock policy | PASS | Two selections expose Align/Group only; three-plus reveals Distribute/Equal Gap; atomic movement evaluation remains authoritative |
+| Arrange command productization | PASS | Existing alignment and Assembly authorities; common actions, assembly Ungroup, and Advanced Alignment are reachable from the viewport context bar without duplicate handlers |
+| Arrange thresholds and lock policy | PASS | Two selections expose Align/Group; three-plus reveals Distribute/Equal Gap; exact compatible pairs add Connect & Snap; assembly and locked states suppress invalid movement actions |
 | Arrange history/dirty | PASS | Existing mutation callbacks record one snapshot per action |
 | Rename runtime authority | PASS | F2/Edit/Explorer route through `edit.renameSelected` |
 | Rename interaction | PASS | Enter commit; Escape and blur cancel; locked targets disabled |
@@ -23,17 +23,18 @@
 | Cross-surface naming | PASS | PlatformEntity, scene, Inspectors, precision, connection snap, assembly, annotation target, collision, delete confirmation, and commercial instance fallback share one resolver |
 | BOM identity stability | PASS | Definition/library grouping and canonical BOM name unchanged |
 | Unified startup/recovery | PASS | Session acceptance is separate from persisted recovery; create/load/resume dismiss Start without silently deleting recovery; cancel retains Start |
-| Viewpoints Bottom Dock authority | PASS | Fresh/start/recovery presentation is closed; explicit Viewpoints activation opens/closes through Bottom Dock/Panel/UI Preference authorities and restores the governed explicit height without overwriting user preference |
+| Viewpoints Primary Dock authority | PASS | Command and rail share the existing Runtime Panel/UI Preference authority; repeated active activation collapses Primary Dock; legacy Bottom ownership normalizes while dormant sizing remains unchanged |
+| Dormant Bottom Dock seam | PASS | No Phase-1 contribution means no empty chrome, resize handle, or viewport inset; the architectural binding remains available for future utilities |
 | Inspector responsibility | PASS | Multi-selection Inspector contains property/context summaries and no Alignment/Distribution/Snap or selection action stack |
 | Contextual Arrange utility | PASS | Hidden below two eligible entities; common 2+ operations; truthful 3-object distribution threshold; no Inspector or Bottom Dock action stack |
 | Connect & Snap utility | PASS | Eligible exact-two machines plus deterministic product-out to product-in pair only; load/same-type/utility pairs excluded; bounded body scrolling keeps Close and the primary action visible at 1440x900 and 1024x768 |
 | Keyboard Nudge placement | PASS | Nudge settings use the existing `NudgeSettings` state in Precision Placement and do not appear in contextual Arrange |
 | Command Palette | PASS | Ctrl/Cmd+K registry projection, filtering, keyboard navigation, disabled reasons, Enter execution, Escape/outside close, and no palette-only authority |
-| Collapse standard | PASS | Primary Dock, Inspector, and Bottom Dock share `WorkbenchDockCollapseButton` hit target, icon, tooltip, focus, and direction grammar |
+| Collapse standard | PASS | Visible Primary Dock and Inspector use `WorkbenchDockCollapseButton`; dormant Bottom Dock exposes no orphan control |
 | Machine label lifecycle | PASS | Texture is cleared before redraw; actual Babylon label mesh is instance-keyed and remains exactly one through rename/history/cancel/visibility/duplicate/delete/restore |
 | Help product surface | PASS | Eight user-facing sections, task cards, semantic keycaps, real outputs/workflows, modal focus lifecycle, and no development/governance language |
 | Help living contract | PASS | Future visible command, workflow, or shortcut changes update Help in the same PR |
-| Feature Access and inventory | PASS | Rename, Arrange, Help, command bar, Explorer, and welcome mapped |
+| Feature Access and inventory | PASS | Rename, Arrange, Viewpoints Primary ownership, Help, command bar, Explorer, and welcome mapped |
 | Release-surface hygiene | PASS | Existing technical surfaces inventoried for PF-2; no new leak |
 | Responsive contract | PASS | 1024 Inspector and <=720 Primary Dock presentation collapse without persisting the transition; explicit reopen is available, desktop state restores wide, the 640 viewport dominates, contextual Arrange remains reachable, and document overflow is absent |
 | Lifecycle/domain invariance | PASS | One EditorHost/canvas and stable scene generation through UI-only surfaces and label updates |
@@ -43,12 +44,13 @@
 | Canonical v3 reconciliation | PASS | Quick Toolbar, contextual Arrange, Connect & Snap popover, Command Palette, shared dock collapse control, Help, and responsive shell use existing authorities |
 | Executed evidence correction | PASS | Review `5449251603`; Flow Pack/Belt Conveyor/Robot Palletizer plus Floor/Wall/Walkway; ten real-app screenshots cover recovery through 640 responsive presentation |
 | Final bounded visual correction | PASS | Review `5462166673`; fixed Connect & Snap action geometry, truthful closed Bottom Dock evidence, transient narrow Primary Dock, composed Inspector headers, and real PF-1 Review / Packaging Line / R01 evidence context |
+| Primary Viewpoints and Arrange correction | PASS | Review `5061150709`; 1440x900 and 1024x768 runtime evidence covers no Bottom chrome, populated Primary Viewpoints, exact-pair/three-object Arrange, and assembly Ungroup |
 | Focused validation | PASS | Product-flow snap, 1440/1024 action geometry, Bottom Dock default/toggle, responsive Inspector and Primary Dock preference invariance, 640 Arrange reachability, Inspector machine/civil/multi header geometry, and scene lifecycle stability |
 | Dependency audit | PASS | `npm audit --audit-level=low`: 0 vulnerabilities |
 | Dependency tree | PASS | `npm ls --all` completed; only expected optional dependencies are absent |
 | Design-token governance | PASS | 255 maintained files checked |
-| Build | PASS | 4,126 modules transformed; existing bundle warning remains documented |
-| Full unit suite | PASS | 151 files / 1,264 tests |
+| Build | PASS | 4,125 modules transformed; existing bundle warning remains documented |
+| Full unit suite | PASS | 151 files / 1,269 tests |
 | Full Chromium suite | PASS | 74 Chromium tests |
 | Diff check | PASS | `git diff --check` |
 | Exact-head GitHub Quality Gate | PR GATE | Required before manual acceptance |

@@ -49,7 +49,8 @@ ungrouping commands. With two or more eligible entities selected, common
 operations appear in a compact viewport context bar. An exact compatible pair
 adds Connect & Snap and opens its existing selectors in a transient popover.
 Advanced pair/anchor operations remain available through Arrange > Advanced
-Alignment. Viewpoints is the only Phase-1 Bottom Dock contribution. Keyboard
+Alignment. Viewpoints is a first-class Primary Dock tab; Phase 1 renders no
+Bottom Dock contribution or empty dock chrome. Keyboard
 Nudge and placement-helper settings live with Precision Placement while
 retaining the existing placement authority. The Inspector remains property and context oriented;
 it does not own operational alignment, distribution, snap, duplicate, delete,
@@ -80,9 +81,9 @@ information.
   but it cannot re-overlay an accepted working layout. A valid recovery changes
   the surface to Resume, Open Project, New Layout, and the visually separated
   destructive action Discard recovery. No second recovery banner may compete.
-- Viewpoints is a truthful panel toggle: it opens or activates Viewpoints,
-  collapses an already active Bottom Dock, and reopens with the persisted
-  explicit dock size. Its pressed state is derived from actual panel state.
+- Viewpoints is a truthful panel toggle: it opens or activates the Viewpoints
+  Primary Dock tab and collapses Primary Dock when repeated while active. Its
+  pressed state is derived from actual Primary Dock and active-tab state.
 - Machine scene-label identity is the placed machine instance. Renaming,
   Undo/Redo, cancellation, visibility changes, duplicate, delete, and restore
   must leave exactly one live label representation per labeled instance.

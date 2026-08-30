@@ -180,7 +180,7 @@ const runtimeOnlyDescriptors: readonly RuntimePanelDescriptor[] = [
   panel(RUNTIME_PANEL_IDS.rightPanelShell, "Secondary Dock", "shell", "required-runtime", "secondary-dock"),
   panel(RUNTIME_PANEL_IDS.bottomDockShell, "Bottom Dock", "shell", "required-runtime", "bottom-dock"),
   panel(RUNTIME_PANEL_IDS.layoutControls, "Layout Import / Export", "modal", "required-runtime", "modal-layer"),
-  panel(RUNTIME_PANEL_IDS.viewpoints, "Viewpoints", "section", "required-runtime", "bottom-dock"),
+  panel(RUNTIME_PANEL_IDS.viewpoints, "Viewpoints", "section", "required-runtime", "primary-dock"),
   panel(RUNTIME_PANEL_IDS.civilReferences, "Building / Civil", "unbound", "modal/tool-surface", "unbound"),
   panel(RUNTIME_PANEL_IDS.projectStatus, "Project Status", "unbound", "modal/tool-surface", "unbound"),
   panel(RUNTIME_PANEL_IDS.performanceBenchmarkLauncher, "Performance Benchmark Launcher", "unbound", "modal/tool-surface", "unbound"),

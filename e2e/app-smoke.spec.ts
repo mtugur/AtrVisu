@@ -192,11 +192,11 @@ const createE2EUiPreferences = (overrides: {
       dock: panelId === "panel.primaryDockShell"
         || panelId === "panel.machineLibrary"
         || panelId === "panel.layoutExplorer"
+        || panelId === "panel.viewpoints"
         || panelId === "panel.layers"
         || panelId === "panel.groups"
         ? "primary-dock"
         : panelId === "panel.bottomDockShell"
-          || panelId === "panel.viewpoints"
           || panelId === "panel.alignmentTools"
           || panelId === "panel.statusBar"
           ? "bottom-dock"
@@ -963,7 +963,7 @@ test("runtime feature access complete gate is bound to observed visible command 
     "data-machine-plan-positions"
   );
   await observe("alignment.alignSelection", () =>
-    alignActions.getByRole("button", { name: "Left", exact: true }).click()
+    alignActions.getByRole("button", { name: "Left edges", exact: true }).click()
   );
   await expect.poll(() =>
     readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
@@ -1454,33 +1454,42 @@ test("PF-1 premium command information architecture is accessible and responsive
   expect(errors).toEqual([]);
 });
 
-test("Viewpoints is a truthful Bottom Dock toggle and preserves the explicit dock size", async ({ page }) => {
+test("Viewpoints is a truthful Primary Dock toggle and leaves no empty Bottom Dock chrome", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-  const bottomDock = page.getByTestId("bottom-dock");
+  const primaryDock = page.getByTestId("primary-dock");
+  const viewpointsTab = page.getByTestId("primary-dock-tab-panel.viewpoints");
   const viewpointsCommand = getCommandBarCommand(page, "view.viewpoints");
 
-  await expect(bottomDock).toHaveAttribute("data-collapsed", "true");
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  await expect(page.locator('[data-app-shell-zone="scene-viewport"]')).toHaveCSS("bottom", "25px");
   await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "false");
+  await expect(viewpointsTab).toHaveAttribute("aria-pressed", "false");
 
   await viewpointsCommand.click();
-  await expect(bottomDock).toHaveAttribute("data-collapsed", "false");
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
   await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
   await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "true");
-  const explicitHeight = await bottomDock.evaluate((element) => element.getBoundingClientRect().height);
+  await expect(viewpointsTab).toHaveAttribute("aria-pressed", "true");
 
   await viewpointsCommand.click();
-  await expect(bottomDock).toHaveAttribute("data-collapsed", "true");
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
   await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "false");
+  await expect(viewpointsTab).toHaveAttribute("aria-pressed", "false");
 
   await expect(page.getByTestId("selection-tools-panel")).toHaveCount(0);
-  await expect(bottomDock.locator('[data-panel-id="panel.alignmentTools"]')).toHaveCount(0);
-  await viewpointsCommand.click();
-  await expect(bottomDock).toHaveAttribute("data-collapsed", "false");
-  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
-    .toBeCloseTo(explicitHeight, 0);
+  await expect(page.locator('[data-panel-id="panel.alignmentTools"]')).toHaveCount(0);
+  await viewpointsTab.click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
+  await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "true");
+  await viewpointsTab.click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator('[data-app-shell-zone="scene-viewport"]')).toHaveCSS("bottom", "25px");
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
@@ -1489,7 +1498,7 @@ test("startup decision closes after create, existing load, and recovery resume",
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const welcome = page.getByTestId("empty-project-welcome");
-  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "true");
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
   await welcome.getByRole("button", { name: "New Layout" }).click();
   await page.getByTestId("new-project-name").fill("Startup Authority Project");
   await page.getByTestId("new-customer-name").fill("E2E Customer");
@@ -1506,7 +1515,7 @@ test("startup decision closes after create, existing load, and recovery resume",
   await loadPage.goto("/?e2eDiagnostics=1");
   const recoveryWelcome = loadPage.getByTestId("empty-project-welcome");
   await expect(recoveryWelcome.getByRole("heading", { name: "Continue where you left off" })).toBeVisible();
-  await expect(loadPage.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "true");
+  await expect(loadPage.getByTestId("bottom-dock")).toHaveCount(0);
   await recoveryWelcome.getByRole("button", { name: "Open Project" }).click();
   const manager = loadPage.getByTestId("project-manager-modal");
   await manager.getByTestId("project-manager-project-option").filter({ hasText: "Startup Authority Project" }).click();
@@ -1549,7 +1558,20 @@ test("PF-1 Arrange commands move, distribute, group, ungroup, undo, and redo onc
 
   const contextualArrange = page.getByTestId("viewport-arrange-bar");
   await expect(contextualArrange).toBeVisible();
+  const alignActions = await openViewportArrangeAction(page, "Align");
+  await expect(alignActions.getByRole("button")).toHaveText([
+    "Left edges",
+    "Center X",
+    "Right edges",
+    "Front edges",
+    "Center Y",
+    "Back edges"
+  ]);
+  await alignActions.locator("summary").click();
   await expect((await openViewportArrangeAction(page, "Distribute")).getByRole("button", { name: "Horizontal", exact: true })).toBeEnabled();
+  await contextualArrange.getByRole("button", { name: "Advanced Alignment..." }).click();
+  await expect(page.getByTestId("advanced-alignment-tool-surface")).toBeVisible();
+  await page.getByRole("button", { name: "Close Advanced Alignment" }).click();
 
   const positionsBefore = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   const beforeAlign = await getRuntimeViewportSnapshot(page);
@@ -1589,9 +1611,11 @@ test("PF-1 Arrange commands move, distribute, group, ungroup, undo, and redo onc
   await expect.poll(async () => (
     await getRuntimeViewportSnapshot(page)
   ).invariants.groupMembership.length).toBe(1);
-  arrangeMenu = await openWorkbenchMenu(page, "Arrange");
+  await expect(contextualArrange.getByRole("button", { name: "Ungroup" })).toBeVisible();
+  await expect(contextualArrange.getByText("Align", { exact: true })).toHaveCount(0);
+  await expect(contextualArrange.getByText("Distribute", { exact: true })).toHaveCount(0);
   page.once("dialog", (dialog) => dialog.accept());
-  await arrangeMenu.locator('[data-command-id="assembly.ungroup"]').click();
+  await contextualArrange.getByRole("button", { name: "Ungroup" }).click();
   await expect.poll(async () => (
     await getRuntimeViewportSnapshot(page)
   ).invariants.groupMembership.length).toBe(0);
@@ -1840,6 +1864,7 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   const arrangeBar = page.getByTestId("viewport-arrange-bar");
   await expect(arrangeBar).toBeVisible();
   await expect(arrangeBar.getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
+  await expect(arrangeBar.getByRole("button", { name: "Advanced Alignment..." })).toBeVisible();
   await expect(arrangeBar.getByText("Distribute", { exact: true })).toHaveCount(0);
   await expect(arrangeBar.getByText("Equal Gap", { exact: true })).toHaveCount(0);
 
@@ -1854,6 +1879,7 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await page.setViewportSize({ width: 640, height: 800 });
   await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
   await expect(arrangeBar).toBeVisible();
+  await expect(arrangeBar.getByRole("button", { name: "Advanced Alignment..." })).toBeVisible();
   const compactArrangeGeometry = await arrangeBar.evaluate((element) => {
     const box = element.getBoundingClientRect();
     const primaryDock = document.querySelector('[data-testid="primary-dock"]')?.getBoundingClientRect();
@@ -2059,7 +2085,8 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
     .toContainText("3 items");
 
   await getCommandBarCommand(page, "view.viewpoints").click();
-  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+  await expect(page.getByTestId("primary-dock-tab-panel.viewpoints")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
   await page.getByTestId("viewpoint-name-input").fill("ATARA Sales Review");
   await page.getByTestId("capture-viewpoint").click();
   await expect(page.getByRole("button", { name: /ATARA Sales Review/i })).toBeVisible();
@@ -2400,7 +2427,7 @@ test("command bar arrow navigation is isolated from editor nudge state", async (
   expect(errors).toEqual([]);
 });
 
-test("640x800 workbench preserves chrome and mobile bottom-panel geometry", async ({ page }) => {
+test("640x800 workbench preserves chrome and Primary Viewpoints geometry", async ({ page }) => {
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 640, height: 800 });
   await openCleanApp(page);
@@ -2463,12 +2490,12 @@ test("640x800 workbench preserves chrome and mobile bottom-panel geometry", asyn
   await page.getByLabel("More commands").click();
   await expect(getCommandBarCommand(page, "view.viewpoints")).toBeVisible();
   await getCommandBarCommand(page, "view.viewpoints").click();
-  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
-  expect(await page.getByTestId("bottom-dock").evaluate((element) =>
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  await expect(page.getByTestId("primary-dock-tab-panel.viewpoints")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
+  expect(await page.locator('[data-panel-id="panel.viewpoints"]').evaluate((element) =>
     element.scrollWidth <= element.clientWidth
-  )).toBe(true);
-  expect(await page.locator(".workbench-bottom-dock-content").evaluate((element) =>
-    element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight
   )).toBe(true);
   const after = await waitForRuntimeViewport(page);
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
@@ -2824,24 +2851,21 @@ test("runtime panel width drag resizes only the viewport", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("Primary and Bottom Dock resizing persists without changing editor state", async ({ page }) => {
+test("Primary Dock resizing persists while the dormant Bottom Dock preference remains intact", async ({ page }) => {
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await openCleanApp(page);
   await waitForUiPreferences(page);
   await page.locator(".machine-card").first().click();
   await waitForMachineDiagnostics(page, 1);
-  await getCommandBarCommand(page, "view.viewpoints").click();
-  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
   await openPrimaryDockPanel(page, "panel.layoutExplorer");
 
   const before = await waitForRuntimeViewport(page);
   const primaryDock = page.getByTestId("primary-dock");
-  const bottomDock = page.getByTestId("bottom-dock");
   const primaryWidthBefore = await primaryDock.evaluate((element) => element.getBoundingClientRect().width);
-  const bottomHeightBefore = await bottomDock.evaluate((element) => element.getBoundingClientRect().height);
-  expect(bottomHeightBefore).toBeGreaterThanOrEqual(100);
-  expect(bottomHeightBefore).toBeLessThanOrEqual(140);
+  const dormantBottomPreference = await page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.bottomDockShell"));
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
 
   const primaryResize = page.getByTestId("primary-dock-resize-handle");
   await expect(primaryResize).toHaveAttribute("aria-label", "Resize Primary Dock");
@@ -2881,31 +2905,11 @@ test("Primary and Bottom Dock resizing persists without changing editor state", 
     element.scrollWidth <= element.clientWidth
   )).toBe(true);
 
-  const bottomResize = page.getByTestId("bottom-dock-resize-handle");
-  await expect(bottomResize).toHaveAttribute("aria-label", "Resize Bottom Dock");
-  const bottomHandleBounds = await bottomResize.boundingBox();
-  if (!bottomHandleBounds) {
-    throw new Error("Bottom Dock resize handle bounds are unavailable.");
-  }
-  await page.mouse.move(bottomHandleBounds.x + 120, bottomHandleBounds.y + bottomHandleBounds.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(bottomHandleBounds.x + 120, bottomHandleBounds.y - 56, { steps: 6 });
-  await page.mouse.up();
-  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
-    .toBeGreaterThan(bottomHeightBefore);
-  const resizedBottomHeight = await bottomDock.evaluate((element) => element.getBoundingClientRect().height);
-
   await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
   await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
   await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
     .toBe(resizedPrimaryWidth);
-
-  await page.getByRole("button", { name: "Collapse Bottom Dock", exact: true }).click();
-  await expect(bottomDock).toHaveAttribute("data-collapsed", "true");
-  await page.getByRole("button", { name: "Expand Bottom Dock", exact: true }).click();
-  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
-    .toBe(resizedBottomHeight);
 
   await expect.poll(() => page.evaluate(() => {
     const panels = window.__atrvisuUiPreferences?.getSnapshot().preferences.panels ?? [];
@@ -2913,7 +2917,7 @@ test("Primary and Bottom Dock resizing persists without changing editor state", 
       primary: panels.find((panel) => panel.panelId === "panel.primaryDockShell")?.size,
       bottom: panels.find((panel) => panel.panelId === "panel.bottomDockShell")?.size
     };
-  })).toEqual({ primary: resizedPrimaryWidth, bottom: resizedBottomHeight });
+  })).toEqual({ primary: resizedPrimaryWidth, bottom: dormantBottomPreference?.size });
 
   const afterResize = await getRuntimeViewportSnapshot(page);
   expect(afterResize.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
@@ -2928,8 +2932,10 @@ test("Primary and Bottom Dock resizing persists without changing editor state", 
   await waitForUiPreferences(page);
   await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
     .toBe(resizedPrimaryWidth);
-  await expect.poll(() => bottomDock.evaluate((element) => element.getBoundingClientRect().height))
-    .toBe(resizedBottomHeight);
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.bottomDockShell")))
+    .toEqual(dormantBottomPreference);
   expect(errors).toEqual([]);
 });
 
@@ -2949,15 +2955,14 @@ test("medium workbench constrains dock resizing around a dominant viewport", asy
   await expect.poll(() => primaryDock.evaluate((element) => Math.round(element.getBoundingClientRect().width)))
     .toBe(480);
   await getCommandBarCommand(page, "view.viewpoints").click();
-  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+  await expect(page.getByTestId("primary-dock-tab-panel.viewpoints")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
   expect(await page.locator('[data-app-shell-zone="scene-viewport"]').evaluate((element) =>
     element.getBoundingClientRect().width
   )).toBeGreaterThanOrEqual(320);
-  expect(await page.getByTestId("bottom-dock").evaluate((element) =>
+  expect(await page.locator('[data-panel-id="panel.viewpoints"]').evaluate((element) =>
     element.scrollWidth <= element.clientWidth
-  )).toBe(true);
-  expect(await page.locator(".workbench-bottom-dock-content").evaluate((element) =>
-    element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight
   )).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth))
     .toBe(true);
@@ -3009,7 +3014,8 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
   await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width)).toBe(260);
   await expectNarrowLibraryTitle();
   await getCommandBarCommand(page, "view.viewpoints").click();
-  await expect(page.getByTestId("bottom-dock")).toHaveAttribute("data-collapsed", "false");
+  await expect(page.getByTestId("primary-dock-tab-panel.viewpoints")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
 
   const capture = async (name: string) => {
     await page.getByTestId("viewpoint-name-input").fill(name);
@@ -3041,8 +3047,9 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       await expect(button).toBeEnabled();
     }
     const geometry = await page.evaluate(() => {
-      const dock = document.querySelector('[data-testid="bottom-dock"]');
-      const content = document.querySelector(".workbench-bottom-dock-content");
+      const dock = document.querySelector('[data-testid="primary-dock"]');
+      const content = document.querySelector(".workbench-primary-dock-content");
+      const panelSurface = document.querySelector('[data-panel-id="panel.viewpoints"]');
       const panel = document.querySelector('[data-testid="viewpoints-panel"]');
       const toolbar = document.querySelector('[data-testid="viewpoints-toolbar"]');
       const results = document.querySelector('[data-testid="viewpoints-results"]');
@@ -3050,11 +3057,12 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       const strip = document.querySelector('[data-testid="viewpoint-strip"]');
       const firstCard = strip?.querySelector(".viewpoint-list-item");
       const actions = document.querySelector('[data-testid="viewpoint-context-actions"]');
-      if (!dock || !content || !panel || !toolbar || !results || !navigation || !strip || !firstCard || !actions) {
+      if (!dock || !content || !panelSurface || !panel || !toolbar || !results || !navigation || !strip || !firstCard || !actions) {
         throw new Error("Viewpoints populated layout is incomplete.");
       }
       const dockBox = dock.getBoundingClientRect();
       const contentBox = content.getBoundingClientRect();
+      const panelSurfaceBox = panelSurface.getBoundingClientRect();
       const panelBox = panel.getBoundingClientRect();
       const toolbarBox = toolbar.getBoundingClientRect();
       const resultsBox = results.getBoundingClientRect();
@@ -3070,27 +3078,28 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
         actionsOutsideStrip: !strip.contains(actions) && actions.parentElement === results,
         stripOwnedByNavigation: strip.parentElement === navigation,
         orderedRows: toolbarBox.bottom <= resultsBox.top + 1,
-        panelInsideDock: panelBox.top >= contentBox.top - 1 && panelBox.bottom <= contentBox.bottom + 1,
-        actionsInsideDock: actionsBox.left >= contentBox.left - 1
-          && actionsBox.right <= contentBox.right + 1
-          && actionsBox.bottom <= contentBox.bottom + 1,
+        panelInsideDock: panelSurfaceBox.top >= contentBox.top - 1
+          && panelSurfaceBox.bottom <= contentBox.bottom + 1
+          && panelBox.left >= panelSurfaceBox.left - 1
+          && panelBox.right <= panelSurfaceBox.right + 1,
+        actionsInsideDock: actionsBox.left >= panelSurfaceBox.left - 1
+          && actionsBox.right <= panelSurfaceBox.right + 1,
         dockInsideDocument: dockBox.left >= -1 && dockBox.right <= document.documentElement.clientWidth + 1,
         noDockHorizontalOverflow: dock.scrollWidth <= dock.clientWidth,
-        noContentVerticalOverflow: content.scrollHeight <= content.clientHeight,
+        noPanelHorizontalOverflow: panelSurface.scrollWidth <= panelSurface.clientWidth,
         noDocumentHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
         stripOverflowX: getComputedStyle(strip).overflowX,
         stripOverflowY: getComputedStyle(strip).overflowY,
         stripScrollbarHidden: getComputedStyle(strip).scrollbarWidth === "none",
         stripCanRevealWholeCard: strip.clientWidth >= firstCard.getBoundingClientRect().width,
         stableCardWidth: new Set(cardWidths.map((width) => Math.round(width))).size === 1
-          && Math.round(cardWidths[0] ?? 0) === 168,
+          && (cardWidths[0] ?? 0) > 80
+          && (cardWidths[0] ?? 0) <= 168,
         stableCardTypography: new Set(cardFontSizes).size === 1,
         singleLineCards: cards.every((card) => card.children.length === 1
           && card.firstElementChild?.tagName === "STRONG"
           && card.scrollHeight <= card.clientHeight),
-        compactDesktopHeight: window.innerWidth <= 1200 || dockBox.height >= 120 && dockBox.height <= 140,
-        noMaterialUnusedBody: contentBox.height - panelBox.height <= 40,
-        responsiveActionRow: window.innerWidth > 1200 || actionsBox.top >= navigationBox.bottom - 1,
+        actionZoneBelowNavigation: actionsBox.top >= navigationBox.bottom - 1,
         stripHasOverflow: strip.scrollWidth > strip.clientWidth
       };
     });
@@ -3104,7 +3113,7 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       actionsInsideDock: true,
       dockInsideDocument: true,
       noDockHorizontalOverflow: true,
-      noContentVerticalOverflow: true,
+      noPanelHorizontalOverflow: true,
       noDocumentHorizontalOverflow: true,
       stripOverflowX: "auto",
       stripOverflowY: "hidden",
@@ -3113,9 +3122,7 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
       stableCardWidth: true,
       stableCardTypography: true,
       singleLineCards: true,
-      compactDesktopHeight: true,
-      noMaterialUnusedBody: true,
-      responsiveActionRow: true,
+      actionZoneBelowNavigation: true,
       stripHasOverflow: true
     });
   };
@@ -3161,10 +3168,15 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
 
   await page.setViewportSize({ width: 1024, height: 768 });
   await expectNarrowLibraryTitle();
+  await getCommandBarCommand(page, "view.viewpoints").click();
+  await expect(page.getByTestId("primary-dock-tab-panel.viewpoints")).toHaveAttribute("aria-pressed", "true");
   await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
 
   await page.setViewportSize({ width: 640, height: 800 });
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
   await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
   await expect(page.getByTestId("editor-host")).toHaveCount(1);
@@ -3446,7 +3458,7 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
     "data-machine-plan-positions"
   );
   await expectOneRuntimeCommandExecution(page, "alignment.alignSelection", () =>
-    alignActions.getByRole("button", { name: "Left", exact: true }).click()
+    alignActions.getByRole("button", { name: "Left edges", exact: true }).click()
   );
   await expect.poll(() =>
     readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
