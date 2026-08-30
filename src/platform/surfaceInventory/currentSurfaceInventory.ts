@@ -91,7 +91,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   {
     surfaceId: "surface.workbenchCommandBar",
     surfaceType: "toolbar-action",
-    label: "Workbench Command Bar",
+    label: "Quick Toolbar",
     owner: "platform",
     sourceFiles: [
       "src/App.tsx",
@@ -99,30 +99,26 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
     ],
     commandIds: [
+      "project.save",
       "edit.undo",
       "edit.redo",
-      "edit.renameSelected",
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.toggleConnectionPoints",
-      "view.viewpoints",
-      "view.showMeasurements",
-      "arrange.alignmentTools"
+      "view.viewpoints"
     ],
     featureIds: [
+      "project.save",
       "edit.undo",
       "edit.redo",
-      "entity.rename",
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
-      "measurements.show",
       "connectionPoints.toggle",
-      "view.viewpoints",
-      "alignment.alignSelection"
+      "view.viewpoints"
     ],
-    notes: "Registry-backed History, Selection, Display, Precision, and Arrange groups use icons plus concise desktop labels, live enablement, pending, disabled-reason and pressed-state presentation. Save Project remains in the Application Bar and File menu instead of being duplicated here."
+    notes: "The flat icon-only Quick Toolbar projects Save, Undo, Redo, Duplicate, Delete, Labels, Connection Points, and Viewpoints through the existing command registry with accessible names, tooltips, live enablement, disabled reasons, and pressed state. Save is also reachable from the File menu; the Application Bar retains project context and saved-state presentation without a duplicate action."
   },
   {
     surfaceId: "surface.help",

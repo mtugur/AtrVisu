@@ -40,3 +40,14 @@ jobs:
 
       - name: E2E smoke tests
         run: npm run test:e2e
+        env:
+          ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 110 && '1' || '0' }}
+
+      - name: Upload PF-1 review evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.number == 110 }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pf1-review-5061150709
+          path: test-results/pf1-review-5061150709
+          if-no-files-found: error
+          retention-days: 30

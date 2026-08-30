@@ -437,7 +437,7 @@ Final presentation target:
 - Delete;
 - New Viewpoint.
 
-Default open height target: ~120–140 px.
+Viewpoints uses the available Primary Dock content area and its existing internal overflow behavior; no independent default height target is defined.
 
 ---
 

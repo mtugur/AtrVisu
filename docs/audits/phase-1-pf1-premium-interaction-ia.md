@@ -289,15 +289,19 @@ compatible snap, Command Palette, Viewpoints, Help, 1024, and 640 layouts under
 - Review `5061150709` correction evidence: PASS at 1440x900 and 1024x768 for
   the normal workbench without Bottom Dock chrome, populated Primary-Dock
   Viewpoints, exact-pair Arrange, three-object Arrange, and assembly Ungroup
-  states. Evidence is retained outside the repository under
-  `C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-review-5061150709/`.
+  states. The PR #110 exact-head Quality Gate publishes all ten real-runtime
+  captures as the single reviewer-accessible `pf1-review-5061150709` workflow
+  artifact; the evidence scenario also rejects Bottom-Dock chrome, document
+  overflow, console errors, and page errors.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 255 maintained files.
 - Production build: PASS, 4,125 modules transformed.
-- Full unit suite: PASS, 151 files / 1,269 tests.
-- Full Chromium suite: PASS, 74 tests.
+- Full unit suite: PASS, 151 files / 1,270 tests.
+- Full local Chromium suite: PASS, 74 tests. The PR #110 exact-head gate also
+  runs the bounded evidence capture scenario, for 75 Chromium tests in that
+  workflow.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.
 

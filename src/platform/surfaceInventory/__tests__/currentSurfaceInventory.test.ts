@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { COMMAND_BAR_COMMAND_IDS } from "../../../workbench/commandSurfaces";
 import { currentPlatformSurfaceInventory } from "../currentSurfaceInventory";
 
 const criticalSurfaceIds = [
@@ -56,6 +57,17 @@ describe("current surface inventory", () => {
     criticalSurfaceIds.forEach((surfaceId) => {
       expect(surfaceIds.has(surfaceId)).toBe(true);
     });
+  });
+
+  it("keeps the Quick Toolbar inventory aligned with the canonical command surface", () => {
+    const quickToolbarSurface = currentPlatformSurfaceInventory.find(
+      (item) => item.surfaceId === "surface.workbenchCommandBar"
+    );
+
+    expect(quickToolbarSurface?.label).toBe("Quick Toolbar");
+    expect(quickToolbarSurface?.commandIds).toEqual([...COMMAND_BAR_COMMAND_IDS]);
+    expect(quickToolbarSurface?.notes).toContain("flat icon-only Quick Toolbar");
+    expect(quickToolbarSurface?.notes).toContain("Application Bar retains project context");
   });
 
   it("documents the multi-selection alignment panel surface", () => {

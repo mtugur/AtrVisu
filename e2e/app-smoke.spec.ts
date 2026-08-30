@@ -1,6 +1,10 @@
 import { expect, type Dialog, type Page, test } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
+
+const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE === "1";
+const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5061150709");
 
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
@@ -1623,6 +1627,84 @@ test("PF-1 Arrange commands move, distribute, group, ungroup, undo, and redo onc
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
+
+if (capturePf1ReviewEvidence) {
+  test("PF-1 review evidence covers Primary Viewpoints, Arrange, and assembly states", async ({ page }) => {
+    test.setTimeout(90_000);
+    const errors = collectPageErrors(page);
+    await mkdir(pf1ReviewEvidenceDirectory, { recursive: true });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openCleanApp(page);
+
+    const captureState = async (state: string) => {
+      const viewports = [
+        { suffix: "1440", width: 1440, height: 900 },
+        { suffix: "1024", width: 1024, height: 768 }
+      ] as const;
+      for (const viewport of viewports) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await expect(page.getByTestId("app-root")).toBeVisible();
+        await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
+        expect(await page.evaluate(() =>
+          document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        )).toBe(true);
+        await page.screenshot({
+          path: join(pf1ReviewEvidenceDirectory, `${state}-${viewport.suffix}.png`),
+          fullPage: false
+        });
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
+    };
+
+    const assets = [
+      { name: "Flow Pack Machine", groups: ["Primary Packaging", "Horizontal Flow Pack"], xMm: "0" },
+      { name: "Belt Conveyor", groups: ["Conveyors", "Belt Conveyors"], xMm: "4200" },
+      { name: "Robot Palletizer", groups: ["Palletizing", "Robot Palletizers"], xMm: "9800" }
+    ] as const;
+    for (const [index, asset] of assets.entries()) {
+      await addCanonicalAtaraMachine(page, asset.name, asset.groups);
+      await waitForMachineDiagnostics(page, index + 1);
+      const properties = page.getByLabel("Selected machine properties");
+      await properties.getByLabel("Plan X").fill(asset.xMm);
+      await properties.getByLabel("Plan X").blur();
+    }
+
+    await openPrimaryDockPanel(page, "panel.machineLibrary");
+    await captureState("01-normal");
+
+    await getCommandBarCommand(page, "view.viewpoints").click();
+    await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
+    for (const name of ["Overview", "Infeed", "Transfer", "Palletizing"]) {
+      await page.getByTestId("viewpoint-name-input").fill(name);
+      await page.getByTestId("capture-viewpoint").click();
+    }
+    await expect(page.locator(".viewpoint-list-item")).toHaveCount(4);
+    await captureState("02-viewpoints");
+
+    await openPrimaryDockPanel(page, "panel.layoutExplorer");
+    const machineRows = page.getByTestId("layout-explorer").locator('[data-entity-id^="machine:"]');
+    await expect(machineRows).toHaveCount(3);
+    await machineRows.nth(0).click();
+    await machineRows.nth(1).click({ modifiers: ["Control"] });
+    await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
+    await captureState("03-arrange-two");
+
+    await machineRows.nth(2).click({ modifiers: ["Control"] });
+    await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
+    await captureState("04-arrange-three");
+
+    await openPrimaryDockPanel(page, "panel.groups");
+    page.once("dialog", (dialog) => dialog.accept("PF-1 Review Assembly"));
+    await page.getByTestId("create-group-from-selection").click();
+    const assembly = page.locator(".assembly-group-row").filter({ hasText: "PF-1 Review Assembly" });
+    await expect(assembly).toContainText("3 items");
+    await assembly.locator(".assembly-group-button").click();
+    await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Ungroup" })).toBeVisible();
+    await captureState("05-assembly");
+
+    expect(errors).toEqual([]);
+  });
+}
 
 test("PF-1 Explorer F2 rename preserves canonical identity and history", async ({ page }) => {
   const errors = collectPageErrors(page);

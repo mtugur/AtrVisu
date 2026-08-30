@@ -327,9 +327,9 @@ introducing new product state:
   or history handler was added.
 
 The evidence package for this correction is executed at 1440x900 and 1024x768
-with normal Viewpoints, populated Viewpoints, exact-pair Arrange, three-object
-Arrange, and assembly states. The ten captures are retained outside the
-repository at
-`C:/Users/mt_ug/.codex/visualizations/2026/06/03/019e8c85-ed6c-7db2-8cda-21319567ec63/pf1-review-5061150709/`.
+with the normal workbench, populated Viewpoints, exact-pair Arrange,
+three-object Arrange, and assembly states. The PR #110 exact-head Quality Gate
+publishes the ten captures as the single reviewer-accessible
+`pf1-review-5061150709` workflow artifact.
 PF-3 visual-language standardization remains a separate Phase-1 exit blocker
 and is not implemented here.
