@@ -57,6 +57,7 @@ describe("workspace application", () => {
       density: "comfortable",
       theme: "light"
     });
+    expect(getPanel(result.preferences, RUNTIME_PANEL_IDS.connectionPointSnap).visible).toBe(true);
     expect(getPanel(result.preferences, RUNTIME_PANEL_IDS.rightPanelShell)).toMatchObject({
       visible: true,
       collapsed: false,

@@ -27,7 +27,7 @@
 | Dormant Bottom Dock seam | PASS | No Phase-1 contribution means no empty chrome, resize handle, or viewport inset; the architectural binding remains available for future utilities |
 | Inspector responsibility | PASS | Multi-selection Inspector contains property/context summaries and no Alignment/Distribution/Snap or selection action stack |
 | Contextual Arrange utility | PASS | Hidden below two eligible entities; common 2+ operations; truthful 3-object distribution threshold; no Inspector or Bottom Dock action stack |
-| Connect & Snap utility | PASS | Eligible exact-two machines plus deterministic product-out to product-in pair only; load/same-type/utility pairs excluded; bounded body scrolling keeps Close and the primary action visible at 1440x900 and 1024x768 |
+| Connect & Snap utility | PASS | Sales Layout and Layout Engineering expose the existing contribution by default for eligible exact-two machines with deterministic product-out to product-in flow; load/same-type/utility pairs and 3+ selections remain excluded |
 | Keyboard Nudge placement | PASS | Nudge settings use the existing `NudgeSettings` state in Precision Placement and do not appear in contextual Arrange |
 | Command Palette | PASS | Ctrl/Cmd+K registry projection, filtering, keyboard navigation, disabled reasons, Enter execution, Escape/outside close, and no palette-only authority |
 | Collapse standard | PASS | Visible Primary Dock and Inspector use `WorkbenchDockCollapseButton`; dormant Bottom Dock exposes no orphan control |
@@ -45,13 +45,14 @@
 | Executed evidence correction | PASS | Review `5449251603`; Flow Pack/Belt Conveyor/Robot Palletizer plus Floor/Wall/Walkway; ten real-app screenshots cover recovery through 640 responsive presentation |
 | Final bounded visual correction | PASS | Review `5462166673`; fixed Connect & Snap action geometry, truthful closed Bottom Dock evidence, transient narrow Primary Dock, composed Inspector headers, and real PF-1 Review / Packaging Line / R01 evidence context |
 | Primary Viewpoints and Arrange correction | PASS | Review `5061150709`; the exact-head `pf1-review-5061150709` workflow artifact contains 1440x900 and 1024x768 runtime evidence for no Bottom chrome, populated Primary Viewpoints, exact-pair/three-object Arrange, and assembly Ungroup |
+| Sales Layout Connect & Snap correction | PASS | Review `5063962183`; stale named Sales visibility is reconciled and persisted, Custom overrides remain intact, project save/reload preserves the canonical Flow Pack to Belt pair, and `pf1-review-5063962183` visibly distinguishes the Sales two- and three-object states |
 | Focused validation | PASS | Product-flow snap, 1440/1024 action geometry, Bottom Dock default/toggle, responsive Inspector and Primary Dock preference invariance, 640 Arrange reachability, Inspector machine/civil/multi header geometry, scene lifecycle stability, canonical Quick Toolbar inventory, and the 10-capture PR evidence scenario |
 | Dependency audit | PASS | `npm audit --audit-level=low`: 0 vulnerabilities |
 | Dependency tree | PASS | `npm ls --all` completed; only expected optional dependencies are absent |
 | Design-token governance | PASS | 255 maintained files checked |
 | Build | PASS | 4,125 modules transformed; existing bundle warning remains documented |
-| Full unit suite | PASS | 151 files / 1,270 tests |
-| Full Chromium suite | PASS | 74 local product regressions; the PR #110 exact-head gate adds the bounded evidence capture scenario for 75 tests |
+| Full unit suite | PASS | 151 files / 1,272 tests |
+| Full Chromium suite | PASS | 75 local product regressions; the PR #110 exact-head gate adds the bounded evidence capture scenario for 76 tests |
 | Diff check | PASS | `git diff --check` |
 | Exact-head GitHub Quality Gate | PR GATE | Required before manual acceptance |
 | Final manual visual acceptance | REQUIRED | Integrated startup, compact toolbar, contextual Arrange/Connect & Snap, Command Palette, Viewpoints, Inspector, Help, and responsive views require user acceptance |

@@ -92,6 +92,13 @@ Advanced Alignment is reachable from the context bar and Arrange menu through
 the same registered modal tool surface. These operations are not dock
 contributions.
 
+Sales Layout and Layout Engineering both include the existing
+`panel.connectionPointSnap` contribution in their named preset composition.
+Hydration reconciles only a previously persisted named Sales Layout record that
+still hides this contribution; the reconciled record is persisted through the
+existing UI Preference store. A Custom Workspace record has no named preset
+identity and retains its explicit visibility override unchanged.
+
 Viewpoints is owned by Primary Dock and uses the same Runtime Panel, Viewpoints,
 and UI Preference authorities as before. The command and Primary rail both
 toggle that binding: first activation opens/activates Viewpoints and repeated

@@ -1,5 +1,6 @@
 import {
   WORKSPACE_PRESET_SCHEMA_VERSION,
+  type WorkbenchUiPreferences,
   type WorkspaceId,
   type WorkspacePreset
 } from "../../platform/contracts";
@@ -22,6 +23,7 @@ export const workspacePresetDefinitions = Object.freeze([
       RUNTIME_PANEL_IDS.machineLibrary,
       RUNTIME_PANEL_IDS.layoutExplorer,
       RUNTIME_PANEL_IDS.viewpoints,
+      RUNTIME_PANEL_IDS.connectionPointSnap,
       RUNTIME_PANEL_IDS.inspector
     ]),
     emphasizedCommandIds: Object.freeze([
@@ -62,6 +64,34 @@ export const workspacePresetDefinitions = Object.freeze([
     densityPreference: "compact"
   })
 ] satisfies readonly WorkspacePreset[]);
+
+export type NamedWorkspacePreferenceReconciliation = Readonly<{
+  changed: boolean;
+  preferences: WorkbenchUiPreferences;
+}>;
+
+export const reconcileNamedWorkspacePresetPreferences = (
+  preferences: WorkbenchUiPreferences
+): NamedWorkspacePreferenceReconciliation => {
+  if (preferences.activeWorkspaceId !== SALES_LAYOUT_WORKSPACE_ID) {
+    return { changed: false, preferences };
+  }
+  const connectionPointSnap = preferences.panels.find(
+    ({ panelId }) => panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+  );
+  if (!connectionPointSnap || connectionPointSnap.visible) {
+    return { changed: false, preferences };
+  }
+  return {
+    changed: true,
+    preferences: {
+      ...preferences,
+      panels: preferences.panels.map((panel) => panel.panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+        ? { ...panel, visible: true }
+        : panel)
+    }
+  };
+};
 
 export const workspaceFallbackLabels = Object.freeze({
   [SALES_LAYOUT_WORKSPACE_ID]: "Sales Layout",

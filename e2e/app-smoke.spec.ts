@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 
 const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE === "1";
-const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5061150709");
+const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5063962183");
 
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
@@ -1635,6 +1635,12 @@ if (capturePf1ReviewEvidence) {
     await mkdir(pf1ReviewEvidenceDirectory, { recursive: true });
     await page.setViewportSize({ width: 1440, height: 900 });
     await openCleanApp(page);
+    const workspace = await openPreferenceBranch(page, "workspace");
+    await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("workspace-preferences-popover")).toHaveCount(0);
 
     const captureState = async (state: string) => {
       const viewports = [
@@ -1687,12 +1693,18 @@ if (capturePf1ReviewEvidence) {
     await machineRows.nth(0).click();
     await machineRows.nth(1).click({ modifiers: ["Control"] });
     await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
+    await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
+      .toBeEnabled();
     await captureState("03-arrange-two");
 
     await machineRows.nth(2).click({ modifiers: ["Control"] });
     await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
     await captureState("04-arrange-three");
 
+    const engineeringWorkspace = await openPreferenceBranch(page, "workspace");
+    await engineeringWorkspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
     await openPrimaryDockPanel(page, "panel.groups");
     page.once("dialog", (dialog) => dialog.accept("PF-1 Review Assembly"));
     await page.getByTestId("create-group-from-selection").click();
@@ -2037,6 +2049,89 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await page.keyboard.up("Control");
   await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
   await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("Sales Layout preserves canonical product-flow snap through project save and reload", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  await waitForUiPreferences(page);
+
+  const workspace = await openPreferenceBranch(page, "workspace");
+  await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await openProjectManagerFromFileMenu(page);
+  await page.getByTestId("new-project-name").fill("Sales Product Flow Project");
+  await page.getByTestId("new-customer-name").fill("E2E Customer");
+  await page.getByTestId("create-project").click();
+  await expect(page.getByTestId("project-manager-project-list")).toContainText("Sales Product Flow Project");
+  await page.getByTestId("close-project-manager").click();
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await waitForMachineDiagnostics(page, 2);
+
+  const selectProductFlowPair = async () => {
+    const machineIds = await getMachineIds(page);
+    await clickSceneMachine(page, machineIds[0]);
+    await page.keyboard.down("Control");
+    await clickSceneMachine(page, machineIds[1]);
+    await page.keyboard.up("Control");
+    const connectAndSnap = page.getByTestId("viewport-arrange-bar")
+      .getByRole("button", { name: "Connect & Snap" });
+    await expect(connectAndSnap).toBeVisible();
+    await expect(connectAndSnap).toBeEnabled();
+    await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap")))
+      .toMatchObject({ available: true, visible: true });
+  };
+
+  await selectProductFlowPair();
+
+  let promptCount = 0;
+  page.on("dialog", async (dialog) => {
+    if (dialog.type() === "prompt") {
+      await dialog.accept(promptCount++ === 0 ? "R01" : "Sales product-flow pair");
+    }
+  });
+  await expectRuntimeCommandExecutionOnce(page, "project.save", () =>
+    getCommandBarCommand(page, "project.save").click()
+  );
+  await expect.poll(() => getActiveProjectRuntimeContext(page))
+    .toMatchObject({ hasUnsavedChanges: false });
+
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  const welcome = page.getByTestId("empty-project-welcome");
+  await expect(welcome).toBeVisible();
+  await welcome.getByRole("button", { name: "Open Project" }).click();
+  const manager = page.getByTestId("project-manager-modal");
+  await manager.getByTestId("project-manager-project-option")
+    .filter({ hasText: "Sales Product Flow Project" })
+    .click();
+  await manager.getByRole("button", { name: "Load Revision", exact: true }).click();
+  await expect(welcome).toHaveCount(0);
+  await manager.getByTestId("close-project-manager").click();
+  await waitForMachineDiagnostics(page, 2);
+  await selectProductFlowPair();
+
+  await addCanonicalAtaraMachine(page, "Robot Palletizer", ["Palletizing", "Robot Palletizers"]);
+  await waitForMachineDiagnostics(page, 3);
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await clickSceneMachine(page, machineIds[2]);
+  await page.keyboard.up("Control");
+  await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
+    .toHaveCount(0);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
   expect(errors).toEqual([]);
 });
 

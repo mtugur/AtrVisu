@@ -293,14 +293,21 @@ compatible snap, Command Palette, Viewpoints, Help, 1024, and 640 layouts under
   captures as the single reviewer-accessible `pf1-review-5061150709` workflow
   artifact; the evidence scenario also rejects Bottom-Dock chrome, document
   overflow, console errors, and page errors.
+- Review `5063962183` correction: PASS. Sales Layout now includes the existing
+  `panel.connectionPointSnap` contribution; stale named Sales records converge
+  and persist while Custom Workspace overrides remain unchanged. A real
+  Flow Pack Machine -> Belt Conveyor pair remains visible/enabled through a
+  current-format project save/reload, and adding Robot Palletizer as the third
+  selection removes the action. The exact-head gate publishes the 1440x900 and
+  1024x768 Sales-labeled evidence in `pf1-review-5063962183`.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 255 maintained files.
 - Production build: PASS, 4,125 modules transformed.
-- Full unit suite: PASS, 151 files / 1,270 tests.
-- Full local Chromium suite: PASS, 74 tests. The PR #110 exact-head gate also
-  runs the bounded evidence capture scenario, for 75 Chromium tests in that
+- Full unit suite: PASS, 151 files / 1,272 tests.
+- Full local Chromium suite: PASS, 75 tests. The PR #110 exact-head gate also
+  runs the bounded evidence capture scenario, for 76 Chromium tests in that
   workflow.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.

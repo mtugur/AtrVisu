@@ -317,7 +317,11 @@ export const createUiPreferencesRuntimeStore = (
             requiresPersistence: true
           });
         }
-        if (plan.readResult.status === "valid" && pendingHydrationUpdates.length === 0) {
+        if (
+          plan.readResult.status === "valid"
+          && pendingHydrationUpdates.length === 0
+          && !plan.requiresPersistence
+        ) {
           hydrationActive = false;
           if (plan.warning) {
             warn(plan.warning);

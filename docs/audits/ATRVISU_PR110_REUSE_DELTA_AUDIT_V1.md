@@ -333,3 +333,22 @@ publishes the ten captures as the single reviewer-accessible
 `pf1-review-5061150709` workflow artifact.
 PF-3 visual-language standardization remains a separate Phase-1 exit blocker
 and is not implemented here.
+
+## J. PF-1 correction review 5063962183
+
+Review `5063962183` found that the canonical Sales Layout preset hid the
+existing Connection Point Snap panel contribution even for a valid exact
+product-flow pair. The bounded correction adds that existing panel ID to Sales
+Layout without changing snap compatibility or mutation authority.
+
+Initialization reconciles and persists only a previous named
+`workspace.sales-layout` record whose Connection Point Snap visibility is
+false. Custom Workspace has no active named preset and preserves its explicit
+override. Chromium coverage applies Sales Layout through the normal UI, places
+fresh canonical Flow Pack and Belt Conveyor assets, verifies the exact pair,
+round-trips a current-format project revision, and confirms a third Robot
+Palletizer selection removes Connect & Snap.
+
+The exact-head Quality Gate publishes ten reviewer-accessible 1440x900 and
+1024x768 captures as `pf1-review-5063962183`; the pair and three-object frames
+visibly identify Sales Layout in the Application Bar.

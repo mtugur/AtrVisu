@@ -397,6 +397,12 @@ When exactly two compatible machines are selected, additionally show:
 
 - **Connect & Snap**
 
+Canonical Sales Layout and Layout Engineering workspaces keep the existing
+Connection Point Snap runtime panel contribution visible by default. Runtime
+availability remains selection-driven: incompatible pairs and selections of
+three or more entities do not expose the action. Custom Workspace visibility
+overrides remain user-owned.
+
 Connection details open as a small contextual popover that shows:
 
 - moving machine;

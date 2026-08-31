@@ -57,7 +57,8 @@ describe("canonical workspace preset registry", () => {
       inspectorMode: "summary",
       densityPreference: "comfortable",
       initiallyVisiblePanelIds: [
-        "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints", "panel.inspector"
+        "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints",
+        "panel.connectionPointSnap", "panel.inspector"
       ],
       emphasizedCommandIds: [
         "project.save", "edit.duplicateSelected", "view.toggleLabels", "view.viewpoints"

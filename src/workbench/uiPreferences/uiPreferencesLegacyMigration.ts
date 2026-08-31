@@ -1,5 +1,6 @@
 import type { WorkbenchUiPreferences } from "../../platform/contracts";
 import { RUNTIME_PANEL_IDS } from "../../platform/runtimePanels/runtimePanelRegistryBridge";
+import { reconcileNamedWorkspacePresetPreferences } from "../workspaces/workspacePresetDefinitions";
 import { cloneWorkbenchUiPreferences, createDefaultWorkbenchUiPreferences } from "./uiPreferencesDefaults";
 import { normalizeWorkbenchUiPreferences } from "./uiPreferencesNormalizer";
 import type { UiPreferencesReadResult, UiPreferencesStorage } from "./uiPreferencesStorage";
@@ -89,11 +90,12 @@ export const prepareUiPreferencesInitialization = async (
 ): Promise<UiPreferencesInitializationPlan> => {
   const readResult = await storage.read();
   if (readResult.status === "valid") {
+    const reconciliation = reconcileNamedWorkspacePresetPreferences(readResult.preferences);
     return {
       readResult,
-      preferences: cloneWorkbenchUiPreferences(readResult.preferences),
+      preferences: cloneWorkbenchUiPreferences(reconciliation.preferences),
       migrated: false,
-      requiresPersistence: false,
+      requiresPersistence: reconciliation.changed,
       consumedLegacyKeys: [],
       ...(readResult.warnings.length > 0 ? { warning: readResult.warnings.join(" ") } : {})
     };
