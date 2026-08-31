@@ -21,6 +21,34 @@ describe("runtime panel registry bridge", () => {
     );
   });
 
+  it("registers Advanced Alignment as a bounded modal tool surface", () => {
+    const bridge = createRuntimePanelRegistryBridge(() => ({}));
+    const descriptor = runtimePanelDescriptors.find(
+      (candidate) => candidate.definition.id === RUNTIME_PANEL_IDS.alignmentTools
+    );
+
+    expect(bridge.registry.get(RUNTIME_PANEL_IDS.alignmentTools)).toMatchObject({
+      title: "Advanced Alignment"
+    });
+    expect(descriptor).toMatchObject({
+      classification: "required-runtime",
+      surfaceKind: "modal",
+      runtimeLocation: "modal-layer"
+    });
+  });
+
+  it("registers Viewpoints as a first-class Primary Dock panel", () => {
+    const descriptor = runtimePanelDescriptors.find(
+      (candidate) => candidate.definition.id === RUNTIME_PANEL_IDS.viewpoints
+    );
+
+    expect(descriptor).toMatchObject({
+      classification: "required-runtime",
+      surfaceKind: "section",
+      runtimeLocation: "primary-dock"
+    });
+  });
+
   it("rejects duplicate runtime panel ids during deterministic registration", () => {
     const definition: PanelDefinition = {
       id: "panel.duplicate",

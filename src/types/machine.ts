@@ -91,6 +91,7 @@ export type MachineDefinition = {
 
 export type PlacedMachine = {
   instanceId: string;
+  displayName?: string;
   libraryId?: string;
   machineDefinitionId: string;
   definitionSnapshot: MachineDefinition;
@@ -114,6 +115,7 @@ export type PlacedMachine = {
 
 export type LayoutObject = {
   id: string;
+  displayName?: string;
   libraryId?: string;
   machineDefinitionId: string;
   definitionSnapshot?: MachineDefinition;

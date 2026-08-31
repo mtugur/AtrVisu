@@ -36,6 +36,7 @@ import type {
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
 import { getCivilReferenceRenderCenterMm, getMachineRenderCenterMm } from "../utils/coordinateReference";
 import { getMachineDimensionsMeters } from "../utils/machineDimensions";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
 import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
@@ -65,6 +66,7 @@ import {
   type MachineDragState
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
+import { drawMachineLabelText } from "./babylonScene/machineLabelLifecycle";
 import {
   captureOrthographicFraming,
   getOrthographicBoundsForViewport,
@@ -182,6 +184,7 @@ type PlacedMachineNode = {
   box: Mesh;
   label: Mesh;
   labelTexture: DynamicTexture;
+  labelText: string;
   material: StandardMaterial;
   selectionFrame: LinesMesh;
   flowArrow?: LinesMesh;
@@ -235,10 +238,14 @@ const getCivilColor = (item: CivilReferenceItem) => {
   return createTechnicalColor3FromHex(CIVIL_TECHNICAL_COLORS[item.type]);
 };
 
+const drawLabelText = (texture: DynamicTexture, text: string) => {
+  drawMachineLabelText(texture, text, TECHNICAL_CSS_COLORS.labelText);
+};
+
 const createLabel = (scene: Scene, textureKey: string, text: string, y: number) => {
   const texture = new DynamicTexture(`label-texture-${textureKey}`, { width: 512, height: 128 }, scene);
   texture.hasAlpha = true;
-  texture.drawText(text, null, 78, "bold 42px Arial", TECHNICAL_CSS_COLORS.labelText, TECHNICAL_CSS_COLORS.transparent, true, true);
+  drawLabelText(texture, text);
 
   const material = new StandardMaterial(`label-material-${textureKey}`, scene);
   material.diffuseTexture = texture;
@@ -1058,6 +1065,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.machineScreenBounds;
         delete canvas.dataset.machinePlanPositions;
         delete canvas.dataset.civilPlanPositions;
+        delete canvas.dataset.machineSceneLabels;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -2021,6 +2029,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             yMm: item.positionMm.yMm
           }])
         ));
+        canvas.dataset.machineSceneLabels = JSON.stringify(scene.meshes
+          .filter((mesh) => typeof mesh.metadata?.machineLabelInstanceId === "string")
+          .map((mesh) => {
+            const instanceId = mesh.metadata.machineLabelInstanceId as string;
+            return {
+              instanceId,
+              meshName: mesh.name,
+              text: machineNodesRef.current.get(instanceId)?.labelText ?? null,
+              visible: mesh.isVisible
+            };
+          }));
       }
       scene.render();
       if (onPerformanceMetricsChangeRef.current) {
@@ -2130,7 +2149,13 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     });
 
     placedMachines.forEach((machine) => {
-      if (machineNodesRef.current.has(machine.instanceId)) {
+      const existingNode = machineNodesRef.current.get(machine.instanceId);
+      const displayName = getPlacedMachineDisplayName(machine);
+      if (existingNode) {
+        if (existingNode.labelText !== displayName) {
+          drawLabelText(existingNode.labelTexture, displayName);
+          existingNode.labelText = displayName;
+        }
         return;
       }
 
@@ -2161,7 +2186,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       box.metadata = { instanceId };
       box.visibility = 0;
 
-      const { label, texture } = createLabel(scene, instanceId, definition.name, dimensions.height + 0.85);
+      const { label, texture } = createLabel(scene, instanceId, displayName, dimensions.height + 0.85);
+      label.metadata = {
+        machineLabelInstanceId: instanceId,
+        platformEntityId: createLegacyPlatformEntityId("machine", instanceId)
+      };
       label.position.x = renderCenter.x;
       label.position.z = renderCenter.z;
       label.isVisible = overlaySettingsRef.current.showLabels;
@@ -2225,6 +2254,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         box,
         label,
         labelTexture: texture,
+        labelText: displayName,
         material,
         selectionFrame,
         flowArrow,

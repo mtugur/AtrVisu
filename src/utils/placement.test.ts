@@ -238,7 +238,11 @@ describe("placement helpers", () => {
       gridSnapStepMm: 100,
       rotationSnapEnabled: false,
       rotationSnapStepDeg: 15,
-      showMeasurementHelpers: true
+      showMeasurementHelpers: false
     });
+  });
+
+  it("keeps measurement helpers off until the selected-machine command enables them", () => {
+    expect(DEFAULT_PLACEMENT_SETTINGS.showMeasurementHelpers).toBe(false);
   });
 });

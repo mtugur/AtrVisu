@@ -20,6 +20,7 @@ const roots: Root[] = [];
 afterEach(async () => {
   await act(async () => roots.splice(0).forEach((root) => root.unmount()));
   document.body.replaceChildren();
+  vi.unstubAllGlobals();
 });
 
 const item = (
@@ -52,55 +53,31 @@ const press = async (element: Element, key: string) => {
 };
 
 describe("WorkbenchApplicationBar", () => {
-  it("shows identity, dirty state, read-only context, and invokes project.save", async () => {
-    const onExecute = vi.fn();
+  it("shows context and opens command search without duplicating Save", async () => {
+    const onOpenCommandPalette = vi.fn();
     const container = await mount(
       createElement(WorkbenchApplicationBar, {
-        saveItem: item("project.save", "application-bar", { label: "Save Project" }),
-        emphasizedCommandIds: ["project.save"],
         hasUnsavedChanges: true,
         projectContext: { project: "Factory", layout: "Line 1", revision: "R03" },
-        onExecute
+        onOpenCommandPalette
       })
     );
 
     expect(container.textContent).toContain("AtrVisu");
+    expect(container.textContent).toContain("Industrial Layout Workbench");
     expect(container.textContent).toContain("Unsaved");
     expect(container.textContent).toContain("Factory");
     const projectSession = container.querySelector(".workbench-project-session") as HTMLElement;
-    const saveCluster = projectSession.querySelector(".workbench-save-cluster") as HTMLElement;
-    const saveButton = saveCluster.querySelector('[data-command-id="project.save"]') as HTMLButtonElement;
     expect(projectSession.getAttribute("aria-label")).toBe("Project session");
-    expect(saveCluster.querySelector(".workbench-save-state")?.textContent).toBe("Unsaved");
-    expect(container.querySelectorAll('[data-command-id="project.save"]')).toHaveLength(1);
-    expect(saveButton.dataset.workspaceEmphasized).toBe("true");
+    expect(projectSession.querySelector(".workbench-save-state")?.textContent).toBe("Unsaved");
+    expect(container.querySelector('[data-command-id="project.save"]')).toBeNull();
     expect(projectSession.querySelector(".workbench-project-context")?.textContent)
       .toContain("Factory");
-    await act(async () => saveButton.click());
-    expect(onExecute).toHaveBeenCalledWith("project.save");
-    expect(container.textContent).not.toContain("Theme");
-  });
-
-  it("does not execute disabled Save and exposes its reason", async () => {
-    const onExecute = vi.fn();
-    const container = await mount(
-      createElement(WorkbenchApplicationBar, {
-        saveItem: item("project.save", "application-bar", {
-          label: "Save Project",
-          disabled: true,
-          disabledReason: "No active project."
-        }),
-        hasUnsavedChanges: false,
-        projectContext: { project: "No project", layout: "No layout", revision: "No revision" },
-        onExecute
-      })
-    );
-    const button = container.querySelector("button") as HTMLButtonElement;
-
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("aria-label")).toContain("No active project.");
-    await act(async () => button.click());
-    expect(onExecute).not.toHaveBeenCalled();
+    const search = container.querySelector('[aria-label="Search commands"]') as HTMLButtonElement;
+    expect(search.querySelector(".workbench-command-search-label-full")?.textContent).toBe("Search commands");
+    expect(search.querySelector(".workbench-command-search-label-compact")?.textContent).toBe("Search");
+    await act(async () => search.click());
+    expect(onOpenCommandPalette).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -272,11 +249,73 @@ describe("RightPanelUtilityStrip", () => {
 });
 
 describe("WorkbenchCommandBar", () => {
+  it("keeps compact frequent commands visible and exposes deterministic overflow", async () => {
+    const mediaListeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 720px)",
+      onchange: null,
+      addEventListener: (_event: string, listener: () => void) => mediaListeners.add(listener),
+      removeEventListener: (_event: string, listener: () => void) => mediaListeners.delete(listener),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    })));
+    const container = await mount(createElement(WorkbenchCommandBar, {
+      items: [
+        item("project.save", "command-bar", { label: "Save" }),
+        item("edit.undo", "command-bar", { label: "Undo" }),
+        item("edit.redo", "command-bar", { label: "Redo" }),
+        item("view.toggleLabels", "command-bar", { label: "Labels" }),
+        item("view.viewpoints", "command-bar", { label: "Viewpoints", disabled: true })
+      ],
+      onExecute: vi.fn()
+    }));
+    const direct = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="direct"]')];
+    const more = container.querySelector('[aria-label="More commands"]') as HTMLButtonElement;
+
+    expect(direct.map((button) => button.dataset.commandId)).toEqual(["project.save", "edit.undo", "edit.redo"]);
+    expect(direct.map((button) => button.tabIndex)).toEqual([0, -1, -1]);
+
+    direct[0].focus();
+    await press(direct[0], "ArrowRight");
+    expect(document.activeElement).toBe(direct[1]);
+    await press(direct[1], "ArrowRight");
+    expect(document.activeElement).toBe(direct[2]);
+
+    await act(async () => more.click());
+    const overflow = [...container.querySelectorAll<HTMLButtonElement>('[data-command-placement="overflow"]')];
+    expect(overflow.map((button) => button.dataset.commandId)).toEqual(["view.toggleLabels", "view.viewpoints"]);
+  });
+
+  it("renders the canonical flat quick toolbar without false or grouped surfaces", async () => {
+    const commandIds = [
+      "project.save",
+      "edit.undo",
+      "edit.redo",
+      "edit.duplicateSelected",
+      "edit.deleteSelected",
+      "view.toggleLabels",
+      "view.toggleConnectionPoints",
+      "view.viewpoints"
+    ];
+    const container = await mount(createElement(WorkbenchCommandBar, {
+      items: commandIds.map((commandId) => item(commandId, "command-bar")),
+      onExecute: vi.fn()
+    }));
+
+    expect(container.querySelectorAll(".workbench-command-group-label")).toHaveLength(0);
+    expect(container.textContent).not.toContain("Selection Tools");
+    expect(container.textContent).not.toContain("Measure");
+    expect(container.querySelectorAll("button[data-command-id]")).toHaveLength(commandIds.length);
+    expect(container.querySelector('[data-command-id="project.save"]')).not.toBeNull();
+  });
+
   it("renders toolbar semantics, pressed state, and roving keyboard focus", async () => {
     const items = [
-      item("edit.undo", "command-bar", { label: "Undo" }),
-      item("edit.redo", "command-bar", { label: "Redo", disabled: true }),
-      item("view.toggleLabels", "command-bar", { label: "Toggle Labels", pressed: true })
+      item("edit.undo", "command-bar", { label: "Undo", iconId: "undo" }),
+      item("edit.redo", "command-bar", { label: "Redo", iconId: "redo", disabled: true }),
+      item("view.toggleLabels", "command-bar", { label: "Labels", iconId: "labels", pressed: true })
     ];
     const container = await mount(createElement(WorkbenchCommandBar, {
       items,
@@ -292,6 +331,10 @@ describe("WorkbenchCommandBar", () => {
       "view.toggleLabels"
     ]);
     expect(buttons[2].getAttribute("aria-pressed")).toBe("true");
+    expect(buttons.map((button) => button.dataset.iconId)).toEqual(["undo", "redo", "labels"]);
+    expect(buttons.every((button) => button.querySelector("svg") !== null)).toBe(true);
+    expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual(["Undo", "Redo", "Labels"]);
+    expect(buttons.every((button) => button.querySelector(".visually-hidden") !== null)).toBe(true);
     expect(buttons[0].dataset.workspaceEmphasized).toBe("true");
     expect(buttons[2].dataset.workspaceEmphasized).toBeUndefined();
     buttons[0].focus();

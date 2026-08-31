@@ -7,6 +7,7 @@ import type { PlacedMachine } from "../../types/machine";
 import { getMachineReferencePositionMm } from "../../utils/coordinateReference";
 import { getMachineDimensionsMm } from "../../utils/machineDimensions";
 import { getGroupEntityKeys } from "../../utils/groups";
+import { getPlacedMachineDisplayName } from "../../utils/entityNames";
 import type { EntityProperty, PlatformEntity } from "../contracts";
 
 export type LegacyEntityFamily = "machine" | "civil" | "annotation" | "group";
@@ -75,7 +76,7 @@ export const adaptPlacedMachineToPlatformEntity = (
   return {
     id: createLegacyPlatformEntityId("machine", machine.instanceId),
     type: "machine",
-    name: machine.definition.name,
+    name: getPlacedMachineDisplayName(machine),
     transform: {
       planX: position.xMm,
       planY: position.yMm,

@@ -62,9 +62,10 @@
   --av-z-modal: 100;
   --av-z-diagnostics: 120;
 
-  --av-workbench-application-bar-height: 36px;
-  --av-workbench-menu-bar-height: 32px;
-  --av-workbench-command-bar-height: 44px;
+  --av-workbench-application-bar-height: 38px;
+  --av-workbench-menu-bar-height: 28px;
+  --av-workbench-command-bar-height: 42px;
+  --av-workbench-status-bar-height: 25px;
   --av-workbench-top-inset: calc(
     var(--av-workbench-application-bar-height)
     + var(--av-workbench-menu-bar-height)

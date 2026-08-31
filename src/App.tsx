@@ -4,18 +4,28 @@ import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { EditorHost } from "./components/EditorHost";
+import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
+import { HelpModal, type HelpSection } from "./components/HelpModal";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import {
+  CommandPalette,
+  ViewportArrangeBar,
   WorkbenchApplicationBar,
   WorkbenchCommandBar,
+  WorkbenchDockCollapseButton,
   WorkbenchMenuBar,
   WorkspacePreferencesControl
 } from "./components/workbench";
 import { LayoutExplorer } from "./components/workbench/LayoutExplorer";
-import { WorkbenchBottomDock } from "./components/workbench/WorkbenchBottomDock";
 import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDock";
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
+import {
+  isResponsiveInspectorPresentation,
+  isResponsivePrimaryDockPresentation,
+  resolveInspectorPresentationCollapsed,
+  resolvePrimaryDockPresentationCollapsed
+} from "./components/workbench/responsivePresentation";
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
@@ -90,10 +100,12 @@ import { listProjects } from "./utils/projectStorage";
 import { initializeProjectStorage } from "./utils/storage/storageMigration";
 import { metersToMm, mmToMeters } from "./utils/units";
 import { normalizeMachineVisualModel } from "./utils/visualModel";
+import { getPlacedMachineDisplayName } from "./utils/entityNames";
+import { isRenameableProjectEntityId, renameProjectEntity } from "./utils/entityRename";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./utils/selectionBounds";
 import {
   applyConnectionPointSnap,
-  evaluateConnectionPointSnapContext,
+  evaluatePremiumConnectionPointSnapContext,
   executeGuardedConnectionPointSnap,
   getConnectionPointSnapContextMessage,
   type ConnectionPointSnapSelection
@@ -141,6 +153,7 @@ import {
   type RuntimeFeatureCommandId,
   type RuntimeFeatureCommandOperationResult
 } from "./platform/runtimeCommands/runtimeFeatureCommands";
+import { createArrangeRuntimeCommandBindings } from "./platform/runtimeCommands/arrangeRuntimeCommands";
 import {
   createExecutedRuntimeCommandResult,
   createFailedRuntimeCommandResult,
@@ -157,6 +170,10 @@ import {
   type ProjectRuntimeCommandE2EBridge,
   type ProjectImportCommandPayload
 } from "./platform/runtimeCommands/projectRuntimeCommandAuthority";
+import {
+  getProjectManagerEntryIntent,
+  type ProjectManagerEntryIntent
+} from "./platform/runtimeCommands/projectManagerEntryIntent";
 import { createLegacyEntitySnapshot, createLegacyPlatformEntityId } from "./platform/adapters/legacyEntityAdapter";
 import {
   applyRuntimeSelectionRequest,
@@ -261,12 +278,10 @@ import {
   LAYOUT_3D_EDITOR_ID
 } from "./workbench/layout3dEditorDefinition";
 import {
-  DEFAULT_BOTTOM_DOCK_HEIGHT,
   DEFAULT_PRIMARY_DOCK_WIDTH,
   DOCK_RESIZE_BREAKPOINT,
   PRIMARY_DOCK_RAIL_WIDTH,
   clampDockSize,
-  getBottomDockHeightBounds,
   getPrimaryDockWidthBounds
 } from "./workbench/dockSizing";
 import {
@@ -287,10 +302,10 @@ const PRIMARY_DOCK_PANEL_IDS = [
   RUNTIME_PANEL_IDS.machineLibrary,
   RUNTIME_PANEL_IDS.layoutExplorer,
   RUNTIME_PANEL_IDS.layers,
-  RUNTIME_PANEL_IDS.groups
+  RUNTIME_PANEL_IDS.groups,
+  RUNTIME_PANEL_IDS.viewpoints
 ] as const;
-const STATUS_BAR_HEIGHT = 28;
-const COLLAPSED_BOTTOM_DOCK_HEIGHT = 34;
+const STATUS_BAR_HEIGHT = 25;
 const DEFAULT_NUDGE_SETTINGS: NudgeSettings = {
   nudgeStepMm: 100,
   largeNudgeStepMm: 1000,
@@ -425,20 +440,32 @@ export function App() {
   const primaryDockPreference = panelPreferences.get(RUNTIME_PANEL_IDS.primaryDockShell);
   const primaryDockWidth = primaryDockPreference?.size ?? DEFAULT_PRIMARY_DOCK_WIDTH;
   const isPrimaryDockCollapsed = !primaryDockPreference?.visible || Boolean(primaryDockPreference.collapsed);
-  const bottomDockPreference = panelPreferences.get(RUNTIME_PANEL_IDS.bottomDockShell);
-  const bottomDockHeight = bottomDockPreference?.size ?? DEFAULT_BOTTOM_DOCK_HEIGHT;
-  const isBottomDockCollapsed = !bottomDockPreference?.visible || Boolean(bottomDockPreference.collapsed);
   const [workbenchViewportSize, setWorkbenchViewportSize] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight
   }));
+  const [isResponsiveInspectorOpen, setIsResponsiveInspectorOpen] = useState(false);
+  const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
+  const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
+  const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
+  const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
+  const responsivePrimaryDockPresentationRef = useRef(responsivePrimaryDockPresentation);
+  const isInspectorPresentationCollapsed = resolveInspectorPresentationCollapsed({
+    viewportWidth: workbenchViewportSize.width,
+    persistedCollapsed: isPanelCollapsed,
+    responsiveInspectorOpen: isResponsiveInspectorOpen
+  });
+  const inspectorPresentationCollapsedRef = useRef(isInspectorPresentationCollapsed);
+  const isPrimaryDockPresentationCollapsed = resolvePrimaryDockPresentationCollapsed({
+    viewportWidth: workbenchViewportSize.width,
+    persistedCollapsed: isPrimaryDockCollapsed,
+    responsivePrimaryDockOpen: isResponsivePrimaryDockOpen
+  });
   const primaryDockWidthBounds = getPrimaryDockWidthBounds(
     workbenchViewportSize.width,
-    isPanelCollapsed ? 0 : panelWidth
+    isInspectorPresentationCollapsed ? 0 : panelWidth
   );
-  const bottomDockHeightBounds = getBottomDockHeightBounds(workbenchViewportSize.height);
   const effectivePrimaryDockWidth = clampDockSize(primaryDockWidth, primaryDockWidthBounds);
-  const effectiveBottomDockHeight = clampDockSize(bottomDockHeight, bottomDockHeightBounds);
   const dockResizeEnabled = workbenchViewportSize.width > DOCK_RESIZE_BREAKPOINT;
   const panelSectionExpansion = useMemo(() => Object.fromEntries(
     uiPreferences.panels
@@ -461,6 +488,27 @@ export function App() {
       collapsed
     });
   }, [uiPreferencesStore]);
+  const openInspectorPresentation = useCallback(() => {
+    if (responsiveInspectorPresentationRef.current) {
+      setIsResponsiveInspectorOpen(true);
+      return;
+    }
+    setIsPanelCollapsed(false);
+  }, [setIsPanelCollapsed]);
+  const closeInspectorPresentation = useCallback(() => {
+    if (responsiveInspectorPresentationRef.current) {
+      setIsResponsiveInspectorOpen(false);
+      return;
+    }
+    setIsPanelCollapsed(true);
+  }, [setIsPanelCollapsed]);
+  const toggleInspectorPresentation = useCallback(() => {
+    if (responsiveInspectorPresentationRef.current) {
+      setIsResponsiveInspectorOpen((current) => !current);
+      return;
+    }
+    setIsPanelCollapsed((current) => !current);
+  }, [setIsPanelCollapsed]);
   const setPanelWidth = useCallback((next: number | ((current: number) => number)) => {
     const currentShell = uiPreferencesStore.getSnapshot().preferences.panels.find(
       (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
@@ -476,17 +524,16 @@ export function App() {
     const rightPanel = currentPreferences.find(
       (panel) => panel.panelId === RUNTIME_PANEL_IDS.rightPanelShell
     );
-    const rightInset = !rightPanel?.visible || rightPanel.collapsed ? 0 : rightPanel.size ?? 360;
+    const rightInset = inspectorPresentationCollapsedRef.current
+      || !rightPanel?.visible
+      || rightPanel.collapsed
+      ? 0
+      : rightPanel.size ?? 360;
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.primaryDockShell, {
       size: clampDockSize(
         requested,
         getPrimaryDockWidthBounds(window.innerWidth, rightInset)
       )
-    });
-  }, [uiPreferencesStore]);
-  const setBottomDockHeight = useCallback((requested: number) => {
-    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
-      size: clampDockSize(requested, getBottomDockHeightBounds(window.innerHeight))
     });
   }, [uiPreferencesStore]);
   const setPrimaryDockCollapsed = useCallback((collapsed: boolean) => {
@@ -495,12 +542,13 @@ export function App() {
       collapsed
     });
   }, [uiPreferencesStore]);
-  const setBottomDockCollapsed = useCallback((collapsed: boolean) => {
-    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.bottomDockShell, {
-      visible: true,
-      collapsed
-    });
-  }, [uiPreferencesStore]);
+  const setPrimaryDockPresentationCollapsed = useCallback((collapsed: boolean) => {
+    if (responsivePrimaryDockPresentationRef.current) {
+      setIsResponsivePrimaryDockOpen(!collapsed);
+      return;
+    }
+    setPrimaryDockCollapsed(collapsed);
+  }, [setPrimaryDockCollapsed]);
   useEffect(() => {
     const handleWorkbenchResize = () => {
       setWorkbenchViewportSize({ width: window.innerWidth, height: window.innerHeight });
@@ -525,9 +573,9 @@ export function App() {
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
   const [runtimeSelection, setRuntimeSelection] = useState(() => createEmptyRuntimeSelection("scene"));
   const [activePrimaryPanelId, setActivePrimaryPanelId] = useState<PanelId>(RUNTIME_PANEL_IDS.machineLibrary);
-  const [activeBottomPanelId, setActiveBottomPanelId] = useState<PanelId>(RUNTIME_PANEL_IDS.viewpoints);
   const [annotationSelectionSignal, setAnnotationSelectionSignal] = useState(0);
   const [recoveryLayout, setRecoveryLayout] = useState<AtrVisuLayout | null>(null);
+  const [hasAcceptedWorkingLayout, setHasAcceptedWorkingLayout] = useState(false);
   const [autosaveReady, setAutosaveReady] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(false);
   const [simulationSpeed, setSimulationSpeed] = useState(1);
@@ -546,6 +594,7 @@ export function App() {
   const [isProjectStorageLoading, setIsProjectStorageLoading] = useState(true);
   const [projectStorageError, setProjectStorageError] = useState("");
   const [isProjectManagerOpen, setIsProjectManagerOpen] = useState(false);
+  const [projectManagerEntryIntent, setProjectManagerEntryIntent] = useState<ProjectManagerEntryIntent | null>(null);
   const [isPerformanceBenchmarkOpen, setIsPerformanceBenchmarkOpen] = useState(false);
   const [isCollisionCheckOpen, setIsCollisionCheckOpen] = useState(false);
   const [isSimulationControlsOpen, setIsSimulationControlsOpen] = useState(false);
@@ -554,6 +603,12 @@ export function App() {
   const [isCommercialOutputsOpen, setIsCommercialOutputsOpen] = useState(false);
   const [isLibraryManagerOpen, setIsLibraryManagerOpen] = useState(false);
   const [isTaxonomyManagerOpen, setIsTaxonomyManagerOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isAdvancedAlignmentOpen, setIsAdvancedAlignmentOpen] = useState(false);
+  const [isConnectionPointSnapOpen, setIsConnectionPointSnapOpen] = useState(false);
+  const [helpSection, setHelpSection] = useState<HelpSection>("quick-start");
+  const [renameRequest, setRenameRequest] = useState<{ entityId: string; version: number } | null>(null);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
   const [latestPerformanceMetrics, setLatestPerformanceMetrics] = useState<ScenePerformanceMetrics | null>(null);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -648,21 +703,19 @@ export function App() {
     simulationSpeed: 1
   });
   const previousViewportShellStateRef = useRef({
-    isPanelCollapsed,
+    isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
-    isPrimaryDockCollapsed,
+    isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
     primaryDockWidth: effectivePrimaryDockWidth,
-    isBottomDockCollapsed,
-    bottomDockHeight: effectiveBottomDockHeight
+    isBottomDockCollapsed: true,
+    bottomDockHeight: 0
   });
   const runtimePanelStateRef = useRef({
     panelSectionExpansion,
     panelSectionVisibility,
     activePrimaryPanelId,
-    activeBottomPanelId,
-    isPrimaryDockCollapsed,
-    isBottomDockCollapsed,
-    isPanelCollapsed,
+    isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
+    isPanelCollapsed: isInspectorPresentationCollapsed,
     panelWidth,
     isProjectManagerOpen,
     isPerformanceBenchmarkOpen,
@@ -673,8 +726,13 @@ export function App() {
     isCommercialOutputsOpen,
     isLibraryManagerOpen,
     isTaxonomyManagerOpen,
+    isHelpOpen,
+    isAdvancedAlignmentOpen,
+    isConnectionPointSnapOpen,
     connectionPointSnapAvailable: false,
     connectionPointSnapReason: "Select exactly two explicit machines.",
+    measurementHelpersAvailable: false,
+    measurementHelpersReason: "Select one machine to use Precision Placement helpers.",
     propertiesContext: "none"
   });
 
@@ -718,11 +776,12 @@ export function App() {
     () => projectExplicitRuntimeSelection(runtimeSelection, platformEntities),
     [platformEntities, runtimeSelection]
   );
-  const connectionPointSnapContext = useMemo(() => evaluateConnectionPointSnapContext({
+  const connectionPointSnapContext = useMemo(() => evaluatePremiumConnectionPointSnapContext({
     selection: runtimeSelection,
     entities: platformEntities,
+    machines: placedMachines,
     activeGroupEditId
-  }), [activeGroupEditId, platformEntities, runtimeSelection]);
+  }), [activeGroupEditId, placedMachines, platformEntities, runtimeSelection]);
   const {
     selectedMachineIds,
     primarySelectedMachineId,
@@ -852,7 +911,7 @@ export function App() {
     ...visiblePlacedMachines.map((machine) => ({
       id: machine.instanceId,
       kind: "machine" as const,
-      label: machine.definition.name,
+      label: getPlacedMachineDisplayName(machine),
       bounds: getObjectPlanBounds(machine),
       positionMm: getMachinePlanPositionMm(machine),
       locked: isLayerLocked(machine.layerId, layers),
@@ -1175,6 +1234,7 @@ export function App() {
       recordLayoutHistory();
     }
     if (!isBenchmarkModeRef.current) {
+      setHasAcceptedWorkingLayout(true);
       setHasUnsavedProjectChanges((current) => current || true);
     }
   }, [recordLayoutHistory]);
@@ -1288,12 +1348,12 @@ export function App() {
     requestLibraryManagerClose,
     closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
     openLibraryManager: () => {
-      setPrimaryDockCollapsed(false);
+      setPrimaryDockPresentationCollapsed(false);
       setActivePrimaryPanelId(RUNTIME_PANEL_IDS.machineLibrary);
       setIsLibraryManagerOpen(true);
     },
     openTaxonomyManager: () => setIsTaxonomyManagerOpen(true)
-  }), [requestLibraryManagerClose, setPrimaryDockCollapsed]);
+  }), [requestLibraryManagerClose, setPrimaryDockPresentationCollapsed]);
 
   const openTaxonomyManager = useCallback(() => openMachineLibraryManagerExclusively("taxonomy", {
     libraryManagerOpen: runtimePanelStateRef.current.isLibraryManagerOpen,
@@ -1303,11 +1363,11 @@ export function App() {
     closeTaxonomyManager: () => setIsTaxonomyManagerOpen(false),
     openLibraryManager: () => setIsLibraryManagerOpen(true),
     openTaxonomyManager: () => {
-      setPrimaryDockCollapsed(false);
+      setPrimaryDockPresentationCollapsed(false);
       setActivePrimaryPanelId(RUNTIME_PANEL_IDS.machineLibrary);
       setIsTaxonomyManagerOpen(true);
     }
-  }), [requestLibraryManagerClose, setPrimaryDockCollapsed]);
+  }), [requestLibraryManagerClose, setPrimaryDockPresentationCollapsed]);
 
   const runtimePanelBindings = useMemo<RuntimePanelBindings>(() => {
     const sectionBinding = (
@@ -1330,7 +1390,7 @@ export function App() {
         };
       },
       open: () => {
-        setIsPanelCollapsed(false);
+        openInspectorPresentation();
         setPanelSectionExpanded(panelId, true);
       },
       close: () => {
@@ -1346,7 +1406,7 @@ export function App() {
         if (isOpen && beforeClose && !beforeClose()) {
           return false;
         }
-        setIsPanelCollapsed(false);
+        openInspectorPresentation();
         setPanelSectionExpanded(panelId, !isOpen);
         return true;
       }
@@ -1368,7 +1428,7 @@ export function App() {
         };
       },
       open: () => {
-        setPrimaryDockCollapsed(false);
+        setPrimaryDockPresentationCollapsed(false);
         setActivePrimaryPanelId(panelId);
         setPanelSectionExpanded(panelId, true);
       },
@@ -1378,7 +1438,7 @@ export function App() {
         }
         if (runtimePanelStateRef.current.activePrimaryPanelId === panelId) {
           setPanelSectionExpanded(panelId, false);
-          setPrimaryDockCollapsed(true);
+          setPrimaryDockPresentationCollapsed(true);
         }
         return true;
       },
@@ -1389,9 +1449,9 @@ export function App() {
             return false;
           }
           setPanelSectionExpanded(panelId, false);
-          setPrimaryDockCollapsed(true);
+          setPrimaryDockPresentationCollapsed(true);
         } else {
-          setPrimaryDockCollapsed(false);
+          setPrimaryDockPresentationCollapsed(false);
           setActivePrimaryPanelId(panelId);
           setPanelSectionExpanded(panelId, true);
         }
@@ -1417,19 +1477,19 @@ export function App() {
           available: true,
           context: `${effectivePrimaryDockWidth}px`
         }),
-        open: () => setPrimaryDockCollapsed(false),
+        open: () => setPrimaryDockPresentationCollapsed(false),
         close: () => {
           if (!closeMachineLibraryManagers()) {
             return false;
           }
-          setPrimaryDockCollapsed(true);
+          setPrimaryDockPresentationCollapsed(true);
           return true;
         },
         toggle: () => {
           if (!runtimePanelStateRef.current.isPrimaryDockCollapsed && !closeMachineLibraryManagers()) {
             return false;
           }
-          setPrimaryDockCollapsed(!runtimePanelStateRef.current.isPrimaryDockCollapsed);
+          setPrimaryDockPresentationCollapsed(!runtimePanelStateRef.current.isPrimaryDockCollapsed);
           return true;
         }
       },
@@ -1440,20 +1500,17 @@ export function App() {
           available: true,
           context: `${runtimePanelStateRef.current.panelWidth}px`
         }),
-        open: () => setIsPanelCollapsed(false),
-        close: () => setIsPanelCollapsed(true),
-        toggle: () => setIsPanelCollapsed((current) => !current)
+        open: openInspectorPresentation,
+        close: closeInspectorPresentation,
+        toggle: toggleInspectorPresentation
       },
       [RUNTIME_PANEL_IDS.bottomDockShell]: {
         getState: () => ({
-          isVisible: true,
-          isOpen: !runtimePanelStateRef.current.isBottomDockCollapsed,
-          available: true,
-          context: `${effectiveBottomDockHeight}px`
-        }),
-        open: () => setBottomDockCollapsed(false),
-        close: () => setBottomDockCollapsed(true),
-        toggle: () => setBottomDockCollapsed(!runtimePanelStateRef.current.isBottomDockCollapsed)
+          isVisible: false,
+          isOpen: false,
+          available: false,
+          reason: "No Bottom Dock contributions are active in Phase 1."
+        })
       },
       [RUNTIME_PANEL_IDS.layoutControls]: {
         getState: () => modalState(runtimePanelStateRef.current.isLayoutControlsOpen),
@@ -1472,24 +1529,7 @@ export function App() {
         closeMachineLibraryManagers
       ),
       [RUNTIME_PANEL_IDS.layoutExplorer]: primaryPanelBinding(RUNTIME_PANEL_IDS.layoutExplorer),
-      [RUNTIME_PANEL_IDS.viewpoints]: {
-        getState: () => ({
-          isVisible: !runtimePanelStateRef.current.isBottomDockCollapsed,
-          isOpen: !runtimePanelStateRef.current.isBottomDockCollapsed
-            && runtimePanelStateRef.current.activeBottomPanelId === RUNTIME_PANEL_IDS.viewpoints,
-          available: true,
-          context: "bottom-dock-contribution"
-        }),
-        open: () => {
-          setActiveBottomPanelId(RUNTIME_PANEL_IDS.viewpoints);
-          setBottomDockCollapsed(false);
-        },
-        close: () => setBottomDockCollapsed(true),
-        toggle: () => {
-          setActiveBottomPanelId(RUNTIME_PANEL_IDS.viewpoints);
-          setBottomDockCollapsed(!runtimePanelStateRef.current.isBottomDockCollapsed);
-        }
-      },
+      [RUNTIME_PANEL_IDS.viewpoints]: primaryPanelBinding(RUNTIME_PANEL_IDS.viewpoints),
       [RUNTIME_PANEL_IDS.layers]: primaryPanelBinding(RUNTIME_PANEL_IDS.layers),
       [RUNTIME_PANEL_IDS.civilReferences]: sectionBinding(RUNTIME_PANEL_IDS.civilReferences),
       [RUNTIME_PANEL_IDS.groups]: primaryPanelBinding(RUNTIME_PANEL_IDS.groups),
@@ -1504,23 +1544,49 @@ export function App() {
         toggle: () => setIsSimulationControlsOpen((current) => !current)
       },
       [RUNTIME_PANEL_IDS.annotations]: sectionBinding(RUNTIME_PANEL_IDS.annotations),
-      [RUNTIME_PANEL_IDS.precisionPlacement]: sectionBinding(RUNTIME_PANEL_IDS.precisionPlacement),
-      [RUNTIME_PANEL_IDS.alignmentTools]: sectionBinding(RUNTIME_PANEL_IDS.alignmentTools),
-      [RUNTIME_PANEL_IDS.connectionPointSnap]: sectionBinding(
-        RUNTIME_PANEL_IDS.connectionPointSnap,
-        () => runtimePanelStateRef.current.connectionPointSnapAvailable
-          ? { available: true, context: "two-explicit-machines" }
-          : {
-              available: false,
-              reason: runtimePanelStateRef.current.connectionPointSnapReason,
-              context: "unavailable"
-            }
+      [RUNTIME_PANEL_IDS.precisionPlacement]: sectionBinding(
+        RUNTIME_PANEL_IDS.precisionPlacement,
+        () => ({
+          available: runtimePanelStateRef.current.measurementHelpersAvailable,
+          reason: runtimePanelStateRef.current.measurementHelpersReason,
+          context: runtimePanelStateRef.current.measurementHelpersAvailable ? "selected-machine" : "unavailable"
+        })
       ),
+      [RUNTIME_PANEL_IDS.alignmentTools]: {
+        getState: () => modalState(runtimePanelStateRef.current.isAdvancedAlignmentOpen),
+        open: () => setIsAdvancedAlignmentOpen(true),
+        close: () => setIsAdvancedAlignmentOpen(false),
+        toggle: () => setIsAdvancedAlignmentOpen((current) => !current)
+      },
+      [RUNTIME_PANEL_IDS.connectionPointSnap]: {
+        getState: () => {
+          const state = runtimePanelStateRef.current;
+          const available = state.connectionPointSnapAvailable;
+          const visible = state.panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false;
+          return {
+            isVisible: visible && available,
+            isOpen: visible && available && state.isConnectionPointSnapOpen,
+            available,
+            reason: available ? undefined : state.connectionPointSnapReason,
+            context: available ? "viewport-context" : "unavailable"
+          };
+        },
+        open: () => setIsConnectionPointSnapOpen(true),
+        close: () => setIsConnectionPointSnapOpen(false),
+        toggle: () => setIsConnectionPointSnapOpen(
+          !runtimePanelStateRef.current.isConnectionPointSnapOpen
+        )
+      },
       [RUNTIME_PANEL_IDS.displayOverlayControls]: {
         getState: () => modalState(runtimePanelStateRef.current.isDisplayOverlayControlsOpen),
         open: () => setIsDisplayOverlayControlsOpen(true),
         close: () => setIsDisplayOverlayControlsOpen(false),
         toggle: () => setIsDisplayOverlayControlsOpen((current) => !current)
+      },
+      [RUNTIME_PANEL_IDS.help]: {
+        getState: () => modalState(runtimePanelStateRef.current.isHelpOpen),
+        open: () => setIsHelpOpen(true),
+        close: () => setIsHelpOpen(false)
       },
       [RUNTIME_PANEL_IDS.collisionCheck]: {
         getState: () => modalState(runtimePanelStateRef.current.isCollisionCheckOpen),
@@ -1541,7 +1607,10 @@ export function App() {
           void refreshProjects();
           setIsProjectManagerOpen(true);
         },
-        close: () => setIsProjectManagerOpen(false)
+        close: () => {
+          setIsProjectManagerOpen(false);
+          setProjectManagerEntryIntent(null);
+        }
       },
       [RUNTIME_PANEL_IDS.performanceBenchmark]: {
         getState: () => modalState(runtimePanelStateRef.current.isPerformanceBenchmarkOpen),
@@ -1567,11 +1636,13 @@ export function App() {
     openTaxonomyManager,
     refreshProjects,
     requestLibraryManagerClose,
-    effectiveBottomDockHeight,
+    closeInspectorPresentation,
     effectivePrimaryDockWidth,
-    setBottomDockCollapsed,
-    setPrimaryDockCollapsed,
-    setPanelSectionExpanded
+    openInspectorPresentation,
+    setPrimaryDockPresentationCollapsed,
+    setPanelSectionExpanded,
+    setPanelSectionExpansionPreservingVisibility,
+    toggleInspectorPresentation
   ]);
 
   const propertiesPanelContext = selectedGroup
@@ -1587,16 +1658,23 @@ export function App() {
   const connectionPointSnapReason = connectionPointSnapContext.available
     ? ""
     : getConnectionPointSnapContextMessage(connectionPointSnapContext.reason);
+  useEffect(() => {
+    if (!connectionPointSnapAvailable) {
+      setIsConnectionPointSnapOpen(false);
+    }
+  }, [connectionPointSnapAvailable]);
+  const measurementHelpersAvailable = runtimeSelection.ids.length === 1 && Boolean(singleSelectedMachine);
+  const measurementHelpersReason = measurementHelpersAvailable
+    ? ""
+    : "Select one machine to use Precision Placement helpers.";
 
   useLayoutEffect(() => {
     runtimePanelStateRef.current = {
       panelSectionExpansion,
       panelSectionVisibility,
       activePrimaryPanelId,
-      activeBottomPanelId,
-      isPrimaryDockCollapsed,
-      isBottomDockCollapsed,
-      isPanelCollapsed,
+      isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
+      isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
       isProjectManagerOpen,
       isPerformanceBenchmarkOpen,
@@ -1607,12 +1685,16 @@ export function App() {
       isCommercialOutputsOpen,
       isLibraryManagerOpen,
       isTaxonomyManagerOpen,
+      isHelpOpen,
+      isAdvancedAlignmentOpen,
+      isConnectionPointSnapOpen,
       connectionPointSnapAvailable,
       connectionPointSnapReason,
+      measurementHelpersAvailable,
+      measurementHelpersReason,
       propertiesContext: editingAnnotationId ? "annotation" : propertiesPanelContext
     };
   }, [
-    activeBottomPanelId,
     activePrimaryPanelId,
     connectionPointSnapAvailable,
     connectionPointSnapReason,
@@ -1622,13 +1704,17 @@ export function App() {
     isCommercialOutputsOpen,
     isLayoutControlsOpen,
     isLibraryManagerOpen,
-    isBottomDockCollapsed,
-    isPanelCollapsed,
+    isHelpOpen,
+    isAdvancedAlignmentOpen,
+    isConnectionPointSnapOpen,
+    isInspectorPresentationCollapsed,
     isPerformanceBenchmarkOpen,
     isProjectManagerOpen,
     isSimulationControlsOpen,
-    isPrimaryDockCollapsed,
+    isPrimaryDockPresentationCollapsed,
     isTaxonomyManagerOpen,
+    measurementHelpersAvailable,
+    measurementHelpersReason,
     panelSectionExpansion,
     panelSectionVisibility,
     panelWidth,
@@ -1658,12 +1744,12 @@ export function App() {
   useLayoutEffect(() => {
     const previous = previousViewportShellStateRef.current;
     const next = {
-      isPanelCollapsed,
+      isPanelCollapsed: isInspectorPresentationCollapsed,
       panelWidth,
-      isPrimaryDockCollapsed,
+      isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
       primaryDockWidth: effectivePrimaryDockWidth,
-      isBottomDockCollapsed,
-      bottomDockHeight: effectiveBottomDockHeight
+      isBottomDockCollapsed: true,
+      bottomDockHeight: 0
     };
     previousViewportShellStateRef.current = next;
     const reason = getRuntimeViewportShellResizeReason(previous, next);
@@ -1683,11 +1769,9 @@ export function App() {
       )
     );
   }, [
-    effectiveBottomDockHeight,
     effectivePrimaryDockWidth,
-    isBottomDockCollapsed,
-    isPanelCollapsed,
-    isPrimaryDockCollapsed,
+    isInspectorPresentationCollapsed,
+    isPrimaryDockPresentationCollapsed,
     panelWidth,
     runtimeViewportBridge
   ]);
@@ -1800,6 +1884,25 @@ export function App() {
       isMounted = false;
     };
   }, []);
+  useLayoutEffect(() => {
+    responsiveInspectorPresentationRef.current = responsiveInspectorPresentation;
+  }, [responsiveInspectorPresentation]);
+  useLayoutEffect(() => {
+    responsivePrimaryDockPresentationRef.current = responsivePrimaryDockPresentation;
+  }, [responsivePrimaryDockPresentation]);
+  useLayoutEffect(() => {
+    inspectorPresentationCollapsedRef.current = isInspectorPresentationCollapsed;
+  }, [isInspectorPresentationCollapsed]);
+  useEffect(() => {
+    if (!responsiveInspectorPresentation) {
+      setIsResponsiveInspectorOpen(false);
+    }
+  }, [responsiveInspectorPresentation]);
+  useEffect(() => {
+    if (!responsivePrimaryDockPresentation) {
+      setIsResponsivePrimaryDockOpen(false);
+    }
+  }, [responsivePrimaryDockPresentation]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -1867,18 +1970,18 @@ export function App() {
       source: "scene"
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
-    setIsPanelCollapsed(false);
+    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [setPanelSectionExpansionPreservingVisibility]);
+  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
-    setIsPanelCollapsed(false);
+    openInspectorPresentation();
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, []);
+  }, [openInspectorPresentation]);
 
   const selectPlatformEntityForEditing = useCallback((entityId: EntityId, mode: SelectionMode = "replace") => {
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
@@ -1890,8 +1993,8 @@ export function App() {
       setAnnotationSelectionSignal((current) => current + 1);
       setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
-    setIsPanelCollapsed(false);
-  }, [setPanelSectionExpansionPreservingVisibility]);
+    openInspectorPresentation();
+  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
     const orderedIds = primaryId
@@ -2474,6 +2577,7 @@ export function App() {
     setCurrentProjectId(projectId);
     setCurrentLayoutId(layoutId);
     setCurrentRevisionId(revisionId);
+    setHasAcceptedWorkingLayout(true);
     void refreshProjects();
     setHasUnsavedProjectChanges(false);
     clearLayoutHistory();
@@ -2801,7 +2905,10 @@ export function App() {
       entities: platformEntitiesRef.current,
       activeGroupEditId: activeGroupEditIdRef.current,
       movingMachineId: selection.movingMachineId,
-      fixedMachineId: selection.fixedMachineId
+      fixedMachineId: selection.fixedMachineId,
+      movingPoint,
+      fixedPoint,
+      requireProductFlowPair: true
     }, () => {
       const currentMachines = placedMachinesRef.current;
       const nextMachines = applyConnectionPointSnap(currentMachines, selection, movingPoint, fixedPoint);
@@ -2827,8 +2934,8 @@ export function App() {
     setRuntimeSelection(replaceRuntimeSelection([
       createLegacyPlatformEntityId("civil", item.id)
     ], "inspector"));
-    setIsPanelCollapsed(false);
-  }, [markLayoutChanged]);
+    openInspectorPresentation();
+  }, [markLayoutChanged, openInspectorPresentation]);
 
   const updateSelectedCivilReference = useCallback((
     id: string,
@@ -2955,9 +3062,9 @@ export function App() {
       createLegacyPlatformEntityId("annotation", annotation.id)
     ], "inspector"));
     setAnnotationSelectionSignal((current) => current + 1);
-    setIsPanelCollapsed(false);
+    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [markLayoutChanged, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
+  }, [markLayoutChanged, openInspectorPresentation, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
@@ -3039,7 +3146,7 @@ export function App() {
       return createUnavailableRuntimeCommandResult("No selected machine is available for deletion.");
     }
 
-    const selectedNames = deletableMachines.map((machine) => machine.definition.name);
+    const selectedNames = deletableMachines.map(getPlacedMachineDisplayName);
     const label = deletableMachines.length === 1
       ? selectedNames[0] ?? "the selected object"
       : `${deletableMachines.length} selected objects`;
@@ -3134,6 +3241,7 @@ export function App() {
     }
 
     importLayout(recoveryLayout);
+    setHasAcceptedWorkingLayout(true);
     setRecoveryLayout(null);
     setAutosaveReady(true);
   }, [importLayout, recoveryLayout]);
@@ -3192,6 +3300,7 @@ export function App() {
         setCurrentProjectId(projectId);
         setCurrentLayoutId(layoutId);
         setCurrentRevisionId(revisionId);
+        setHasAcceptedWorkingLayout(true);
         setHasUnsavedProjectChanges(false);
       },
       prompt: (message, defaultValue) => window.prompt(message, defaultValue)
@@ -3202,6 +3311,54 @@ export function App() {
       projects,
       refreshProjects
     ]);
+
+  const selectedRenameEntity = runtimeSelection.ids.length === 1 && runtimeSelection.primaryId
+    ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
+    : undefined;
+  const renameEnableState = selectedRenameEntity
+    && isRenameableProjectEntityId(selectedRenameEntity.id)
+    && !selectedRenameEntity.locked
+    ? { enabled: true as const }
+    : {
+        enabled: false as const,
+        reason: selectedRenameEntity?.locked
+          ? "Locked entities cannot be renamed."
+          : "Select one renameable machine instance, civil reference, or group."
+      };
+
+  const commitEntityRename = useCallback((entityId: string, name: string) => {
+    const result = renameProjectEntity({
+      entityId,
+      name,
+      machines: placedMachines,
+      civilReferences,
+      groups,
+      lockedEntityIds: new Set(platformEntities.filter((entity) => entity.locked).map((entity) => entity.id))
+    });
+    if (!result.changed) {
+      return false;
+    }
+    markLayoutChanged();
+    setPlacedMachines([...result.machines]);
+    setCivilReferences([...result.civilReferences]);
+    setGroups([...result.groups]);
+    return true;
+  }, [civilReferences, groups, markLayoutChanged, placedMachines, platformEntities]);
+
+  const requestSelectedEntityRename = useCallback(() => {
+    const entityId = runtimeSelectionRef.current.primaryId;
+    if (!entityId || !isRenameableProjectEntityId(entityId)) {
+      return false;
+    }
+    runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.layoutExplorer);
+    setRenameRequest((current) => ({ entityId, version: (current?.version ?? 0) + 1 }));
+    return true;
+  }, [runtimePanelBridge]);
+
+  const openHelpSection = useCallback((section: HelpSection) => {
+    setHelpSection(section);
+    return mapPanelOperationToRuntimeCommandResult(runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.help));
+  }, [runtimePanelBridge]);
 
   const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
     ...projectRuntimeCommandBindings,
@@ -3216,9 +3373,12 @@ export function App() {
     },
     [RUNTIME_FEATURE_COMMAND_IDS.projectManager]: {
       getEnableState: () => ({ enabled: true }),
-      execute: () => mapPanelOperationToRuntimeCommandResult(
-        runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)
-      )
+      execute: (context) => {
+        setProjectManagerEntryIntent(getProjectManagerEntryIntent(context.payload));
+        return mapPanelOperationToRuntimeCommandResult(
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)
+        );
+      }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.layoutControls]: {
       getEnableState: () => ({ enabled: true }),
@@ -3280,7 +3440,7 @@ export function App() {
       getEnableState: () => ({ enabled: true }),
       execute: () => {
         return mapPanelOperationToRuntimeCommandResult(
-          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.viewpoints)
+          runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.viewpoints)
         );
       }
     },
@@ -3299,17 +3459,45 @@ export function App() {
       }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.showMeasurements]: {
-      getEnableState: () => ({ enabled: true }),
+      getEnableState: () => measurementHelpersAvailable
+        ? { enabled: true }
+        : { enabled: false, reason: measurementHelpersReason },
       execute: (context) => {
-        if (isPlacementSettings(context.payload)) {
-          setPlacementSettings(context.payload);
+        const nextSettings = isPlacementSettings(context.payload)
+          ? context.payload
+          : {
+              ...placementSettingsRef.current,
+              showMeasurementHelpers: !placementSettingsRef.current.showMeasurementHelpers
+            };
+        setPlacementSettings(nextSettings);
+        if (nextSettings.showMeasurementHelpers) {
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.precisionPlacement);
+        }
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.renameSelected]: {
+      getEnableState: () => renameEnableState,
+      execute: (context) => {
+        if (isRecord(context.payload)) {
+          const entityId = typeof context.payload.entityId === "string" ? context.payload.entityId : "";
+          const name = typeof context.payload.name === "string" ? context.payload.name : "";
+          if (entityId !== runtimeSelectionRef.current.primaryId || !commitEntityRename(entityId, name)) {
+            return {
+              handled: false,
+              status: "disabled",
+              reason: "Rename was not applied to the current selected entity."
+            };
+          }
           return createExecutedRuntimeFeatureCommandResult();
         }
-        setPlacementSettings((current) => ({
-          ...current,
-          showMeasurementHelpers: !current.showMeasurementHelpers
-        }));
-        return createExecutedRuntimeFeatureCommandResult();
+        return requestSelectedEntityRename()
+          ? createExecutedRuntimeFeatureCommandResult()
+          : {
+              handled: false,
+              status: "disabled",
+              reason: "Select one renameable entity."
+            };
       }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.addMachine]: {
@@ -3413,6 +3601,16 @@ export function App() {
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
+    ...createArrangeRuntimeCommandBindings({
+      selectedCount: selectedAlignableEntityIds.length,
+      movementAllowed: runtimeSelectionMovementEvaluation.allowed,
+      align: applyAlignmentAction,
+      distribute: applyDistributionAction,
+      equalGap: applyEqualGapAction,
+      toggleAlignmentTools: () => mapPanelOperationToRuntimeCommandResult(
+        runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.alignmentTools)
+      )
+    }),
     [RUNTIME_FEATURE_COMMAND_IDS.rotationSnap]: {
       getEnableState: () => ({ enabled: true }),
       execute: (context) => {
@@ -3457,6 +3655,18 @@ export function App() {
       execute: () => mapPanelOperationToRuntimeCommandResult(
         runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.simulationControls)
       )
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.helpQuickStart]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => openHelpSection("quick-start")
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.helpKeyboardShortcuts]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => openHelpSection("shortcuts")
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.helpAbout]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => openHelpSection("about")
     }
   }), [
     addAnnotation,
@@ -3468,6 +3678,7 @@ export function App() {
     applyEqualGapAction,
     applyPairAlignmentAction,
     applyPairAnchorSnap,
+    commitEntityRename,
     connectionPointSnapContext.available,
     connectionPointSnapReason,
     commercialOutputSnapshot,
@@ -3475,6 +3686,11 @@ export function App() {
     exportCommercialPlan,
     exportCommercialSnapshot,
     projectRuntimeCommandBindings,
+    openHelpSection,
+    renameEnableState,
+    measurementHelpersAvailable,
+    measurementHelpersReason,
+    requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,
     runtimePanelBridge,
@@ -3492,10 +3708,10 @@ export function App() {
         ? { enabled: true }
         : { enabled: false, reason: "Select at least one ungrouped entity." },
       execute: (context) => {
-        if (!isRecord(context.payload) || typeof context.payload.name !== "string") {
-          throw new Error("Create Group command requires a name.");
-        }
-        createGroupFromSelection(context.payload.name);
+        const requestedName = isRecord(context.payload) && typeof context.payload.name === "string"
+          ? context.payload.name
+          : `Assembly ${groups.length + 1}`;
+        createGroupFromSelection(requestedName);
         return createExecutedRuntimeCommandResult();
       }
     },
@@ -3952,7 +4168,16 @@ export function App() {
   const commandSurfaceMetadataRegistry = useMemo(() => ({
     get: (commandId: string) => runtimeCommandBridge.registry.get(commandId)
       ?? runtimeFeatureCommandBridge.registry.get(commandId)
-  }), [runtimeCommandBridge, runtimeFeatureCommandBridge]);
+      ?? assemblyCommandBridge.registry.get(commandId),
+    list: () => {
+      const definitions = [
+        ...runtimeCommandBridge.registry.list(),
+        ...runtimeFeatureCommandBridge.registry.list(),
+        ...assemblyCommandBridge.registry.list()
+      ];
+      return [...new Map(definitions.map((definition) => [definition.id, definition])).values()];
+    }
+  }), [assemblyCommandBridge, runtimeCommandBridge, runtimeFeatureCommandBridge]);
 
   const commandSurfaceCoreBridge = useMemo(() => ({
     registry: runtimeCommandBridge.registry,
@@ -3984,6 +4209,26 @@ export function App() {
     }
   }), [recordRuntimeCommandExecution, runtimeFeatureCommandBridge]);
 
+  const commandSurfaceAssemblyBridge = useMemo(() => ({
+    registry: assemblyCommandBridge.registry,
+    getRuntimeCommand: (commandId: string, context?: CommandContext) =>
+      assemblyCommandBridge.getRuntimeCommand(commandId, context ?? {
+        selectionIds: runtimeSelectionRef.current.ids,
+        primarySelectionId: runtimeSelectionRef.current.primaryId,
+        hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+      }),
+    executeCommand: (commandId: string, context?: CommandContext) => {
+      const resolvedContext = context ?? {
+        selectionIds: runtimeSelectionRef.current.ids,
+        primarySelectionId: runtimeSelectionRef.current.primaryId,
+        hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+      };
+      const result = assemblyCommandBridge.executeCommand(commandId as AssemblyCommandId, resolvedContext);
+      recordRuntimeCommandExecution(commandId, result);
+      return result;
+    }
+  }), [assemblyCommandBridge, recordRuntimeCommandExecution]);
+
   const getCommandSurfaceContext = useCallback(() => ({
     selectionIds: runtimeSelectionRef.current.ids,
     primarySelectionId: runtimeSelectionRef.current.primaryId,
@@ -4000,6 +4245,14 @@ export function App() {
     if (commandId === RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints) {
       return overlaySettingsRef.current.showConnectionPoints;
     }
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.viewpoints) {
+      const state = runtimePanelStateRef.current;
+      return !state.isPrimaryDockCollapsed
+        && state.activePrimaryPanelId === RUNTIME_PANEL_IDS.viewpoints;
+    }
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.alignmentTools) {
+      return runtimePanelStateRef.current.isAdvancedAlignmentOpen;
+    }
     return undefined;
   }, []);
 
@@ -4007,6 +4260,7 @@ export function App() {
     metadataRegistry: commandSurfaceMetadataRegistry,
     coreBridge: commandSurfaceCoreBridge,
     runtimeBridge: commandSurfaceRuntimeBridge,
+    assemblyBridge: commandSurfaceAssemblyBridge,
     getContext: getCommandSurfaceContext,
     getPressed: getCommandSurfacePressedState,
     importRequest: {
@@ -4015,6 +4269,7 @@ export function App() {
     }
   }), [
     commandSurfaceCoreBridge,
+    commandSurfaceAssemblyBridge,
     commandSurfaceMetadataRegistry,
     commandSurfaceRuntimeBridge,
     getCommandSurfaceContext,
@@ -4030,7 +4285,7 @@ export function App() {
 
   const commandSurfaceMenus = commandSurfaceAdapter.getMenus();
   const commandBarItems = commandSurfaceAdapter.getCommandBarItems();
-  const applicationSaveItem = commandSurfaceAdapter.getApplicationSaveItem();
+  const commandPaletteItems = commandSurfaceAdapter.getCommandPaletteItems();
   const executeCommandSurfaceItem = useCallback((commandId: string) => {
     void commandSurfaceAdapter.execute(commandId);
   }, [commandSurfaceAdapter]);
@@ -4161,6 +4416,20 @@ export function App() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest("input, textarea, select, [contenteditable='true']")
+          && document.querySelector('[role="dialog"][aria-modal="true"]') === null) {
+          event.preventDefault();
+          setIsCommandPaletteOpen(true);
+        }
+        return;
+      }
+      if (event.key === "Escape" && isConnectionPointSnapOpen) {
+        event.preventDefault();
+        runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap);
+        return;
+      }
       const action = resolveEditorShortcut({
         key: event.key,
         target: event.target,
@@ -4180,6 +4449,22 @@ export function App() {
         const handled = executeCoreEditorCommand(commandId);
         if (shouldPreventEditorShortcutDefault(action, handled)) {
           event.preventDefault();
+        }
+        return;
+      }
+
+      if (action === "rename-selected") {
+        const context = {
+          selectionIds: runtimeSelectionRef.current.ids,
+          primarySelectionId: runtimeSelectionRef.current.primaryId,
+          hasUnsavedChanges: hasUnsavedProjectChangesRef.current
+        };
+        if (runtimeFeatureCommandBridge.getRuntimeCommand(
+          RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
+          context
+        ).currentlyAvailable) {
+          event.preventDefault();
+          void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.renameSelected);
         }
         return;
       }
@@ -4234,10 +4519,14 @@ export function App() {
   }, [
     clearSelection,
     executeCoreEditorCommand,
+    executeRuntimeFeatureCommand,
+    isConnectionPointSnapOpen,
     moveSelectedByDelta,
     nudgeSettings,
     runtimeSelection.ids.length,
     runtimeSelectionMovementEvaluation.allowed,
+    runtimeFeatureCommandBridge,
+    runtimePanelBridge,
     selectedAlignableEntities.length
   ]);
 
@@ -4258,45 +4547,109 @@ export function App() {
     [{
       editorId: LAYOUT_3D_EDITOR_ID,
       render: () => (
-        <BabylonScene
-          ref={sceneRef}
-          placedMachines={visiblePlacedMachines}
-          civilReferences={visibleCivilReferences}
-          annotations={visibleAnnotations}
-          selectedMachineIds={selectedMachineIds}
-          primarySelectedMachineId={primarySelectedMachineId}
-          selectedCivilReferenceId={selectedCivilReferenceId}
-          selectedCivilReferenceIds={selectedCivilReferenceIds}
-          selectedAnnotationId={selectedAnnotationId}
-          lockedMachineIds={lockedMachineIds}
-          lockedCivilReferenceIds={lockedCivilReferenceIds}
-          lockedAnnotationIds={lockedAnnotationIds}
-          activeGroupEditMachineIds={activeGroupEditMachineIds}
-          selectedAssemblyId={selectedGroupId}
-          activeGroupEditId={activeGroupEditId}
-          onSelectMachine={selectMachine}
-          onSelectCivilReference={selectCivilReferenceForEditing}
-          onSelectAnnotation={selectAnnotationForEditing}
-          onUpdateMachine={updateMachine}
-          onSetMachinePositions={setMachinePositions}
-          onSetAnnotationPosition={setAnnotationPosition}
-          onSetCivilReferencePosition={setCivilReferencePosition}
-          canBeginObjectDrag={canBeginObjectDrag}
-          isSimulationRunning={isSimulationRunning}
-          simulationSpeed={simulationSpeed}
-          overlaySettings={overlaySettings}
-          collisionResult={collisionResult}
-          enableE2EDiagnostics={enableE2EDiagnostics}
-          onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
-          onPerformanceMetricsChange={setLatestPerformanceMetrics}
-        />
+        <>
+          <BabylonScene
+            ref={sceneRef}
+            placedMachines={visiblePlacedMachines}
+            civilReferences={visibleCivilReferences}
+            annotations={visibleAnnotations}
+            selectedMachineIds={selectedMachineIds}
+            primarySelectedMachineId={primarySelectedMachineId}
+            selectedCivilReferenceId={selectedCivilReferenceId}
+            selectedCivilReferenceIds={selectedCivilReferenceIds}
+            selectedAnnotationId={selectedAnnotationId}
+            lockedMachineIds={lockedMachineIds}
+            lockedCivilReferenceIds={lockedCivilReferenceIds}
+            lockedAnnotationIds={lockedAnnotationIds}
+            activeGroupEditMachineIds={activeGroupEditMachineIds}
+            selectedAssemblyId={selectedGroupId}
+            activeGroupEditId={activeGroupEditId}
+            onSelectMachine={selectMachine}
+            onSelectCivilReference={selectCivilReferenceForEditing}
+            onSelectAnnotation={selectAnnotationForEditing}
+            onUpdateMachine={updateMachine}
+            onSetMachinePositions={setMachinePositions}
+            onSetAnnotationPosition={setAnnotationPosition}
+            onSetCivilReferencePosition={setCivilReferencePosition}
+            canBeginObjectDrag={canBeginObjectDrag}
+            isSimulationRunning={isSimulationRunning}
+            simulationSpeed={simulationSpeed}
+            overlaySettings={overlaySettings}
+            collisionResult={collisionResult}
+            enableE2EDiagnostics={enableE2EDiagnostics}
+            onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
+            onPerformanceMetricsChange={setLatestPerformanceMetrics}
+          />
+          <div className="workbench-viewport-context-layer" aria-live="polite">
+            <ViewportArrangeBar
+              selectionCount={selectedAlignableEntities.length}
+              movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
+              canDistribute={!selectedGroup && selectedAlignableEntities.length >= 3}
+              canGroup={!selectedGroup && selectedAlignableEntities.length >= 2}
+              canUngroup={Boolean(selectedGroup)}
+              canOpenAdvancedAlignment={!selectedGroup && selectedAlignableEntities.length >= 2}
+              connectAndSnapAvailable={connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false}
+              connectAndSnapOpen={isConnectionPointSnapOpen}
+              onAlign={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "align", action } satisfies RuntimeAlignmentPayload
+              )}
+              onDistribute={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "distribute", action } satisfies RuntimeAlignmentPayload
+              )}
+              onEqualGap={(action) => executeRuntimeFeatureCommand(
+                RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
+                { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
+              )}
+              onGroup={() => executeCommandSurfaceItem(ASSEMBLY_COMMAND_IDS.createGroup)}
+              onUngroup={() => executeCommandSurfaceItem(ASSEMBLY_COMMAND_IDS.ungroup)}
+              onOpenAdvancedAlignment={() => executeCommandSurfaceItem(
+                RUNTIME_FEATURE_COMMAND_IDS.alignmentTools
+              )}
+              onToggleConnectAndSnap={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}
+            />
+            {isConnectionPointSnapOpen && connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false ? (
+              <div className="viewport-connect-popover" role="dialog" aria-label="Connect & Snap" data-testid="connect-and-snap-popover">
+                <header><strong>Connect &amp; Snap</strong><button type="button" aria-label="Close Connect & Snap" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}>Close</button></header>
+                <ConnectionPointSnapPanel
+                  selectedMachines={selectedMachines}
+                  primarySelectedMachine={selectedMachine}
+                  productFlowOnly
+                  onSnap={(selection, movingPoint, fixedPoint) => {
+                    void executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
+                      { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
+                    ).then(() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap));
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+          {!isProjectStorageLoading
+          && !hasAcceptedWorkingLayout ? (
+            <EmptyProjectWelcome
+              recoveryAvailable={Boolean(recoveryLayout)}
+              onResumeRecovery={() => {
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt);
+              }}
+              onDiscardRecovery={dismissAutosavedLayout}
+              onCreateNewLayout={() => {
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager, { intent: "create" });
+              }}
+              onOpenExistingProject={() => {
+                void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager, { intent: "open" });
+              }}
+            />
+          ) : null}
+        </>
       )
     }]
   );
 
   const activeWorkspaceLabel = workspaceProjection.activeWorkspaceId
     ? workspaceFallbackLabels[workspaceProjection.activeWorkspaceId]
-    : "Current arrangement";
+    : "Custom Workspace";
   const workspacePanelOptions = useMemo(() => {
     const reachabilityById = new Map(
       workspacePanelReachability.map((panel) => [panel.panelId, panel])
@@ -4336,10 +4689,8 @@ export function App() {
   const primarySelectionEntity = runtimeSelection.primaryId
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
-  const primaryDockInset = isPrimaryDockCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
-  const bottomDockInset = STATUS_BAR_HEIGHT + (
-    isBottomDockCollapsed ? COLLAPSED_BOTTOM_DOCK_HEIGHT : effectiveBottomDockHeight
-  );
+  const primaryDockInset = isPrimaryDockPresentationCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
+  const bottomDockInset = STATUS_BAR_HEIGHT;
   const layerNames = new Map(layers.map((layer) => [layer.id, layer.name]));
   const showLegacyCompatibilityStack = false;
 
@@ -4348,8 +4699,6 @@ export function App() {
       workspaceInspectorMode={workspaceProjection.inspectorMode}
       applicationBar={(
         <WorkbenchApplicationBar
-          saveItem={applicationSaveItem}
-          emphasizedCommandIds={workspaceProjection.emphasizedCommandIds}
           workspaceControl={(
             <WorkspacePreferencesControl
               activeWorkspaceId={workspaceProjection.activeWorkspaceId}
@@ -4394,7 +4743,7 @@ export function App() {
             layout: currentLayout?.layoutName ?? "No layout",
             revision: currentRevision?.revisionCode ?? "No revision"
           }}
-          onExecute={executeCommandSurfaceItem}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
       )}
       menuBar={(
@@ -4442,6 +4791,14 @@ export function App() {
                   selection={runtimeSelection}
                   layerNames={layerNames}
                   onSelectEntity={selectPlatformEntityForEditing}
+                  renameRequestEntityId={renameRequest?.entityId}
+                  renameRequestVersion={renameRequest?.version}
+                  onRenameEntity={(entityId, name) =>
+                    commandSurfaceAdapter.execute(
+                      RUNTIME_FEATURE_COMMAND_IDS.renameSelected,
+                      { entityId, name }
+                    ).then((result) => result.handled)}
+                  onRenameRequestHandled={() => setRenameRequest(null)}
                 />
               )
             },
@@ -4494,24 +4851,46 @@ export function App() {
                   onToggleGroupCollapsed={toggleGroupCollapsed}
                 />
               )
+            },
+            {
+              panelId: RUNTIME_PANEL_IDS.viewpoints,
+              label: "Viewpoints",
+              badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
+              content: (
+                <ViewpointsPanel
+                  viewpoints={viewpoints}
+                  selectedViewpointId={selectedViewpointId}
+                  onSelectViewpoint={setSelectedViewpointId}
+                  onCaptureViewpoint={captureViewpoint}
+                  onApplyViewpoint={applyViewpoint}
+                  onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
+                  onRenameViewpoint={renameViewpoint}
+                  onDeleteViewpoint={removeViewpoint}
+                  onStepViewpoint={stepViewpoint}
+                />
+              )
             }
           ].filter((item) => panelSectionVisibility[item.panelId] !== false)}
           activePanelId={activePrimaryPanelId}
-          collapsed={isPrimaryDockCollapsed}
+          collapsed={isPrimaryDockPresentationCollapsed}
           width={effectivePrimaryDockWidth}
           minWidth={primaryDockWidthBounds.min}
           maxWidth={primaryDockWidthBounds.max}
           resizeEnabled={dockResizeEnabled}
           bottomInset={bottomDockInset}
           onActivate={(panelId) => {
-            runtimePanelBridge.openPanel(panelId);
+            if (panelId === RUNTIME_PANEL_IDS.viewpoints) {
+              runtimePanelBridge.togglePanel(panelId);
+            } else {
+              runtimePanelBridge.openPanel(panelId);
+            }
           }}
           onToggleCollapsed={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.primaryDockShell)}
           onResize={setPrimaryDockWidth}
         />
       )}
       editorLeftInset={primaryDockInset}
-      editorRightInset={isPanelCollapsed ? 0 : panelWidth}
+      editorRightInset={isInspectorPresentationCollapsed ? 0 : panelWidth}
       editorBottomInset={bottomDockInset}
       editorHost={(
         <EditorHost
@@ -4520,16 +4899,15 @@ export function App() {
           runtimeRegistry={editorRuntimeRegistry}
         />
       )}
-      secondaryDock={isPanelCollapsed ? (
-        <button
-          className="panel-reopen-tab"
-          type="button"
-          aria-label="Open Inspector"
-          data-app-shell-zone="machine-properties"
-          onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.rightPanelShell)}
-        >
-          Inspector
-        </button>
+      secondaryDock={isInspectorPresentationCollapsed ? (
+        <div className="panel-reopen-tab" data-app-shell-zone="machine-properties">
+          <WorkbenchDockCollapseButton
+            side="right"
+            collapsed
+            onToggle={openInspectorPresentation}
+            testId="right-dock-collapse-toggle"
+          />
+        </div>
       ) : (
         <aside
           className="machine-panel"
@@ -4550,13 +4928,12 @@ export function App() {
           />
           <header className="workbench-inspector-header">
             <strong>Inspector</strong>
-            <button
-              type="button"
-              aria-label="Collapse Inspector"
-              onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.rightPanelShell)}
-            >
-              Collapse
-            </button>
+            <WorkbenchDockCollapseButton
+              side="right"
+              collapsed={false}
+              onToggle={closeInspectorPresentation}
+              testId="right-dock-collapse-toggle"
+            />
           </header>
           {showLegacyCompatibilityStack ? (
             <>
@@ -4729,7 +5106,7 @@ export function App() {
                 data-testid="open-project-manager"
                 type="button"
                 disabled={isProjectStorageLoading}
-                onClick={() => runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.projectManager)}
+                onClick={() => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectManager)}
               >
                 Project Manager
               </button>
@@ -4801,6 +5178,7 @@ export function App() {
               settings={placementSettings}
               placedMachines={placedMachines}
               selectedMachine={singleSelectedMachine}
+              nudgeSettings={nudgeSettings}
               onChangeSettings={(settings) => {
                 const rotationChanged =
                   settings.rotationSnapEnabled !== placementSettings.rotationSnapEnabled
@@ -4815,6 +5193,7 @@ export function App() {
                   setPlacementSettings(settings);
                 }
               }}
+              onChangeNudgeSettings={setNudgeSettings}
               onUpdateMachine={updateMachine}
             />
           </PanelSection>
@@ -4827,7 +5206,6 @@ export function App() {
             <AlignmentToolsPanel
               selectedEntityCount={selectedAlignableEntities.length}
               primarySelectionLabel={primarySelectedAlignable?.label}
-              nudgeSettings={nudgeSettings}
               onAlign={(action) => executeRuntimeFeatureCommand(
                 RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
                 { kind: "align", action } satisfies RuntimeAlignmentPayload
@@ -4848,7 +5226,6 @@ export function App() {
                 RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
                 { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
               )}
-              onChangeNudgeSettings={setNudgeSettings}
             />
           </PanelSection>
           {connectionPointSnapAvailable ? (
@@ -4861,6 +5238,7 @@ export function App() {
               <ConnectionPointSnapPanel
                 selectedMachines={selectedMachines}
                 primarySelectedMachine={selectedMachine}
+                productFlowOnly
                 onSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
                   RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
                   { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
@@ -4907,7 +5285,7 @@ export function App() {
           <PanelSection
             title={editingAnnotationId ? "Annotation Properties" : selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
             defaultExpanded
-            badge={editingAnnotationId ? "Annotation" : selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+            badge={editingAnnotationId ? "Annotation" : selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? getPlacedMachineDisplayName(selectedMachine) : "None"}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
           >
             {editingAnnotationId ? (
@@ -4972,92 +5350,18 @@ export function App() {
                 onDeleteCivilReference={executeDeleteSelectedCommand}
               />
             ) : selectedMachineIds.length > 1 && selectedCivilReferenceIds.length === 0 ? (
-              <>
-                <MultiSelectionProperties
-                  selectedMachines={selectedMachines}
-                  assemblyName={selectedGroup?.name}
-                  primarySelectedMachine={selectedMachine}
-                  selectionBounds={selectionBounds}
-                  onAlign={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "align", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onDistribute={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "distribute", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onEqualGap={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  canDuplicateSelected={canExecuteDuplicateSelectedCommand}
-                  onDuplicateSelected={executeDuplicateSelectedCommand}
-                  onClearSelection={clearSelection}
-                  onDeleteSelected={executeDeleteSelectedCommand}
-                  canArrangeSelection={!selectedGroup}
-                  alignmentContribution={{
-                    panelId: RUNTIME_PANEL_IDS.alignmentTools,
-                    ...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)
-                  }}
-                />
-                {connectionPointSnapAvailable ? (
-                  <WorkbenchContextContribution
-                    panelId={RUNTIME_PANEL_IDS.connectionPointSnap}
-                    title="Connection Point Snap"
-                    badge="2"
-                    {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.connectionPointSnap)}
-                  >
-                    <ConnectionPointSnapPanel
-                      selectedMachines={selectedMachines}
-                      primarySelectedMachine={selectedMachine}
-                      onSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
-                        RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
-                        { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
-                      )}
-                      onClearSelection={clearSelection}
-                    />
-                  </WorkbenchContextContribution>
-                ) : null}
-              </>
+              <MultiSelectionProperties
+                selectedMachines={selectedMachines}
+                assemblyName={selectedGroup?.name}
+                primarySelectedMachine={selectedMachine}
+                selectionBounds={selectionBounds}
+              />
             ) : selectedAlignableEntities.length > 1 ? (
               <div className="property-grid">
                 <div className="property-readout">
                   <span>{selectedGroup ? "Assembly" : "Selected entities"}</span>
                   <strong>{selectedGroup?.name ?? selectedAlignableEntities.length}</strong>
                 </div>
-                <WorkbenchContextContribution
-                  panelId={RUNTIME_PANEL_IDS.alignmentTools}
-                  title="Alignment Tools"
-                  badge={`${selectedAlignableEntities.length}`}
-                  {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)}
-                >
-                  <AlignmentToolsPanel
-                    selectedEntityCount={selectedAlignableEntities.length}
-                    primarySelectionLabel={primarySelectedAlignable?.label}
-                    nudgeSettings={nudgeSettings}
-                    onAlign={(action) => executeRuntimeFeatureCommand(
-                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                      { kind: "align", action } satisfies RuntimeAlignmentPayload
-                    )}
-                    onDistribute={(action) => executeRuntimeFeatureCommand(
-                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                      { kind: "distribute", action } satisfies RuntimeAlignmentPayload
-                    )}
-                    onEqualGap={(action) => executeRuntimeFeatureCommand(
-                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                      { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
-                    )}
-                    onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(
-                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                      { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload
-                    )}
-                    onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(
-                      RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                      { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload
-                    )}
-                    onChangeNudgeSettings={setNudgeSettings}
-                  />
-                </WorkbenchContextContribution>
               </div>
             ) : singleSelectedMachine ? (
               <>
@@ -5085,28 +5389,12 @@ export function App() {
                     settings={placementSettings}
                     placedMachines={placedMachines}
                     selectedMachine={singleSelectedMachine}
+                    nudgeSettings={nudgeSettings}
                     onChangeSettings={setPlacementSettings}
+                    onChangeNudgeSettings={setNudgeSettings}
                     onUpdateMachine={updateMachine}
                   />
                 </WorkbenchContextContribution>
-                {connectionPointSnapAvailable ? (
-                  <WorkbenchContextContribution
-                    panelId={RUNTIME_PANEL_IDS.connectionPointSnap}
-                    title="Connection Point Snap"
-                    badge="2"
-                    {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.connectionPointSnap)}
-                  >
-                    <ConnectionPointSnapPanel
-                      selectedMachines={selectedMachines}
-                      primarySelectedMachine={selectedMachine}
-                      onSnap={(selection, movingPoint, fixedPoint) => executeRuntimeFeatureCommand(
-                        RUNTIME_FEATURE_COMMAND_IDS.connectionPointSnap,
-                        { selection, movingPoint, fixedPoint } satisfies RuntimeConnectionSnapPayload
-                      )}
-                      onClearSelection={clearSelection}
-                    />
-                  </WorkbenchContextContribution>
-                ) : null}
               </>
             ) : (
               <p className="empty-selection" data-testid="inspector-empty-state">
@@ -5118,7 +5406,7 @@ export function App() {
             <PanelSection
               title={selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
               defaultExpanded={selectedAlignableEntities.length > 0 || Boolean(selectedCivilReference) || Boolean(selectedGroup)}
-              badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? selectedMachine.definition.name : "None"}
+              badge={selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? getPlacedMachineDisplayName(selectedMachine) : "None"}
               {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
             >
               {selectedGroup && (selectedCivilReferenceIds.length > 0 || selectedMachineIds.length <= 1) ? (
@@ -5165,23 +5453,6 @@ export function App() {
                   assemblyName={selectedGroup?.name}
                   primarySelectedMachine={selectedMachine}
                   selectionBounds={selectionBounds}
-                  onAlign={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "align", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onDistribute={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "distribute", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  onEqualGap={(action) => executeRuntimeFeatureCommand(
-                    RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
-                    { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload
-                  )}
-                  canDuplicateSelected={canExecuteDuplicateSelectedCommand}
-                  onDuplicateSelected={executeDuplicateSelectedCommand}
-                  onClearSelection={clearSelection}
-                  onDeleteSelected={executeDeleteSelectedCommand}
-                  canArrangeSelection={!selectedGroup}
                 />
               ) : selectedAlignableEntities.length > 1 ? (
                 <div className="property-grid">
@@ -5212,44 +5483,6 @@ export function App() {
           ) : null}
         </aside>
       )}
-      bottomDock={(
-        <WorkbenchBottomDock
-          contributions={[
-            {
-              panelId: RUNTIME_PANEL_IDS.viewpoints,
-              label: "Viewpoints",
-              badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
-              content: (
-                <ViewpointsPanel
-                  viewpoints={viewpoints}
-                  selectedViewpointId={selectedViewpointId}
-                  onSelectViewpoint={setSelectedViewpointId}
-                  onCaptureViewpoint={captureViewpoint}
-                  onApplyViewpoint={applyViewpoint}
-                  onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
-                  onRenameViewpoint={renameViewpoint}
-                  onDeleteViewpoint={removeViewpoint}
-                  onStepViewpoint={stepViewpoint}
-                />
-              )
-            }
-          ]}
-          activePanelId={activeBottomPanelId}
-          collapsed={isBottomDockCollapsed}
-          expandedHeight={effectiveBottomDockHeight}
-          minHeight={bottomDockHeightBounds.min}
-          maxHeight={bottomDockHeightBounds.max}
-          resizeEnabled={dockResizeEnabled}
-          leftInset={primaryDockInset}
-          rightInset={isPanelCollapsed ? 0 : panelWidth}
-          onActivate={(panelId) => {
-            setActiveBottomPanelId(panelId);
-            setBottomDockCollapsed(false);
-          }}
-          onToggleCollapsed={() => runtimePanelBridge.togglePanel(RUNTIME_PANEL_IDS.bottomDockShell)}
-          onResize={setBottomDockHeight}
-        />
-      )}
       statusBar={(
         <WorkbenchStatusBar
           selectionCount={runtimeSelection.ids.length}
@@ -5265,20 +5498,6 @@ export function App() {
       )}
       overlayLayer={(
         <div className="workbench-overlay-layer">
-          {recoveryLayout ? (
-            <section className="recovery-prompt workbench-recovery-prompt" aria-label="Autosave recovery">
-              <p>A previous unsaved layout was found. Restore it?</p>
-              <div className="recovery-actions">
-                <button
-                  type="button"
-                  onClick={() => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt)}
-                >
-                  Restore
-                </button>
-                <button type="button" onClick={dismissAutosavedLayout}>Dismiss</button>
-              </div>
-            </section>
-          ) : null}
           <input
             ref={projectImportFileInputRef}
             className="file-input"
@@ -5287,8 +5506,38 @@ export function App() {
             accept="application/json,.json"
             onChange={handleProjectImportFileChange}
           />
+          {isCommandPaletteOpen ? (
+            <CommandPalette
+              items={commandPaletteItems}
+              onExecute={executeCommandSurfaceItem}
+              onClose={() => setIsCommandPaletteOpen(false)}
+            />
+          ) : null}
+          {isAdvancedAlignmentOpen ? (
+            <div className="manager-backdrop" data-testid="advanced-alignment-tool-surface">
+              <section className="manager-dialog workbench-tool-dialog" role="dialog" aria-modal="true" aria-label="Advanced Alignment">
+                <header className="manager-header">
+                  <div><span>Arrange</span><h2>Advanced Alignment</h2></div>
+                  <button type="button" aria-label="Close Advanced Alignment" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.alignmentTools)}>Close</button>
+                </header>
+                <div className="workbench-tool-dialog-body">
+                  <AlignmentToolsPanel
+                    selectedEntityCount={selectedAlignableEntities.length}
+                    primarySelectionLabel={primarySelectedAlignable?.label}
+                    movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
+                    onAlign={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "align", action } satisfies RuntimeAlignmentPayload)}
+                    onDistribute={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "distribute", action } satisfies RuntimeAlignmentPayload)}
+                    onEqualGap={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload)}
+                    onPairAlign={(action, gapMm) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "pair", action, gapMm } satisfies RuntimeAlignmentPayload)}
+                    onPairAnchorSnap={(primaryAnchor, secondaryAnchor) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "anchor", primaryAnchor, secondaryAnchor } satisfies RuntimeAlignmentPayload)}
+                  />
+                </div>
+              </section>
+            </div>
+          ) : null}
           {isProjectManagerOpen ? (
             <ProjectManager
+              entryIntent={projectManagerEntryIntent}
               projects={projects}
               currentProjectId={currentProjectId}
               currentLayoutId={currentLayoutId}
@@ -5308,6 +5557,7 @@ export function App() {
                 setCurrentProjectId(projectId);
                 setCurrentLayoutId(layoutId);
                 setCurrentRevisionId(revisionId);
+                setHasAcceptedWorkingLayout(true);
                 void refreshProjects();
                 setHasUnsavedProjectChanges(false);
               }}
@@ -5315,6 +5565,12 @@ export function App() {
                 return executeRuntimeFeatureCommand(commandId, payload);
               }}
               onRequestProjectImport={requestProjectImportFile}
+            />
+          ) : null}
+          {isHelpOpen ? (
+            <HelpModal
+              initialSection={helpSection}
+              onClose={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.help)}
             />
           ) : null}
           {isCommercialOutputsOpen ? (

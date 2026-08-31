@@ -2,10 +2,13 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  ATRVISU_SOURCE_HEAD_HEADER,
   allowedE2EPorts,
+  assertAtrVisuServerProvenance,
   createExternalServer,
   createOwnedServer,
   createPlaywrightEnvironment,
+  readGitSourceProvenance,
   resolveE2EServerMode,
   selectAvailableE2EPort,
   stopOwnedE2EServer
@@ -13,6 +16,7 @@ import {
 
 const host = "127.0.0.1";
 const startupTimeoutMs = 120_000;
+const source = readGitSourceProvenance();
 
 const run = (command, args, options = {}) =>
   new Promise((resolve) => {
@@ -30,8 +34,18 @@ const run = (command, args, options = {}) =>
 const isAtrVisuServer = async (baseUrl) => {
   try {
     const response = await fetch(baseUrl);
-    return response.ok && (await response.text()).includes("<title>AtrVisu</title>");
-  } catch {
+    if (!response.ok || !(await response.text()).includes("<title>AtrVisu</title>")) {
+      return false;
+    }
+    assertAtrVisuServerProvenance(
+      source.head,
+      response.headers.get(ATRVISU_SOURCE_HEAD_HEADER)
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("AtrVisu server")) {
+      throw error;
+    }
     return false;
   }
 };
@@ -123,7 +137,10 @@ try {
     "test",
     ...process.argv.slice(2)
   ], {
-    env: createPlaywrightEnvironment(process.env, baseUrl)
+    env: createPlaywrightEnvironment({
+      ...process.env,
+      ATRVISU_E2E_EXPECTED_SOURCE_HEAD: source.head
+    }, baseUrl)
   });
   await teardown();
 

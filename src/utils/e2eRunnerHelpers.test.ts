@@ -9,6 +9,12 @@ type E2EServerOwnership =
   | { ownership: "external"; baseUrl: string };
 
 type E2ERunnerHelpers = {
+  ATRVISU_SOURCE_HEAD_HEADER: string;
+  assertAtrVisuServerProvenance: (expectedHead: string, observedHead: string | null) => void;
+  readGitSourceProvenance: (
+    cwd: string,
+    execute: (args: readonly string[]) => string
+  ) => Readonly<{ head: string; branch: string }>;
   allowedE2EPorts: readonly number[];
   resolveE2EServerMode: (environment: Record<string, string | undefined>) => E2EServerMode;
   selectAvailableE2EPort: (
@@ -31,6 +37,28 @@ const helperModulePath = "../../scripts/e2eRunnerHelpers.mjs";
 const helpers = await import(helperModulePath) as unknown as E2ERunnerHelpers;
 
 describe("AtrVisu E2E runner ownership", () => {
+  it("reports deterministic source provenance for the worktree being served", () => {
+    const execute = vi.fn((args: readonly string[]) => args[0] === "rev-parse"
+      ? "exact-head"
+      : "feat/exact-branch");
+
+    expect(helpers.readGitSourceProvenance("C:/AtrVisu", execute)).toEqual({
+      head: "exact-head",
+      branch: "feat/exact-branch"
+    });
+    expect(execute).toHaveBeenNthCalledWith(1, ["rev-parse", "HEAD"]);
+    expect(execute).toHaveBeenNthCalledWith(2, ["branch", "--show-current"]);
+  });
+
+  it("rejects missing or stale server source provenance", () => {
+    expect(() => helpers.assertAtrVisuServerProvenance("expected", null))
+      .toThrow(/refusing an unverified runtime/);
+    expect(() => helpers.assertAtrVisuServerProvenance("expected", "stale"))
+      .toThrow(/source mismatch/);
+    expect(() => helpers.assertAtrVisuServerProvenance("expected", "expected"))
+      .not.toThrow();
+  });
+
   it("selects a free fallback when port 5173 is occupied", async () => {
     const port = await helpers.selectAvailableE2EPort(
       helpers.allowedE2EPorts,

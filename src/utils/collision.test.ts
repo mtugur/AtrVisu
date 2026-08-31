@@ -138,6 +138,19 @@ describe("collision helpers", () => {
     });
   });
 
+  it("uses placed-instance names for collision presentation without changing canonical identity", () => {
+    const machine = createMachine("flow-pack", { xMm: 0, yMm: 0 });
+    machine.definition.name = "Flow Pack Machine";
+    machine.definitionSnapshot.name = "Flow Pack Machine";
+    machine.displayName = "Line 1 Packer";
+
+    const footprint = buildCollisionEnvelopeFromObject(machine);
+
+    expect(footprint?.objectName).toBe("Line 1 Packer");
+    expect(footprint?.entityRef?.name).toBe("Line 1 Packer");
+    expect(machine.definition.name).toBe("Flow Pack Machine");
+  });
+
   it("ignores disabled collision envelopes", () => {
     const result = checkAllObjectCollisions([
       createMachine("a", { xMm: 0, yMm: 0 }, {

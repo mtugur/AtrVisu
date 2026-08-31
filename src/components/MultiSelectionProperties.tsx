@@ -1,30 +1,14 @@
 import type { PlanBounds } from "../types/alignment";
-import type { AlignmentAction, DistributionAction, EqualGapAction } from "../types/alignment";
 import type { PlacedMachine } from "../types/machine";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { calculateReferencePointMeasurementBetweenMachines } from "../utils/placement";
 import { formatLength } from "../utils/units";
-import {
-  WorkbenchContextContribution,
-  type WorkbenchContextContributionProps
-} from "./workbench/WorkbenchContextContribution";
 
 type MultiSelectionPropertiesProps = {
   selectedMachines: PlacedMachine[];
   assemblyName?: string;
   primarySelectedMachine?: PlacedMachine;
   selectionBounds: PlanBounds | null;
-  onAlign: (action: AlignmentAction) => void;
-  onDistribute: (action: DistributionAction) => void;
-  onEqualGap: (action: EqualGapAction) => void;
-  canDuplicateSelected: boolean;
-  onDuplicateSelected: () => void;
-  onClearSelection: () => void;
-  onDeleteSelected: () => void;
-  canArrangeSelection?: boolean;
-  alignmentContribution?: Omit<
-    WorkbenchContextContributionProps,
-    "title" | "children" | "badge"
-  >;
 };
 
 const formatMm = (value: number) => formatLength(value, "mm", 0);
@@ -33,66 +17,11 @@ export function MultiSelectionProperties({
   selectedMachines,
   assemblyName,
   primarySelectedMachine,
-  selectionBounds,
-  onAlign,
-  onDistribute,
-  onEqualGap,
-  canDuplicateSelected,
-  onDuplicateSelected,
-  onClearSelection,
-  onDeleteSelected,
-  canArrangeSelection = true,
-  alignmentContribution
+  selectionBounds
 }: MultiSelectionPropertiesProps) {
-  const canDistribute = canArrangeSelection && selectedMachines.length >= 3;
   const pairMeasurement = selectedMachines.length === 2
     ? calculateReferencePointMeasurementBetweenMachines(selectedMachines[0], selectedMachines[1])
     : null;
-  const alignmentActions = (
-    <>
-      <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-alignment-actions">
-        <strong>Align Selection</strong>
-        <div className="alignment-button-grid">
-          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("left")}>
-            Align Left
-          </button>
-          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerX")}>
-            Align Center X
-          </button>
-          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("right")}>
-            Align Right
-          </button>
-          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("front")}>
-            Align Top
-          </button>
-          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("centerY")}>
-            Align Center Y
-          </button>
-          <button type="button" disabled={!canArrangeSelection} onClick={() => onAlign("back")}>
-            Align Bottom
-          </button>
-        </div>
-      </div>
-      <div className="alignment-group multi-selection-alignment" data-testid="multi-selection-distribution-actions">
-        <strong>Distribute Selection</strong>
-        <div className="alignment-button-grid">
-          <button type="button" disabled={!canDistribute} onClick={() => onDistribute("horizontal")}>
-            Distribute Horizontal Center
-          </button>
-          <button type="button" disabled={!canDistribute} onClick={() => onDistribute("vertical")}>
-            Distribute Vertical Center
-          </button>
-          <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapX")}>
-            Equal Gap X
-          </button>
-          <button type="button" disabled={!canDistribute} onClick={() => onEqualGap("gapY")}>
-            Equal Gap Y
-          </button>
-        </div>
-      </div>
-    </>
-  );
-
   return (
     <section className="properties-section multi-selection-panel" data-testid="multi-selection-panel" aria-label="Multi-selection properties">
       <header className="section-header">
@@ -108,7 +37,7 @@ export function MultiSelectionProperties({
         ) : null}
         <div className="property-readout">
           <span>Primary</span>
-          <strong>{primarySelectedMachine?.definition.name ?? primarySelectedMachine?.instanceId ?? "None"}</strong>
+          <strong>{primarySelectedMachine ? getPlacedMachineDisplayName(primarySelectedMachine) : "None"}</strong>
         </div>
         <div className="multi-selection-list" aria-label="Selected objects">
           {selectedMachines.map((machine) => (
@@ -116,7 +45,7 @@ export function MultiSelectionProperties({
               className={machine.instanceId === primarySelectedMachine?.instanceId ? "multi-selection-item is-primary" : "multi-selection-item"}
               key={machine.instanceId}
             >
-              <span>{machine.definition.name}</span>
+              <span>{getPlacedMachineDisplayName(machine)}</span>
               {machine.instanceId === primarySelectedMachine?.instanceId ? <strong>Primary</strong> : null}
             </div>
           ))}
@@ -153,22 +82,6 @@ export function MultiSelectionProperties({
             </strong>
           </div>
         ) : null}
-        {alignmentContribution ? (
-          <WorkbenchContextContribution {...alignmentContribution} title="Alignment Tools">
-            {alignmentActions}
-          </WorkbenchContextContribution>
-        ) : alignmentActions}
-        <div className="selection-actions">
-          <button type="button" disabled={!canDuplicateSelected} onClick={onDuplicateSelected}>
-            Duplicate Selected
-          </button>
-          <button type="button" onClick={onClearSelection}>
-            Clear Selection
-          </button>
-          <button className="danger-action" type="button" onClick={onDeleteSelected}>
-            Delete Selected Objects
-          </button>
-        </div>
       </div>
     </section>
   );

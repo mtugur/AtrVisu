@@ -103,8 +103,43 @@ export const createAssemblyRuntimeCommandBridge = (
     });
   });
 
+  const getRuntimeCommand = (commandId: string, context: CommandContext) => {
+    const command = registry.get(commandId);
+    if (!command) {
+      return {
+        commandId,
+        registered: false,
+        bound: false,
+        reachable: false,
+        currentlyAvailable: false,
+        reason: `Runtime command "${commandId}" is unknown.`
+      };
+    }
+    const binding = getBindings()[commandId as AssemblyCommandId];
+    if (!binding) {
+      return {
+        commandId,
+        registered: true,
+        bound: false,
+        reachable: false,
+        currentlyAvailable: false,
+        reason: `Runtime command "${commandId}" is not bound.`
+      };
+    }
+    const enableState = binding.getEnableState(context);
+    return {
+      commandId,
+      registered: true,
+      bound: true,
+      reachable: true,
+      currentlyAvailable: enableState.enabled,
+      ...(enableState.reason ? { reason: enableState.reason } : {})
+    };
+  };
+
   return {
     registry,
+    getRuntimeCommand,
     executeCommand(commandId: AssemblyCommandId, context: CommandContext) {
       const binding = getBindings()[commandId];
       if (!binding) {

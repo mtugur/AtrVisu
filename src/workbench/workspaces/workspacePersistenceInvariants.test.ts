@@ -16,8 +16,10 @@ const legacyStorage = {
   removeItem: vi.fn()
 };
 
-const createPersistentHarness = () => {
-  let persisted = createDefaultWorkbenchUiPreferences();
+const createPersistentHarness = (
+  initial = createDefaultWorkbenchUiPreferences()
+) => {
+  let persisted = structuredClone(initial);
   const storage: UiPreferencesStorage = {
     read: vi.fn(async () => ({
       status: "valid" as const,
@@ -33,6 +35,48 @@ const createPersistentHarness = () => {
 };
 
 describe("workspace persistence and invariants", () => {
+  it("reconciles the previous named Sales Layout snap visibility and persists it", async () => {
+    const defaults = createDefaultWorkbenchUiPreferences();
+    const harness = createPersistentHarness({
+      ...defaults,
+      activeWorkspaceId: SALES_LAYOUT_WORKSPACE_ID,
+      panels: defaults.panels.map((panel) => panel.panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+        ? { ...panel, visible: false }
+        : panel)
+    });
+    const store = createUiPreferencesRuntimeStore({ storage: harness.storage, legacyStorage });
+
+    await store.hydrate();
+
+    expect(store.getSnapshot().preferences.activeWorkspaceId).toBe(SALES_LAYOUT_WORKSPACE_ID);
+    expect(store.getSnapshot().preferences.panels.find(
+      ({ panelId }) => panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+    )?.visible).toBe(true);
+    expect(harness.getPersisted().panels.find(
+      ({ panelId }) => panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+    )?.visible).toBe(true);
+    expect(harness.storage.put).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an intentional Custom Workspace snap visibility override", async () => {
+    const defaults = createDefaultWorkbenchUiPreferences();
+    const harness = createPersistentHarness({
+      ...defaults,
+      panels: defaults.panels.map((panel) => panel.panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+        ? { ...panel, visible: false }
+        : panel)
+    });
+    const store = createUiPreferencesRuntimeStore({ storage: harness.storage, legacyStorage });
+
+    await store.hydrate();
+
+    expect(store.getSnapshot().preferences.activeWorkspaceId).toBeUndefined();
+    expect(store.getSnapshot().preferences.panels.find(
+      ({ panelId }) => panelId === RUNTIME_PANEL_IDS.connectionPointSnap
+    )?.visible).toBe(false);
+    expect(harness.storage.put).not.toHaveBeenCalled();
+  });
+
   it("hydrates a selected workspace without reapplying factory panel visibility", async () => {
     const harness = createPersistentHarness();
     const firstStore = createUiPreferencesRuntimeStore({

@@ -118,6 +118,7 @@ describe("editor shortcut resolution", () => {
     expect(getEditorCommandIdForShortcutAction("undo")).toBe("edit.undo");
     expect(getEditorCommandIdForShortcutAction("redo")).toBe("edit.redo");
     expect(getEditorCommandIdForShortcutAction("clear-selection")).toBeNull();
+    expect(getEditorCommandIdForShortcutAction("rename-selected")).toBeNull();
     expect(getEditorCommandIdForShortcutAction("nudge-left")).toBeNull();
   });
 
@@ -139,6 +140,15 @@ describe("editor shortcut resolution", () => {
 
     expect(resolveEditorShortcut(shortcut({ key: "Delete" }))).toBe("delete-selected");
     expect(resolveEditorShortcut(shortcut({ key: "Delete", repeat: true }))).toBeNull();
+  });
+
+  it("resolves F2 rename outside editable and modal contexts", () => {
+    installFakeDomClasses();
+
+    expect(resolveEditorShortcut(shortcut({ key: "F2" }))).toBe("rename-selected");
+    expect(resolveEditorShortcut(shortcut({ key: "F2", repeat: true }))).toBeNull();
+    expect(resolveEditorShortcut(shortcut({ key: "F2", target: new FakeHTMLInputElement() }))).toBeNull();
+    expect(resolveEditorShortcut(shortcut({ key: "F2", modalOpen: true }))).toBeNull();
   });
 
   it("resolves Ctrl/Meta undo and redo conventions", () => {

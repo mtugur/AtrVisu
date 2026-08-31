@@ -79,6 +79,30 @@ describe("UI preferences storage and normalization", () => {
     expect(normalizeWorkbenchUiPreferences(null).preferences).toEqual(createDefaultWorkbenchUiPreferences());
   });
 
+  it("converges legacy Viewpoints ownership to Primary Dock without changing Bottom Dock sizing", () => {
+    const defaults = createDefaultWorkbenchUiPreferences();
+    const result = normalizeWorkbenchUiPreferences({
+      ...defaults,
+      theme: "light",
+      panels: defaults.panels.map((panel) => {
+        if (panel.panelId === RUNTIME_PANEL_IDS.viewpoints) {
+          return { ...panel, dock: "bottom-dock" };
+        }
+        if (panel.panelId === RUNTIME_PANEL_IDS.bottomDockShell) {
+          return { ...panel, size: 233, collapsed: false };
+        }
+        return panel;
+      })
+    });
+
+    expect(result.preferences.theme).toBe("light");
+    expect(result.preferences.panels.find(({ panelId }) => panelId === RUNTIME_PANEL_IDS.viewpoints)?.dock)
+      .toBe("primary-dock");
+    expect(result.preferences.panels.find(({ panelId }) => panelId === RUNTIME_PANEL_IDS.bottomDockShell))
+      .toMatchObject({ size: 233, collapsed: false });
+    expect(result.warnings).toContain("Legacy Viewpoints dock ownership was normalized to Primary Dock.");
+  });
+
   it("preserves future and corrupt stored records without automatic writes", async () => {
     const database = await openAtrVisuDatabase();
     const future = { schemaVersion: 99, theme: "future", panels: [{ raw: true }] };

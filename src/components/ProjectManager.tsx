@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AtrVisuLayout } from "../types/machine";
 import type { AtrVisuProject } from "../types/project";
 import type { RuntimeFeatureCommandOperationResult } from "../platform/runtimeCommands/runtimeFeatureCommands";
 import type { ProjectExportCommandPayload } from "../platform/runtimeCommands/projectRuntimeCommandAuthority";
+import type { ProjectManagerEntryIntent } from "../platform/runtimeCommands/projectManagerEntryIntent";
+import { useModalFocus } from "./common/useModalFocus";
 import {
   createLayout,
   createProject,
@@ -19,6 +21,7 @@ import {
 } from "../utils/projectStorage";
 
 type ProjectManagerProps = {
+  entryIntent: ProjectManagerEntryIntent | null;
   projects: AtrVisuProject[];
   currentProjectId: string | null;
   currentLayoutId: string | null;
@@ -64,6 +67,7 @@ export const executeProjectManagerRuntimeOperation = async (
 };
 
 export function ProjectManager({
+  entryIntent,
   projects,
   currentProjectId,
   currentLayoutId,
@@ -79,6 +83,11 @@ export function ProjectManager({
   onExecuteRuntimeCommand,
   onRequestProjectImport
 }: ProjectManagerProps) {
+  const dialogRef = useModalFocus<HTMLElement>(onClose);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const createProjectNameRef = useRef<HTMLInputElement>(null);
+  const firstExistingProjectRef = useRef<HTMLButtonElement>(null);
+  const emptyOpenRouteRef = useRef<HTMLButtonElement>(null);
   const [selectedProjectId, setSelectedProjectId] = useState(currentProjectId ?? projects[0]?.projectId ?? "");
   const selectedProject = projects.find((project) => project.projectId === selectedProjectId) ?? projects[0] ?? null;
   const [selectedLayoutId, setSelectedLayoutId] = useState(
@@ -182,6 +191,24 @@ export function ProjectManager({
     }
   }, [currentLayoutId, currentProjectId, currentRevisionId]);
 
+  useEffect(() => {
+    const focusEntryTarget = () => {
+      const target = entryIntent === "create"
+        ? createProjectNameRef.current
+        : entryIntent === "open"
+          ? firstExistingProjectRef.current ?? emptyOpenRouteRef.current
+          : closeButtonRef.current;
+      target?.focus();
+      target?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    };
+    focusEntryTarget();
+    if (entryIntent !== null) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(focusEntryTarget);
+    return () => window.cancelAnimationFrame(frame);
+  }, [entryIntent, projects.length]);
+
   const createNewProject = () => {
     void runAction(async () => {
       const project = await createProject(
@@ -237,7 +264,16 @@ export function ProjectManager({
 
   const modal = (
     <div className="manager-backdrop" role="presentation">
-      <section className="manager-dialog project-dialog" data-testid="project-manager-modal" role="dialog" aria-modal="true" aria-label="Project Manager">
+      <section
+        ref={dialogRef}
+        className="manager-dialog project-dialog"
+        data-entry-intent={entryIntent ?? "neutral"}
+        data-testid="project-manager-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Project Manager"
+        tabIndex={-1}
+      >
         <header className="manager-header">
           <div>
             <span className="panel-kicker">AtrVisu</span>
@@ -247,7 +283,7 @@ export function ProjectManager({
             <strong>{selectedProject?.projectName ?? "No project"}</strong>
             <span className={`manager-mode-badge${isDirty ? "" : " is-editable"}`}>{isDirty ? "Unsaved changes" : "Saved"}</span>
           </div>
-          <button data-testid="close-project-manager" type="button" onClick={onClose}>
+          <button ref={closeButtonRef} data-testid="close-project-manager" type="button" onClick={onClose}>
             Close
           </button>
         </header>
@@ -258,10 +294,11 @@ export function ProjectManager({
               <span>Projects</span>
               <strong>{projects.length}</strong>
             </div>
-            <div className="project-create-card">
+            <div className="project-create-card" data-testid="project-manager-create-workflow">
               <label>
                 <span>Project Name</span>
                 <input
+                  ref={createProjectNameRef}
                   data-testid="new-project-name"
                   value={newProjectName}
                   onChange={(event) => setNewProjectName(event.target.value)}
@@ -290,7 +327,9 @@ export function ProjectManager({
             <div className="project-list" data-testid="project-manager-project-list">
               {projects.map((project) => (
                 <button
+                  ref={project.projectId === projects[0]?.projectId ? firstExistingProjectRef : undefined}
                   className={project.projectId === selectedProject?.projectId ? "is-selected" : ""}
+                  data-testid="project-manager-project-option"
                   key={project.projectId}
                   type="button"
                   onClick={() => selectProject(project)}
@@ -303,7 +342,7 @@ export function ProjectManager({
             </div>
           </aside>
 
-          <section className="project-column" aria-label="Project details">
+          <section className="project-column" aria-label="Project details" data-testid="project-manager-existing-workflow">
             <div className="manager-column-header">
               <span>Layouts</span>
               <strong>{selectedProject?.layouts.length ?? 0}</strong>
@@ -386,9 +425,16 @@ export function ProjectManager({
                 </button>
               </div>
             ) : (
-              <p className="empty-selection" data-testid="project-manager-empty-state">
-                Create or import a project to begin.
-              </p>
+              <div className="empty-selection" data-testid="project-manager-empty-state">
+                <p>No existing projects are available. Create or import a project to begin.</p>
+                <button
+                  ref={emptyOpenRouteRef}
+                  type="button"
+                  onClick={() => createProjectNameRef.current?.focus()}
+                >
+                  Start a New Project
+                </button>
+              </div>
             )}
 
             <div className="project-list">

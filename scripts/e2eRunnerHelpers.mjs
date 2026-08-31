@@ -1,3 +1,29 @@
+import { execFileSync } from "node:child_process";
+
+export const ATRVISU_SOURCE_HEAD_HEADER = "x-atrvisu-source-head";
+export const ATRVISU_SOURCE_BRANCH_HEADER = "x-atrvisu-source-branch";
+
+export const readGitSourceProvenance = (
+  cwd = process.cwd(),
+  execute = (args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim()
+) => Object.freeze({
+  head: execute(["rev-parse", "HEAD"]),
+  branch: execute(["branch", "--show-current"])
+});
+
+export const assertAtrVisuServerProvenance = (expectedHead, observedHead) => {
+  if (!observedHead) {
+    throw new Error(
+      `AtrVisu server did not report ${ATRVISU_SOURCE_HEAD_HEADER}; refusing an unverified runtime.`
+    );
+  }
+  if (observedHead !== expectedHead) {
+    throw new Error(
+      `AtrVisu server source mismatch: expected ${expectedHead}, received ${observedHead}.`
+    );
+  }
+};
+
 export const allowedE2EPorts = Object.freeze([5173, 5174, 5175, 5176, 5177]);
 
 export const resolveE2EServerMode = (environment) => {

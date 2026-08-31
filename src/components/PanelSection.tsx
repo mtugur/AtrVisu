@@ -78,7 +78,7 @@ export function PanelSection({
         aria-expanded={isExpanded}
         onClick={() => setExpanded(!isExpanded)}
       >
-        <span aria-hidden="true">{isExpanded ? "-" : "+"}</span>
+        <span className="panel-section-disclosure" aria-hidden="true">{isExpanded ? "-" : "+"}</span>
         <strong>{title}</strong>
         {badge ? <small>{badge}</small> : null}
       </button>

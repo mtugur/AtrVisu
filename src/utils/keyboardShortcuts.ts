@@ -22,6 +22,7 @@ export type EditorShortcutAction =
   | "delete-selected"
   | "undo"
   | "redo"
+  | "rename-selected"
   | "clear-selection"
   | "nudge-left"
   | "nudge-right"
@@ -79,6 +80,10 @@ export const resolveEditorShortcut = (
 
   if (!commandModifier && !event.altKey && !event.shiftKey && key === "delete") {
     return event.repeat ? null : "delete-selected";
+  }
+
+  if (!commandModifier && !event.altKey && !event.shiftKey && key === "f2") {
+    return event.repeat ? null : "rename-selected";
   }
 
   if (!commandModifier && !event.altKey && !event.shiftKey && key === "escape") {

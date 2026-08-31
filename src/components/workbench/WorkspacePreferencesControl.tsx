@@ -325,7 +325,7 @@ export function WorkspacePreferencesControl({
             if (!readOnly) onSelectCurrentArrangement();
           }}
         />
-        <span>Current arrangement</span>
+        <span>Custom Workspace</span>
       </label>
       {workspaceOptions.map((option) => (
         <label key={option.id} title={option.tooltip}>

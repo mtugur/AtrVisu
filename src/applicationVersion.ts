@@ -1,0 +1,1 @@
+export const ATRVISU_APPLICATION_VERSION = "0.1.0";

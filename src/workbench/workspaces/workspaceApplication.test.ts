@@ -42,6 +42,9 @@ const isWorkbenchShellPanel = (panelId: string) => panelId === RUNTIME_PANEL_IDS
   || panelId === RUNTIME_PANEL_IDS.rightPanelShell
   || panelId === RUNTIME_PANEL_IDS.bottomDockShell;
 
+const isAlwaysOpenWorkspaceShell = (panelId: string) => panelId === RUNTIME_PANEL_IDS.primaryDockShell
+  || panelId === RUNTIME_PANEL_IDS.rightPanelShell;
+
 describe("workspace application", () => {
   it("applies Sales Layout in one presentation result while preserving theme and panel geometry", () => {
     const before = customizePreferences();
@@ -54,6 +57,7 @@ describe("workspace application", () => {
       density: "comfortable",
       theme: "light"
     });
+    expect(getPanel(result.preferences, RUNTIME_PANEL_IDS.connectionPointSnap).visible).toBe(true);
     expect(getPanel(result.preferences, RUNTIME_PANEL_IDS.rightPanelShell)).toMatchObject({
       visible: true,
       collapsed: false,
@@ -61,7 +65,7 @@ describe("workspace application", () => {
     });
     result.preferences.panels.forEach((panel) => {
       const previous = getPanel(before, panel.panelId);
-      const isAlwaysOpenShell = isWorkbenchShellPanel(panel.panelId);
+      const isAlwaysOpenShell = isAlwaysOpenWorkspaceShell(panel.panelId);
       expect(panel).toMatchObject({
         collapsed: isAlwaysOpenShell ? false : previous.collapsed,
         order: previous.order,
@@ -74,6 +78,24 @@ describe("workspace application", () => {
       }
     });
     expect(before).toEqual(customizePreferences());
+  });
+
+  it("keeps Viewpoints in Primary Dock while preserving the dormant Bottom Dock preference", () => {
+    const defaults = createDefaultWorkbenchUiPreferences();
+    const before = {
+      ...defaults,
+      panels: defaults.panels.map((panel) => panel.panelId === RUNTIME_PANEL_IDS.bottomDockShell
+        ? { ...panel, collapsed: false, size: 233 }
+        : panel)
+    };
+    const bottomBefore = getPanel(before, RUNTIME_PANEL_IDS.bottomDockShell);
+    const result = applyWorkspaceToPreferences(before, SALES_LAYOUT_WORKSPACE_ID);
+
+    expect(getPanel(result.preferences, RUNTIME_PANEL_IDS.viewpoints)).toMatchObject({
+      visible: true,
+      dock: "primary-dock"
+    });
+    expect(getPanel(result.preferences, RUNTIME_PANEL_IDS.bottomDockShell)).toEqual(bottomBefore);
   });
 
   it("applies Layout Engineering with compact density and exact visibility", () => {

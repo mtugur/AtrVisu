@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { EntityId, PlatformEntity, SelectionState } from "../../platform/contracts";
 import type { RuntimeSelectionMode } from "../../platform/runtimeSelection";
 
@@ -7,6 +7,10 @@ type LayoutExplorerProps = {
   selection: SelectionState;
   layerNames: ReadonlyMap<string, string>;
   onSelectEntity: (entityId: EntityId, mode: RuntimeSelectionMode) => void;
+  renameRequestEntityId?: EntityId | null;
+  renameRequestVersion?: number;
+  onRenameEntity?: (entityId: EntityId, name: string) => boolean | Promise<boolean>;
+  onRenameRequestHandled?: () => void;
 };
 
 const getTypeLabel = (type: PlatformEntity["type"]) => ({
@@ -26,12 +30,67 @@ export function LayoutExplorer({
   entities,
   selection,
   layerNames,
-  onSelectEntity
+  onSelectEntity,
+  renameRequestEntityId,
+  renameRequestVersion = 0,
+  onRenameEntity,
+  onRenameRequestHandled
 }: LayoutExplorerProps) {
+  const [editingEntityId, setEditingEntityId] = useState<EntityId | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const entityById = new Map(entities.map((entity) => [entity.id, entity]));
   const groups = entities.filter((entity) => entity.type === "group");
   const groupedIds = new Set(groups.flatMap((group) => group.childrenIds));
   const ungrouped = entities.filter((entity) => entity.type !== "group" && !groupedIds.has(entity.id));
+
+  const startRename = (entity: PlatformEntity) => {
+    if (!onRenameEntity || entity.locked || !["machine", "civil", "group"].includes(entity.type)) {
+      return;
+    }
+    setEditingEntityId(entity.id);
+    setDraftName(entity.name);
+  };
+
+  useEffect(() => {
+    if (!renameRequestEntityId) {
+      return;
+    }
+    const entity = entityById.get(renameRequestEntityId);
+    if (entity) {
+      startRename(entity);
+    }
+    onRenameRequestHandled?.();
+  }, [renameRequestEntityId, renameRequestVersion]);
+
+  useEffect(() => {
+    if (editingEntityId) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editingEntityId]);
+
+  const cancelRename = () => {
+    setEditingEntityId(null);
+    setDraftName("");
+  };
+
+  const commitRename = async (entityId: EntityId) => {
+    if (await onRenameEntity?.(entityId, draftName)) {
+      cancelRename();
+    }
+  };
+
+  const handleRenameKeyDown = (event: KeyboardEvent<HTMLInputElement>, entityId: EntityId) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commitRename(entityId);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelRename();
+    }
+  };
 
   const renderEntity = (entity: PlatformEntity, nested = false) => {
     const selected = selection.ids.includes(entity.id);
@@ -42,6 +101,26 @@ export function LayoutExplorer({
       : !entity.selectable
         ? "This entity is not selectable."
         : undefined;
+
+    if (editingEntityId === entity.id) {
+      return (
+        <div
+          key={entity.id}
+          className={`layout-explorer-row is-renaming${nested ? " is-nested" : ""}`}
+          data-testid={`layout-explorer-rename-${entity.id}`}
+        >
+          <input
+            ref={inputRef}
+            value={draftName}
+            aria-label={`Rename ${entity.name}`}
+            onChange={(event) => setDraftName(event.target.value)}
+            onKeyDown={(event) => handleRenameKeyDown(event, entity.id)}
+            onBlur={cancelRename}
+          />
+          <span className="layout-explorer-context">Enter to save | Escape to cancel</span>
+        </div>
+      );
+    }
 
     return (
       <button
@@ -54,6 +133,7 @@ export function LayoutExplorer({
         disabled={Boolean(unavailableReason)}
         title={unavailableReason ?? `${entity.name} | ${getTypeLabel(entity.type)} | ${layerName}`}
         onClick={(event) => onSelectEntity(entity.id, getSelectionMode(event))}
+        onDoubleClick={() => startRename(entity)}
       >
         <span className="layout-explorer-identity">
           <strong>{entity.name || entity.id}</strong>
@@ -93,9 +173,6 @@ export function LayoutExplorer({
           <p className="empty-selection">Add a machine, civil reference, or annotation to populate the layout.</p>
         ) : null}
       </nav>
-      <p className="layout-explorer-rename-note" title="Rename requires a canonical history-backed mutation command.">
-        Rename is unavailable until a history-backed entity rename command exists.
-      </p>
     </section>
   );
 }

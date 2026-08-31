@@ -10,7 +10,6 @@ import {
   type RuntimeCommandOperationResult
 } from "../../platform/runtimeCommands/runtimeCommandOperation";
 import {
-  APPLICATION_BAR_COMMAND_IDS,
   COMMAND_BAR_COMMAND_IDS,
   COMMAND_SURFACE_MENU_DEFINITIONS,
   getCommandSurfaceRuntimeRoute
@@ -109,7 +108,8 @@ export const createCommandSurfaceAdapter = (
           };
     }
 
-    const reachability = options.runtimeBridge.getRuntimeCommand(commandId, context);
+    const bridge = route === "assembly" ? options.assemblyBridge : options.runtimeBridge;
+    const reachability = bridge.getRuntimeCommand(commandId, context);
     return {
       renderable: reachability.registered && reachability.bound && reachability.reachable,
       enabled: reachability.currentlyAvailable,
@@ -135,8 +135,10 @@ export const createCommandSurfaceAdapter = (
       commandId,
       placement,
       label: metadata.label,
+      group: metadata.group,
       tooltip: metadata.tooltip,
       ...(metadata.shortcut ? { shortcut: metadata.shortcut } : {}),
+      ...(metadata.iconId ? { iconId: metadata.iconId } : {}),
       disabled: !availability.enabled,
       ...(availability.reason ? { disabledReason: availability.reason } : {}),
       pending,
@@ -151,7 +153,7 @@ export const createCommandSurfaceAdapter = (
     await options.runtimeBridge.executeCommand(commandId, context)
   );
 
-  const execute = async (commandId: CommandId): Promise<RuntimeCommandOperationResult> => {
+  const execute = async (commandId: CommandId, payload?: unknown): Promise<RuntimeCommandOperationResult> => {
     const metadata = options.metadataRegistry.get(commandId);
     if (!metadata) {
       return createUnsupportedRuntimeCommandResult(
@@ -188,10 +190,12 @@ export const createCommandSurfaceAdapter = (
     pendingCommandIds.add(commandId);
     emitChange();
     try {
-      const context = getContextWithPayload(options.getContext());
+      const context = getContextWithPayload(options.getContext(), payload);
       return route === "core"
         ? normalizeRuntimeCommandOperationResult(options.coreBridge.executeCommand(commandId, context))
-        : await executeRuntime(commandId, context);
+        : route === "assembly"
+          ? normalizeRuntimeCommandOperationResult(await options.assemblyBridge.executeCommand(commandId, context))
+          : await executeRuntime(commandId, context);
     } catch (error) {
       return createFailedRuntimeCommandResult(error);
     } finally {
@@ -201,7 +205,7 @@ export const createCommandSurfaceAdapter = (
   };
 
   return {
-    getApplicationSaveItem: () => getItem(APPLICATION_BAR_COMMAND_IDS[0], "application-bar"),
+    getApplicationSaveItem: () => undefined,
     getMenus: () => COMMAND_SURFACE_MENU_DEFINITIONS.map((menu) => ({
       id: menu.id,
       labelKey: menu.labelKey,
@@ -213,6 +217,10 @@ export const createCommandSurfaceAdapter = (
     getCommandBarItems: () => COMMAND_BAR_COMMAND_IDS
       .map((commandId) => getItem(commandId, "command-bar"))
       .filter((item): item is CommandSurfaceItem => Boolean(item)),
+    getCommandPaletteItems: () => (options.metadataRegistry.list?.() ?? [])
+      .map((definition) => getItem(definition.id, "command-palette"))
+      .filter((item): item is CommandSurfaceItem => Boolean(item))
+      .sort((left, right) => left.label.localeCompare(right.label)),
     getItem,
     execute,
     subscribe: (listener) => {

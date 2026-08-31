@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { PlacedMachine } from "../types/machine";
 import type { PlacementSettings } from "../types/placement";
+import type { NudgeSettings } from "../types/selection";
 import {
   applyPositionSnap,
   calculateMeasurementBetweenMachines,
@@ -8,13 +9,16 @@ import {
   getRotationNudgeStepDeg,
   getMachinePlanPositionMm
 } from "../utils/placement";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { formatLength, mmToMeters } from "../utils/units";
 
 type PrecisionPlacementPanelProps = {
   settings: PlacementSettings;
   placedMachines: PlacedMachine[];
   selectedMachine?: PlacedMachine;
+  nudgeSettings: NudgeSettings;
   onChangeSettings: (settings: PlacementSettings) => void;
+  onChangeNudgeSettings: (settings: NudgeSettings) => void;
   onUpdateMachine: (
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>,
@@ -28,7 +32,9 @@ export function PrecisionPlacementPanel({
   settings,
   placedMachines,
   selectedMachine,
+  nudgeSettings,
   onChangeSettings,
+  onChangeNudgeSettings,
   onUpdateMachine
 }: PrecisionPlacementPanelProps) {
   const [objectAId, setObjectAId] = useState("");
@@ -48,7 +54,7 @@ export function PrecisionPlacementPanel({
     return placedMachines
       .filter((machine) => machine.instanceId !== selectedMachine.instanceId)
       .map((machine) => ({
-        name: machine.definition.name,
+        name: getPlacedMachineDisplayName(machine),
         distanceMm: distanceBetweenPlanPositionsMm(selectedPosition, getMachinePlanPositionMm(machine))
       }))
       .sort((a, b) => a.distanceMm - b.distanceMm)[0] ?? null;
@@ -63,6 +69,14 @@ export function PrecisionPlacementPanel({
       ...settings,
       [key]: numericValue
     });
+  };
+
+  const updateNudgeSetting = (key: keyof NudgeSettings, value: string) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      return;
+    }
+    onChangeNudgeSettings({ ...nudgeSettings, [key]: numericValue });
   };
 
   const snapSelectedToGrid = () => {
@@ -182,13 +196,19 @@ export function PrecisionPlacementPanel({
 
       {settings.showMeasurementHelpers ? (
         <div className="measurement-section" aria-label="Measurement helpers">
+          <fieldset className="precision-nudge-settings" data-testid="precision-nudge-settings">
+            <legend>Keyboard Nudge</legend>
+            <label><span>Default Step (mm)</span><input aria-label="Default Nudge Step" type="number" min="1" step="10" value={nudgeSettings.nudgeStepMm} onChange={(event) => updateNudgeSetting("nudgeStepMm", event.target.value)} /></label>
+            <label><span>Large Step (mm)</span><input aria-label="Large Nudge Step" type="number" min="1" step="10" value={nudgeSettings.largeNudgeStepMm} onChange={(event) => updateNudgeSetting("largeNudgeStepMm", event.target.value)} /></label>
+            <label><span>Small Step (mm)</span><input aria-label="Small Nudge Step" type="number" min="1" step="1" value={nudgeSettings.smallNudgeStepMm} onChange={(event) => updateNudgeSetting("smallNudgeStepMm", event.target.value)} /></label>
+          </fieldset>
           <label>
             <span>Object A</span>
             <select value={objectA?.instanceId ?? ""} onChange={(event) => setObjectAId(event.target.value)}>
               <option value="">Select object</option>
               {placedMachines.map((machine) => (
                 <option key={machine.instanceId} value={machine.instanceId}>
-                  {machine.definition.name}
+                  {getPlacedMachineDisplayName(machine)}
                 </option>
               ))}
             </select>
@@ -199,7 +219,7 @@ export function PrecisionPlacementPanel({
               <option value="">Select object</option>
               {placedMachines.map((machine) => (
                 <option key={machine.instanceId} value={machine.instanceId}>
-                  {machine.definition.name}
+                  {getPlacedMachineDisplayName(machine)}
                 </option>
               ))}
             </select>

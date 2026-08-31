@@ -2,6 +2,7 @@ import type { AtrVisuLayout } from "../types/machine";
 import type { AtrVisuProject, AtrVisuProjectLayout, AtrVisuRevision, LayoutSnapshot, ProjectMetadata } from "../types/project";
 import { ATRVISU_UNIT_SYSTEM } from "./machineDimensions";
 import { openAtrVisuDatabase } from "./storage/indexedDb";
+import { ATRVISU_APPLICATION_VERSION } from "../applicationVersion";
 
 export const PROJECTS_STORAGE_KEY = "atrvisu.projects.v1";
 export const PROJECTS_INDEXEDDB_MIGRATION_KEY = "atrvisu.projects.indexeddb.migrated.v1";
@@ -9,7 +10,7 @@ export const PROJECTS_INDEXEDDB_MIGRATION_KEY = "atrvisu.projects.indexeddb.migr
 const EMPTY_LAYOUT_SNAPSHOT: LayoutSnapshot = {
   appName: "AtrVisu",
   version: 1,
-  projectAppVersion: "0.1.0",
+  projectAppVersion: ATRVISU_APPLICATION_VERSION,
   unitSystem: ATRVISU_UNIT_SYSTEM,
   exportedAt: new Date(0).toISOString(),
   objects: []
@@ -38,7 +39,7 @@ const normalizeSnapshot = (value: unknown): LayoutSnapshot => {
 
   return {
     ...(value as AtrVisuLayout),
-    projectAppVersion: isNonEmptyString(value.projectAppVersion) ? value.projectAppVersion : "0.1.0",
+    projectAppVersion: isNonEmptyString(value.projectAppVersion) ? value.projectAppVersion : ATRVISU_APPLICATION_VERSION,
     unitSystem: (value as AtrVisuLayout).unitSystem ?? ATRVISU_UNIT_SYSTEM,
     objects: (value as AtrVisuLayout).objects
   };

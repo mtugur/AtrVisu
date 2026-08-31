@@ -12,6 +12,7 @@ import {
   type PlanPointMm
 } from "../utils/coordinateReference";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import type {
   CommercialOutputBomGroup,
   CommercialOutputEquipmentInstance,
@@ -110,7 +111,7 @@ const machineFootprint = (
   return {
     entityId: `machine:${machine.instanceId}`,
     entityType: "machine",
-    name: machine.definition.name,
+    name: getPlacedMachineDisplayName(machine),
     cornersMm: getFootprintCornersFromReferenceMm(reference, dimensions, rotationDeg),
     rotationDeg,
     visible
@@ -154,7 +155,8 @@ const createExtents = (footprints: readonly CommercialOutputFootprint[]): Commer
 };
 
 const createBomGroups = (
-  equipment: readonly CommercialOutputEquipmentInstance[]
+  equipment: readonly CommercialOutputEquipmentInstance[],
+  definitionNameByIdentity: ReadonlyMap<string, string>
 ): CommercialOutputBomGroup[] => {
   const groups = new Map<string, CommercialOutputBomGroup>();
   equipment.forEach((instance) => {
@@ -168,7 +170,7 @@ const createBomGroups = (
       definitionIdentity: instance.definitionIdentity,
       machineDefinitionId: instance.machineDefinitionId,
       ...(instance.libraryId ? { libraryId: instance.libraryId } : {}),
-      name: instance.name,
+      name: definitionNameByIdentity.get(instance.definitionIdentity) ?? instance.name,
       quantity: 1,
       properties: instance.bomProperties
     });
@@ -195,7 +197,7 @@ export const createCommercialOutputSnapshot = (
     return {
       entityId: `machine:${machine.instanceId}`,
       instanceId: machine.instanceId,
-      name: machine.definition.name,
+      name: getPlacedMachineDisplayName(machine),
       definitionIdentity: identity,
       machineDefinitionId: machine.machineDefinitionId,
       ...(machine.libraryId ? { libraryId: machine.libraryId } : {}),
@@ -216,7 +218,10 @@ export const createCommercialOutputSnapshot = (
     };
   }).sort((left, right) => left.instanceId.localeCompare(right.instanceId));
 
-  const bomGroups = createBomGroups(equipment);
+  const bomGroups = createBomGroups(
+    equipment,
+    new Map(input.machines.map((machine) => [definitionIdentity(machine), machine.definition.name]))
+  );
   const machineFootprints = equipment.map((instance) => instance.footprint);
   const civilFootprints = input.civilReferences.map((item) => {
     const visible = item.visible !== false && (item.layerId ? layerVisibility.get(item.layerId) !== false : true);

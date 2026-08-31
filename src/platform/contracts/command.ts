@@ -1,6 +1,6 @@
 export type CommandId = string;
 
-export type CommandGroup = "file" | "edit" | "view" | "insert" | "arrange" | "tools";
+export type CommandGroup = "file" | "edit" | "view" | "insert" | "arrange" | "tools" | "help";
 
 export type CommandEnableState = {
   enabled: boolean;
@@ -19,7 +19,7 @@ export type CommandDefinition = {
   group: CommandGroup;
   label: string;
   tooltip: string;
-  icon?: string;
+  iconId?: string;
   shortcut?: string;
   enableRule?: (context: CommandContext) => CommandEnableState;
   execute: (context: CommandContext) => void | Promise<void>;

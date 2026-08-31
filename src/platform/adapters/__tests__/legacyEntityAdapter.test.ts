@@ -156,6 +156,15 @@ describe("legacy entity adapter", () => {
     expect(entity.transform).toMatchObject({ planX: -2500, planY: 4750 });
   });
 
+  it("projects the placed-instance display name without changing machine definition metadata", () => {
+    const source = placedMachine({ displayName: "Case Packer - Line 2" });
+    const entity = adaptPlacedMachineToPlatformEntity(source, layers);
+
+    expect(entity.name).toBe("Case Packer - Line 2");
+    expect(source.definition.name).toBe("Case Packer");
+    expect(propertyValue(entity, "machineDefinitionId")).toBe("machine-definition-01");
+  });
+
   it("adapts civil subtype, transform, dimensions, object lock, and object visibility", () => {
     const entity = adaptCivilReferenceToPlatformEntity(
       civilReference({ type: "column", locked: true, visible: false }),

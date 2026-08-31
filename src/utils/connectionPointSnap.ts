@@ -7,6 +7,7 @@ import type { PlacedMachine } from "../types/machine";
 import type { PlatformEntity, SelectionState } from "../platform/contracts";
 import { evaluateAtomicMovement } from "../platform/runtimeSelection";
 import {
+  getConnectionPointsForObject,
   getConnectionPointTypeLabel,
   getConnectionPointWorldDirection,
   getConnectionPointWorldPosition
@@ -55,7 +56,8 @@ export type ConnectionPointSnapContextFailureReason =
   | "machine-unavailable"
   | "assembly-edit-required"
   | "explicit-selection-required"
-  | "locked";
+  | "locked"
+  | "no-product-flow-pair";
 
 export type ConnectionPointSnapContextEvaluation =
   | {
@@ -74,12 +76,30 @@ export type ConnectionPointSnapContextInput = {
   activeGroupEditId?: string | null;
 };
 
+export type ProductFlowConnectionPointPair = Readonly<{
+  movingMachineId: string;
+  fixedMachineId: string;
+  movingPoint: MachineConnectionPoint;
+  fixedPoint: MachineConnectionPoint;
+}>;
+
+export type PremiumConnectionPointSnapContextInput = ConnectionPointSnapContextInput & {
+  machines: readonly PlacedMachine[];
+};
+
+export type PremiumConnectionPointSnapContextEvaluation =
+  | (Extract<ConnectionPointSnapContextEvaluation, { available: true }> & {
+      productFlowPair: ProductFlowConnectionPointPair;
+    })
+  | Extract<ConnectionPointSnapContextEvaluation, { available: false }>;
+
 const connectionPointSnapContextMessages: Readonly<Record<ConnectionPointSnapContextFailureReason, string>> = {
   unresolved: "Selected machines could not be resolved.",
   "machine-unavailable": "Both selected machines must be visible and selectable.",
   "assembly-edit-required": "Grouped machines require their matching active Edit Group.",
   "explicit-selection-required": "Select exactly two explicit machines.",
-  locked: "Connection Point Snap is blocked because the selection contains a locked entity."
+  locked: "Connection Point Snap is blocked because the selection contains a locked entity.",
+  "no-product-flow-pair": "Selected machines do not provide a Product Out to Product In connection."
 };
 
 export const getConnectionPointSnapContextMessage = (
@@ -92,6 +112,9 @@ export type ConnectionPointSnapRuntimeAccessInput = {
   activeGroupEditId?: string | null;
   movingMachineId: string;
   fixedMachineId: string;
+  movingPoint?: MachineConnectionPoint;
+  fixedPoint?: MachineConnectionPoint;
+  requireProductFlowPair?: boolean;
 };
 
 const directionVectors: Record<AtaraConnectionDirection, { xMm: number; yMm: number; zMm: number }> = {
@@ -104,6 +127,45 @@ const directionVectors: Record<AtaraConnectionDirection, { xMm: number; yMm: num
 };
 
 const productTypes = new Set<AtaraConnectionPointType>(["product-in", "product-out"]);
+
+export const isProductFlowConnectionPointPair = (
+  movingPoint: MachineConnectionPoint | null | undefined,
+  fixedPoint: MachineConnectionPoint | null | undefined
+) => movingPoint?.type === "product-out" && fixedPoint?.type === "product-in";
+
+export const findProductFlowConnectionPointPair = (
+  machines: readonly PlacedMachine[]
+): ProductFlowConnectionPointPair | null => {
+  if (machines.length !== 2) {
+    return null;
+  }
+
+  const [firstMachine, secondMachine] = machines;
+  const firstPoints = getConnectionPointsForObject(firstMachine);
+  const secondPoints = getConnectionPointsForObject(secondMachine);
+  const firstOut = firstPoints.find((point) => point.type === "product-out");
+  const firstIn = firstPoints.find((point) => point.type === "product-in");
+  const secondOut = secondPoints.find((point) => point.type === "product-out");
+  const secondIn = secondPoints.find((point) => point.type === "product-in");
+
+  if (firstOut && secondIn) {
+    return {
+      movingMachineId: firstMachine.instanceId,
+      fixedMachineId: secondMachine.instanceId,
+      movingPoint: firstOut,
+      fixedPoint: secondIn
+    };
+  }
+  if (secondOut && firstIn) {
+    return {
+      movingMachineId: secondMachine.instanceId,
+      fixedMachineId: firstMachine.instanceId,
+      movingPoint: secondOut,
+      fixedPoint: firstIn
+    };
+  }
+  return null;
+};
 
 const directionDot = (a: AtaraConnectionDirection, b: AtaraConnectionDirection) => {
   const first = directionVectors[a];
@@ -285,12 +347,38 @@ export const evaluateConnectionPointSnapContext = ({
   };
 };
 
+export const evaluatePremiumConnectionPointSnapContext = ({
+  selection,
+  entities,
+  machines,
+  activeGroupEditId = null
+}: PremiumConnectionPointSnapContextInput): PremiumConnectionPointSnapContextEvaluation => {
+  const context = evaluateConnectionPointSnapContext({ selection, entities, activeGroupEditId });
+  if (!context.available) {
+    return context;
+  }
+
+  const selectedMachines = context.machineIds.flatMap((machineId) => {
+    const machine = machines.find((candidate) => candidate.instanceId === machineId);
+    return machine ? [machine] : [];
+  });
+  const productFlowPair = findProductFlowConnectionPointPair(selectedMachines);
+  if (!productFlowPair) {
+    return { available: false, reason: "no-product-flow-pair" };
+  }
+
+  return { ...context, productFlowPair };
+};
+
 export const evaluateConnectionPointSnapRuntimeAccess = ({
   selection,
   entities,
   activeGroupEditId = null,
   movingMachineId,
-  fixedMachineId
+  fixedMachineId,
+  movingPoint,
+  fixedPoint,
+  requireProductFlowPair = false
 }: ConnectionPointSnapRuntimeAccessInput): ConnectionPointSnapRuntimeAccessEvaluation => {
   const movingEntityId = `machine:${movingMachineId}`;
   const fixedEntityId = `machine:${fixedMachineId}`;
@@ -304,6 +392,9 @@ export const evaluateConnectionPointSnapRuntimeAccess = ({
     || movingEntityId === fixedEntityId
   ) {
     return { allowed: false, reason: "explicit-selection-required" };
+  }
+  if (requireProductFlowPair && !isProductFlowConnectionPointPair(movingPoint, fixedPoint)) {
+    return { allowed: false, reason: "no-product-flow-pair" };
   }
   return { allowed: true };
 };

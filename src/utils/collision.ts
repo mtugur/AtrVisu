@@ -1,6 +1,7 @@
 import type { CivilReferenceItem } from "../types/civil";
 import type { CollisionCheckResult, CollisionEntityRef, CollisionEnvelope, CollisionPair } from "../types/collision";
 import type { PlacedMachine } from "../types/machine";
+import { getPlacedMachineDisplayName } from "./entityNames";
 import {
   getCivilReferenceRenderCenterMm,
   getFootprintCornersFromReferenceMm,
@@ -153,11 +154,11 @@ export const buildCollisionEnvelopeFromObject = (machine: PlacedMachine): Collis
 
   return {
     objectId: machine.instanceId,
-    objectName: machine.definition.name,
+    objectName: getPlacedMachineDisplayName(machine),
     entityRef: {
       entityType: "object",
       id: machine.instanceId,
-      name: machine.definition.name,
+      name: getPlacedMachineDisplayName(machine),
       typeLabel: machine.definition.category
     },
     center,

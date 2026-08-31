@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { CSSProperties } from "react";
 import type { PanelId } from "../../platform/contracts";
 import { WorkbenchDockResizeHandle } from "./WorkbenchDockResizeHandle";
+import { WorkbenchDockCollapseButton } from "./WorkbenchDockCollapseButton";
 
 export type WorkbenchPrimaryDockItem = Readonly<{
   panelId: PanelId;
@@ -59,7 +60,7 @@ export function WorkbenchPrimaryDock({
             className={item.panelId === activeItem?.panelId ? "is-active" : undefined}
             data-testid={`primary-dock-tab-${item.panelId}`}
             aria-label={item.label}
-            aria-pressed={item.panelId === activeItem?.panelId}
+            aria-pressed={!collapsed && item.panelId === activeItem?.panelId}
             title={item.label}
             onClick={() => onActivate(item.panelId)}
           >
@@ -67,19 +68,12 @@ export function WorkbenchPrimaryDock({
             {item.badge ? <small>{item.badge}</small> : null}
           </button>
         ))}
-        <button
-          type="button"
-          className="workbench-dock-collapse"
-          data-testid="primary-dock-collapse-toggle"
-          aria-label={collapsed ? "Expand Primary Dock" : "Collapse Primary Dock"}
-          title={collapsed ? "Expand Primary Dock" : "Collapse Primary Dock"}
-          onClick={onToggleCollapsed}
-        >
-          <span
-            className={`workbench-dock-collapse-icon ${collapsed ? "is-expand" : "is-collapse"}`}
-            aria-hidden="true"
-          />
-        </button>
+        <WorkbenchDockCollapseButton
+          side="left"
+          collapsed={collapsed}
+          onToggle={onToggleCollapsed}
+          testId="primary-dock-collapse-toggle"
+        />
       </nav>
       <div className="workbench-primary-dock-content" hidden={collapsed}>
         <header>

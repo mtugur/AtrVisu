@@ -102,9 +102,15 @@ export const normalizeWorkbenchUiPreferences = (
     if (!fallback) {
       return;
     }
-    const dock = ALLOWED_DOCKS.has(candidate.dock as WorkbenchDockRegionId)
+    const requestedDock = ALLOWED_DOCKS.has(candidate.dock as WorkbenchDockRegionId)
       ? candidate.dock as WorkbenchDockRegionId
       : fallback.dock;
+    const dock = candidate.panelId === RUNTIME_PANEL_IDS.viewpoints
+      ? fallback.dock
+      : requestedDock;
+    if (candidate.panelId === RUNTIME_PANEL_IDS.viewpoints && requestedDock !== fallback.dock) {
+      warnings.push("Legacy Viewpoints dock ownership was normalized to Primary Dock.");
+    }
     const sizeBounds = getPanelSizeBounds(candidate.panelId);
     const size = sizeBounds
       && typeof candidate.size === "number"

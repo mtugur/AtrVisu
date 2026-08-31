@@ -32,7 +32,7 @@ const mount = async (element: ReactNode) => {
 
 const createProps = () => ({
   activeWorkspaceId: undefined,
-  activeWorkspaceLabel: "Current arrangement",
+  activeWorkspaceLabel: "Custom Workspace",
   workspaceOptions: [
     { id: "workspace.sales-layout" as const, label: "Sales Layout" },
     { id: "workspace.layout-engineering" as const, label: "Layout Engineering" }
@@ -147,12 +147,12 @@ describe("WorkspacePreferencesControl", () => {
     expect(props.onSelectDensity).toHaveBeenCalledWith("comfortable");
     await act(async () => root.render(createElement(WorkspacePreferencesControl, {
       ...props,
-      activeWorkspaceLabel: "Current arrangement",
+      activeWorkspaceLabel: "Custom Workspace",
       theme: "dark",
       density: "comfortable"
     })));
     expect(container.querySelector('[data-testid="workspace-preferences-workspace-trigger"]')?.textContent)
-      .toContain("Current arrangement");
+      .toContain("Custom Workspace");
     expect(container.querySelector('[data-testid="workspace-preferences-density-trigger"]')?.textContent)
       .toContain("Comfortable");
     expect(container.querySelector("#workspace-preferences-density-surface")).not.toBeNull();

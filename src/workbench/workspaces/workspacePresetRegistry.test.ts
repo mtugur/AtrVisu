@@ -57,7 +57,8 @@ describe("canonical workspace preset registry", () => {
       inspectorMode: "summary",
       densityPreference: "comfortable",
       initiallyVisiblePanelIds: [
-        "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints", "panel.inspector"
+        "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints",
+        "panel.connectionPointSnap", "panel.inspector"
       ],
       emphasizedCommandIds: [
         "project.save", "edit.duplicateSelected", "view.toggleLabels", "view.viewpoints"
@@ -76,7 +77,7 @@ describe("canonical workspace preset registry", () => {
       densityPreference: "compact",
       initiallyVisiblePanelIds: [
         "panel.machineLibrary", "panel.layoutExplorer", "panel.viewpoints", "panel.layers",
-        "panel.groups", "panel.annotations", "panel.precisionPlacement", "panel.alignmentTools",
+        "panel.groups", "panel.annotations", "panel.precisionPlacement",
         "panel.connectionPointSnap", "panel.inspector"
       ],
       emphasizedCommandIds: [

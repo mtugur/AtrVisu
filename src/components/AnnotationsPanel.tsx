@@ -2,6 +2,7 @@ import type { AnnotationObject, AnnotationType } from "../types/annotations";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import { normalizeAnnotationSizeScale } from "../utils/annotations";
+import { getPlacedMachineDisplayName } from "../utils/entityNames";
 import { createNumericFieldRule } from "../utils/numericFieldRules";
 import { NumericInput } from "./common/NumericInput";
 
@@ -227,7 +228,7 @@ export function AnnotationsPanel({
             <strong>
               {selectedAnnotation.targetObjectId
                 ? targetMachine
-                  ? `${targetMachine.definition.name} (${targetMachine.instanceId})`
+                  ? `${getPlacedMachineDisplayName(targetMachine)} (${targetMachine.instanceId})`
                   : `Missing target (${selectedAnnotation.targetObjectId})`
                 : selectedAnnotation.type === "callout"
                   ? "Free callout"

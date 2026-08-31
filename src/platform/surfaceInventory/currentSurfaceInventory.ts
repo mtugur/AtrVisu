@@ -35,17 +35,34 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "project.restorePrompt",
       "edit.undo",
       "edit.redo",
+      "edit.renameSelected",
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.viewpoints",
       "view.toggleConnectionPoints",
       "view.showMeasurements",
+      "arrange.alignLeft",
+      "arrange.alignRight",
+      "arrange.alignFront",
+      "arrange.alignBack",
+      "arrange.alignCenterX",
+      "arrange.alignCenterY",
+      "arrange.distributeHorizontal",
+      "arrange.distributeVertical",
+      "arrange.equalGapX",
+      "arrange.equalGapY",
+      "assembly.createGroup",
+      "assembly.ungroup",
+      "arrange.alignmentTools",
       "library.manager",
       "library.taxonomyManager",
       "collision.check",
       "performance.benchmark",
-      "simulation.controls"
+      "simulation.controls",
+      "help.quickStart",
+      "help.keyboardShortcuts",
+      "help.about"
     ],
     featureIds: [
       "project.save",
@@ -55,23 +72,26 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "project.commercialOutputs",
       "edit.undo",
       "edit.redo",
+      "entity.rename",
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.viewpoints",
       "connectionPoints.toggle",
       "measurements.show",
+      "arrange.quickActions",
       "library.manager",
       "library.taxonomyManager",
       "collision.check",
-      "performance.benchmark"
+      "performance.benchmark",
+      "help.productGuidance"
     ],
-    notes: "File/Edit/View/Tools commands execute through existing runtime bridges. project.importJson reuses the single persistent App-owned file acquisition provider."
+    notes: "File/Edit/View/Insert/Arrange/Tools/Help commands execute through existing runtime bridges. project.importJson reuses the single persistent App-owned file acquisition provider."
   },
   {
     surfaceId: "surface.workbenchCommandBar",
     surfaceType: "toolbar-action",
-    label: "Workbench Command Bar",
+    label: "Quick Toolbar",
     owner: "platform",
     sourceFiles: [
       "src/App.tsx",
@@ -79,26 +99,52 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"
     ],
     commandIds: [
+      "project.save",
       "edit.undo",
       "edit.redo",
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
-      "view.showMeasurements",
       "view.toggleConnectionPoints",
       "view.viewpoints"
     ],
     featureIds: [
+      "project.save",
       "edit.undo",
       "edit.redo",
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
-      "measurements.show",
       "connectionPoints.toggle",
       "view.viewpoints"
     ],
-    notes: "One-row registry-backed command projection with live enablement, pending, disabled-reason and pressed-state presentation."
+    notes: "The flat icon-only Quick Toolbar projects Save, Undo, Redo, Duplicate, Delete, Labels, Connection Points, and Viewpoints through the existing command registry with accessible names, tooltips, live enablement, disabled reasons, and pressed state. Save is also reachable from the File menu; the Application Bar retains project context and saved-state presentation without a duplicate action."
+  },
+  {
+    surfaceId: "surface.help",
+    surfaceType: "modal",
+    label: "AtrVisu Help",
+    owner: "platform",
+    sourceFiles: [
+      "src/App.tsx",
+      "src/components/HelpModal.tsx",
+      "src/components/common/useModalFocus.ts"
+    ],
+    commandIds: ["help.quickStart", "help.keyboardShortcuts", "help.about"],
+    panelIds: ["panel.help"],
+    featureIds: ["help.productGuidance", "panel.help"],
+    notes: "The registered Help commands open one accessible product help center with task guidance, workbench, arrange/snap, measurements, viewpoints, outputs, semantic keyboard shortcuts, product information, focus trapping, Escape close, and opener focus restoration."
+  },
+  {
+    surfaceId: "surface.emptyProjectWelcome",
+    surfaceType: "manager",
+    label: "Empty Project Welcome",
+    owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/EmptyProjectWelcome.tsx"],
+    commandIds: ["project.manager"],
+    panelIds: ["panel.projectManager"],
+    featureIds: ["project.manager"],
+    notes: "A presentation-only Editor Host overlay separates recovery availability from the current-session startup decision. It disappears after a working layout is accepted while routing create/open/resume/discard through existing authorities without replacing the Babylon canvas."
   },
   {
     surfaceId: "surface.machineLibrary",
@@ -116,9 +162,10 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     label: "Layout Explorer",
     owner: "platform",
     sourceFiles: ["src/App.tsx", "src/components/workbench/LayoutExplorer.tsx"],
+    commandIds: ["edit.renameSelected"],
     panelIds: ["panel.layoutExplorer"],
-    featureIds: ["panel.layoutExplorer", "selection.singleSelect", "selection.multiSelect"],
-    notes: "Projects current PlatformEntity adapters and writes through the canonical Runtime Selection Bridge."
+    featureIds: ["panel.layoutExplorer", "selection.singleSelect", "selection.multiSelect", "entity.rename"],
+    notes: "Projects current PlatformEntity adapters, writes through canonical Runtime Selection, and commits rename through the history-backed runtime command."
   },
   {
     surfaceId: "surface.sceneViewport",
@@ -272,7 +319,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/App.tsx", "src/components/ViewpointsPanel.tsx", "src/utils/viewpoints.ts"],
     commandIds: ["view.viewpoints"],
     panelIds: ["panel.viewpoints"],
-    featureIds: ["view.viewpoints", "panel.viewpoints"]
+    featureIds: ["view.viewpoints", "panel.viewpoints"],
+    notes: "Viewpoints is a first-class Primary Dock tab; Quick Toolbar and rail activation share the Runtime Panel authority."
   },
   {
     surfaceId: "surface.measurements",
@@ -470,23 +518,24 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   },
   {
     surfaceId: "surface.connectionPointSnap",
-    surfaceType: "property-editor",
+    surfaceType: "panel",
     label: "Connection Point Snap",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/ConnectionPointSnapPanel.tsx", "src/utils/connectionPointSnap.ts"],
+    sourceFiles: ["src/App.tsx", "src/components/SelectionToolsPanel.tsx", "src/components/ConnectionPointSnapPanel.tsx", "src/utils/connectionPointSnap.ts"],
     commandIds: ["snap.connectionPoint"],
     panelIds: ["panel.connectionPointSnap"],
     featureIds: ["snap.connectionPoint", "panel.connectionPointSnap"]
   },
   {
     surfaceId: "surface.alignment",
-    surfaceType: "property-editor",
-    label: "Alignment",
+    surfaceType: "toolbar-action",
+    label: "Contextual Arrange Bar",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
-    commandIds: ["alignment.alignSelection"],
+    sourceFiles: ["src/App.tsx", "src/components/workbench/ViewportArrangeBar.tsx", "src/components/AlignmentToolsPanel.tsx", "src/utils/alignment.ts"],
+    commandIds: ["alignment.alignSelection", "arrange.alignmentTools", "assembly.createGroup", "assembly.ungroup"],
     panelIds: ["panel.alignmentTools"],
-    featureIds: ["alignment.alignSelection", "panel.alignmentTools"]
+    featureIds: ["alignment.alignSelection", "arrange.quickActions", "assembly.createGroup", "assembly.ungroup", "panel.alignmentTools"],
+    notes: "Two-plus selections expose plan alignment and valid grouping, three-plus progressively disclose distribution/equal-gap, assemblies expose Ungroup, and Advanced Alignment opens the registered modal."
   },
   {
     surfaceId: "surface.layoutControls",

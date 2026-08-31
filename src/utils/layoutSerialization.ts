@@ -65,6 +65,7 @@ export const createLayoutSnapshotFromMachines = (
 
     return {
       id: machine.instanceId,
+      displayName: machine.displayName,
       libraryId: machine.libraryId,
       machineDefinitionId: machine.machineDefinitionId,
       definitionSnapshot: snapshot,
@@ -173,6 +174,7 @@ export const placedMachinesFromLayout = (layout: AtrVisuLayout): PlacedMachine[]
 
     return {
       instanceId: object.id,
+      displayName: object.displayName,
       libraryId: object.libraryId,
       machineDefinitionId: object.machineDefinitionId,
       definitionSnapshot: definition,

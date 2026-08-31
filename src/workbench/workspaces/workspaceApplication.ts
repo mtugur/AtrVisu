@@ -45,11 +45,7 @@ export const applyWorkspaceToPreferences = (
       return { ...panel, visible: true, collapsed: false };
     }
     if (panel.panelId === RUNTIME_PANEL_IDS.bottomDockShell) {
-      return {
-        ...panel,
-        visible: true,
-        collapsed: !visiblePanelIds.has(RUNTIME_PANEL_IDS.viewpoints)
-      };
+      return panel;
     }
     if (!liveContentPanelIds.has(panel.panelId)) {
       return panel;
