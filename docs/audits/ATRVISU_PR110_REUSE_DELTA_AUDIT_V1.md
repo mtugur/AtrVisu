@@ -352,3 +352,25 @@ Palletizer selection removes Connect & Snap.
 The exact-head Quality Gate publishes ten reviewer-accessible 1440x900 and
 1024x768 captures as `pf1-review-5063962183`; the pair and three-object frames
 visibly identify Sales Layout in the Application Bar.
+
+## K. PF-1 transition and source-provenance review 5064733007
+
+Review `5064733007` reported a manual runtime that still hid Connect & Snap in
+Sales Layout after Layout Engineering showed it for the same canonical pair.
+The bounded investigation reproduced the exact persisted-state path. Canonical
+UI Preferences and IndexedDB correctly reconcile the previous named Sales
+visibility record, while Runtime Panel reachability remains selection-driven.
+With the pair selected, both named workspace applications converge to
+`available: true` and `visible: true`; Custom Workspace still preserves its own
+explicit hidden override.
+
+The discrepancy was therefore guarded at the served-worktree boundary rather
+than patched with another product authority. Vite reports branch/head source
+provenance, and the E2E runner fails fast when the server omits or disagrees
+with the expected exact head. Chromium coverage now includes the seeded legacy
+record, hard reload, selected-pair Engineering -> Sales transition, fresh
+state, current-format project save/reload, and three-object suppression.
+
+The exact-head Quality Gate publishes twelve reviewer-accessible captures as
+`pf1-review-5064733007`: both named-workspace pair states and the Sales
+three-object state are explicit at 1440x900 and 1024x768.

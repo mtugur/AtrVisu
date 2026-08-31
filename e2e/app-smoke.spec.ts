@@ -4,7 +4,15 @@ import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 
 const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE === "1";
-const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5063962183");
+const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5064733007");
+
+const expectExactHeadServer = async (page: Page) => {
+  const expectedHead = process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD;
+  expect(expectedHead, "The E2E runner must provide the exact worktree head.").toBeTruthy();
+  const response = await page.request.get("/");
+  expect(response.ok()).toBe(true);
+  expect(response.headers()["x-atrvisu-source-head"]).toBe(expectedHead);
+};
 
 const collectPageErrors = (page: Page) => {
   const errors: string[] = [];
@@ -1634,13 +1642,21 @@ if (capturePf1ReviewEvidence) {
     const errors = collectPageErrors(page);
     await mkdir(pf1ReviewEvidenceDirectory, { recursive: true });
     await page.setViewportSize({ width: 1440, height: 900 });
-    await openCleanApp(page);
-    const workspace = await openPreferenceBranch(page, "workspace");
-    await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+    await seedUiPreferences(page, createE2EUiPreferences({
+      activeWorkspaceId: "workspace.sales-layout",
+      panelOverrides: {
+        "panel.connectionPointSnap": { visible: false }
+      }
+    }));
+    await page.goto("/?e2eDiagnostics=1");
+    await expect(page.getByTestId("app-root")).toBeVisible();
+    await waitForUiPreferences(page);
+    await expectExactHeadServer(page);
     await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("workspace-preferences-popover")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => window.__atrvisuUiPreferences
+      ?.getSnapshot().preferences.panels.find(
+        (panel) => panel.panelId === "panel.connectionPointSnap"
+      )?.visible)).toBe(true);
 
     const captureState = async (state: string) => {
       const viewports = [
@@ -1670,6 +1686,10 @@ if (capturePf1ReviewEvidence) {
     for (const [index, asset] of assets.entries()) {
       await addCanonicalAtaraMachine(page, asset.name, asset.groups);
       await waitForMachineDiagnostics(page, index + 1);
+      const propertiesToggle = page.getByRole("button", { name: /Selected Object Properties/i });
+      if (await propertiesToggle.getAttribute("aria-expanded") !== "true") {
+        await propertiesToggle.click();
+      }
       const properties = page.getByLabel("Selected machine properties");
       await properties.getByLabel("Plan X").fill(asset.xMm);
       await properties.getByLabel("Plan X").blur();
@@ -1693,13 +1713,29 @@ if (capturePf1ReviewEvidence) {
     await machineRows.nth(0).click();
     await machineRows.nth(1).click({ modifiers: ["Control"] });
     await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
+    let workspace = await openPreferenceBranch(page, "workspace");
+    await workspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Layout Engineering");
     await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
       .toBeEnabled();
-    await captureState("03-arrange-two");
+    await captureState("03-arrange-two-engineering");
+
+    workspace = await openPreferenceBranch(page, "workspace");
+    await workspace.surface.getByLabel("Sales Layout", { exact: true }).check();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+    await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
+      .toBeEnabled();
+    await captureState("04-arrange-two-sales");
 
     await machineRows.nth(2).click({ modifiers: ["Control"] });
     await expect(page.getByTestId("viewport-arrange-bar")).toBeVisible();
-    await captureState("04-arrange-three");
+    await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
+      .toHaveCount(0);
+    await captureState("05-arrange-three-sales");
 
     const engineeringWorkspace = await openPreferenceBranch(page, "workspace");
     await engineeringWorkspace.surface.getByLabel("Layout Engineering", { exact: true }).check();
@@ -1712,7 +1748,7 @@ if (capturePf1ReviewEvidence) {
     await expect(assembly).toContainText("3 items");
     await assembly.locator(".assembly-group-button").click();
     await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Ungroup" })).toBeVisible();
-    await captureState("05-assembly");
+    await captureState("06-assembly");
 
     expect(errors).toEqual([]);
   });
@@ -2052,6 +2088,62 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   expect(errors).toEqual([]);
 });
 
+test("persisted pre-correction Sales preferences converge through Engineering to Sales", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seedUiPreferences(page, createE2EUiPreferences({
+    activeWorkspaceId: "workspace.sales-layout",
+    panelOverrides: {
+      "panel.connectionPointSnap": { visible: false }
+    }
+  }));
+  await page.goto("/?e2eDiagnostics=1");
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page);
+  await expectExactHeadServer(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  await expect.poll(() => page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === "panel.connectionPointSnap"
+    )?.visible)).toBe(true);
+  expect(JSON.parse(await readRawUiPreferencesJson(page)).panels.find(
+    (panel: { panelId: string }) => panel.panelId === "panel.connectionPointSnap"
+  )).toMatchObject({ visible: true });
+
+  await page.reload();
+  await waitForUiPreferences(page);
+  await expectExactHeadServer(page);
+  await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
+  await expect.poll(() => page.evaluate(() => window.__atrvisuUiPreferences
+    ?.getSnapshot().preferences.panels.find(
+      (panel) => panel.panelId === "panel.connectionPointSnap"
+    )?.visible)).toBe(true);
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await waitForMachineDiagnostics(page, 2);
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[0]);
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineIds[1]);
+  await page.keyboard.up("Control");
+
+  for (const name of ["Layout Engineering", "Sales Layout"] as const) {
+    const workspace = await openPreferenceBranch(page, "workspace");
+    await workspace.surface.getByLabel(name, { exact: true }).check();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText(name);
+    await expect(page.getByTestId("viewport-arrange-bar")).toContainText("2 selected");
+    await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
+      .toBeEnabled();
+    await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap")))
+      .toMatchObject({ available: true, visible: true });
+  }
+
+  expect(errors).toEqual([]);
+});
+
 test("Sales Layout preserves canonical product-flow snap through project save and reload", async ({ page }) => {
   test.setTimeout(60_000);
   const errors = collectPageErrors(page);
@@ -2090,7 +2182,24 @@ test("Sales Layout preserves canonical product-flow snap through project save an
       .toMatchObject({ available: true, visible: true });
   };
 
+  const applyNamedWorkspaceWithSelectedPair = async (
+    name: "Sales Layout" | "Layout Engineering"
+  ) => {
+    const branch = await openPreferenceBranch(page, "workspace");
+    await branch.surface.getByLabel(name, { exact: true }).check();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("workspace-preferences-trigger")).toContainText(name);
+    await expect(page.getByTestId("viewport-arrange-bar")).toContainText("2 selected");
+    await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" }))
+      .toBeEnabled();
+    await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap")))
+      .toMatchObject({ available: true, visible: true });
+  };
+
   await selectProductFlowPair();
+  await applyNamedWorkspaceWithSelectedPair("Layout Engineering");
+  await applyNamedWorkspaceWithSelectedPair("Sales Layout");
 
   let promptCount = 0;
   page.on("dialog", async (dialog) => {
@@ -2120,6 +2229,8 @@ test("Sales Layout preserves canonical product-flow snap through project save an
   await manager.getByTestId("close-project-manager").click();
   await waitForMachineDiagnostics(page, 2);
   await selectProductFlowPair();
+  await applyNamedWorkspaceWithSelectedPair("Layout Engineering");
+  await applyNamedWorkspaceWithSelectedPair("Sales Layout");
 
   await addCanonicalAtaraMachine(page, "Robot Palletizer", ["Palletizing", "Robot Palletizers"]);
   await waitForMachineDiagnostics(page, 3);

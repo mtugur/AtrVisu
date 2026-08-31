@@ -300,14 +300,23 @@ compatible snap, Command Palette, Viewpoints, Help, 1024, and 640 layouts under
   current-format project save/reload, and adding Robot Palletizer as the third
   selection removes the action. The exact-head gate publishes the 1440x900 and
   1024x768 Sales-labeled evidence in `pf1-review-5063962183`.
+- Review `5064733007` transition/provenance correction: PASS locally. A seeded
+  pre-correction named Sales record converges and persists through hard reload;
+  with the canonical Flow Pack Machine -> Belt Conveyor pair already selected,
+  Layout Engineering and Sales Layout both expose the same enabled action while
+  preserving the pair. Fresh and project save/reload paths exercise the same
+  transition, and a third Robot Palletizer suppresses it. Vite now reports its
+  exact Git source and the E2E runner rejects missing or stale source-head
+  provenance. The exact-head gate publishes twelve 1440x900/1024x768 captures
+  in `pf1-review-5064733007`.
 - `npm audit --audit-level=low`: PASS, 0 vulnerabilities.
 - `npm ls --all`: PASS; platform-specific and toolchain optional dependencies
   remain reported as optional.
 - Design-token governance: PASS, 255 maintained files.
 - Production build: PASS, 4,125 modules transformed.
-- Full unit suite: PASS, 151 files / 1,272 tests.
-- Full local Chromium suite: PASS, 75 tests. The PR #110 exact-head gate also
-  runs the bounded evidence capture scenario, for 76 Chromium tests in that
+- Full unit suite: PASS, 151 files / 1,274 tests.
+- Full local Chromium suite: PASS, 76 tests. The PR #110 exact-head gate also
+  runs the bounded evidence capture scenario, for 77 Chromium tests in that
   workflow.
 - `git diff --check`: PASS.
 - Exact-head GitHub Quality Gate: required before manual re-acceptance.

@@ -99,6 +99,13 @@ still hides this contribution; the reconciled record is persisted through the
 existing UI Preference store. A Custom Workspace record has no named preset
 identity and retains its explicit visibility override unchanged.
 
+Manual and automated acceptance must identify the worktree actually served by
+Vite. The development server reports the current Git branch and exact head at
+startup and returns them as source-provenance response headers. The E2E runner
+refuses a server that omits or disagrees with the expected exact head, including
+an explicitly reused external server. This tooling guard does not introduce a
+runtime product authority or alter workspace, panel, selection, or snap state.
+
 Viewpoints is owned by Primary Dock and uses the same Runtime Panel, Viewpoints,
 and UI Preference authorities as before. The command and Primary rail both
 toggle that binding: first activation opens/activates Viewpoints and repeated
