@@ -1168,6 +1168,7 @@ body.is-resizing-workbench-dock {
   display: flex;
   min-width: 0;
   align-items: stretch;
+  justify-content: space-between;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-inline: contain;
@@ -1185,8 +1186,8 @@ body.is-resizing-workbench-dock {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 0 3px;
+  gap: 1px;
+  padding: 0 2px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -1194,8 +1195,9 @@ body.is-resizing-workbench-dock {
   background: transparent;
   cursor: pointer;
   font-family: var(--av-font-family-sans);
-  font-size: var(--av-font-size-xs);
-  font-weight: var(--av-font-weight-medium);
+  font-size: 0.68rem;
+  font-weight: var(--av-font-weight-normal);
+  letter-spacing: 0;
   line-height: 1;
   text-align: center;
   white-space: nowrap;
