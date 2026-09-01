@@ -89,6 +89,42 @@ const openPrimaryDockPanel = async (
   return page.locator(`[data-panel-id="${panelId}"]`);
 };
 
+const expectDefaultPrimaryDockTabsFit = async (page: Page) => {
+  const geometry = await page.evaluate(() => {
+    const dock = document.querySelector<HTMLElement>('[data-testid="primary-dock"]');
+    const tabs = document.querySelector<HTMLElement>(".workbench-primary-dock-tabs");
+    const viewpoints = document.querySelector<HTMLElement>('[data-testid="primary-dock-tab-panel.viewpoints"]');
+    const collapse = document.querySelector<HTMLElement>('[data-testid="primary-dock-collapse-toggle"]');
+    if (!dock || !tabs || !viewpoints || !collapse) {
+      return null;
+    }
+    const dockBounds = dock.getBoundingClientRect();
+    const tabsBounds = tabs.getBoundingClientRect();
+    const viewpointsBounds = viewpoints.getBoundingClientRect();
+    const collapseBounds = collapse.getBoundingClientRect();
+    return {
+      dockWidth: dockBounds.width,
+      tabsLeft: tabsBounds.left,
+      tabsRight: tabsBounds.right,
+      tabsClientWidth: tabs.clientWidth,
+      tabsScrollWidth: tabs.scrollWidth,
+      viewpointsLeft: viewpointsBounds.left,
+      viewpointsRight: viewpointsBounds.right,
+      collapseLeft: collapseBounds.left
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry?.dockWidth).toBe(292);
+  expect(geometry?.viewpointsLeft ?? -1).toBeGreaterThanOrEqual((geometry?.tabsLeft ?? 0) - 0.5);
+  expect(geometry?.viewpointsRight ?? Number.POSITIVE_INFINITY)
+    .toBeLessThanOrEqual((geometry?.tabsRight ?? 0) + 0.5);
+  expect(geometry?.viewpointsRight ?? Number.POSITIVE_INFINITY)
+    .toBeLessThanOrEqual((geometry?.collapseLeft ?? 0) + 0.5);
+  expect(geometry?.tabsScrollWidth ?? Number.POSITIVE_INFINITY)
+    .toBeLessThanOrEqual((geometry?.tabsClientWidth ?? 0) + 1);
+};
+
 const seedUiPreferences = async (page: Page, preferences: unknown) => {
   await page.addInitScript((seed) => new Promise<void>((resolve, reject) => {
     if (window.sessionStorage.getItem("atrvisu.e2e.uiPreferencesSeeded") === "true") {
@@ -5720,6 +5756,7 @@ test("PF-2A asset discovery preserves domain state and persists Favorites while 
   await expect(page.locator(".workbench-activity-rail")).toHaveCount(0);
   await expect(page.locator(".workbench-primary-dock-tabs button span"))
     .toHaveText(["Library", "Explorer", "Layers", "Groups", "Viewpoints"]);
+  await expectDefaultPrimaryDockTabsFit(page);
   await capturePf2aScreenshot(page, "01-library-1440.png");
 
   const beforePreferenceOperations = await getRuntimeViewportSnapshot(page);
@@ -5805,6 +5842,7 @@ test("PF-2A asset browser remains reachable without horizontal overflow at respo
   await search.fill("flow");
   await expect(library.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
   await expect(library.getByRole("button", { name: "Add Flow Pack Machine to favorites" })).toBeVisible();
+  await expectDefaultPrimaryDockTabsFit(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator(".workbench-activity-rail")).toHaveCount(0);
   await capturePf2aScreenshot(page, "06-library-1024.png");
@@ -5822,6 +5860,7 @@ test("PF-2A asset browser remains reachable without horizontal overflow at respo
   await expect(search).toBeVisible();
   await expect(library.getByRole("button", { name: "Favorites", exact: true })).toBeVisible();
   await expect(library.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
+  await expectDefaultPrimaryDockTabsFit(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await capturePf2aScreenshot(page, "10-library-640.png");
   expect(errors).toEqual([]);

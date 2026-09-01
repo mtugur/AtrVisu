@@ -1158,8 +1158,8 @@ body.is-resizing-workbench-dock {
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  gap: var(--av-spacing-2xs);
-  padding: 0 var(--av-spacing-2xs);
+  gap: 0;
+  padding: 0;
   border-bottom: 1px solid var(--av-border-subtle);
   background: var(--av-surface-raised);
 }
@@ -1185,8 +1185,8 @@ body.is-resizing-workbench-dock {
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 0 4px;
+  gap: 2px;
+  padding: 0 3px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;

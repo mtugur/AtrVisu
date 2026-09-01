@@ -48,6 +48,9 @@ Groups, and Viewpoints contributions as one compact horizontal tab strip. It
 does not repeat the active tab as a second title. Collapsing reserves zero
 layout width and exposes one floating `Open <active tab>` control; reopening
 uses the existing active panel authority and restores the persisted dock width.
+At the canonical 292 px default width, all five full tab labels remain visible
+without scrolling or overlap; narrower user-resized widths retain horizontal
+scrolling as a fallback.
 
 ## Persistence
 
