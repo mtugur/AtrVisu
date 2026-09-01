@@ -72,14 +72,14 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
             {section === "quick-start" ? (
               <article><h3>Quick Start</h3><div className="help-task-grid">
                 <HelpTaskCard title="1. Start or open a layout">Create a new layout, open an existing project, or resume unsaved work.</HelpTaskCard>
-                <HelpTaskCard title="2. Add equipment">Choose equipment from Library and place it in the viewport.</HelpTaskCard>
+                <HelpTaskCard title="2. Add equipment">Search or browse Library, narrow the results with filters, then use Add to place equipment in the viewport.</HelpTaskCard>
                 <HelpTaskCard title="3. Arrange and inspect">Select, move, align, rename, and review equipment properties.</HelpTaskCard>
                 <HelpTaskCard title="4. Present and export">Capture viewpoints and create customer-ready workbook, plan, and image outputs.</HelpTaskCard>
               </div></article>
             ) : null}
             {section === "workbench" ? (
               <article><h3>Workbench</h3><dl className="help-feature-list">
-                <div><dt>Library</dt><dd>Browse and place available equipment.</dd></div>
+                <div><dt>Library</dt><dd>Search assets, browse categories and families, and narrow results by source, category, or family. Use Favorites for equipment you want to keep handy, Recent for equipment you have added, and Add to place the selected asset.</dd></div>
                 <div><dt>Explorer</dt><dd>Review layout items and control the current selection.</dd></div>
                 <div><dt>Viewport</dt><dd>Navigate and edit the 3D layout.</dd></div>
                 <div><dt>Inspector</dt><dd>Edit properties for the current object or selection.</dd></div>

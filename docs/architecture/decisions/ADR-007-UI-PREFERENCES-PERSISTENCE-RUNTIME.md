@@ -74,6 +74,26 @@ attempt from clearing or replacing a newer connection.
 - P1-D2 owns workspace presets, workspace application, and visible theme,
   density, workspace, panel visibility, ordering, and docking controls.
 
+## PF-2A Asset-Browser Preference Extension
+
+PF-2A advances the shared AtrVisu database additively from version 2 to version
+3 and creates the `assetBrowserPreferences` object store with the fixed key
+`browser`. The versioned record contains only stable `libraryId::item.id`
+favorite and recent keys. Existing `projects` and `uiPreferences` stores,
+records, indexes, and schemas are not rewritten.
+
+Asset-browser preferences have a separate framework-independent runtime because
+they are neither workbench presentation settings nor project data. It owns
+hydration, immutable in-memory updates, a twelve-entry unique most-recent list,
+and one serialized persistence queue. Updates accepted during hydration are
+replayed over the hydrated value before the canonical record is saved. Storage
+failure keeps the current session usable with a non-blocking degraded status.
+Missing asset keys remain harmless preferences and become visible again only if
+their source library returns.
+
+This extension does not alter project/layout serialization, `MachineDefinition`,
+the UI preference contract, Library loading, or placed-machine creation.
+
 ## Rejected Alternatives
 
 - Storing preferences in project or revision records.
@@ -81,3 +101,5 @@ attempt from clearing or replacing a newer connection.
 - Keeping App and individual sections as parallel persistence authorities.
 - Downgrading future records or automatically replacing corrupt records.
 - Introducing visible preference controls or workspace switching in P1-D1.
+- Storing Favorites or Recent Assets in projects, layout JSON, `localStorage`,
+  or the workbench UI preference record.

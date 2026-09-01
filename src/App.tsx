@@ -4767,15 +4767,14 @@ export function App() {
               label: "Library",
               content: (
                 <MachineLibrary
-                  onAddMachine={(selection) =>
-                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addMachine, selection)}
+                  onAddMachine={async (selection) =>
+                    (await executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.addMachine,
+                      selection
+                    )).status === "executed"}
                   isLibraryManagerOpen={isLibraryManagerOpen}
                   isTaxonomyManagerOpen={isTaxonomyManagerOpen}
-                  onOpenLibraryManager={() =>
-                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.libraryManager)}
                   onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
-                  onOpenTaxonomyManager={() =>
-                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager)}
                   onCloseTaxonomyManager={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.taxonomyManager)}
                   onLibraryManagerRuntimeControllerChange={setLibraryManagerRuntimeController}
                 />
@@ -4959,15 +4958,14 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.machineLibrary)}
           >
             <MachineLibrary
-              onAddMachine={(selection) =>
-                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addMachine, selection)}
+              onAddMachine={async (selection) =>
+                (await executeRuntimeFeatureCommand(
+                  RUNTIME_FEATURE_COMMAND_IDS.addMachine,
+                  selection
+                )).status === "executed"}
               isLibraryManagerOpen={isLibraryManagerOpen}
               isTaxonomyManagerOpen={isTaxonomyManagerOpen}
-              onOpenLibraryManager={() =>
-                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.libraryManager)}
               onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
-              onOpenTaxonomyManager={() =>
-                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager)}
               onCloseTaxonomyManager={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.taxonomyManager)}
               onLibraryManagerRuntimeControllerChange={setLibraryManagerRuntimeController}
             />

@@ -5,6 +5,19 @@ import { strFromU8, unzipSync } from "fflate";
 
 const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE === "1";
 const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5064733007");
+const capturePf2aEvidence = process.env.ATRVISU_CAPTURE_PF2A_EVIDENCE === "1";
+const pf2aEvidenceDirectory = join(process.cwd(), "test-results", "pf2a-asset-browser-discovery");
+
+const capturePf2aScreenshot = async (page: Page, fileName: string) => {
+  if (!capturePf2aEvidence) {
+    return;
+  }
+  await mkdir(pf2aEvidenceDirectory, { recursive: true });
+  await page.screenshot({
+    path: join(pf2aEvidenceDirectory, fileName),
+    fullPage: false
+  });
+};
 
 const expectExactHeadServer = async (page: Page) => {
   const expectedHead = process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD;
@@ -74,7 +87,7 @@ const seedUiPreferences = async (page: Page, preferences: unknown) => {
     const deleteRequest = indexedDB.deleteDatabase("atrvisu-db");
     deleteRequest.onerror = () => reject(deleteRequest.error);
     deleteRequest.onsuccess = () => {
-      const openRequest = indexedDB.open("atrvisu-db", 2);
+      const openRequest = indexedDB.open("atrvisu-db", 3);
       openRequest.onupgradeneeded = () => {
         const database = openRequest.result;
         if (!database.objectStoreNames.contains("projects")) {
@@ -85,6 +98,9 @@ const seedUiPreferences = async (page: Page, preferences: unknown) => {
         }
         if (!database.objectStoreNames.contains("uiPreferences")) {
           database.createObjectStore("uiPreferences");
+        }
+        if (!database.objectStoreNames.contains("assetBrowserPreferences")) {
+          database.createObjectStore("assetBrowserPreferences");
         }
       };
       openRequest.onerror = () => reject(openRequest.error);
@@ -111,7 +127,7 @@ const waitForUiPreferences = async (page: Page, status = "ready") => {
 
 const readRawUiPreferencesJson = async (page: Page) => page.evaluate(() =>
   new Promise<string>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 2);
+    const request = indexedDB.open("atrvisu-db", 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -1016,13 +1032,17 @@ test("runtime feature access complete gate is bound to observed visible command 
   await expect(page.getByTestId("civil-reference-properties")).toBeVisible();
 
   await openPrimaryDockPanel(page, "panel.machineLibrary");
-  await observe("library.manager", () => page.getByTestId("open-library-manager").click());
+  let toolsMenu = await openWorkbenchMenu(page, "Tools");
+  await observe("library.manager", () =>
+    toolsMenu.locator('[data-command-id="library.manager"]').click()
+  );
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await page.getByTestId("close-library-manager-header").click();
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
 
+  toolsMenu = await openWorkbenchMenu(page, "Tools");
   await observe("library.taxonomyManager", () =>
-    page.getByTestId("open-taxonomy-manager").click()
+    toolsMenu.locator('[data-command-id="library.taxonomyManager"]').click()
   );
   await expect(page.getByTestId("taxonomy-manager-modal")).toBeVisible();
   await page.getByTestId("close-taxonomy-manager-header").click();
@@ -1048,7 +1068,7 @@ test("runtime feature access complete gate is bound to observed visible command 
   await page.getByTestId("close-commercial-outputs").click();
   await expect(page.getByTestId("commercial-outputs-modal")).toHaveCount(0);
 
-  const toolsMenu = await openWorkbenchMenu(page, "Tools");
+  toolsMenu = await openWorkbenchMenu(page, "Tools");
   await observe("performance.benchmark", () =>
     toolsMenu.locator('[data-command-id="performance.benchmark"]').click()
   );
@@ -3639,11 +3659,12 @@ test("dirty Library Manager guards library navigation and discards only after ac
   expect(errors).toEqual([]);
 });
 
-test("dirty Library Manager reports cancelled Taxonomy command until discard is accepted", async ({ page }) => {
+test("dirty Library Manager guards Taxonomy panel navigation until discard is accepted", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
-  await page.getByTestId("open-library-manager").click();
+  const toolsMenu = await openWorkbenchMenu(page, "Tools");
+  await toolsMenu.locator('[data-command-id="library.manager"]').click();
   await expect(page.getByTestId("library-manager-ready")).toBeVisible();
   await selectExistingCustomLibraryItem(page);
   const nameInput = page
@@ -3651,23 +3672,15 @@ test("dirty Library Manager reports cancelled Taxonomy command until discard is 
     .getByRole("textbox", { name: "Name", exact: true });
   await nameInput.fill(`${await nameInput.inputValue()} - pending taxonomy navigation`);
 
-  const taxonomyControl = page.getByTestId("open-taxonomy-manager");
-  const beforeCancelled = await getRuntimeCommandExecution(page, "library.taxonomyManager");
   page.once("dialog", (dialog) => dialog.dismiss());
-  await taxonomyControl.evaluate((element) => (element as HTMLButtonElement).click());
-  await expect.poll(async () =>
-    (await getRuntimeCommandExecution(page, "library.taxonomyManager")).attemptCount
-  ).toBe(beforeCancelled.attemptCount + 1);
-  const cancelled = await getRuntimeCommandExecution(page, "library.taxonomyManager");
-  expect(cancelled.executedCount).toBe(beforeCancelled.executedCount);
-  expect(cancelled.lastResult).toMatchObject({ handled: false, status: "cancelled" });
+  expect(await invokeRuntimePanel(page, "open", "panel.taxonomyManager"))
+    .toMatchObject({ handled: false, status: "cancelled" });
   await expect(page.getByTestId("library-manager-modal")).toBeVisible();
   await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
 
   page.once("dialog", (dialog) => dialog.accept());
-  await expectOneRuntimeCommandExecution(page, "library.taxonomyManager", () =>
-    taxonomyControl.evaluate((element) => (element as HTMLButtonElement).click())
-  );
+  expect(await invokeRuntimePanel(page, "open", "panel.taxonomyManager"))
+    .toMatchObject({ handled: true });
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("taxonomy-manager-modal")).toBeVisible();
   await page.getByTestId("close-taxonomy-manager-header").click();
@@ -4748,7 +4761,13 @@ test("Library Manager opens and closes with stable header control", async ({ pag
   await openCleanApp(page);
 
   await expectNoModalBackdrop(page);
-  const openLibraryManager = page.getByTestId("open-library-manager");
+  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
+  const palette = page.getByTestId("command-palette");
+  await palette.locator("input").fill("Library Manager");
+  await expect(palette.getByRole("option", { name: /Library Manager/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const toolsMenu = await openWorkbenchMenu(page, "Tools");
+  const openLibraryManager = toolsMenu.locator('[data-command-id="library.manager"]');
   await expect(openLibraryManager).toBeVisible();
   await expect(openLibraryManager).toBeEnabled();
   await expectOneRuntimeCommandExecution(page, "library.manager", () =>
@@ -4780,7 +4799,13 @@ test("Taxonomy Manager opens and closes with stable header control", async ({ pa
   await openCleanApp(page);
 
   await expectNoModalBackdrop(page);
-  const openTaxonomyManager = page.getByTestId("open-taxonomy-manager");
+  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
+  const palette = page.getByTestId("command-palette");
+  await palette.locator("input").fill("Taxonomy Manager");
+  await expect(palette.getByRole("option", { name: /Taxonomy Manager/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  const toolsMenu = await openWorkbenchMenu(page, "Tools");
+  const openTaxonomyManager = toolsMenu.locator('[data-command-id="library.taxonomyManager"]');
   await expect(openTaxonomyManager).toBeVisible();
   await expect(openTaxonomyManager).toBeEnabled();
   await expectOneRuntimeCommandExecution(page, "library.taxonomyManager", () =>
@@ -4839,7 +4864,7 @@ test("legacy panel preferences migrate once to IndexedDB and preserve unrelated 
       .find((panel) => panel.panelId === "panel.layers")?.collapsed
   )).toBe(false);
   const persisted = await page.evaluate(() => new Promise<{ width?: number }>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 2);
+    const request = indexedDB.open("atrvisu-db", 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -4941,7 +4966,7 @@ test("visible panel updates survive a deliberately pending preference hydration"
   expect(finalSnapshot?.preferences.panels.find((panel) => panel.panelId === "panel.layers"))
     .toMatchObject({ collapsed: false });
   const persisted = await page.evaluate(() => new Promise<unknown>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 2);
+    const request = indexedDB.open("atrvisu-db", 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -5641,6 +5666,113 @@ test("1024 responsive presentation preserves viewport dominance and the persiste
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("PF-2A asset discovery preserves domain state and persists Favorites while Add populates Recent", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const library = page.getByTestId("machine-library-panel");
+  await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
+  await expect(library.getByLabel("Search assets")).toBeVisible();
+  await capturePf2aScreenshot(page, "01-library-1440.png");
+
+  const beforePreferenceOperations = await getRuntimeViewportSnapshot(page);
+  const search = library.getByLabel("Search assets");
+  await search.fill("Flow Pack Machine");
+  const flowCard = library.locator('[data-asset-key="atara-standard::packaging-flowpack-01"]');
+  await expect(flowCard).toBeVisible();
+  await expect(library.locator(".asset-card")).toHaveCount(1);
+  await capturePf2aScreenshot(page, "02-search-results.png");
+
+  const favoriteFlow = flowCard.getByRole("button", { name: "Add Flow Pack Machine to favorites" });
+  await favoriteFlow.click();
+  await expect(flowCard.locator(".asset-favorite-button")).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => page.evaluate(() => new Promise<readonly string[]>((resolve, reject) => {
+    const request = indexedDB.open("atrvisu-db", 3);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const getRequest = database.transaction("assetBrowserPreferences")
+        .objectStore("assetBrowserPreferences")
+        .get("browser");
+      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onsuccess = () => {
+        resolve(getRequest.result?.favoriteAssetKeys ?? []);
+        database.close();
+      };
+    };
+  }))).toContain("atara-standard::packaging-flowpack-01");
+
+  await library.getByRole("button", { name: "Favorites", exact: true }).click();
+  await expect(flowCard).toBeVisible();
+  await expect(library.locator(".asset-card")).toHaveCount(1);
+  await capturePf2aScreenshot(page, "03-favorites.png");
+
+  const afterPreferenceOperations = await getRuntimeViewportSnapshot(page);
+  expect(afterPreferenceOperations.invariants).toEqual(beforePreferenceOperations.invariants);
+  expect(afterPreferenceOperations.camera).toEqual(beforePreferenceOperations.camera);
+  expect(afterPreferenceOperations.viewport?.sceneLifecycleGeneration)
+    .toBe(beforePreferenceOperations.viewport?.sceneLifecycleGeneration);
+
+  await page.reload();
+  await expectExactHeadServer(page);
+  await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
+  await library.getByRole("button", { name: "Favorites", exact: true }).click();
+  const restoredFlowCard = library.locator('[data-asset-key="atara-standard::packaging-flowpack-01"]');
+  await expect(restoredFlowCard).toBeVisible();
+  await restoredFlowCard.getByRole("button", { name: "Remove Flow Pack Machine from favorites" }).click();
+  await expect(library.getByText("No favorites yet.", { exact: true })).toBeVisible();
+
+  await library.getByRole("button", { name: "All", exact: true }).click();
+  await search.fill("conveyor");
+  const conveyorCard = library.locator('[data-asset-key="atara-standard::conveyor-belt-01"]');
+  await expect(conveyorCard).toBeVisible();
+  await expect(library.locator(".asset-card")).toHaveCount(1);
+  await conveyorCard.getByRole("button", { name: "Add Belt Conveyor to layout" }).click();
+  await waitForMachineDiagnostics(page, 1);
+  await library.getByRole("button", { name: "Recent", exact: true }).click();
+  await expect(conveyorCard).toBeVisible();
+  await expect(library.locator(".asset-card")).toHaveCount(1);
+  await capturePf2aScreenshot(page, "04-recent-after-add.png");
+
+  await library.getByRole("button", { name: "All", exact: true }).click();
+  await search.fill("");
+  await library.getByRole("button", { name: "Filters", exact: false }).click();
+  await library.getByLabel("Asset source").selectOption({ label: "Atara Standard" });
+  await library.getByLabel("Asset category").selectOption({ label: "Conveying" });
+  await library.getByLabel("Asset family").selectOption({ label: "Belt Conveyors" });
+  await expect(conveyorCard).toBeVisible();
+  await expect(library.locator(".asset-card")).toHaveCount(1);
+  await capturePf2aScreenshot(page, "05-filters-active.png");
+  await library.getByRole("button", { name: "Clear filters", exact: true }).click();
+  await expect(library.getByTestId("asset-browser-hierarchy")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("PF-2A asset browser remains reachable without horizontal overflow at responsive widths", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openCleanApp(page);
+  const library = page.getByTestId("machine-library-panel");
+  await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
+  const search = library.getByLabel("Search assets");
+  await search.fill("flow");
+  await expect(library.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
+  await expect(library.getByRole("button", { name: "Add Flow Pack Machine to favorites" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await capturePf2aScreenshot(page, "06-library-1024.png");
+
+  await page.setViewportSize({ width: 640, height: 800 });
+  await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+  await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
+  await expect(library).toBeVisible();
+  await expect(search).toBeVisible();
+  await expect(library.getByRole("button", { name: "Favorites", exact: true })).toBeVisible();
+  await expect(library.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await capturePf2aScreenshot(page, "07-library-640.png");
   expect(errors).toEqual([]);
 });
 

@@ -42,6 +42,7 @@ jobs:
         run: npm run test:e2e
         env:
           ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 110 && '1' || '0' }}
+          ATRVISU_CAPTURE_PF2A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-asset-browser-discovery-v01' && '1' || '0' }}
 
       - name: Upload PF-1 review evidence
         if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.number == 110 }}
@@ -49,5 +50,14 @@ jobs:
         with:
           name: pf1-review-5064733007
           path: test-results/pf1-review-5064733007
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload PF-2A asset-browser evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-asset-browser-discovery-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pf2a-asset-browser-discovery
+          path: test-results/pf2a-asset-browser-discovery
           if-no-files-found: error
           retention-days: 30
