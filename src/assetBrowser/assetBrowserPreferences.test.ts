@@ -95,4 +95,29 @@ describe("asset browser preferences", () => {
     });
     expect(runtime.getSnapshot().preferences.favoriteAssetKeys).toEqual(["library::asset"]);
   });
+
+  it("preserves pending favorites when hydration fails after accepting mutations", async () => {
+    const read = deferred<unknown>();
+    const runtime = createAssetBrowserPreferencesRuntime({
+      read: () => read.promise,
+      write: vi.fn(async () => undefined)
+    });
+
+    const hydration = runtime.hydrate();
+    const firstFavoritePersisted = runtime.toggleFavorite("library::first");
+    const secondFavoritePersisted = runtime.toggleFavorite("library::second");
+    read.reject(new Error("read unavailable"));
+
+    await hydration;
+    await expect(firstFavoritePersisted).resolves.toBe(false);
+    await expect(secondFavoritePersisted).resolves.toBe(false);
+    expect(runtime.getSnapshot()).toMatchObject({
+      status: "degraded",
+      warning: "Favorites and recent assets will remain available for this session."
+    });
+    expect(runtime.getSnapshot().preferences.favoriteAssetKeys).toEqual([
+      "library::first",
+      "library::second"
+    ]);
+  });
 });

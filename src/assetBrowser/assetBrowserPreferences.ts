@@ -211,15 +211,11 @@ export const createAssetBrowserPreferencesRuntime = (
         }
         return snapshot;
       }).catch(() => {
-        let preferences = snapshot.preferences;
         const pending = pendingHydrationMutations;
-        pending.forEach(({ mutation }) => {
-          preferences = mutation(preferences);
-        });
         pendingHydrationMutations = [];
         hydrationActive = false;
         const result = commit(
-          preferences,
+          snapshot.preferences,
           "degraded",
           "Favorites and recent assets will remain available for this session."
         );

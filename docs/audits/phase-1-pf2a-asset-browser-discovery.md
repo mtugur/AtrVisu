@@ -48,9 +48,11 @@ projections are removed.
 AtrVisu IndexedDB version 3 adds only `assetBrowserPreferences` / `browser`.
 The version-1 preference schema stores favorite and most-recent-first asset
 keys; recents are unique and capped at 12. Hydration races replay accepted
-mutations and all writes share one serialization queue. Failure retains an
-in-memory session without a red-console path. Real version-2 migration tests
-prove project and workbench preference bytes survive unchanged.
+mutations only when stored state was read successfully. Failed reads preserve
+mutations already accepted into the current in-memory snapshot without replay,
+and all writes share one serialization queue. Failure retains an in-memory
+session without a red-console path. Real version-2 migration tests prove
+project and workbench preference bytes survive unchanged.
 
 ## Release And Runtime Evidence
 
@@ -71,6 +73,6 @@ Focused regressions passed for 7 files / 24 tests and the bounded PF-2A plus
 manager Chromium routes. The complete local gate passed with zero audit
 vulnerabilities, a valid dependency tree with expected platform-optional
 packages absent, design-token governance across 260 maintained files, a
-4,130-module build, 154 unit files / 1,289 tests, and 78 Chromium tests. The
+4,130-module build, 154 unit files / 1,290 tests, and 78 Chromium tests. The
 final diff check passed. Exact-head GitHub Quality Gate remains the delivery
 authority.
