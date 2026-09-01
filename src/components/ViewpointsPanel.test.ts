@@ -200,10 +200,10 @@ describe("ViewpointsPanel", () => {
       right: 320
     } as DOMRect);
     const target = container.querySelector<HTMLButtonElement>('[data-testid="viewpoint-item-viewpoint-10"]')!;
-    vi.spyOn(target, "getBoundingClientRect").mockReturnValue({
-      left: 480,
-      right: 636
-    } as DOMRect);
+    vi.spyOn(target, "getBoundingClientRect").mockImplementation(() => ({
+      left: 480 - strip.scrollLeft,
+      right: 636 - strip.scrollLeft
+    } as DOMRect));
 
     await rerender(viewpoints, "viewpoint-10");
     expect(strip.scrollLeft).toBe(316);
