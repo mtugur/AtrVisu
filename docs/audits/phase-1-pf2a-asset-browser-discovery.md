@@ -43,6 +43,12 @@ Library Manager and Taxonomy Manager remain registered modal authorities and
 are reachable from Tools and Command Palette. Their permanent Library footer
 projections are removed.
 
+The shared Primary Dock presents its canonical Library, Explorer, Layers,
+Groups, and Viewpoints contributions as one compact horizontal tab strip. It
+does not repeat the active tab as a second title. Collapsing reserves zero
+layout width and exposes one floating `Open <active tab>` control; reopening
+uses the existing active panel authority and restores the persisted dock width.
+
 ## Persistence
 
 AtrVisu IndexedDB version 3 adds only `assetBrowserPreferences` / `browser`.
@@ -62,7 +68,7 @@ project and workbench preference bytes survive unchanged.
 - Chromium covers Search/Add/Recent, hard-reload Favorites, unfavorite empty
   state, combined filters, manager command reachability, non-domain invariance,
   and 1440x900 / 1024x768 / 640x800 overflow resilience.
-- Conditional exact-head CI capture produces seven real-runtime screenshots in
+- Conditional exact-head CI capture produces ten real-runtime screenshots in
   artifact `pf2a-asset-browser-discovery`.
 - Help explains search, category/family browsing, filters, Favorites, Recent,
   and explicit Add using current customer-facing behavior only.

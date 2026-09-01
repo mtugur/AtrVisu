@@ -25,11 +25,13 @@ Rename remains unavailable until a history-backed rename command exists.
 
 The expanded Primary Dock is user-resizable from its right edge on desktop and
 medium layouts. Its bounded width and collapse state remain fields of the
-existing UI Preferences `PanelPreference`; collapse preserves the activity
-rail and expansion restores the persisted width. Layout Explorer consumes the
-available width without horizontal scrolling and retains full identity/type/
-context text through its row tooltip. Narrow layout disables the desktop drag
-handle and keeps the existing one-context composition.
+existing UI Preferences `PanelPreference`; collapse reserves zero layout width
+and exposes one floating edge reopen control for the current active tab, while
+expansion restores the persisted width and active contribution. Open navigation
+uses a compact horizontal tab strip without a permanent activity rail. Layout
+Explorer consumes the available width without horizontal scrolling and retains
+full identity/type/context text through its row tooltip. Narrow layout disables
+the desktop drag handle and keeps the existing one-context composition.
 
 The Secondary Dock is the contextual Inspector. It renders an empty state,
 single-entity properties, P1-E Smart Asset Properties, assembly context, or

@@ -22,7 +22,9 @@
 | Release hygiene | PASS | Actual release index/library validation and identity/duplicate regressions |
 | Help | PASS | Search, browse, filters, Favorites, Recent, and Add guidance; no internal terminology |
 | Responsive | PASS | Chromium at 1440x900, 1024x768, and 640x800; no document horizontal overflow |
-| Runtime evidence | PASS | Conditional seven-capture artifact `pf2a-asset-browser-discovery` |
+| Primary Dock density | PASS | Canonical horizontal Library / Explorer / Layers / Groups / Viewpoints tabs; no permanent vertical rail or duplicate active title |
+| Primary Dock collapse | PASS | Zero editor inset and zero reserved dock width; floating `Open <active tab>` affordance restores the existing active contribution and persisted width |
+| Runtime evidence | PASS | Conditional ten-capture artifact `pf2a-asset-browser-discovery` |
 | Dependency audit | PASS | `npm audit --audit-level=low`: 0 vulnerabilities |
 | Dependency tree | PASS | `npm ls --all`: valid; expected platform-optional packages absent |
 | Design-token governance | PASS | 260 maintained files checked |

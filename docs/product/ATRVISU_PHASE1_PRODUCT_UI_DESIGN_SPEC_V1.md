@@ -427,7 +427,7 @@ Panel binding, and UI Preference record.
 
 Behavior:
 
-- first command or rail activation opens Primary Dock with Viewpoints active;
+- first command or Primary Dock tab activation opens Primary Dock with Viewpoints active;
 - repeated activation while Viewpoints is active collapses Primary Dock;
 - selecting another Primary tab preserves that tab's existing authority;
 - legacy persisted `bottom-dock` ownership is normalized to `primary-dock`;

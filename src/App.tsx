@@ -280,7 +280,6 @@ import {
 import {
   DEFAULT_PRIMARY_DOCK_WIDTH,
   DOCK_RESIZE_BREAKPOINT,
-  PRIMARY_DOCK_RAIL_WIDTH,
   clampDockSize,
   getPrimaryDockWidthBounds
 } from "./workbench/dockSizing";
@@ -4689,7 +4688,7 @@ export function App() {
   const primarySelectionEntity = runtimeSelection.primaryId
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
-  const primaryDockInset = isPrimaryDockPresentationCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
+  const primaryDockInset = isPrimaryDockPresentationCollapsed ? 0 : effectivePrimaryDockWidth;
   const bottomDockInset = STATUS_BAR_HEIGHT;
   const layerNames = new Map(layers.map((layer) => [layer.id, layer.name]));
   const showLegacyCompatibilityStack = false;

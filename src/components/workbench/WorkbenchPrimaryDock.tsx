@@ -52,33 +52,45 @@ export function WorkbenchPrimaryDock({
         "--av-primary-dock-bottom-inset": `${Math.max(0, bottomInset)}px`
       } as CSSProperties}
     >
-      <nav className="workbench-activity-rail" aria-label="Primary Dock panels">
-        {items.map((item) => (
-          <button
-            key={item.panelId}
-            type="button"
-            className={item.panelId === activeItem?.panelId ? "is-active" : undefined}
-            data-testid={`primary-dock-tab-${item.panelId}`}
-            aria-label={item.label}
-            aria-pressed={!collapsed && item.panelId === activeItem?.panelId}
-            title={item.label}
-            onClick={() => onActivate(item.panelId)}
-          >
-            <span>{item.label}</span>
-            {item.badge ? <small>{item.badge}</small> : null}
-          </button>
-        ))}
-        <WorkbenchDockCollapseButton
-          side="left"
-          collapsed={collapsed}
-          onToggle={onToggleCollapsed}
-          testId="primary-dock-collapse-toggle"
-        />
-      </nav>
+      <header className="workbench-primary-dock-header" hidden={collapsed}>
+        <nav className="workbench-primary-dock-tabs" aria-label="Primary Dock panels">
+          {items.map((item) => (
+            <button
+              key={item.panelId}
+              type="button"
+              className={item.panelId === activeItem?.panelId ? "is-active" : undefined}
+              data-testid={`primary-dock-tab-${item.panelId}`}
+              aria-label={item.label}
+              aria-pressed={!collapsed && item.panelId === activeItem?.panelId}
+              title={item.label}
+              onClick={() => onActivate(item.panelId)}
+            >
+              <span>{item.label}</span>
+              {item.badge ? <small>{item.badge}</small> : null}
+            </button>
+          ))}
+        </nav>
+        {!collapsed ? (
+          <WorkbenchDockCollapseButton
+            side="left"
+            collapsed={false}
+            onToggle={onToggleCollapsed}
+            testId="primary-dock-collapse-toggle"
+          />
+        ) : null}
+      </header>
+      {collapsed ? (
+        <div className="workbench-primary-dock-reopen">
+          <WorkbenchDockCollapseButton
+            side="left"
+            collapsed
+            label={`Open ${activeItem?.label ?? "Primary Dock"}`}
+            onToggle={onToggleCollapsed}
+            testId="primary-dock-collapse-toggle"
+          />
+        </div>
+      ) : null}
       <div className="workbench-primary-dock-content" hidden={collapsed}>
-        <header>
-          <strong>{activeItem?.label ?? "Primary Dock"}</strong>
-        </header>
         <div className="workbench-primary-panel-stack">
           {items.map((item) => (
             <section

@@ -1,4 +1,4 @@
-import { expect, type Dialog, type Page, test } from "@playwright/test";
+import { expect, type Dialog, type Locator, type Page, test } from "@playwright/test";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
@@ -17,6 +17,14 @@ const capturePf2aScreenshot = async (page: Page, fileName: string) => {
     path: join(pf2aEvidenceDirectory, fileName),
     fullPage: false
   });
+};
+
+const capturePf2aElementScreenshot = async (locator: Locator, fileName: string) => {
+  if (!capturePf2aEvidence) {
+    return;
+  }
+  await mkdir(pf2aEvidenceDirectory, { recursive: true });
+  await locator.screenshot({ path: join(pf2aEvidenceDirectory, fileName) });
 };
 
 const expectExactHeadServer = async (page: Page) => {
@@ -50,7 +58,8 @@ const openCleanApp = async (page: Page) => {
 
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
-  await expect(page.getByTestId("primary-dock")).toBeVisible();
+  const primaryDock = page.getByTestId("primary-dock");
+  await expect(primaryDock).toBeAttached();
   if ((page.viewportSize()?.width ?? 1440) <= 1100) {
     await expect(page.getByTestId("right-panel")).toHaveCount(0);
     if ((page.viewportSize()?.width ?? 1440) > 720) {
@@ -60,9 +69,11 @@ const openCleanApp = async (page: Page) => {
     await expect(page.getByTestId("right-panel")).toHaveCount(1);
   }
   if ((page.viewportSize()?.width ?? 1440) <= 720) {
-    await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+    await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByRole("button", { name: "Open Library", exact: true })).toBeVisible();
     await expect(page.getByTestId("machine-library-panel")).toBeAttached();
   } else {
+    await expect(primaryDock).toBeVisible();
     await expect(page.getByTestId("machine-library-panel")).toBeVisible();
   }
 };
@@ -1488,18 +1499,48 @@ test("PF-1 premium command information architecture is accessible and responsive
 
 test("Viewpoints is a truthful Primary Dock toggle and leaves no empty Bottom Dock chrome", async ({ page }) => {
   const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
   const primaryDock = page.getByTestId("primary-dock");
+  const viewport = page.locator('[data-app-shell-zone="scene-viewport"]');
+  const groupsTab = page.getByTestId("primary-dock-tab-panel.groups");
   const viewpointsTab = page.getByTestId("primary-dock-tab-panel.viewpoints");
   const viewpointsCommand = getCommandBarCommand(page, "view.viewpoints");
+  const expectRuntimeViewportMatchesHost = async () => expect.poll(async () => {
+    const hostWidth = await viewport.evaluate((element) => Math.round(element.getBoundingClientRect().width));
+    return (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth === hostWidth;
+  }).toBe(true);
+  const waitForVisualFrame = () => page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
 
   await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
   await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
   await expect(page.locator('[data-app-shell-zone="scene-viewport"]')).toHaveCSS("bottom", "25px");
   await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "false");
   await expect(viewpointsTab).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".workbench-activity-rail")).toHaveCount(0);
+
+  await groupsTab.click();
+  await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
+  expect(await viewport.evaluate((element) => element.getBoundingClientRect().left)).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await expect(groupsTab).toBeHidden();
+  await expect(page.getByRole("button", { name: "Open Groups", exact: true })).toBeVisible();
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width)).toBe(0);
+  await expect.poll(() => viewport.evaluate((element) => element.getBoundingClientRect().left)).toBe(0);
+  await expectRuntimeViewportMatchesHost();
+  await waitForVisualFrame();
+  await capturePf2aScreenshot(page, "08-primary-dock-collapsed-groups-1440.png");
+  await page.getByRole("button", { name: "Open Groups", exact: true }).click();
+  await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-panel-id="panel.groups"]')).toBeVisible();
+  await expectRuntimeViewportMatchesHost();
+  await waitForVisualFrame();
+  await capturePf2aElementScreenshot(primaryDock, "09-primary-dock-groups-reopened-1440.png");
 
   await viewpointsCommand.click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
@@ -1514,7 +1555,7 @@ test("Viewpoints is a truthful Primary Dock toggle and leaves no empty Bottom Do
 
   await expect(page.getByTestId("selection-tools-panel")).toHaveCount(0);
   await expect(page.locator('[data-panel-id="panel.alignmentTools"]')).toHaveCount(0);
-  await viewpointsTab.click();
+  await page.getByRole("button", { name: "Open Viewpoints", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
   await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
   await expect(viewpointsCommand).toHaveAttribute("aria-pressed", "true");
@@ -2749,7 +2790,7 @@ test("640x800 workbench preserves chrome and Primary Viewpoints geometry", async
   const persistedPrimaryDock = await page.evaluate(() => window.__atrvisuUiPreferences
     ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.primaryDockShell"));
   expect(persistedPrimaryDock?.collapsed).toBe(false);
-  await page.getByRole("button", { name: "Expand Primary Dock" }).click();
+  await page.getByRole("button", { name: "Open Library", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
   expect((await page.evaluate(() => window.__atrvisuUiPreferences
     ?.getSnapshot().preferences.panels.find((panel) => panel.panelId === "panel.primaryDockShell")))?.collapsed)
@@ -3215,7 +3256,7 @@ test("Primary Dock resizing persists while the dormant Bottom Dock preference re
 
   await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
-  await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
+  await page.getByRole("button", { name: "Open Explorer", exact: true }).click();
   await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width))
     .toBe(resizedPrimaryWidth);
 
@@ -3483,7 +3524,7 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
 
   await page.setViewportSize({ width: 640, height: 800 });
   await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
-  await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
+  await page.getByRole("button", { name: "Open Viewpoints", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
   await expectSelectedCardRevealed(7);
   await expectBoundedPopulatedLayout();
@@ -5676,6 +5717,9 @@ test("PF-2A asset discovery preserves domain state and persists Favorites while 
   const library = page.getByTestId("machine-library-panel");
   await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
   await expect(library.getByLabel("Search assets")).toBeVisible();
+  await expect(page.locator(".workbench-activity-rail")).toHaveCount(0);
+  await expect(page.locator(".workbench-primary-dock-tabs button span"))
+    .toHaveText(["Library", "Explorer", "Layers", "Groups", "Viewpoints"]);
   await capturePf2aScreenshot(page, "01-library-1440.png");
 
   const beforePreferenceOperations = await getRuntimeViewportSnapshot(page);
@@ -5762,17 +5806,24 @@ test("PF-2A asset browser remains reachable without horizontal overflow at respo
   await expect(library.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
   await expect(library.getByRole("button", { name: "Add Flow Pack Machine to favorites" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(page.locator(".workbench-activity-rail")).toHaveCount(0);
   await capturePf2aScreenshot(page, "06-library-1024.png");
 
   await page.setViewportSize({ width: 640, height: 800 });
-  await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
-  await page.getByRole("button", { name: "Expand Primary Dock", exact: true }).click();
+  const primaryDock = page.getByTestId("primary-dock");
+  const viewport = page.locator('[data-app-shell-zone="scene-viewport"]');
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await expect.poll(() => primaryDock.evaluate((element) => element.getBoundingClientRect().width)).toBe(0);
+  await expect.poll(() => viewport.evaluate((element) => element.getBoundingClientRect().left)).toBe(0);
+  await expect(page.getByRole("button", { name: "Open Library", exact: true })).toBeVisible();
+  await capturePf2aScreenshot(page, "07-primary-dock-collapsed-640.png");
+  await page.getByRole("button", { name: "Open Library", exact: true }).click();
   await expect(library).toBeVisible();
   await expect(search).toBeVisible();
   await expect(library.getByRole("button", { name: "Favorites", exact: true })).toBeVisible();
   await expect(library.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await capturePf2aScreenshot(page, "07-library-640.png");
+  await capturePf2aScreenshot(page, "10-library-640.png");
   expect(errors).toEqual([]);
 });
 

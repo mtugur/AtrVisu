@@ -7,6 +7,7 @@ export type WorkbenchDockCollapseButtonProps = {
   collapsed: boolean;
   onToggle: () => void;
   testId?: string;
+  label?: string;
 };
 
 const iconId = (side: DockSide, collapsed: boolean) => {
@@ -15,9 +16,9 @@ const iconId = (side: DockSide, collapsed: boolean) => {
   return collapsed ? "chevron-up" : "chevron-down";
 };
 
-export function WorkbenchDockCollapseButton({ side, collapsed, onToggle, testId }: WorkbenchDockCollapseButtonProps) {
+export function WorkbenchDockCollapseButton({ side, collapsed, onToggle, testId, label: customLabel }: WorkbenchDockCollapseButtonProps) {
   const dockName = side === "left" ? "Primary Dock" : side === "right" ? "Inspector" : "Bottom Dock";
-  const label = `${collapsed ? "Expand" : "Collapse"} ${dockName}`;
+  const label = customLabel ?? `${collapsed ? "Expand" : "Collapse"} ${dockName}`;
   return (
     <button className="workbench-dock-collapse-control" type="button" data-testid={testId} aria-label={label} title={label} onClick={onToggle}>
       <WorkbenchIcon iconId={iconId(side, collapsed)} />
