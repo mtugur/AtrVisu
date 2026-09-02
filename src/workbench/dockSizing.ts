@@ -1,4 +1,3 @@
-export const PRIMARY_DOCK_RAIL_WIDTH = 78;
 export const DEFAULT_PRIMARY_DOCK_WIDTH = 292;
 export const MIN_PRIMARY_DOCK_WIDTH = 260;
 export const MAX_PRIMARY_DOCK_WIDTH = 480;

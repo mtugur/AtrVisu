@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ATRVISU_DB_NAME,
   ATRVISU_DB_VERSION,
+  ASSET_BROWSER_PREFERENCES_STORE_NAME,
   PROJECTS_STORE_NAME,
   UI_PREFERENCES_STORE_NAME,
   openAtrVisuDatabase,
@@ -34,17 +35,42 @@ const createVersionOneDatabase = (project?: Record<string, unknown>) => new Prom
   request.onerror = () => reject(request.error);
 });
 
-describe("AtrVisu IndexedDB version 2", () => {
+const createVersionTwoDatabase = (
+  project: Record<string, unknown>,
+  preferences: Record<string, unknown>
+) => new Promise<void>((resolve, reject) => {
+  const request = indexedDB.open(ATRVISU_DB_NAME, 2);
+  request.onupgradeneeded = () => {
+    const projectStore = request.result.createObjectStore(PROJECTS_STORE_NAME, { keyPath: "projectId" });
+    projectStore.createIndex("updatedAt", "updatedAt");
+    projectStore.createIndex("customerName", "customerName");
+    projectStore.createIndex("projectName", "projectName");
+    projectStore.put(project);
+    const preferencesStore = request.result.createObjectStore(UI_PREFERENCES_STORE_NAME);
+    preferencesStore.put(preferences, "workbench");
+  };
+  request.onsuccess = () => {
+    request.result.close();
+    resolve();
+  };
+  request.onerror = () => reject(request.error);
+});
+
+describe("AtrVisu IndexedDB version 3", () => {
   beforeEach(async () => {
     resetAtrVisuDatabaseConnectionForTests();
     await deleteDatabase();
   });
 
-  it("creates both stores and preserves the project indexes on a fresh install", async () => {
+  it("creates all stores and preserves the project indexes on a fresh install", async () => {
     const database = await openAtrVisuDatabase();
 
     expect(database.version).toBe(ATRVISU_DB_VERSION);
-    expect([...database.objectStoreNames]).toEqual([PROJECTS_STORE_NAME, UI_PREFERENCES_STORE_NAME]);
+    expect([...database.objectStoreNames]).toEqual([
+      ASSET_BROWSER_PREFERENCES_STORE_NAME,
+      PROJECTS_STORE_NAME,
+      UI_PREFERENCES_STORE_NAME
+    ]);
     const projectStore = database.transaction(PROJECTS_STORE_NAME).objectStore(PROJECTS_STORE_NAME);
     expect([...projectStore.indexNames]).toEqual(["customerName", "projectName", "updatedAt"]);
 
@@ -65,9 +91,35 @@ describe("AtrVisu IndexedDB version 2", () => {
     const database = await openAtrVisuDatabase();
     const persisted = await database.get(PROJECTS_STORE_NAME, project.projectId);
 
-    expect(database.version).toBe(2);
+    expect(database.version).toBe(3);
     expect(database.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)).toBe(true);
+    expect(database.objectStoreNames.contains(ASSET_BROWSER_PREFERENCES_STORE_NAME)).toBe(true);
     expect(persisted).toEqual(project);
+  });
+
+  it("upgrades a real version-2 database without rewriting projects or UI preferences", async () => {
+    const project = {
+      projectId: "project-v2-upgrade-proof",
+      projectName: "V2 Upgrade Proof",
+      customerName: "Atara",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+      untouched: { nested: ["project"] }
+    };
+    const preferences = {
+      schemaVersion: 1,
+      theme: "dark",
+      density: "comfortable",
+      panels: [],
+      untouched: { nested: ["preferences"] }
+    };
+    await createVersionTwoDatabase(project, preferences);
+
+    const database = await openAtrVisuDatabase();
+
+    expect(database.version).toBe(3);
+    expect(database.objectStoreNames.contains(ASSET_BROWSER_PREFERENCES_STORE_NAME)).toBe(true);
+    expect(await database.get(PROJECTS_STORE_NAME, project.projectId)).toEqual(project);
+    expect(await database.get(UI_PREFERENCES_STORE_NAME, "workbench")).toEqual(preferences);
   });
 
   it("clears a rejected production opener cache and retries the same version-1 upgrade", async () => {
@@ -85,8 +137,12 @@ describe("AtrVisu IndexedDB version 2", () => {
     })).rejects.toThrow("injected production open failure");
 
     const recovered = await openAtrVisuDatabase();
-    expect(recovered.version).toBe(2);
-    expect([...recovered.objectStoreNames]).toEqual([PROJECTS_STORE_NAME, UI_PREFERENCES_STORE_NAME]);
+    expect(recovered.version).toBe(3);
+    expect([...recovered.objectStoreNames]).toEqual([
+      ASSET_BROWSER_PREFERENCES_STORE_NAME,
+      PROJECTS_STORE_NAME,
+      UI_PREFERENCES_STORE_NAME
+    ]);
     expect([...recovered.transaction(PROJECTS_STORE_NAME).objectStore(PROJECTS_STORE_NAME).indexNames])
       .toEqual(["customerName", "projectName", "updatedAt"]);
     expect(recovered.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)).toBe(true);

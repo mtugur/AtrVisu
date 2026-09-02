@@ -8,10 +8,12 @@ import type { WorkbenchUiPreferences } from "../../platform/contracts";
 import type { AtrVisuProject } from "../../types/project";
 
 export const ATRVISU_DB_NAME = "atrvisu-db";
-export const ATRVISU_DB_VERSION = 2;
+export const ATRVISU_DB_VERSION = 3;
 export const PROJECTS_STORE_NAME = "projects";
 export const UI_PREFERENCES_STORE_NAME = "uiPreferences";
 export const UI_PREFERENCES_RECORD_KEY = "workbench";
+export const ASSET_BROWSER_PREFERENCES_STORE_NAME = "assetBrowserPreferences";
+export const ASSET_BROWSER_PREFERENCES_RECORD_KEY = "browser";
 
 export interface AtrVisuDatabaseSchema extends DBSchema {
   projects: {
@@ -26,6 +28,14 @@ export interface AtrVisuDatabaseSchema extends DBSchema {
   uiPreferences: {
     key: string;
     value: WorkbenchUiPreferences;
+  };
+  assetBrowserPreferences: {
+    key: string;
+    value: {
+      schemaVersion: 1;
+      favoriteAssetKeys: readonly string[];
+      recentAssetKeys: readonly string[];
+    };
   };
 }
 
@@ -53,6 +63,9 @@ const openAtrVisuDatabaseWith = (openDatabase: AtrVisuDatabaseOpener) => {
         }
         if (!database.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)) {
           database.createObjectStore(UI_PREFERENCES_STORE_NAME);
+        }
+        if (!database.objectStoreNames.contains(ASSET_BROWSER_PREFERENCES_STORE_NAME)) {
+          database.createObjectStore(ASSET_BROWSER_PREFERENCES_STORE_NAME);
         }
       }
     })

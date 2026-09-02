@@ -225,12 +225,18 @@ describe("WorkbenchDockCollapseButton", () => {
     const container = await mount(createElement("div", null,
       createElement(WorkbenchDockCollapseButton, { side: "left", collapsed: false, onToggle }),
       createElement(WorkbenchDockCollapseButton, { side: "right", collapsed: true, onToggle }),
-      createElement(WorkbenchDockCollapseButton, { side: "bottom", collapsed: false, onToggle })
+      createElement(WorkbenchDockCollapseButton, { side: "bottom", collapsed: false, onToggle }),
+      createElement(WorkbenchDockCollapseButton, {
+        side: "left",
+        collapsed: true,
+        label: "Open Groups",
+        onToggle
+      })
     ));
     const buttons = [...container.querySelectorAll("button")];
     expect(buttons.every((button) => button.className === "workbench-dock-collapse-control")).toBe(true);
     expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
-      "Collapse Primary Dock", "Expand Inspector", "Collapse Bottom Dock"
+      "Collapse Primary Dock", "Expand Inspector", "Collapse Bottom Dock", "Open Groups"
     ]);
     expect(buttons.every((button) => button.querySelector("svg") !== null)).toBe(true);
   });

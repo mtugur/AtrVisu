@@ -39,6 +39,7 @@ describe("HelpModal", () => {
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(dialog.querySelectorAll(".help-task-card")).toHaveLength(4);
     expect(dialog.textContent).toContain("Start or open a layout");
+    expect(dialog.textContent).toContain("Search or browse Library");
     expect(dialog.textContent).toContain("Present and export");
     expect(dialog.contains(document.activeElement)).toBe(true);
 
@@ -92,6 +93,13 @@ describe("HelpModal", () => {
     expect(container.querySelectorAll("kbd").length).toBeGreaterThan(0);
     expect(container.textContent).toContain("F2");
     expect(container.textContent).toContain("Arrow keys");
+
+    const workbench = sectionButtons.find((button) => button.textContent?.trim() === "Workbench");
+    await act(async () => workbench?.click());
+    const workbenchText = container.querySelector(".help-dialog-content")?.textContent ?? "";
+    for (const guidance of ["Search assets", "categories and families", "Favorites", "Recent", "Add"]) {
+      expect(workbenchText).toContain(guidance);
+    }
 
     for (const button of sectionButtons) {
       await act(async () => button.click());

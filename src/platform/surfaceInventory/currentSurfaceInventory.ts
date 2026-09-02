@@ -320,7 +320,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     commandIds: ["view.viewpoints"],
     panelIds: ["panel.viewpoints"],
     featureIds: ["view.viewpoints", "panel.viewpoints"],
-    notes: "Viewpoints is a first-class Primary Dock tab; Quick Toolbar and rail activation share the Runtime Panel authority."
+    notes: "Viewpoints is a first-class Primary Dock tab; Quick Toolbar and tab activation share the Runtime Panel authority."
   },
   {
     surfaceId: "surface.measurements",

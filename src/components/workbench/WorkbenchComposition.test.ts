@@ -50,13 +50,16 @@ const entity = (id: string, name: string, overrides: Partial<PlatformEntity> = {
 describe("final workbench composition contracts", () => {
   it("renders one active Primary Dock contribution and activates registry panel ids", () => {
     const onActivate = vi.fn();
+    const items = [
+      { panelId: "panel.machineLibrary" as const, label: "Library", content: "library-content" },
+      { panelId: "panel.layoutExplorer" as const, label: "Explorer", content: "explorer-content" },
+      { panelId: "panel.layers" as const, label: "Layers", content: "layers-content" },
+      { panelId: "panel.groups" as const, label: "Groups", content: "groups-content" },
+      { panelId: "panel.viewpoints" as const, label: "Viewpoints", content: "viewpoints-content" }
+    ];
     const markup = renderToStaticMarkup(createElement(WorkbenchPrimaryDock, {
-      items: [
-        { panelId: "panel.machineLibrary", label: "Library", content: "library-content" },
-        { panelId: "panel.layoutExplorer", label: "Explorer", content: "explorer-content" },
-        { panelId: "panel.viewpoints", label: "Viewpoints", content: "viewpoints-content" }
-      ],
-      activePanelId: "panel.layoutExplorer",
+      items,
+      activePanelId: "panel.groups",
       collapsed: false,
       width: 304,
       minWidth: 260,
@@ -69,22 +72,23 @@ describe("final workbench composition contracts", () => {
     }));
 
     expect(markup).toContain('data-testid="primary-dock"');
-    expect(markup).toContain('data-panel-id="panel.layoutExplorer"');
+    expect(markup).toContain('class="workbench-primary-dock-tabs"');
+    expect(markup).not.toContain("workbench-activity-rail");
     expect(markup).toContain('data-panel-id="panel.machineLibrary" hidden=""');
-    expect(markup).toContain('data-panel-id="panel.viewpoints" hidden=""');
-    expect(markup).toMatch(/data-testid="primary-dock-tab-panel\.layoutExplorer"[^>]*aria-pressed="true"/);
+    expect(markup).toContain('data-panel-id="panel.groups" aria-label="Groups"');
+    expect(markup).toMatch(/data-testid="primary-dock-tab-panel\.groups"[^>]*aria-pressed="true"/);
     expect(markup).toMatch(/data-testid="primary-dock-tab-panel\.viewpoints"[^>]*aria-pressed="false"/);
+    const tabOrder = items.map(({ panelId }) => markup.indexOf(`primary-dock-tab-${panelId}`));
+    expect(tabOrder).toEqual([...tabOrder].sort((left, right) => left - right));
+    expect(markup.match(/data-panel-id=/g)).toHaveLength(items.length);
+    expect(markup).not.toContain("<strong>Groups</strong>");
     expect(markup).toContain('aria-label="Resize Primary Dock"');
     expect(markup).toContain('aria-valuenow="304"');
     expect(markup).toContain('aria-label="Collapse Primary Dock"');
     expect(markup).not.toContain("&lt;");
 
     const tree = WorkbenchPrimaryDock({
-      items: [
-        { panelId: "panel.machineLibrary", label: "Library", content: "library-content" },
-        { panelId: "panel.layoutExplorer", label: "Explorer", content: "explorer-content" },
-        { panelId: "panel.viewpoints", label: "Viewpoints", content: "viewpoints-content" }
-      ],
+      items,
       activePanelId: "panel.machineLibrary",
       collapsed: false,
       width: 304,
@@ -102,6 +106,27 @@ describe("final workbench composition contracts", () => {
       shiftKey: false
     });
     expect(onActivate).toHaveBeenCalledWith("panel.layoutExplorer");
+
+    const collapsedTree = WorkbenchPrimaryDock({
+      items,
+      activePanelId: "panel.groups",
+      collapsed: true,
+      width: 304,
+      minWidth: 260,
+      maxWidth: 480,
+      resizeEnabled: true,
+      bottomInset: 62,
+      onActivate,
+      onToggleCollapsed: vi.fn(),
+      onResize: vi.fn()
+    });
+    const collapsedMarkup = renderToStaticMarkup(collapsedTree);
+    expect(collapsedMarkup).toContain('class="workbench-primary-dock-header" hidden=""');
+    expect(collapsedMarkup).toContain('class="workbench-primary-dock-content" hidden=""');
+    expect(collapsedMarkup).toContain('class="workbench-dock-reopen-control is-left"');
+    expect(collapsedMarkup).toContain('aria-label="Open Groups"');
+    expect(collapsedMarkup).not.toContain('aria-label="Expand Primary Dock"');
+    expect(collapsedMarkup.match(/data-testid="primary-dock-collapse-toggle"/g)).toHaveLength(1);
   });
 
   it("projects real entities and forwards replace or toggle selection without local authority", async () => {

@@ -1,17 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
-import { LibraryManager, type LibraryManagerRuntimeController } from "./LibraryManager";
-import { TaxonomyManager } from "./TaxonomyManager";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore
+} from "react";
+import {
+  EMPTY_ASSET_BROWSER_FILTERS,
+  createAssetBrowserPreferencesRuntime,
+  createAssetBrowserRecords,
+  getActiveAssetBrowserFilterCount,
+  getAssetBrowserFilterOptions,
+  selectAssetBrowserRecords,
+  type AssetBrowserFilters,
+  type AssetBrowserPreferencesRuntime,
+  type AssetBrowserRecord,
+  type AssetBrowserScope
+} from "../assetBrowser";
 import type {
-  LibraryGroup,
   LibraryMachineItem,
   LibraryValidationWarning,
   LoadedMachineLibrary,
   MachineDefinition
 } from "../types/machine";
 import { loadMachineLibraries } from "../utils/libraryValidation";
-import { getMachineDimensionsMm, normalizeMachineDefinitionDimensions } from "../utils/machineDimensions";
-import { formatLength } from "../utils/units";
+import { normalizeMachineDefinitionDimensions } from "../utils/machineDimensions";
 import { normalizeMachineVisualModel } from "../utils/visualModel";
+import { WorkbenchIcon } from "../workbench/icons";
+import { AssetBrowserCard } from "./assetBrowser/AssetBrowserCard";
+import { AssetBrowserHierarchy } from "./assetBrowser/AssetBrowserHierarchy";
+import { LibraryManager, type LibraryManagerRuntimeController } from "./LibraryManager";
+import { TaxonomyManager } from "./TaxonomyManager";
 
 type LibrarySelection = {
   libraryId: string;
@@ -20,14 +38,13 @@ type LibrarySelection = {
 };
 
 type MachineLibraryProps = {
-  onAddMachine: (selection: LibrarySelection) => void;
+  onAddMachine: (selection: LibrarySelection) => Promise<boolean>;
   isLibraryManagerOpen: boolean;
   isTaxonomyManagerOpen: boolean;
-  onOpenLibraryManager: () => void;
   onCloseLibraryManager: () => void;
-  onOpenTaxonomyManager: () => void;
   onCloseTaxonomyManager: () => void;
   onLibraryManagerRuntimeControllerChange?: (controller: LibraryManagerRuntimeController | null) => void;
+  preferencesRuntime?: AssetBrowserPreferencesRuntime;
 };
 
 export const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition => normalizeMachineVisualModel(normalizeMachineDefinitionDimensions({
@@ -56,197 +73,258 @@ export const toMachineDefinition = (item: LibraryMachineItem): MachineDefinition
   capabilities: item.capabilities
 }));
 
-const formatDimensions = (item: LibraryMachineItem) => {
-  const dimensions = getMachineDimensionsMm({
-    ...item,
-    category: item.type
-  });
+const scopeLabels: Readonly<Record<AssetBrowserScope, string>> = Object.freeze({
+  all: "All",
+  recent: "Recent",
+  favorites: "Favorites"
+});
 
-  return `${formatLength(dimensions.widthMm, "mm", 0)} x ${formatLength(dimensions.depthMm, "mm", 0)} x ${formatLength(dimensions.heightMm, "mm", 0)}`;
-};
-
-function GroupNode({
-  group,
-  libraryId,
-  depth,
-  onAddMachine
-}: {
-  group: LibraryGroup;
-  libraryId: string;
-  depth: number;
-  onAddMachine: (selection: LibrarySelection) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(depth < 2);
-  const hasChildren = group.children.length > 0 || group.items.length > 0;
-
+const EmptyState = ({ scope, filtered }: { scope: AssetBrowserScope; filtered: boolean }) => {
+  if (filtered) {
+    return (
+      <div className="asset-browser-empty" role="status">
+        <strong>No assets match the current search and filters.</strong>
+        <span>Clear the search or filters to browse all available equipment.</span>
+      </div>
+    );
+  }
+  if (scope === "favorites") {
+    return (
+      <div className="asset-browser-empty" role="status">
+        <strong>No favorites yet.</strong>
+        <span>Use the star on an asset to keep it here.</span>
+      </div>
+    );
+  }
+  if (scope === "recent") {
+    return (
+      <div className="asset-browser-empty" role="status">
+        <strong>No recent assets yet.</strong>
+        <span>Equipment appears here after it is added to the layout.</span>
+      </div>
+    );
+  }
   return (
-    <div className="library-tree-node">
-      <button
-        className="library-tree-toggle"
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        style={{ paddingLeft: 10 + depth * 14 }}
-        disabled={!hasChildren}
-      >
-        <span aria-hidden="true">{hasChildren ? (isOpen ? "-" : "+") : ""}</span>
-        <strong>{group.name}</strong>
-      </button>
-
-      {isOpen ? (
-        <div className="library-tree-children">
-          {group.children.map((child) => (
-            <GroupNode
-              group={child}
-              key={child.id}
-              libraryId={libraryId}
-              depth={depth + 1}
-              onAddMachine={onAddMachine}
-            />
-          ))}
-          {group.items.map((item) => {
-            const definition = toMachineDefinition(item);
-
-            return (
-              <button
-                className="machine-card"
-                key={item.id}
-                type="button"
-                onClick={() => onAddMachine({ libraryId, item, definition })}
-                style={{ marginLeft: 10 + (depth + 1) * 14 }}
-                title={`Add ${item.name}`}
-              >
-                <span
-                  className="machine-icon"
-                  style={{ backgroundColor: item.defaultColor }}
-                  aria-hidden="true"
-                >
-                  {item.name.slice(0, 1)}
-                </span>
-                <span className="machine-content">
-                  <strong>{item.name}</strong>
-                  <span>{item.category} / {item.machineType ?? item.type}</span>
-                  <small>{formatDimensions(item)}</small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+    <div className="asset-browser-empty" role="status">
+      <strong>No assets are currently available.</strong>
     </div>
   );
-}
+};
 
 export function MachineLibrary({
   onAddMachine,
   isLibraryManagerOpen,
   isTaxonomyManagerOpen,
-  onOpenLibraryManager,
   onCloseLibraryManager,
-  onOpenTaxonomyManager,
   onCloseTaxonomyManager,
-  onLibraryManagerRuntimeControllerChange
+  onLibraryManagerRuntimeControllerChange,
+  preferencesRuntime
 }: MachineLibraryProps) {
+  const [runtime] = useState(() => preferencesRuntime ?? createAssetBrowserPreferencesRuntime());
+  const preferenceSnapshot = useSyncExternalStore(
+    runtime.subscribe,
+    runtime.getSnapshot,
+    runtime.getSnapshot
+  );
   const [libraries, setLibraries] = useState<LoadedMachineLibrary[]>([]);
   const [openLibraries, setOpenLibraries] = useState<Set<string>>(new Set());
   const [warnings, setWarnings] = useState<LibraryValidationWarning[]>([]);
-  const [loadError, setLoadError] = useState<string>("");
+  const [loadError, setLoadError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
   const [taxonomyReloadToken, setTaxonomyReloadToken] = useState(0);
+  const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<AssetBrowserScope>("all");
+  const [filters, setFilters] = useState<AssetBrowserFilters>(EMPTY_ASSET_BROWSER_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    void runtime.hydrate();
+  }, [runtime]);
 
   useEffect(() => {
     let isCancelled = false;
-
+    setIsLoading(true);
     const loadLibraries = async () => {
       const result = await loadMachineLibraries();
-
       if (!isCancelled) {
         setLibraries(result.libraries);
         setWarnings(result.warnings);
         setLoadError(result.loadError);
         setOpenLibraries(new Set(result.libraries.map((library) => library.libraryId)));
+        setIsLoading(false);
       }
     };
-
     void loadLibraries();
-
     return () => {
       isCancelled = true;
     };
   }, [reloadToken]);
 
-  const libraryCountText = useMemo(
-    () => `${libraries.length} librar${libraries.length === 1 ? "y" : "ies"}`,
-    [libraries.length]
+  const records = useMemo(() => createAssetBrowserRecords(libraries), [libraries]);
+  const recordsByKey = useMemo(
+    () => new Map(records.map((record) => [record.assetKey, record])),
+    [records]
   );
+  const favoriteAssetKeys = useMemo(
+    () => new Set(preferenceSnapshot.preferences.favoriteAssetKeys),
+    [preferenceSnapshot.preferences.favoriteAssetKeys]
+  );
+  const filterOptions = useMemo(() => getAssetBrowserFilterOptions(records), [records]);
+  const activeFilterCount = getActiveAssetBrowserFilterCount(filters);
+  const hasSearchOrFilters = query.trim().length > 0 || activeFilterCount > 0;
+  const showHierarchy = scope === "all" && !hasSearchOrFilters;
+  const visibleRecords = useMemo(() => selectAssetBrowserRecords(records, {
+    scope,
+    query,
+    filters,
+    favoriteAssetKeys: preferenceSnapshot.preferences.favoriteAssetKeys,
+    recentAssetKeys: preferenceSnapshot.preferences.recentAssetKeys
+  }), [
+    filters,
+    preferenceSnapshot.preferences.favoriteAssetKeys,
+    preferenceSnapshot.preferences.recentAssetKeys,
+    query,
+    records,
+    scope
+  ]);
+
+  const clearSearchAndFilters = () => {
+    setQuery("");
+    setFilters(EMPTY_ASSET_BROWSER_FILTERS);
+  };
+
+  const addAsset = async (record: AssetBrowserRecord) => {
+    const added = await onAddMachine({
+      libraryId: record.libraryId,
+      item: record.item,
+      definition: toMachineDefinition(record.item)
+    });
+    if (added) {
+      void runtime.recordRecent(record.assetKey);
+    }
+    return added;
+  };
 
   return (
-    <section className="library-section" aria-label="Machine library" data-testid="machine-library-panel">
-      <div className="panel-search">
-        <span aria-hidden="true">+</span>
-        <input type="search" placeholder={libraryCountText} aria-label="Machine library status" readOnly />
+    <section
+      className="library-section"
+      aria-label="Machine library"
+      data-testid="machine-library-panel"
+      data-asset-preferences-status={preferenceSnapshot.status}
+    >
+      <label className="panel-search asset-browser-search">
+        <WorkbenchIcon iconId="search" />
+        <input
+          type="search"
+          placeholder="Search assets…"
+          aria-label="Search assets"
+          value={query}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+      </label>
+
+      <div className="asset-browser-scopes" role="group" aria-label="Asset scope">
+        {(Object.keys(scopeLabels) as AssetBrowserScope[]).map((scopeId) => (
+          <button
+            key={scopeId}
+            type="button"
+            aria-pressed={scope === scopeId}
+            onClick={() => setScope(scopeId)}
+          >
+            {scopeLabels[scopeId]}
+          </button>
+        ))}
       </div>
 
-      {loadError ? <p className="library-error">{loadError}</p> : null}
-      {warnings.length > 0 ? (
-        <p className="library-warning-summary">
-          Library warnings found: {warnings.length}. Check console for details.
-        </p>
-      ) : null}
+      <div className="asset-browser-filter-disclosure">
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="asset-browser-filters"
+          onClick={() => setFiltersOpen((current) => !current)}
+        >
+          <WorkbenchIcon iconId="filter" />
+          <span>Filters</span>
+          {activeFilterCount > 0 ? <small>{activeFilterCount}</small> : null}
+          <WorkbenchIcon iconId={filtersOpen ? "chevron-up" : "chevron-down"} />
+        </button>
+        {filtersOpen ? (
+          <div id="asset-browser-filters" className="asset-browser-filters">
+            <label>
+              <span>Source</span>
+              <select aria-label="Asset source" value={filters.libraryId} onChange={(event) => setFilters((current) => ({ ...current, libraryId: event.currentTarget.value }))}>
+                <option value="">All sources</option>
+                {filterOptions.sources.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Category</span>
+              <select aria-label="Asset category" value={filters.category} onChange={(event) => setFilters((current) => ({ ...current, category: event.currentTarget.value }))}>
+                <option value="">All categories</option>
+                {filterOptions.categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Family</span>
+              <select aria-label="Asset family" value={filters.family} onChange={(event) => setFilters((current) => ({ ...current, family: event.currentTarget.value }))}>
+                <option value="">All families</option>
+                {filterOptions.families.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <button className="asset-browser-clear" type="button" disabled={activeFilterCount === 0} onClick={() => setFilters(EMPTY_ASSET_BROWSER_FILTERS)}>
+              Clear filters
+            </button>
+          </div>
+        ) : null}
+      </div>
 
-      <section className="machine-list" aria-label="Available libraries">
-        {libraries.map((library) => {
-          const isOpen = openLibraries.has(library.libraryId);
-
-          return (
-            <article
-              className={`library-card${library.loadError ? " has-error" : ""}`}
-              key={library.libraryId}
-            >
-              <button
-                className="library-title"
-                type="button"
-                title={`${library.libraryName} - ${library.loadError ?? (library.readonly ? "Read-only" : "Editable later")}`}
-                onClick={() =>
-                  setOpenLibraries((current) => {
-                    const next = new Set(current);
-                    if (next.has(library.libraryId)) {
-                      next.delete(library.libraryId);
-                    } else {
-                      next.add(library.libraryId);
-                    }
-                    return next;
-                  })
-                }
-              >
-                <span aria-hidden="true">{isOpen ? "-" : "+"}</span>
-                <strong title={library.libraryName}>{library.libraryName}</strong>
-                <small>{library.loadError ?? (library.readonly ? "Read-only" : "Editable later")}</small>
-              </button>
-
-              {isOpen ? (
-                <GroupNode
-                  group={library.root}
-                  libraryId={library.libraryId}
-                  depth={0}
-                  onAddMachine={onAddMachine}
-                />
-              ) : null}
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="library-tools" aria-label="Library tools">
-        <div className="section-header">
-          <span>Library Tools</span>
-          <strong>Manager</strong>
+      {preferenceSnapshot.warning ? <p className="asset-browser-storage-warning" role="status">{preferenceSnapshot.warning}</p> : null}
+      {loadError ? (
+        <div className="library-error" role="alert">
+          <span>Assets could not be loaded.</span>
+          <button type="button" onClick={() => setReloadToken((current) => current + 1)}>Retry</button>
         </div>
-        <button className="manager-open-button" data-testid="open-library-manager" type="button" onClick={onOpenLibraryManager}>
-          Open Library Manager
-        </button>
-        <button className="manager-open-button" data-testid="open-taxonomy-manager" type="button" onClick={onOpenTaxonomyManager}>
-          Open Taxonomy Manager
-        </button>
+      ) : null}
+      {warnings.length > 0 ? <p className="library-warning-summary" role="status">Some assets could not be prepared. Available assets remain usable.</p> : null}
+
+      <div className="asset-browser-results-header" aria-live="polite">
+        <span>{isLoading ? "Loading assets…" : `${visibleRecords.length} asset${visibleRecords.length === 1 ? "" : "s"}`}</span>
+        {hasSearchOrFilters ? <button type="button" onClick={clearSearchAndFilters}>Clear search and filters</button> : null}
+      </div>
+
+      <section className="machine-list" aria-label="Available assets">
+        {isLoading ? <p className="asset-browser-loading" role="status">Loading assets…</p> : null}
+        {!isLoading && !loadError && visibleRecords.length === 0 ? <EmptyState scope={scope} filtered={hasSearchOrFilters} /> : null}
+        {!isLoading && !loadError && visibleRecords.length > 0 && showHierarchy ? (
+          <AssetBrowserHierarchy
+            libraries={libraries}
+            openLibraryIds={openLibraries}
+            onToggleLibrary={(libraryId) => setOpenLibraries((current) => {
+              const next = new Set(current);
+              if (next.has(libraryId)) next.delete(libraryId);
+              else next.add(libraryId);
+              return next;
+            })}
+            recordsByKey={recordsByKey}
+            favoriteAssetKeys={favoriteAssetKeys}
+            onToggleFavorite={(assetKey) => void runtime.toggleFavorite(assetKey)}
+            onAdd={addAsset}
+          />
+        ) : null}
+        {!isLoading && !loadError && visibleRecords.length > 0 && !showHierarchy ? (
+          <div className="asset-browser-flat-results" data-testid="asset-browser-flat-results">
+            {visibleRecords.map((record) => (
+              <AssetBrowserCard
+                key={record.assetKey}
+                record={record}
+                favorite={favoriteAssetKeys.has(record.assetKey)}
+                onToggleFavorite={(assetKey) => void runtime.toggleFavorite(assetKey)}
+                onAdd={addAsset}
+              />
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {isLibraryManagerOpen ? (
@@ -258,12 +336,7 @@ export function MachineLibrary({
           onRuntimeControllerChange={onLibraryManagerRuntimeControllerChange}
         />
       ) : null}
-      {isTaxonomyManagerOpen ? (
-        <TaxonomyManager
-          onClose={onCloseTaxonomyManager}
-          onChanged={() => setTaxonomyReloadToken((current) => current + 1)}
-        />
-      ) : null}
+      {isTaxonomyManagerOpen ? <TaxonomyManager onClose={onCloseTaxonomyManager} onChanged={() => setTaxonomyReloadToken((current) => current + 1)} /> : null}
     </section>
   );
 }

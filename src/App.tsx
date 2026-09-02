@@ -280,7 +280,6 @@ import {
 import {
   DEFAULT_PRIMARY_DOCK_WIDTH,
   DOCK_RESIZE_BREAKPOINT,
-  PRIMARY_DOCK_RAIL_WIDTH,
   clampDockSize,
   getPrimaryDockWidthBounds
 } from "./workbench/dockSizing";
@@ -4689,7 +4688,7 @@ export function App() {
   const primarySelectionEntity = runtimeSelection.primaryId
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
-  const primaryDockInset = isPrimaryDockPresentationCollapsed ? PRIMARY_DOCK_RAIL_WIDTH : effectivePrimaryDockWidth;
+  const primaryDockInset = isPrimaryDockPresentationCollapsed ? 0 : effectivePrimaryDockWidth;
   const bottomDockInset = STATUS_BAR_HEIGHT;
   const layerNames = new Map(layers.map((layer) => [layer.id, layer.name]));
   const showLegacyCompatibilityStack = false;
@@ -4767,15 +4766,14 @@ export function App() {
               label: "Library",
               content: (
                 <MachineLibrary
-                  onAddMachine={(selection) =>
-                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addMachine, selection)}
+                  onAddMachine={async (selection) =>
+                    (await executeRuntimeFeatureCommand(
+                      RUNTIME_FEATURE_COMMAND_IDS.addMachine,
+                      selection
+                    )).status === "executed"}
                   isLibraryManagerOpen={isLibraryManagerOpen}
                   isTaxonomyManagerOpen={isTaxonomyManagerOpen}
-                  onOpenLibraryManager={() =>
-                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.libraryManager)}
                   onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
-                  onOpenTaxonomyManager={() =>
-                    executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager)}
                   onCloseTaxonomyManager={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.taxonomyManager)}
                   onLibraryManagerRuntimeControllerChange={setLibraryManagerRuntimeController}
                 />
@@ -4900,7 +4898,7 @@ export function App() {
         />
       )}
       secondaryDock={isInspectorPresentationCollapsed ? (
-        <div className="panel-reopen-tab" data-app-shell-zone="machine-properties">
+        <div className="workbench-dock-reopen-control is-right" data-app-shell-zone="machine-properties">
           <WorkbenchDockCollapseButton
             side="right"
             collapsed
@@ -4959,15 +4957,14 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.machineLibrary)}
           >
             <MachineLibrary
-              onAddMachine={(selection) =>
-                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addMachine, selection)}
+              onAddMachine={async (selection) =>
+                (await executeRuntimeFeatureCommand(
+                  RUNTIME_FEATURE_COMMAND_IDS.addMachine,
+                  selection
+                )).status === "executed"}
               isLibraryManagerOpen={isLibraryManagerOpen}
               isTaxonomyManagerOpen={isTaxonomyManagerOpen}
-              onOpenLibraryManager={() =>
-                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.libraryManager)}
               onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
-              onOpenTaxonomyManager={() =>
-                executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.taxonomyManager)}
               onCloseTaxonomyManager={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.taxonomyManager)}
               onLibraryManagerRuntimeControllerChange={setLibraryManagerRuntimeController}
             />
