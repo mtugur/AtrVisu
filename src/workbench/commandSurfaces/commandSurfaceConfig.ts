@@ -56,6 +56,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     labelKey: "menu.insert",
     fallbackLabel: "Insert",
     commandIds: [
+      RUNTIME_FEATURE_COMMAND_IDS.importAsset,
       RUNTIME_FEATURE_COMMAND_IDS.createAnnotation,
       RUNTIME_FEATURE_COMMAND_IDS.addFloor,
       RUNTIME_FEATURE_COMMAND_IDS.addWall,

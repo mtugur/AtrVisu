@@ -215,7 +215,7 @@ const waitForUiPreferences = async (page: Page, status = "ready") => {
 
 const readRawUiPreferencesJson = async (page: Page) => page.evaluate(() =>
   new Promise<string>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -973,10 +973,14 @@ test("runtime feature access complete gate is bound to observed visible command 
   const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
   const completions: Awaited<ReturnType<typeof expectOneRuntimeCommandExecution>>[] = [];
   const observe = async (commandId: string, action: () => Promise<unknown>) => {
-    completions.push(await expectOneRuntimeCommandExecution(page, commandId, action));
+    completions.push(await test.step(commandId, () => expectOneRuntimeCommandExecution(page, commandId, action)));
   };
 
   expect((await getRuntimeFeatureAccessGate(page, true)).passed).toBe(false);
+
+  await observe("library.importAsset", () => page.getByTestId("machine-library-panel").getByRole("button", { name: "Import 3D Asset", exact: true }).click());
+  await page.getByRole("button", { name: "Close import", exact: true }).click();
+  await observe("library.createCustomVariant", () => page.getByRole("button", { name: /^Create Custom Variant of / }).first().click());
 
   const machineCard = page.locator(".machine-card").first();
   await observe("library.addMachine", () => machineCard.click());
@@ -4982,7 +4986,7 @@ test("legacy panel preferences migrate once to IndexedDB and preserve unrelated 
       .find((panel) => panel.panelId === "panel.layers")?.collapsed
   )).toBe(false);
   const persisted = await page.evaluate(() => new Promise<{ width?: number }>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -5084,7 +5088,7 @@ test("visible panel updates survive a deliberately pending preference hydration"
   expect(finalSnapshot?.preferences.panels.find((panel) => panel.panelId === "panel.layers"))
     .toMatchObject({ collapsed: false });
   const persisted = await page.evaluate(() => new Promise<unknown>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -5864,7 +5868,7 @@ test("PF-2A asset discovery preserves domain state and persists Favorites while 
   await favoriteFlow.click();
   await expect(flowCard.locator(".asset-favorite-button")).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => page.evaluate(() => new Promise<readonly string[]>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;

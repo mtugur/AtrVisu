@@ -1,4 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { modelKeyFromPath } from "../nativeAssets/modelContract";
+import { resolveImportedModel } from "../nativeAssets/modelStorage";
+import { loadImportedModelRoot, calibrateImportedRoot } from "../nativeAssets/modelRendering";
 import {
   AbstractMesh,
   Camera,
@@ -10,6 +13,7 @@ import {
   MeshBuilder,
   Nullable,
   Observer,
+  Quaternion,
   PointerEventTypes,
   PointerInfo,
   Scene,
@@ -884,6 +888,33 @@ const loadVisualModel = async (
   }
 
   try {
+    if (modelKeyFromPath(modelPath)) {
+      const resolved = await resolveImportedModel(modelPath);
+      try {
+        if (scene.isDisposed || rootBox.isDisposed()) throw new Error("Model owner was disposed.");
+        const loaded = await loadImportedModelRoot(scene, resolved.url, `visual-root-${machine.instanceId}`);
+        if (rootBox.isDisposed()) { loaded.root.dispose(); throw new Error("Model owner was disposed."); }
+        const projection = calibrateImportedRoot(loaded.root, loaded.bounds, visualModel.unit, visualModel.calibration);
+        const dimensions = getMachineDimensionsMeters(machine.definition);
+        let appliedScale = { x: loaded.root.scaling.x, y: loaded.root.scaling.y, z: loaded.root.scaling.z };
+        if (visualModel.scaleMode === "metadata-box") {
+          const fit = calculateMetadataBoxScale(dimensions, { width: projection.widthMm / 1000, depth: projection.depthMm / 1000, height: projection.heightMm / 1000 }, visualModel.calibration.preserveAspectRatio);
+          loaded.root.scaling.multiplyInPlace(new Vector3(fit.x, fit.y, fit.z));
+          loaded.root.position.multiplyInPlace(new Vector3(fit.x, fit.y, fit.z));
+          appliedScale = { x: loaded.root.scaling.x, y: loaded.root.scaling.y, z: loaded.root.scaling.z };
+        }
+        const rotation = getRotationVectorRadians(visualModel.rotationOffsetDeg);
+        loaded.root.rotationQuaternion = Quaternion.RotationYawPitchRoll(rotation.y, rotation.x, rotation.z).multiply(loaded.root.rotationQuaternion!);
+        loaded.root.position.y -= dimensions.height / 2;
+        loaded.root.position.addInPlace(new Vector3(mmToMeters(visualModel.positionOffsetMm.xMm), mmToMeters(visualModel.positionOffsetMm.yMm), mmToMeters(visualModel.positionOffsetMm.zMm)));
+        loaded.root.parent = rootBox;
+        applyMachinePickMetadataToHierarchy(loaded.root, machine.instanceId);
+        loaded.root.isPickable = false;
+        return { visualRoot: loaded.root, loadedVisualMeshes: loaded.meshes,
+          visualBoundsMm: { widthMm: projection.widthMm, depthMm: projection.depthMm, heightMm: projection.heightMm },
+          appliedScale, calibrationWarnings: [] as string[] };
+      } finally { resolved.release(); }
+    }
     const { rootUrl, fileName } = splitModelPath(modelPath);
     const result = await SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene);
     const visualRoot = new Mesh(`visual-root-${machine.instanceId}`, scene);
@@ -1066,6 +1097,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.machinePlanPositions;
         delete canvas.dataset.civilPlanPositions;
         delete canvas.dataset.machineSceneLabels;
+        delete canvas.dataset.machineLoadedModelCounts;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -2028,6 +2060,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             xMm: item.positionMm.xMm,
             yMm: item.positionMm.yMm
           }])
+        ));
+        canvas.dataset.machineLoadedModelCounts = JSON.stringify(Object.fromEntries(
+          [...machineNodesRef.current].map(([id, node]) => [id, node.loadedVisualMeshes.filter((mesh) => !mesh.isDisposed() && mesh.getTotalVertices() > 0).length])
         ));
         canvas.dataset.machineSceneLabels = JSON.stringify(scene.meshes
           .filter((mesh) => typeof mesh.metadata?.machineLabelInstanceId === "string")

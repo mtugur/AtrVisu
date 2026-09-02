@@ -5394,3 +5394,50 @@ body.is-resizing-workbench-dock {
   }
 
 }
+.native-asset-dialog {
+  width: min(960px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.native-asset-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--av-spacing-md);
+  list-style: none;
+  padding: var(--av-spacing-md);
+  margin: 0;
+  border-bottom: 1px solid var(--av-border-subtle);
+  font-size: var(--av-font-size-sm);
+}
+.native-asset-steps [aria-current="step"] { font-weight: 700; color: var(--av-text-primary); }
+.native-asset-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.8fr);
+  gap: var(--av-spacing-lg);
+  padding: var(--av-spacing-lg);
+  overflow-y: auto;
+  min-height: 0;
+}
+.native-asset-preview, .native-asset-empty {
+  width: 100%;
+  height: 320px;
+  min-width: 0;
+  touch-action: none;
+}
+.native-asset-empty { display: grid; place-content: center; gap: var(--av-spacing-md); }
+.native-asset-fields { display: grid; align-content: start; gap: var(--av-spacing-sm); min-width: 0; }
+.native-asset-fields label { display: grid; gap: var(--av-spacing-xs); }
+.native-asset-fields input, .native-asset-fields select { min-width: 0; max-width: 100%; }
+.native-asset-fields label:has(input[type="checkbox"]) { display: flex; align-items: center; }
+.native-asset-fields p, .native-asset-fields dd { overflow-wrap: anywhere; }
+.native-asset-fields dl { margin: 0; }
+.native-asset-fields dd { margin: 0 0 var(--av-spacing-sm); color: var(--av-text-secondary); }
+.native-asset-import-trigger { display: flex; gap: var(--av-spacing-sm); align-items: center; }
+.native-asset-dialog .manager-footer { flex-shrink: 0; display: flex; justify-content: space-between; }
+.native-asset-dialog .manager-footer button { width: auto; }
+@media (max-width: 700px) {
+  .native-asset-body { grid-template-columns: minmax(0, 1fr); }
+  .native-asset-preview, .native-asset-empty { height: 210px; }
+}
