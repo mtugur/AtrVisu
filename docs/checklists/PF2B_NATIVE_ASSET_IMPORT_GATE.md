@@ -13,7 +13,7 @@
 | Shared model lifetime | Variant/final-reference delete regression |
 | No stale overwrite | Serialized imports, browser Web Lock and stale editor rejection |
 | Standard immutability | Deep clone test and Chromium custom edit with unchanged source |
-| Real imported model after reload | Loaded-geometry count, stable custom identity and Recent in Chromium |
+| Real imported model after reload | Loaded-geometry count plus filled-surface pixel check, stable custom identity and Recent in Chromium |
 | Responsive / no red console | 1440, 1024, 640 Chromium scenarios and canvas-pixel checks |
 | PF-2A unchanged | Existing projection, preference, Add and release-hygiene suites |
 | Customer Help | Import, units/axes, Validate & Save and Custom Variant guidance |

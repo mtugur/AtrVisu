@@ -32,7 +32,8 @@ Branch: `feat/phase-1-native-asset-import-v01`.
   The preview keeps the actual model framed rather than assuming an origin.
   Main canvas
   identity stays connected. Saved-model diagnostics count real loaded geometry,
-  not a placeholder-only success.
+  and a projected-footprint pixel check waits for the GLB's filled surface after
+  Add and reload. A loaded mesh or selection-box-only frame is insufficient.
 - Runtime feature-access completion observes both new visible command routes.
 - Existing PF-2A projection/search/favorites/recent and release-hygiene tests
   remain in the full gate; their ranking/domain behavior is unchanged.

@@ -71,6 +71,28 @@ const expectPreviewPixels = async (page: Page) => {
 };
 const expectRealModel = async (page: Page) => {
   await expect.poll(async () => Object.values(JSON.parse(await page.getByLabel("AtrVisu 3D workspace").getAttribute("data-machine-loaded-model-counts") ?? "{}") as Record<string, number>).filter((count) => count > 0).length).toBeGreaterThan(0);
+  // Loaded meshes can precede shader readiness. Require the fixture's filled surface,
+  // not merely its selection box or the underlying grid, before capturing evidence.
+  await expect.poll(() => page.evaluate(() => new Promise<number>((resolve) => requestAnimationFrame(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('[aria-label="AtrVisu 3D workspace"]')!;
+    const bounds = Object.values(JSON.parse(canvas.dataset.machineScreenBounds ?? "{}") as Record<string, { left: number; top: number; width: number; height: number }>)[0];
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    if (!gl || !bounds || bounds.width <= 0 || bounds.height <= 0) { resolve(0); return; }
+    const scaleX = gl.drawingBufferWidth / canvas.clientWidth;
+    const scaleY = gl.drawingBufferHeight / canvas.clientHeight;
+    const x = Math.max(0, Math.floor(bounds.left * scaleX));
+    const y = Math.max(0, gl.drawingBufferHeight - Math.ceil((bounds.top + bounds.height) * scaleY));
+    const width = Math.min(gl.drawingBufferWidth - x, Math.ceil(bounds.width * scaleX));
+    const height = Math.min(gl.drawingBufferHeight - y, Math.ceil(bounds.height * scaleY));
+    if (width <= 0 || height <= 0) { resolve(0); return; }
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(x, y, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let filledPixels = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i] > 60 && pixels[i + 1] > pixels[i] + 15 && pixels[i + 2] > pixels[i] + 15) filledPixels++;
+    }
+    resolve(filledPixels / (width * height));
+  })))).toBeGreaterThan(0.2);
 };
 const customCard = (page: Page) => page.getByTestId("machine-library-panel").locator('.asset-card[data-asset-key^="project-custom::"]').filter({ hasText: "Imported Test Equipment" });
 
