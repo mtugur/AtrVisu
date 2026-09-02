@@ -80,7 +80,7 @@ export function WorkbenchPrimaryDock({
         ) : null}
       </header>
       {collapsed ? (
-        <div className="workbench-primary-dock-reopen">
+        <div className="workbench-dock-reopen-control is-left">
           <WorkbenchDockCollapseButton
             side="left"
             collapsed

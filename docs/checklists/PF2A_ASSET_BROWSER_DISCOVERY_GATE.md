@@ -24,7 +24,8 @@
 | Responsive | PASS | Chromium at 1440x900, 1024x768, and 640x800; no document horizontal overflow |
 | Primary Dock density | PASS | Canonical horizontal Library / Explorer / Layers / Groups / Viewpoints tabs are fully visible at the 292 px default width; no permanent vertical rail or duplicate active title |
 | Primary Dock collapse | PASS | Zero editor inset and zero reserved dock width; floating `Open <active tab>` affordance restores the existing active contribution and persisted width |
-| Runtime evidence | PASS | Conditional ten-capture artifact `pf2a-asset-browser-discovery` |
+| Structural dock symmetry | PASS | Collapsed Primary Dock and Inspector use mirrored 32 x 32 edge controls at the same shell-relative top inset at 1440 and 640 widths |
+| Runtime evidence | PASS | Conditional twelve-capture artifact `pf2a-asset-browser-discovery` |
 | Dependency audit | PASS | `npm audit --audit-level=low`: 0 vulnerabilities |
 | Dependency tree | PASS | `npm ls --all`: valid; expected platform-optional packages absent |
 | Design-token governance | PASS | 260 maintained files checked |

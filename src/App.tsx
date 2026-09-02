@@ -4898,7 +4898,7 @@ export function App() {
         />
       )}
       secondaryDock={isInspectorPresentationCollapsed ? (
-        <div className="panel-reopen-tab" data-app-shell-zone="machine-properties">
+        <div className="workbench-dock-reopen-control is-right" data-app-shell-zone="machine-properties">
           <WorkbenchDockCollapseButton
             side="right"
             collapsed

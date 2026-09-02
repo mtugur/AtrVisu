@@ -1227,18 +1227,38 @@ body.is-resizing-workbench-dock {
   align-self: center;
 }
 
-.workbench-primary-dock-reopen {
-  position: absolute;
-  top: var(--av-spacing-sm);
-  left: 0;
+.workbench-dock-reopen-control {
+  position: fixed;
+  top: calc(var(--av-shell-top-inset) + var(--av-spacing-sm));
+  z-index: calc(var(--av-z-chrome) + 1);
+  display: grid;
+  width: var(--av-control-min-pointer-target);
+  height: var(--av-control-min-pointer-target);
+  place-items: center;
   pointer-events: none;
 }
 
-.workbench-primary-dock-reopen .workbench-dock-collapse-control {
+.workbench-dock-reopen-control.is-left {
+  left: 0;
+}
+
+.workbench-dock-reopen-control.is-right {
+  right: 0;
+}
+
+.workbench-dock-reopen-control .workbench-dock-collapse-control {
   pointer-events: auto;
+  box-shadow: var(--av-elevation-panel);
+}
+
+.workbench-dock-reopen-control.is-left .workbench-dock-collapse-control {
   border-left: 0;
   border-radius: 0 var(--av-control-radius-sm) var(--av-control-radius-sm) 0;
-  box-shadow: var(--av-elevation-panel);
+}
+
+.workbench-dock-reopen-control.is-right .workbench-dock-collapse-control {
+  border-right: 0;
+  border-radius: var(--av-control-radius-sm) 0 0 var(--av-control-radius-sm);
 }
 
 .workbench-dock-collapse-icon {
@@ -1705,8 +1725,7 @@ body.is-resizing-workbench-dock {
   gap: 8px;
 }
 
-.panel-toolbar button,
-.panel-reopen-tab {
+.panel-toolbar button {
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 22%, transparent);
   border-radius: 8px;
   color: var(--av-text-primary);
@@ -1727,9 +1746,7 @@ body.is-resizing-workbench-dock {
 }
 
 .panel-toolbar button:hover,
-.panel-toolbar button:focus-visible,
-.panel-reopen-tab:hover,
-.panel-reopen-tab:focus-visible {
+.panel-toolbar button:focus-visible {
   border-color: color-mix(in srgb, var(--av-interaction-accent) 72%, transparent);
   background: color-mix(in srgb, var(--av-interaction-accent) 16%, transparent);
   outline: none;
@@ -1772,20 +1789,6 @@ body.is-resizing-workbench-dock {
 .is-resizing-panel {
   cursor: ew-resize;
   user-select: none;
-}
-
-.panel-reopen-tab {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  z-index: 3;
-  min-width: 42px;
-  min-height: 96px;
-  padding: 8px 6px;
-  border-right: 0;
-  border-radius: 8px 0 0 8px;
-  writing-mode: vertical-rl;
-  transform: translateY(-50%);
 }
 
 .panel-section {
@@ -4721,7 +4724,7 @@ body.is-resizing-workbench-dock {
   }
 
   .app-shell:has(.workbench-primary-dock:not(.is-collapsed)) .machine-panel,
-  .app-shell:has(.workbench-primary-dock:not(.is-collapsed)) .panel-reopen-tab {
+  .app-shell:has(.workbench-primary-dock:not(.is-collapsed)) .workbench-dock-reopen-control.is-right {
     display: none;
   }
 
@@ -4777,17 +4780,6 @@ body.is-resizing-workbench-dock {
 
   .panel-resize-handle {
     display: none;
-  }
-
-  .panel-reopen-tab {
-    top: auto;
-    right: 14px;
-    bottom: 66px;
-    min-width: 92px;
-    min-height: 38px;
-    writing-mode: horizontal-tb;
-    transform: none;
-    border-radius: 8px 8px 0 0;
   }
 
   .panel-header h1 {
@@ -5125,17 +5117,6 @@ body.is-resizing-workbench-dock {
   height: var(--av-icon-size-md);
 }
 
-.panel-reopen-tab {
-  display: grid;
-  min-width: 42px;
-  min-height: 96px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  writing-mode: horizontal-tb;
-}
-
 .workbench-bottom-dock {
   bottom: var(--av-workbench-status-bar-height);
 }
@@ -5412,8 +5393,4 @@ body.is-resizing-workbench-dock {
     overscroll-behavior-inline: contain;
   }
 
-  .panel-reopen-tab {
-    min-width: 40px;
-    min-height: 40px;
-  }
 }

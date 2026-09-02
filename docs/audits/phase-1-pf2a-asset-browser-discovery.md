@@ -52,6 +52,11 @@ At the canonical 292 px default width, all five full tab labels remain visible
 without scrolling or overlap; narrower user-resized widths retain horizontal
 scrolling as a fallback.
 
+Collapsed Primary Dock and Inspector reopen affordances share one structural
+dock grammar: mirrored 32 x 32 edge controls at the same shell-relative top
+inset. Their existing panel authorities, persisted collapse state, responsive
+rules, and reopen targets remain unchanged.
+
 ## Persistence
 
 AtrVisu IndexedDB version 3 adds only `assetBrowserPreferences` / `browser`.
@@ -71,7 +76,7 @@ project and workbench preference bytes survive unchanged.
 - Chromium covers Search/Add/Recent, hard-reload Favorites, unfavorite empty
   state, combined filters, manager command reachability, non-domain invariance,
   and 1440x900 / 1024x768 / 640x800 overflow resilience.
-- Conditional exact-head CI capture produces ten real-runtime screenshots in
+- Conditional exact-head CI capture produces twelve real-runtime screenshots in
   artifact `pf2a-asset-browser-discovery`.
 - Help explains search, category/family browsing, filters, Favorites, Recent,
   and explicit Add using current customer-facing behavior only.

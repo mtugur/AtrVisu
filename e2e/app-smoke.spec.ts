@@ -125,6 +125,47 @@ const expectDefaultPrimaryDockTabsFit = async (page: Page) => {
     .toBeLessThanOrEqual((geometry?.tabsClientWidth ?? 0) + 1);
 };
 
+const expectMirroredStructuralDockReopenControls = async (page: Page) => {
+  const primaryReopen = page.getByTestId("primary-dock-collapse-toggle");
+  const inspectorReopen = page.getByTestId("right-dock-collapse-toggle");
+  await expect(primaryReopen).toBeVisible();
+  await expect(inspectorReopen).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const primary = document.querySelector<HTMLElement>('[data-testid="primary-dock-collapse-toggle"]');
+    const inspector = document.querySelector<HTMLElement>('[data-testid="right-dock-collapse-toggle"]');
+    if (!primary || !inspector) {
+      return null;
+    }
+    const primaryBounds = primary.getBoundingClientRect();
+    const inspectorBounds = inspector.getBoundingClientRect();
+    return {
+      viewportWidth: window.innerWidth,
+      primary: {
+        top: primaryBounds.top,
+        left: primaryBounds.left,
+        width: primaryBounds.width,
+        height: primaryBounds.height
+      },
+      inspector: {
+        top: inspectorBounds.top,
+        right: inspectorBounds.right,
+        width: inspectorBounds.width,
+        height: inspectorBounds.height
+      }
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry?.primary.width).toBe(32);
+  expect(geometry?.primary.height).toBe(32);
+  expect(Math.abs((geometry?.primary.width ?? 0) - (geometry?.inspector.width ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs((geometry?.primary.height ?? 0) - (geometry?.inspector.height ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs((geometry?.primary.top ?? 0) - (geometry?.inspector.top ?? 0))).toBeLessThanOrEqual(1);
+  expect(Math.abs(geometry?.primary.left ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(1);
+  expect(Math.abs((geometry?.viewportWidth ?? 0) - (geometry?.inspector.right ?? 0))).toBeLessThanOrEqual(1);
+};
+
 const seedUiPreferences = async (page: Page, preferences: unknown) => {
   await page.addInitScript((seed) => new Promise<void>((resolve, reject) => {
     if (window.sessionStorage.getItem("atrvisu.e2e.uiPreferencesSeeded") === "true") {
@@ -5743,6 +5784,58 @@ test("1024 responsive presentation preserves viewport dominance and the persiste
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("PF-2A collapsed structural dock controls mirror at desktop and narrow widths", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const primaryDock = page.getByTestId("primary-dock");
+  const groupsTab = page.getByTestId("primary-dock-tab-panel.groups");
+  const groupsPanel = page.locator('[data-panel-id="panel.groups"]');
+
+  await groupsTab.click();
+  await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("primary-dock-collapse-toggle").click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await page.getByTestId("right-panel")
+    .getByTestId("right-dock-collapse-toggle")
+    .click();
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expectMirroredStructuralDockReopenControls(page);
+  await capturePf2aScreenshot(page, "11-structural-docks-collapsed-1440.png");
+
+  await page.getByTestId("primary-dock-collapse-toggle").click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
+  await expect(groupsPanel).toBeVisible();
+  await page.getByTestId("primary-dock-collapse-toggle").click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await page.getByTestId("right-dock-collapse-toggle").click();
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  await page.getByTestId("right-panel")
+    .getByTestId("right-dock-collapse-toggle")
+    .click();
+
+  await page.setViewportSize({ width: 640, height: 800 });
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expectMirroredStructuralDockReopenControls(page);
+  await capturePf2aScreenshot(page, "12-structural-docks-collapsed-640.png");
+
+  await page.getByTestId("primary-dock-collapse-toggle").click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "false");
+  await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
+  await expect(groupsPanel).toBeVisible();
+  await page.getByTestId("primary-dock-collapse-toggle").click();
+  await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
+  await page.getByTestId("right-dock-collapse-toggle").click();
+  await expect(page.getByTestId("right-panel")).toBeVisible();
+  await page.getByTestId("right-panel")
+    .getByTestId("right-dock-collapse-toggle")
+    .click();
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

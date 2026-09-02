@@ -123,6 +123,7 @@ describe("final workbench composition contracts", () => {
     const collapsedMarkup = renderToStaticMarkup(collapsedTree);
     expect(collapsedMarkup).toContain('class="workbench-primary-dock-header" hidden=""');
     expect(collapsedMarkup).toContain('class="workbench-primary-dock-content" hidden=""');
+    expect(collapsedMarkup).toContain('class="workbench-dock-reopen-control is-left"');
     expect(collapsedMarkup).toContain('aria-label="Open Groups"');
     expect(collapsedMarkup).not.toContain('aria-label="Expand Primary Dock"');
     expect(collapsedMarkup.match(/data-testid="primary-dock-collapse-toggle"/g)).toHaveLength(1);
