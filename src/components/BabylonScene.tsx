@@ -2067,10 +2067,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         ));
         canvas.dataset.machineRenderTransforms = JSON.stringify(Object.fromEntries(
           [...machineNodesRef.current].slice(0, 16).map(([id, node]) => {
-            const worldPosition = (mesh: AbstractMesh) => {
-              mesh.computeWorldMatrix(true);
-              return mesh.getAbsolutePosition().asArray();
-            };
+            const worldPosition = (mesh: AbstractMesh) => mesh.getAbsolutePosition().asArray();
             return [id, {
               box: worldPosition(node.box),
               label: worldPosition(node.label),

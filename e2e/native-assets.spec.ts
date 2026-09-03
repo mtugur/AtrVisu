@@ -27,17 +27,19 @@ const openImport = async (page: Page) => {
   await expect(dialog).toBeVisible();
   return dialog;
 };
-const prepare = async (page: Page, evidence = false, offsetUnindexed = false) => {
+const prepare = async (page: Page, { evidence = false, offsetUnindexed = false, exerciseCalibration = true } = {}) => {
   const dialog = await openImport(page);
   await dialog.getByLabel("GLB file").setInputFiles({ name: "Imported Test Equipment.glb", mimeType: "model/gltf-binary", buffer: Buffer.from(createNativeGlbFixture({ unindexed: offsetUnindexed, offset: offsetUnindexed })) });
   await expect(dialog.getByTestId("native-asset-preview")).toHaveAttribute("data-ready", "true");
   if (evidence) await capture(page, "01-import-file-preview-1440.png");
   await dialog.getByRole("button", { name: "Next", exact: true }).click();
-  await dialog.getByLabel("Model units").selectOption("mm");
-  await expect(dialog.getByLabel("Calibrated dimensions")).toContainText("W 2.0");
-  await dialog.getByLabel("Model units").selectOption("m");
-  await dialog.getByLabel("Forward axis").selectOption("x+");
-  await expect(dialog.getByLabel("Calibrated dimensions")).toContainText("W 3000.0");
+  if (exerciseCalibration) {
+    await dialog.getByLabel("Model units").selectOption("mm");
+    await expect(dialog.getByLabel("Calibrated dimensions")).toContainText("W 2.0");
+    await dialog.getByLabel("Model units").selectOption("m");
+    await dialog.getByLabel("Forward axis").selectOption("x+");
+    await expect(dialog.getByLabel("Calibrated dimensions")).toContainText("W 3000.0");
+  }
   await expectPreviewPixels(page);
   if (offsetUnindexed) {
     await dialog.getByLabel("Center on footprint").uncheck();
@@ -168,7 +170,8 @@ for (const imported of [false, true]) {
       await page.getByTestId("create-project").click();
       await expect(page.getByTestId("project-manager-project-list")).toContainText("Elevated GLB Project");
       await page.getByTestId("close-project-manager").click();
-      const dialog = await prepare(page);
+      // Calibration controls are exercised by the dedicated import/responsive cases.
+      const dialog = await prepare(page, { exerciseCalibration: false });
       await dialog.getByRole("button", { name: "Validate & Save", exact: true }).click();
       await expect(dialog).toHaveCount(0);
     }
@@ -230,7 +233,7 @@ for (const imported of [false, true]) {
 test("PF-2B native GLB preview save Add and hard reload resolve the persisted real model", async ({ page }) => {
   const errors = await start(page);
   const canvas = await page.getByLabel("AtrVisu 3D workspace").elementHandle();
-  const dialog = await prepare(page, true);
+  const dialog = await prepare(page, { evidence: true });
   expect(await canvas?.evaluate((element) => element.isConnected)).toBe(true);
   await dialog.getByRole("button", { name: "Validate & Save", exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -308,7 +311,7 @@ test("PF-2B Standard custom variant is editable without mutating its source", as
 for (const [width, height] of [[1024, 768], [640, 800]]) {
   test(`PF-2B import stays operable at ${width}`, async ({ page }) => {
     const errors = await start(page, width, height);
-    const dialog = await prepare(page, false, width === 1024);
+    const dialog = await prepare(page, { offsetUnindexed: width === 1024 });
     await expect(dialog.getByRole("button", { name: "Validate & Save", exact: true })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await capture(page, width === 640 ? "10-import-640.png" : "11-import-1024.png");
