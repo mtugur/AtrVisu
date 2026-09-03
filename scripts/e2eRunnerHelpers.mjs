@@ -73,3 +73,30 @@ export const createPlaywrightEnvironment = (environment, baseUrl) => ({
   ATRVISU_E2E_EXTERNAL_SERVER: "1",
   ATRVISU_E2E_BASE_URL: baseUrl
 });
+
+const isolatedRoutePattern = "runtime feature access complete gate is bound to observed visible command routes$";
+
+export const createE2EPhases = (args) => args.length > 0
+  // Explicit focused/list invocations retain their existing CLI semantics.
+  ? [{ name: "focused", args: [...args] }]
+  : [
+      { name: "parallel suite", args: ["--grep-invert", isolatedRoutePattern] },
+      {
+        name: "isolated runtime feature access",
+        args: [
+          "--grep", isolatedRoutePattern,
+          // Playwright clears its output directory at startup; preserve phase-one evidence.
+          "--output", "test-results/runtime-feature-access"
+        ]
+      }
+    ];
+
+export const runE2EPhases = async (phases, runPhase) => {
+  let failure = null;
+  for (const phase of phases) {
+    const result = await runPhase(phase);
+    if (result.signal) return result;
+    if (result.code !== 0) failure ??= result;
+  }
+  return failure ?? { code: 0, signal: null };
+};

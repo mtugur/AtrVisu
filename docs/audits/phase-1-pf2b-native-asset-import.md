@@ -79,8 +79,23 @@ The original five native cases remain independently scheduled; shared helpers
 keep their existing behavior and all 87 tests registered. No assertion, timeout,
 worker count or workflow is relaxed.
 
-Ready for bounded visual/manual acceptance only after exact-head CI succeeds.
-Review a real customer GLB at 1440/1024/640, units/axes/floor calibration, save,
-hard reload and Add, then create/edit a custom variant. Browser-local imported
-models do not travel with JSON exports. No product decision is required to keep
-that explicitly bounded PF-2B storage behavior.
+## Exact-Head CI Scheduling Correction
+
+Reviewer comment `5526447876` records manual PF-2B product acceptance as PASS.
+The accepted product tree is unchanged by this test-only correction. Browser-local
+imported models still do not travel with JSON exports.
+
+Run `33739108074` exhausted the existing 60-second command-route scenario budget
+under concurrent graphics/export/preview load. Standard `npm run test:e2e` now
+awaits two Playwright phases against one owned, provenance-verified server:
+the other 86 scenarios with normal parallelism, then the exact command-route
+scenario alone. Its test body and assertions are unchanged, as are all 87
+scenarios, timeouts, retries and global worker settings. Explicit focused/list
+CLI invocations retain their existing semantics.
+
+The isolated phase uses `test-results/runtime-feature-access` so Playwright's
+startup cleanup cannot remove the first phase's 14 PF-2B captures. The existing
+workflow uploads `pf2b-native-asset-import` once. Either phase failure fails the
+runner; phase completion is awaited, not retried. Helper tests cover partitioning,
+sequential execution, output isolation and failure propagation. Final local and
+exact-head CI results are recorded in the PR delivery description.

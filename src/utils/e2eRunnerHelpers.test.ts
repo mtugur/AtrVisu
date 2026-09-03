@@ -8,7 +8,15 @@ type E2EServerOwnership =
   | { ownership: "owned"; processHandle: unknown }
   | { ownership: "external"; baseUrl: string };
 
+type E2EPhase = { name: string; args: string[] };
+type E2EResult = { code: number | null; signal: string | null };
+
 type E2ERunnerHelpers = {
+  createE2EPhases: (args: string[]) => E2EPhase[];
+  runE2EPhases: (
+    phases: E2EPhase[],
+    runPhase: (phase: E2EPhase) => Promise<E2EResult>
+  ) => Promise<E2EResult>;
   ATRVISU_SOURCE_HEAD_HEADER: string;
   assertAtrVisuServerProvenance: (expectedHead: string, observedHead: string | null) => void;
   readGitSourceProvenance: (
@@ -120,5 +128,70 @@ describe("AtrVisu E2E runner ownership", () => {
       ATRVISU_E2E_EXTERNAL_SERVER: "1",
       ATRVISU_E2E_BASE_URL: "http://127.0.0.1:5176"
     });
+  });
+});
+
+describe("AtrVisu complete E2E phase scheduling", () => {
+  it("partitions the exact command-route scenario without changing workers, retries or timeouts", () => {
+    const phases = helpers.createE2EPhases([]);
+    expect(phases).toHaveLength(2);
+    const [parallel, isolated] = phases;
+    expect(parallel.args[0]).toBe("--grep-invert");
+    expect(isolated.args.slice(0, 2)).toEqual(["--grep", parallel.args[1]]);
+    const pattern = new RegExp(parallel.args[1]);
+    expect(pattern.test("[chromium] app-smoke.spec.ts runtime feature access complete gate is bound to observed visible command routes")).toBe(true);
+    expect(pattern.test("runtime feature access complete gate is bound to observed visible command routes extra")).toBe(false);
+    expect(pattern.test("native asset import is persistent")).toBe(false);
+    for (const phase of phases) {
+      expect(phase.args.join(" ")).not.toMatch(/--(?:workers|retries|timeout|pass-with-no-tests)/);
+    }
+  });
+
+  it("keeps phase-one evidence outside the isolated Playwright output directory", () => {
+    const [parallel, isolated] = helpers.createE2EPhases([]);
+    expect(parallel.args).not.toContain("--output");
+    expect(isolated.args.slice(-2)).toEqual(["--output", "test-results/runtime-feature-access"]);
+  });
+
+  it("preserves explicit focused and list CLI arguments without adding another test", () => {
+    for (const args of [["--list"], ["native-assets.spec.ts", "--grep", "reload", "--workers=2"]]) {
+      expect(helpers.createE2EPhases(args)).toEqual([{ name: "focused", args }]);
+      expect(helpers.createE2EPhases(args)[0].args).not.toBe(args);
+    }
+  });
+
+  it("waits for the parallel child to exit before starting the isolated child", async () => {
+    const phases = helpers.createE2EPhases([]);
+    let finishParallel!: (result: E2EResult) => void;
+    const parallelExit = new Promise<E2EResult>((resolve) => { finishParallel = resolve; });
+    const runPhase = vi.fn()
+      .mockReturnValueOnce(parallelExit)
+      .mockResolvedValueOnce({ code: 0, signal: null });
+    const execution = helpers.runE2EPhases(phases, runPhase);
+    expect(runPhase).toHaveBeenCalledTimes(1);
+    expect(runPhase).toHaveBeenNthCalledWith(1, phases[0]);
+    finishParallel({ code: 0, signal: null });
+    await expect(execution).resolves.toEqual({ code: 0, signal: null });
+    expect(runPhase).toHaveBeenNthCalledWith(2, phases[1]);
+  });
+
+  it.each([0, 1])("does not hide a failure in phase %i or omit another phase", async (failedPhase) => {
+    const phases = helpers.createE2EPhases([]);
+    const runPhase = vi.fn(async (phase: E2EPhase) => ({
+      code: phase === phases[failedPhase] ? 1 : 0, signal: null
+    }));
+    await expect(helpers.runE2EPhases(phases, runPhase)).resolves.toEqual({ code: 1, signal: null });
+    expect(runPhase).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not continue after a terminated child or turn a missing exit code into success", async () => {
+    const phases = helpers.createE2EPhases([]);
+    const terminated = vi.fn(async () => ({ code: null, signal: "SIGTERM" }));
+    await expect(helpers.runE2EPhases(phases, terminated)).resolves.toEqual({ code: null, signal: "SIGTERM" });
+    expect(terminated).toHaveBeenCalledOnce();
+    const missingCode = vi.fn()
+      .mockResolvedValueOnce({ code: null, signal: null })
+      .mockResolvedValueOnce({ code: 0, signal: null });
+    await expect(helpers.runE2EPhases(phases, missingCode)).resolves.toEqual({ code: null, signal: null });
   });
 });

@@ -23,4 +23,5 @@
 | Same-PR documentation | ADR-013 and PF-2B audit |
 | Complete validation | Audit low, dependency tree, tokens, build, unit, E2E, diff check; final run linked in PR |
 | Exact-head visual artifact | pf2b-native-asset-import, 14 captures including selected-file state and elevated model before/after project reload |
-| Manual acceptance | Required after green CI; not claimed by automated screenshots |
+| Manual acceptance | PASS recorded by reviewer comment 5526447876; accepted product unchanged by CI scheduling correction |
+| Deterministic complete E2E scheduling | 86 normal-parallel scenarios followed by isolated exact command-route scenario; unchanged 87 scenarios/assertions/timeouts; separate output preserves all 14 captures |
