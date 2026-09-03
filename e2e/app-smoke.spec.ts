@@ -2,6 +2,15 @@ import { expect, type Dialog, type Locator, type Page, test } from "@playwright/
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
+import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
+import {
+  capture as captureNativeAssetEvidence,
+  start as startNativeAssetTest,
+  openImport as openNativeAssetImport,
+  prepare as prepareNativeAsset,
+  expectPreviewPixels as expectNativePreviewPixels,
+  expectRealModel as expectNativeRealModel
+} from "./nativeAssetHelpers";
 
 const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE === "1";
 const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5064733007");
@@ -5962,4 +5971,138 @@ test("PF-2A asset browser remains reachable without horizontal overflow at respo
   await capturePf2aScreenshot(page, "10-library-640.png");
   expect(errors).toEqual([]);
 });
+
+// Keep the additional GPU-heavy acceptance cases sequential with the long shell
+// smoke scenarios; the original import suite retains its independent worker.
+type RenderTransform = { box: number[]; label: number[]; children: { name: string; position: number[] }[] };
+const renderTransforms = async (page: Page): Promise<Record<string, RenderTransform>> =>
+  JSON.parse(await page.getByLabel("AtrVisu 3D workspace").getAttribute("data-machine-render-transforms") ?? "{}");
+const expectVerticalOffset = (before: RenderTransform, after: RenderTransform, delta: number) => {
+  const expectPosition = (start: number[], end: number[]) => {
+    expect(end[0]).toBeCloseTo(start[0]);
+    expect(end[1]).toBeCloseTo(start[1] + delta);
+    expect(end[2]).toBeCloseTo(start[2]);
+  };
+  expectPosition(before.box, after.box);
+  expectPosition(before.label, after.label);
+  expect(after.children.map((child) => child.name)).toEqual(before.children.map((child) => child.name));
+  expect(before.children.length).toBeGreaterThan(0);
+  before.children.forEach((child, index) => {
+    // Product animation may advance along the conveyor, but its elevation is inherited too.
+    expect(after.children[index].position[1]).toBeCloseTo(child.position[1] + delta);
+  });
+};
+const openProjects = async (page: Page) => {
+  await page.getByRole("menuitem", { name: "File", exact: true }).click();
+  await page.locator('[role="menu"] [data-command-id="project.manager"]').click();
+  await expect(page.getByTestId("project-manager-modal")).toBeVisible();
+};
+
+test("PF-2B picker has one accessible selected-file state and supports same-file reselection", async ({ page }) => {
+  const errors = await startNativeAssetTest(page);
+  const dialog = await openNativeAssetImport(page);
+  const input = dialog.getByLabel("GLB file", { exact: true });
+  const button = dialog.getByRole("button", { name: "Choose GLB file", exact: true });
+  const status = dialog.getByTestId("native-asset-selected-file");
+  await expect(input).toBeHidden();
+  await expect(status).toHaveText("No GLB selected");
+  const buffer = Buffer.from(createNativeGlbFixture());
+  for (const key of ["Enter", "Space"]) {
+    await button.focus();
+    await expect(button).toBeFocused();
+    const chooserEvent = page.waitForEvent("filechooser");
+    await button.press(key);
+    const chooser = await chooserEvent;
+    await chooser.setFiles({ name: "Selected Equipment.glb", mimeType: "model/gltf-binary", buffer });
+    await expect(dialog.getByTestId("native-asset-preview")).toHaveAttribute("data-ready", "true");
+    await expectNativePreviewPixels(page);
+    const text = `Selected Equipment.glb (${(buffer.byteLength / 1024).toFixed(1)} KB)`;
+    await expect(status).toHaveCount(1);
+    await expect(status).toHaveText(text);
+    await expect(dialog.getByText(text, { exact: true })).toHaveCount(1);
+    await expect(button).toHaveAccessibleDescription(text);
+    await expect(input).toBeHidden();
+    await expect(input).toHaveValue("");
+    expect(await dialog.innerText()).not.toMatch(/No file selected|Dosya seçilmedi|No GLB selected/i);
+  }
+  // Cancelling leaves the application-owned selection intact.
+  await input.dispatchEvent("cancel");
+  await expect(status).toContainText("Selected Equipment.glb");
+  await captureNativeAssetEvidence(page, "12-truthful-selected-file.png");
+  expect(errors).toEqual([]);
+});
+
+for (const imported of [false, true]) {
+  test(`PF-2B ${imported ? "persisted GLB" : "Standard machine"} elevation moves root label and child affordances without changing Plan X/Y`, async ({ page }) => {
+    const errors = await startNativeAssetTest(page);
+    const canvas = page.getByLabel("AtrVisu 3D workspace");
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+    const generation = await canvas.getAttribute("data-scene-lifecycle-generation");
+    const canvasHandle = await canvas.elementHandle();
+    if (imported) {
+      await openProjects(page);
+      await page.getByTestId("new-project-name").fill("Elevated GLB Project");
+      await page.getByTestId("new-customer-name").fill("E2E Customer");
+      await page.getByTestId("create-project").click();
+      await expect(page.getByTestId("project-manager-project-list")).toContainText("Elevated GLB Project");
+      await page.getByTestId("close-project-manager").click();
+      // Calibration controls are exercised by the dedicated import/responsive cases.
+      const dialog = await prepareNativeAsset(page, { exerciseCalibration: false });
+      await dialog.getByRole("button", { name: "Validate & Save", exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+    const name = imported ? "Imported Test Equipment" : "Flow Pack Machine";
+    const library = page.getByTestId("machine-library-panel");
+    await library.getByLabel("Search assets").fill(name);
+    await library.getByRole("button", { name: `Add ${name} to layout`, exact: true }).click();
+    if (imported) await expectNativeRealModel(page);
+    await expect.poll(async () => Object.keys(await renderTransforms(page)).length).toBe(1);
+    const [id, before] = Object.entries(await renderTransforms(page))[0];
+    const plan = await canvas.getAttribute("data-machine-plan-positions");
+    const planX = await page.getByRole("textbox", { name: "Plan X", exact: true }).inputValue();
+    const planY = await page.getByRole("textbox", { name: "Plan Y", exact: true }).inputValue();
+    const elevation = page.getByRole("textbox", { name: "Elevation", exact: true });
+    const screenBefore = JSON.parse(await canvas.getAttribute("data-machine-screen-points") ?? "{}")[id];
+    await elevation.fill("1500");
+    await elevation.press("Tab");
+    await expect.poll(async () => (await renderTransforms(page))[id]?.box[1]).toBeCloseTo(before.box[1] + 1.5);
+    expectVerticalOffset(before, (await renderTransforms(page))[id], 1.5);
+    await expect.poll(async () => JSON.parse(await canvas.getAttribute("data-machine-screen-points") ?? "{}")[id]?.y).toBeLessThan(screenBefore.y - 5);
+    await expect(canvas).toHaveAttribute("data-machine-plan-positions", plan!);
+    await expect(page.getByRole("textbox", { name: "Plan X", exact: true })).toHaveValue(planX);
+    await expect(page.getByRole("textbox", { name: "Plan Y", exact: true })).toHaveValue(planY);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", generation!);
+    expect(await canvasHandle?.evaluate((element) => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'))).toBe(true);
+    if (imported) {
+      await expectNativeRealModel(page);
+      await captureNativeAssetEvidence(page, "13-imported-model-elevated.png");
+      let prompts = 0;
+      page.on("dialog", async (dialog) => { if (dialog.type() === "prompt") await dialog.accept(prompts++ === 0 ? "Elevated" : "1500 mm above floor"); });
+      await page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]').click();
+      await expect.poll(() => page.evaluate(() => window.__atrvisuProjectCommands?.getActiveContext().hasUnsavedChanges)).toBe(false);
+      const saved = await page.evaluate(() => window.__atrvisuProjectCommands!.getActiveContext());
+      expect(saved.revisionId).not.toBeNull();
+      await page.reload();
+      await expect(page.getByTestId("empty-project-welcome")).toBeVisible();
+      await page.getByTestId("empty-project-welcome").getByRole("button", { name: "Open Project", exact: true }).click();
+      const manager = page.getByTestId("project-manager-modal");
+      await manager.getByTestId("project-manager-project-option").filter({ hasText: "Elevated GLB Project" }).click();
+      await manager.getByRole("button", { name: "Load Revision", exact: true }).click();
+      await manager.getByTestId("close-project-manager").click();
+      await expectNativeRealModel(page);
+      await expect.poll(async () => (await renderTransforms(page))[id]?.box[1]).toBeCloseTo(before.box[1] + 1.5);
+      expectVerticalOffset(before, (await renderTransforms(page))[id], 1.5);
+      await expect(canvas).toHaveAttribute("data-machine-plan-positions", plan!);
+      expect(await page.evaluate(() => window.__atrvisuProjectCommands!.getActiveContext())).toMatchObject(saved);
+      await captureNativeAssetEvidence(page, "14-elevated-model-project-reload.png");
+    } else {
+      await elevation.fill("0");
+      await elevation.press("Tab");
+      await expect.poll(async () => (await renderTransforms(page))[id]?.box[1]).toBeCloseTo(before.box[1]);
+      expectVerticalOffset(before, (await renderTransforms(page))[id], 0);
+      await expect(canvas).toHaveAttribute("data-machine-plan-positions", plan!);
+    }
+    expect(errors).toEqual([]);
+  });
+}
 

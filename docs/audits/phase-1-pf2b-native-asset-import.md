@@ -67,12 +67,17 @@ Manual review `5099293463` correction coverage:
   invariant. Diagnostics stay gated by the existing E2E opt-in.
 - No Civil/Build, collision, project schema, PF-2A behavior or PF-3 change.
 
-The first correction CI run exposed E2E time-budget pressure under two workers.
+The first two correction CI runs exposed E2E time-budget pressure under two workers.
 Transform diagnostics now read world positions without forcing recursive matrix
 recalculation. The elevation/persistence case uses default import calibration;
 the original import/responsive cases retain the full unit/axis control checks.
 The affected command/shell tests, timeouts, assertions and CI worker policy are
 unchanged. Final exact-head CI, not the earlier failed run, remains the gate.
+To avoid overlapping additional GLB previews with the long shell scenarios, the
+three new acceptance cases are sequenced at the end of `app-smoke.spec.ts`.
+The original five native cases remain independently scheduled; shared helpers
+keep their existing behavior and all 87 tests registered. No assertion, timeout,
+worker count or workflow is relaxed.
 
 Ready for bounded visual/manual acceptance only after exact-head CI succeeds.
 Review a real customer GLB at 1440/1024/640, units/axes/floor calibration, save,

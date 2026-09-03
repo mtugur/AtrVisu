@@ -74,3 +74,7 @@ The separate machine label receives the same elevation offset. Existing GLB,
 placeholder and affordance children keep their box parent and inherit movement.
 This corrects rendering for imported, Standard and legacy machines without
 changing Plan X/Y, collision semantics, project serialization or Civil/Build.
+The added picker/elevation acceptance cases run at the end of `app-smoke.spec.ts`,
+sequentially with its long shell scenarios. The original five native import cases
+remain in `native-assets.spec.ts`; both use `nativeAssetHelpers.ts` without a new
+test execution policy or altered timeout/worker settings.
