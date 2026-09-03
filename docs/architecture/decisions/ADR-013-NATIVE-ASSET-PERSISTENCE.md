@@ -59,3 +59,18 @@ scene crash.
 `e2e/native-assets.spec.ts` cover persistence, validation, calibration, sharing,
 compensation, source immutability, reload, editor reuse and responsive preview.
 Exact-head CI publishes `pf2b-native-asset-import`.
+
+## Manual-Acceptance Correction
+
+Review `5099293463` identified contradictory native file text and a pre-existing
+machine elevation/render mismatch. The wizard now presents one application-owned
+filename/size status, with a keyboard-accessible picker button and a hidden native
+input that resets solely to allow same-file reselection. Cancellation preserves
+the selected state; native browser-localized filename text is not displayed.
+
+Machine creation and updates share the vertical render projection:
+`centerY = mmToMeters(elevationMm ?? 0) + heightMeters / 2`.
+The separate machine label receives the same elevation offset. Existing GLB,
+placeholder and affordance children keep their box parent and inherit movement.
+This corrects rendering for imported, Standard and legacy machines without
+changing Plan X/Y, collision semantics, project serialization or Civil/Build.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MachineDefinition } from "../../types/machine";
-import { getMachinePlaceholderVisualParts } from "./objectRendering";
+import { getMachinePlaceholderVisualParts, getMachineVerticalRenderPositions } from "./objectRendering";
 
 const createDefinition = (
   placeholderVisualType: string | undefined,
@@ -21,6 +21,26 @@ const createDefinition = (
     canWrap: false,
     hasFlowDirection: false
   }
+});
+
+describe("machine vertical render authority", () => {
+  it.each([undefined, 0, 1500, -250])("applies elevation %s to the root center and label without changing the definition", (elevationMm) => {
+    const definition = createDefinition("box-generic");
+    const before = structuredClone(definition);
+    const offset = (elevationMm ?? 0) / 1000;
+    const positions = getMachineVerticalRenderPositions({ definition, elevationMm });
+    expect(positions.centerY).toBeCloseTo(0.4 + offset);
+    expect(positions.labelY).toBeCloseTo(1.65 + offset);
+    expect(definition).toEqual(before);
+  });
+
+  it("uses canonical mm height for imported and Standard definitions, with legacy height fallback", () => {
+    const definition = { ...createDefinition("box-generic"), heightMm: 1200 };
+    const expected = { centerY: 2.6, labelY: 4.05 };
+    expect(getMachineVerticalRenderPositions({ definition, elevationMm: 2000 })).toEqual(expected);
+    expect(getMachineVerticalRenderPositions({ definition: { ...definition, modelPath: "atrvisu-model:test" }, elevationMm: 2000 })).toEqual(expected);
+    expect(getMachineVerticalRenderPositions({ definition: createDefinition(undefined), elevationMm: 2000 }).centerY).toBe(2.4);
+  });
 });
 
 describe("object rendering placeholder descriptors", () => {

@@ -25,7 +25,7 @@ Branch: `feat/phase-1-native-asset-import-v01`.
 - Real v3 database migration retains project, UI and asset-browser records.
 - Render calibration tests transform all supported perpendicular axis pairs and
   check the resulting dimensions, +Z forward, floor and footprint center.
-- Five Chromium cases cover native import/Add, hard reload, malformed and
+- Eight Chromium cases cover native import/Add, hard reload, malformed and
   non-renderable files, editing a Standard-derived Custom variant, 1024 and 640.
 - Preview canvas pixel checks run after unit/orientation changes. These
   checks include an offset, unindexed GLB with centering/floor calibration off.
@@ -41,7 +41,9 @@ Branch: `feat/phase-1-native-asset-import-v01`.
 ## Reviewer Evidence
 
 Conditional exact-head artifact: `pf2b-native-asset-import`.
-It includes the ten requested captures plus `11-import-1024.png`.
+It includes the ten original requested captures plus `11-import-1024.png`,
+`12-truthful-selected-file.png`, `13-imported-model-elevated.png` and
+`14-elevated-model-project-reload.png`.
 CI checks out the PR's real head and verifies provenance before running the
 complete gate and uploading the captures. The E2E server header is also checked.
 
@@ -51,6 +53,19 @@ counts and exact run URL are recorded in the PR delivery description, not
 manufactured as future results in this report.
 
 ## Acceptance Boundary
+
+Manual review `5099293463` correction coverage:
+- One visible application-owned file status, accessible picker activation with
+  Enter/Space, same-file reselection and cancel retaining the selected filename.
+- Deterministic vertical projection tests for default/zero/positive/negative
+  elevation, canonical mm height and legacy meter fallback.
+- Standard machine elevation 0 -> 1500 -> 0 moves the root and label, with every
+  box-child affordance inheriting the same vertical delta. Imported real geometry
+  receives the identical projection and survives a saved-project hard reload.
+- Chromium reads actual mesh world transforms, projected screen movement, real
+  model pixels and active revision context; Plan X/Y and scene lifecycle remain
+  invariant. Diagnostics stay gated by the existing E2E opt-in.
+- No Civil/Build, collision, project schema, PF-2A behavior or PF-3 change.
 
 Ready for bounded visual/manual acceptance only after exact-head CI succeeds.
 Review a real customer GLB at 1440/1024/640, units/axes/floor calibration, save,

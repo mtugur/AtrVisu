@@ -1,5 +1,14 @@
-import type { MachineDefinition } from "../../types/machine";
+import type { MachineDefinition, PlacedMachine } from "../../types/machine";
 import { getMachineDimensionsMeters } from "../../utils/machineDimensions";
+import { mmToMeters } from "../../utils/units";
+
+export const getMachineVerticalRenderPositions = (
+  machine: Pick<PlacedMachine, "definition" | "elevationMm">
+) => {
+  const { height } = getMachineDimensionsMeters(machine.definition);
+  const elevation = mmToMeters(machine.elevationMm ?? 0);
+  return { centerY: elevation + height / 2, labelY: elevation + height + 0.85 };
+};
 
 export type PlaceholderVisualPart =
   | {

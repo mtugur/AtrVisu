@@ -92,7 +92,8 @@ function ModelPreview({ bytes, unit, calibration, onBounds, onError }: {
 
 export function NativeAssetImport({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0);
-  const [fileName, setFileName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
   const [bounds, setBounds] = useState<ModelBounds | null>(null);
   const [unit, setUnit] = useState<"mm" | "m">("m");
@@ -119,7 +120,7 @@ export function NativeAssetImport({ onClose }: { onClose: () => void }) {
   const valid = !!bytes && !!projection && !!metadata.name.trim() && !!metadata.category.trim() && storageReady && !error;
   const chooseFile = async (file: File) => {
     const request = ++generation.current;
-    setError(""); setBytes(null); setBounds(null); setFileName(file.name); setStep(0);
+    setError(""); setBytes(null); setBounds(null); setSelectedFile({ name: file.name, size: file.size }); setStep(0);
     try {
       if (!file.name.toLowerCase().endsWith(".glb")) throw new Error("Choose a .glb file.");
       const content = await file.arrayBuffer();
@@ -130,11 +131,11 @@ export function NativeAssetImport({ onClose }: { onClose: () => void }) {
     } catch (caught) { if (request === generation.current) setError(errorText(caught)); }
   };
   const save = async () => {
-    if (!valid || !bounds || !bytes || busy) return;
+    if (!valid || !bounds || !bytes || !selectedFile || busy) return;
     setBusy(true);
     try {
       const draft: NativeAssetDraft = { ...metadata, bounds, unit, calibration };
-      await customAssets.importAsset(draft, bytes, fileName);
+      await customAssets.importAsset(draft, bytes, selectedFile.name);
       onClose();
     } catch (caught) { setError(`Could not save the asset: ${errorText(caught)}`); }
     finally { setBusy(false); }
@@ -146,7 +147,16 @@ export function NativeAssetImport({ onClose }: { onClose: () => void }) {
       <div className="native-asset-body">
         {bytes ? <ModelPreview bytes={bytes} unit={unit} calibration={calibration} onBounds={setBounds} onError={setError} /> : <div className="native-asset-empty"><Upload size={32} /><span>GLB model preview</span></div>}
         <div className="native-asset-fields">
-          {step === 0 && <><label>GLB file<input type="file" accept=".glb" aria-label="GLB file" onChange={(event) => { const file = event.target.files?.[0]; if (file) void chooseFile(file); event.target.value = ""; }} /></label>{fileName && <p>{fileName}{bytes ? ` (${(bytes.byteLength / 1024).toFixed(1)} KB)` : ""}</p>}</>}
+          {step === 0 && <>
+            <input ref={fileInputRef} type="file" accept=".glb" aria-label="GLB file" hidden onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void chooseFile(file);
+              // Only the application status is visible; resetting permits same-file reselection.
+              event.target.value = "";
+            }} />
+            <button type="button" aria-describedby="native-asset-selected-file" onClick={() => fileInputRef.current?.click()}><Upload size={16} /> Choose GLB file</button>
+            <p id="native-asset-selected-file" role="status" data-testid="native-asset-selected-file">{selectedFile ? `${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "No GLB selected"}</p>
+          </>}
           {step === 1 && <><label>Model units<select aria-label="Model units" value={unit} onChange={(event) => setUnit(event.target.value as "mm" | "m")}><option value="m">m</option><option value="mm">mm</option></select></label>
             <label>Forward axis<select aria-label="Forward axis" value={calibration.forwardAxis} onChange={(event) => setCalibration({ ...calibration, forwardAxis: event.target.value as ModelCalibration["forwardAxis"] })}>{["x+", "x-", "z+", "z-"].map((axis) => <option key={axis}>{axis}</option>)}</select></label>
             <label>Up axis<select aria-label="Up axis" value={calibration.upAxis} onChange={(event) => setCalibration({ ...calibration, upAxis: event.target.value as ModelCalibration["upAxis"] })}>{["y+", "z+", "x+"].map((axis) => <option key={axis}>{axis}</option>)}</select></label>

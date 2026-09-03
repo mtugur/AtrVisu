@@ -5,6 +5,9 @@
 | Exact main baseline | e3fd3ae396c68739ea993c34b7ff68fc86b21ae3 |
 | Registered import / variant routes | Runtime Feature Command bindings, seeds, surface inventory and feature-access gate |
 | Four-step GLB wizard | NativeAssetImport; isolated preview and positive loaded bounds |
+| Truthful file selection | One application-owned filename/size status; keyboard and same-file reselection Chromium regression; review 5099293463 |
+| Canonical machine elevation | Shared create/update center-Y helper; root, label and child world-transform regressions for Standard and imported models; Plan X/Y invariant |
+| Elevated project reload | Real GLB surface plus saved revision reload at nonzero elevation |
 | No fake external GLTF support | GLB container and external-resource rejection tests |
 | Shared calibration | Model calibration unit and Babylon matrix tests |
 | Additive v4 storage | Real v3 migration plus binary create/read/delete tests |
@@ -19,5 +22,5 @@
 | Customer Help | Import, units/axes, Validate & Save and Custom Variant guidance |
 | Same-PR documentation | ADR-013 and PF-2B audit |
 | Complete validation | Audit low, dependency tree, tokens, build, unit, E2E, diff check; final run linked in PR |
-| Exact-head visual artifact | pf2b-native-asset-import, 11 captures |
+| Exact-head visual artifact | pf2b-native-asset-import, 14 captures including selected-file state and elevated model before/after project reload |
 | Manual acceptance | Required after green CI; not claimed by automated screenshots |
