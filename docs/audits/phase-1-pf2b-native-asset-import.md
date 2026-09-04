@@ -99,3 +99,11 @@ workflow uploads `pf2b-native-asset-import` once. Either phase failure fails the
 runner; phase completion is awaited, not retried. Helper tests cover partitioning,
 sequential execution, output isolation and failure propagation. Final local and
 exact-head CI results are recorded in the PR delivery description.
+
+Run `33768200466` confirmed the isolated command route passes (44.5 seconds),
+but exposed the existing PF-1 responsive scenario's 30-second total budget during
+the earlier parallel native-preview window. That unchanged test is now declared
+near the end of the main smoke spec, after its other shell scenarios. This is
+test order only: its entire callback and every other top-level statement are
+preserved, all 87 scenarios remain registered, and normal parallelism is unchanged.
+The failed run still uploaded all 14 captures; it is not claimed as a green gate.

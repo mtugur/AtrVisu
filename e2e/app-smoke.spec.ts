@@ -1445,148 +1445,6 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   expect(errors).toEqual([]);
 });
 
-test("PF-1 premium command information architecture is accessible and responsive", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openCleanApp(page);
-  const welcome = page.getByTestId("empty-project-welcome");
-  await expect(welcome).toBeVisible();
-  await expect(welcome.getByRole("button", { name: "New Layout" })).toBeVisible();
-  await expect(welcome.getByRole("button", { name: "Open Project" })).toBeVisible();
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-
-  const menuBar = page.getByTestId("workbench-menu-bar");
-  expect(await menuBar.locator(".workbench-menu-trigger").allTextContents()).toEqual([
-    "File", "Edit", "View", "Insert", "Arrange", "Tools", "Help"
-  ]);
-
-  const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(8);
-  await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
-  await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
-  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
-  for (const button of await commandButtons.all()) {
-    await expect(button.locator(":scope > svg")).toHaveCount(1);
-    await expect(button.locator(":scope > .visually-hidden")).toHaveCount(1);
-    expect(await button.getAttribute("aria-label")).toBeTruthy();
-    expect(await button.getAttribute("title")).toBeTruthy();
-  }
-  expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
-    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Labels", "Connection Points", "Viewpoints"
-  ]);
-  await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
-  await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
-  const fileMenuForSave = await openWorkbenchMenu(page, "File");
-  await expect(fileMenuForSave.locator('[data-command-id="project.save"]')).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
-  await expect(page.getByTestId("command-palette")).toBeVisible();
-  await expect(page.getByTestId("command-palette").getByRole("listbox", { name: "Commands" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("command-palette")).toHaveCount(0);
-
-  const createNewLayout = welcome.getByRole("button", { name: "New Layout" });
-  await createNewLayout.click();
-  const projectManager = page.getByTestId("project-manager-modal");
-  await expect(projectManager).toHaveAttribute("data-entry-intent", "create");
-  await expect(page.getByTestId("new-project-name")).toBeFocused();
-  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
-  await page.keyboard.press("Escape");
-  await expect(projectManager).toHaveCount(0);
-  await expect(createNewLayout).toBeFocused();
-
-  const openExistingProject = welcome.getByRole("button", { name: "Open Project" });
-  await openExistingProject.click();
-  await expect(projectManager).toHaveAttribute("data-entry-intent", "open");
-  await expect(page.getByRole("button", { name: "Start a New Project" })).toBeFocused();
-  await expect(page.getByTestId("project-manager-empty-state")).toContainText("No existing projects are available.");
-  await page.keyboard.press("Escape");
-  await expect(projectManager).toHaveCount(0);
-  await expect(openExistingProject).toBeFocused();
-
-  await openProjectManagerFromFileMenu(page);
-  await expect(projectManager).toHaveAttribute("data-entry-intent", "neutral");
-  await expect(page.getByTestId("close-project-manager")).toBeFocused();
-  await page.getByTestId("close-project-manager").click();
-  await expect(projectManager).toHaveCount(0);
-  await expect(welcome).toBeVisible();
-  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
-  await expect(page.getByTestId("editor-host")).toHaveCount(1);
-  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-
-  const helpTrigger = menuBar.getByRole("menuitem", { name: "Help", exact: true });
-  const helpMenu = await openWorkbenchMenu(page, "Help");
-  await helpMenu.locator('[data-command-id="help.quickStart"]').click();
-  const help = page.getByTestId("help-modal");
-  await expect(help).toBeVisible();
-  await expect(help.locator(".help-task-card")).toHaveCount(4);
-  const helpSections = ["Quick Start", "Workbench", "Arrange & Snap", "Measurements", "Viewpoints", "Outputs", "Keyboard Shortcuts", "About"];
-  for (const section of helpSections) {
-    await help.getByRole("button", { name: section, exact: true }).click();
-    const customerText = (await help.locator(".help-dialog-content").innerText()).toLowerCase();
-    for (const forbidden of ["pull request", "product rule", "canonical", "registry", "phase", "pf-"]) {
-      expect(customerText).not.toContain(forbidden);
-    }
-  }
-  await expect(help.locator("kbd")).toHaveCount(0);
-  await help.getByRole("button", { name: "Keyboard Shortcuts", exact: true }).click();
-  expect(await help.locator("kbd").count()).toBeGreaterThan(0);
-  await page.keyboard.press("Escape");
-  await expect(help).toHaveCount(0);
-  await expect(helpTrigger).toBeFocused();
-
-  for (const viewport of [
-    { width: 1440, height: 900 },
-    { width: 1024, height: 768 },
-    { width: 640, height: 800 }
-  ]) {
-    await page.setViewportSize(viewport);
-    await expect.poll(() => page.evaluate(() =>
-      document.documentElement.scrollWidth <= document.documentElement.clientWidth
-    )).toBe(true);
-    await expect(menuBar).toBeVisible();
-    await expect(page.getByTestId("workbench-command-bar")).toBeVisible();
-    await expect(page.getByTestId("editor-host")).toHaveCount(1);
-    await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
-    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-    if (viewport.width === 640) {
-      await expect(getCommandBarCommand(page, "project.save")).toBeVisible();
-      const more = page.getByLabel("More commands");
-      await expect(more).toBeVisible();
-      await more.focus();
-      await page.keyboard.press("Shift+Tab");
-      await expect(more).not.toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(more).toBeFocused();
-      await page.keyboard.press("Enter");
-      await expect(page.locator(".workbench-command-overflow-menu")).toBeVisible();
-      await expect(getCommandBarCommand(page, "edit.duplicateSelected")).toBeVisible();
-      await page.keyboard.press("Tab");
-      const focusedOverflowPlacement = await page.evaluate(() =>
-        (document.activeElement as HTMLElement | null)?.dataset.commandPlacement ?? null
-      );
-      expect(focusedOverflowPlacement).toBe("overflow");
-      await page.keyboard.press("Escape");
-      await expect(more).toBeFocused();
-      await expect(page.locator(".workbench-command-overflow-menu")).not.toBeVisible();
-      expect(await page.locator('[data-command-placement="overflow"]').evaluateAll((buttons) =>
-        buttons.length === 0
-      )).toBe(true);
-      await page.keyboard.press("ArrowRight");
-      await expect(more).toBeFocused();
-      const welcomeLeft = await welcome.evaluate((element) => element.getBoundingClientRect().left);
-      const primaryDockRight = await page.locator(".workbench-primary-dock")
-        .evaluate((element) => element.getBoundingClientRect().right);
-      expect(welcomeLeft).toBeGreaterThanOrEqual(primaryDockRight);
-    }
-  }
-
-  expect(errors).toEqual([]);
-});
-
 test("Viewpoints is a truthful Primary Dock toggle and leaves no empty Bottom Dock chrome", async ({ page }) => {
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -5997,6 +5855,149 @@ const openProjects = async (page: Page) => {
   await page.locator('[role="menu"] [data-command-id="project.manager"]').click();
   await expect(page.getByTestId("project-manager-modal")).toBeVisible();
 };
+
+// Keep this existing graphics-heavy check after the parallel native-preview startup load.
+test("PF-1 premium command information architecture is accessible and responsive", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const welcome = page.getByTestId("empty-project-welcome");
+  await expect(welcome).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "New Layout" })).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "Open Project" })).toBeVisible();
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  const menuBar = page.getByTestId("workbench-menu-bar");
+  expect(await menuBar.locator(".workbench-menu-trigger").allTextContents()).toEqual([
+    "File", "Edit", "View", "Insert", "Arrange", "Tools", "Help"
+  ]);
+
+  const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
+  await expect(commandButtons).toHaveCount(8);
+  await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
+  await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
+  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
+  for (const button of await commandButtons.all()) {
+    await expect(button.locator(":scope > svg")).toHaveCount(1);
+    await expect(button.locator(":scope > .visually-hidden")).toHaveCount(1);
+    expect(await button.getAttribute("aria-label")).toBeTruthy();
+    expect(await button.getAttribute("title")).toBeTruthy();
+  }
+  expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
+    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Labels", "Connection Points", "Viewpoints"
+  ]);
+  await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
+  await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
+  const fileMenuForSave = await openWorkbenchMenu(page, "File");
+  await expect(fileMenuForSave.locator('[data-command-id="project.save"]')).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await expect(page.getByTestId("command-palette").getByRole("listbox", { name: "Commands" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+
+  const createNewLayout = welcome.getByRole("button", { name: "New Layout" });
+  await createNewLayout.click();
+  const projectManager = page.getByTestId("project-manager-modal");
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "create");
+  await expect(page.getByTestId("new-project-name")).toBeFocused();
+  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(projectManager).toHaveCount(0);
+  await expect(createNewLayout).toBeFocused();
+
+  const openExistingProject = welcome.getByRole("button", { name: "Open Project" });
+  await openExistingProject.click();
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "open");
+  await expect(page.getByRole("button", { name: "Start a New Project" })).toBeFocused();
+  await expect(page.getByTestId("project-manager-empty-state")).toContainText("No existing projects are available.");
+  await page.keyboard.press("Escape");
+  await expect(projectManager).toHaveCount(0);
+  await expect(openExistingProject).toBeFocused();
+
+  await openProjectManagerFromFileMenu(page);
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "neutral");
+  await expect(page.getByTestId("close-project-manager")).toBeFocused();
+  await page.getByTestId("close-project-manager").click();
+  await expect(projectManager).toHaveCount(0);
+  await expect(welcome).toBeVisible();
+  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  const helpTrigger = menuBar.getByRole("menuitem", { name: "Help", exact: true });
+  const helpMenu = await openWorkbenchMenu(page, "Help");
+  await helpMenu.locator('[data-command-id="help.quickStart"]').click();
+  const help = page.getByTestId("help-modal");
+  await expect(help).toBeVisible();
+  await expect(help.locator(".help-task-card")).toHaveCount(4);
+  const helpSections = ["Quick Start", "Workbench", "Arrange & Snap", "Measurements", "Viewpoints", "Outputs", "Keyboard Shortcuts", "About"];
+  for (const section of helpSections) {
+    await help.getByRole("button", { name: section, exact: true }).click();
+    const customerText = (await help.locator(".help-dialog-content").innerText()).toLowerCase();
+    for (const forbidden of ["pull request", "product rule", "canonical", "registry", "phase", "pf-"]) {
+      expect(customerText).not.toContain(forbidden);
+    }
+  }
+  await expect(help.locator("kbd")).toHaveCount(0);
+  await help.getByRole("button", { name: "Keyboard Shortcuts", exact: true }).click();
+  expect(await help.locator("kbd").count()).toBeGreaterThan(0);
+  await page.keyboard.press("Escape");
+  await expect(help).toHaveCount(0);
+  await expect(helpTrigger).toBeFocused();
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 640, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )).toBe(true);
+    await expect(menuBar).toBeVisible();
+    await expect(page.getByTestId("workbench-command-bar")).toBeVisible();
+    await expect(page.getByTestId("editor-host")).toHaveCount(1);
+    await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+    if (viewport.width === 640) {
+      await expect(getCommandBarCommand(page, "project.save")).toBeVisible();
+      const more = page.getByLabel("More commands");
+      await expect(more).toBeVisible();
+      await more.focus();
+      await page.keyboard.press("Shift+Tab");
+      await expect(more).not.toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(more).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(page.locator(".workbench-command-overflow-menu")).toBeVisible();
+      await expect(getCommandBarCommand(page, "edit.duplicateSelected")).toBeVisible();
+      await page.keyboard.press("Tab");
+      const focusedOverflowPlacement = await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.dataset.commandPlacement ?? null
+      );
+      expect(focusedOverflowPlacement).toBe("overflow");
+      await page.keyboard.press("Escape");
+      await expect(more).toBeFocused();
+      await expect(page.locator(".workbench-command-overflow-menu")).not.toBeVisible();
+      expect(await page.locator('[data-command-placement="overflow"]').evaluateAll((buttons) =>
+        buttons.length === 0
+      )).toBe(true);
+      await page.keyboard.press("ArrowRight");
+      await expect(more).toBeFocused();
+      const welcomeLeft = await welcome.evaluate((element) => element.getBoundingClientRect().left);
+      const primaryDockRight = await page.locator(".workbench-primary-dock")
+        .evaluate((element) => element.getBoundingClientRect().right);
+      expect(welcomeLeft).toBeGreaterThanOrEqual(primaryDockRight);
+    }
+  }
+
+  expect(errors).toEqual([]);
+});
 
 test("PF-2B picker has one accessible selected-file state and supports same-file reselection", async ({ page }) => {
   const errors = await startNativeAssetTest(page);
