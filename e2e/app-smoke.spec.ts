@@ -2496,6 +2496,144 @@ test("commercial outputs download real XLSX PDF and clean PNG without runtime mu
   expect(errors).toEqual([]);
 });
 
+test("Phase 1 sales flow creates a real line viewpoint and commercial outputs", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  await openProjectManagerFromFileMenu(page);
+  await page.getByTestId("new-project-name").fill("Phase 1 Sales Acceptance");
+  await page.getByTestId("new-customer-name").fill("ATARA Customer");
+  await page.getByTestId("create-project").click();
+  await expect(page.getByTestId("project-manager-project-list"))
+    .toContainText("Phase 1 Sales Acceptance");
+  await page.getByTestId("close-project-manager").click();
+
+  const lineAssets = [
+    { name: "Flow Pack Machine", groups: ["Primary Packaging", "Horizontal Flow Pack"], xMm: "0" },
+    { name: "Belt Conveyor", groups: ["Conveyors", "Belt Conveyors"], xMm: "4200" },
+    { name: "Robot Palletizer", groups: ["Palletizing", "Robot Palletizers"], xMm: "9800" }
+  ] as const;
+  for (const [index, asset] of lineAssets.entries()) {
+    await addCanonicalAtaraMachine(page, asset.name, asset.groups);
+    await waitForMachineDiagnostics(page, index + 1);
+    const properties = page.getByLabel("Selected machine properties");
+    await expect(properties).toBeVisible();
+    await properties.getByLabel("Plan X").fill(asset.xMm);
+    await properties.getByLabel("Plan X").blur();
+  }
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const explorer = page.getByTestId("layout-explorer");
+  const flowPackRow = explorer.locator(".layout-explorer-row").filter({ hasText: "Flow Pack Machine" });
+  const conveyorRow = explorer.locator(".layout-explorer-row").filter({ hasText: "Belt Conveyor" });
+  const palletizerRow = explorer.locator(".layout-explorer-row").filter({ hasText: "Robot Palletizer" });
+  await flowPackRow.click();
+  await expect(flowPackRow).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("schema-property-inspector")).toBeVisible();
+  await expect(page.getByTestId("atara-machine-data-diagnostics"))
+    .toHaveAttribute("data-schema-id", "schema.atara.machine");
+
+  const machineIds = await getMachineIds(page);
+  await clickSceneMachine(page, machineIds[1]);
+  await expect(conveyorRow).toHaveAttribute("aria-pressed", "true");
+  const conveyorProperties = page.getByLabel("Selected machine properties");
+  await conveyorProperties.getByLabel("Plan Y").fill("400");
+  await conveyorProperties.getByLabel("Plan Y").blur();
+
+  await flowPackRow.click();
+  await conveyorRow.click({ modifiers: ["Control"] });
+  await expect(page.getByTestId("connection-point-snap-panel")).toBeVisible();
+  await expect.poll(async () => (await getRuntimeFeature(page, "snap.connectionPoint"))?.status)
+    .toBe("ready");
+  const positionsBeforeSnap = await readCanvasRecord<PlanPosition>(
+    page,
+    "data-machine-plan-positions"
+  );
+  await expectOneRuntimeCommandExecution(page, "snap.connectionPoint", () =>
+    page.getByTestId("connection-point-snap-button").click()
+  );
+  await expect.poll(() =>
+    readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  ).not.toEqual(positionsBeforeSnap);
+
+  await palletizerRow.click();
+  await expect(palletizerRow).toHaveAttribute("aria-pressed", "true");
+  await getCommandBarCommand(page, "view.viewpoints").click();
+  await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
+  await page.getByTestId("viewpoint-name-input").fill("Phase 1 Customer Review");
+  await page.getByTestId("capture-viewpoint").click();
+  await expect(page.getByRole("button", { name: /Phase 1 Customer Review/i })).toBeVisible();
+
+  const beforeExports = await waitForRuntimeViewport(page);
+  const projectBeforeExports = await getActiveProjectRuntimeContext(page);
+  const fileMenu = await openWorkbenchMenu(page, "File");
+  await expectRuntimeCommandExecutionOnce(page, "project.commercialOutputs", () =>
+    fileMenu.locator('[data-command-id="project.commercialOutputs"]').click()
+  );
+  const modal = page.getByTestId("commercial-outputs-modal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText("Phase 1 Sales Acceptance");
+  await expect(modal).toContainText("3");
+
+  const [xlsxDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    expectRuntimeCommandExecutionOnce(page, "commercial.exportBomExcel", () =>
+      page.getByTestId("export-commercial-bom").click()
+    )
+  ]);
+  const xlsxPath = await xlsxDownload.path();
+  expect(xlsxPath).not.toBeNull();
+  const workbookFiles = unzipSync(await readFile(xlsxPath ?? ""));
+  const workbookXml = strFromU8(workbookFiles["xl/workbook.xml"]);
+  expect(workbookXml).toContain('name="Summary"');
+  expect(workbookXml).toContain('name="BOM"');
+  expect(workbookXml).toContain('name="Instances"');
+  const bomXml = strFromU8(workbookFiles["xl/worksheets/sheet2.xml"]);
+  expect(bomXml).toContain("Flow Pack Machine");
+  expect(bomXml).toContain("Belt Conveyor");
+  expect(bomXml).toContain("Robot Palletizer");
+
+  const [pdfDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    expectRuntimeCommandExecutionOnce(page, "commercial.exportLayoutPdf", () =>
+      page.getByTestId("export-commercial-plan").click()
+    )
+  ]);
+  const pdfPath = await pdfDownload.path();
+  expect(pdfPath).not.toBeNull();
+  const pdfBytes = await readFile(pdfPath ?? "");
+  expect(pdfBytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(pdfBytes.byteLength).toBeGreaterThan(10_000);
+
+  const [pngDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    expectRuntimeCommandExecutionOnce(page, "commercial.exportScenePng", () =>
+      page.getByTestId("export-commercial-snapshot").click()
+    )
+  ]);
+  const pngPath = await pngDownload.path();
+  expect(pngPath).not.toBeNull();
+  const pngBytes = await readFile(pngPath ?? "");
+  expect([...pngBytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  expect(pngBytes.readUInt32BE(16)).toBe(1920);
+  expect(pngBytes.readUInt32BE(20)).toBe(1080);
+
+  const afterExports = await getRuntimeViewportSnapshot(page);
+  expect(afterExports.invariants).toEqual(beforeExports.invariants);
+  expect(afterExports.camera).toEqual(beforeExports.camera);
+  expect(await getActiveProjectRuntimeContext(page)).toEqual(projectBeforeExports);
+  expect(afterExports.viewport?.sceneLifecycleGeneration)
+    .toBe(beforeExports.viewport?.sceneLifecycleGeneration);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await expect(page.getByTestId("app-root")).toHaveCount(1);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
 test("app shell zone anchors are rendered without red console errors", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
