@@ -10,8 +10,8 @@ import type {
 import type { AtaraMachineData, MachineConnectionPoint } from "../types/ataraMachineData";
 import type { MachineTaxonomy } from "../types/taxonomy";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
+import { customAssets } from "../nativeAssets/customAssets";
 import {
-  CUSTOM_LIBRARY_STORAGE_KEY,
   PROJECT_CUSTOM_LIBRARY_ID,
   validateProjectCustomLibraryDocument
 } from "../utils/libraryValidation";
@@ -1333,12 +1333,18 @@ export function LibraryManager({
     [itemEditor?.category, taxonomy?.categories, taxonomy?.machineTypes]
   );
 
-  const persistLibrary = (library: MachineLibraryDocument, statusText: string) => {
-    window.localStorage.setItem(CUSTOM_LIBRARY_STORAGE_KEY, JSON.stringify(library, null, 2));
-    setDraftLibrary(library);
-    setMessage(statusText);
-    setValidationError("");
-    onLibrariesChanged();
+  const persistLibrary = async (library: MachineLibraryDocument, statusText: string) => {
+    try {
+      await customAssets.saveLibrary(library, draftLibrary ?? undefined);
+      setDraftLibrary(library);
+      setMessage(statusText);
+      setValidationError("");
+      onLibrariesChanged();
+      return true;
+    } catch (error: unknown) {
+      setValidationError(error instanceof Error ? error.message : "Could not save custom library.");
+      return false;
+    }
   };
 
   const requestClose = useCallback(() => {
@@ -1413,7 +1419,7 @@ export function LibraryManager({
     setValidationError("");
   };
 
-  const addGroup = (parentGroupId: string) => {
+  const addGroup = async (parentGroupId: string) => {
     if (!editable || !draftLibrary) {
       return;
     }
@@ -1431,11 +1437,11 @@ export function LibraryManager({
         children: [...target.children, group]
       }))
     };
-    persistLibrary(nextLibrary, `Group "${group.name}" added.`);
+    if (!await persistLibrary(nextLibrary, `Group "${group.name}" added.`)) return;
     setSelectedNode({ type: "group", groupId: group.id });
   };
 
-  const renameGroup = (groupId: string) => {
+  const renameGroup = async (groupId: string) => {
     if (!editable || !draftLibrary) {
       return;
     }
@@ -1453,11 +1459,11 @@ export function LibraryManager({
         name: name.trim()
       }))
     };
-    persistLibrary(nextLibrary, "Group renamed.");
+    if (!await persistLibrary(nextLibrary, "Group renamed.")) return;
     setSelectedNode({ type: "group", groupId });
   };
 
-  const deleteGroup = (groupId: string) => {
+  const deleteGroup = async (groupId: string) => {
     if (!editable || !draftLibrary) {
       return;
     }
@@ -1477,17 +1483,17 @@ export function LibraryManager({
       return;
     }
 
-    persistLibrary(
+    if (!await persistLibrary(
       {
         ...draftLibrary,
         root: deleteGroupById(draftLibrary.root, groupId)
       },
       "Group deleted."
-    );
+    )) return;
     setSelectedNode({ type: "group", groupId: draftLibrary.root.id });
   };
 
-  const deleteItem = (itemId: string) => {
+  const deleteItem = async (itemId: string) => {
     if (!editable || !draftLibrary) {
       return;
     }
@@ -1497,13 +1503,13 @@ export function LibraryManager({
       return;
     }
 
-    persistLibrary(
+    if (!await persistLibrary(
       {
         ...draftLibrary,
         root: deleteItemById(draftLibrary.root, itemId)
       },
       "Machine item deleted."
-    );
+    )) return;
     clearItemEditor();
     setSelectedNode({ type: "group", groupId: draftLibrary.root.id });
   };
@@ -1525,7 +1531,7 @@ export function LibraryManager({
     setValidationError("");
   };
 
-  const saveItem = () => {
+  const saveItem = async () => {
     if (!editable || !draftLibrary || !itemEditor) {
       return;
     }
@@ -1700,7 +1706,7 @@ export function LibraryManager({
       }))
     };
 
-    persistLibrary(nextLibrary, `Machine item "${item.name}" saved.`);
+    if (!await persistLibrary(nextLibrary, `Machine item "${item.name}" saved.`)) return;
     setSelectedNode({ type: "item", groupId: itemEditor.parentGroupId, itemId: item.id });
     clearItemEditor();
   };
@@ -1745,7 +1751,7 @@ export function LibraryManager({
         readonly: false,
         root: library.root
       };
-      persistLibrary(importedLibrary, "Custom library imported.");
+      if (!await persistLibrary(importedLibrary, "Custom library imported.")) return;
       clearItemEditor();
       setSelectedNode({ type: "group", groupId: importedLibrary.root.id });
     } catch {
@@ -1757,13 +1763,23 @@ export function LibraryManager({
     }
   };
 
-  const resetCustomLibrary = () => {
+  const resetCustomLibrary = async () => {
     const confirmed = window.confirm("Reset Project Custom Library to the default file version?");
     if (!confirmed) {
       return;
     }
 
-    window.localStorage.removeItem(CUSTOM_LIBRARY_STORAGE_KEY);
+    try {
+      const entry = libraries.find((library) => library.libraryId === PROJECT_CUSTOM_LIBRARY_ID);
+      if (!entry) throw new Error("Custom library is unavailable.");
+      const response = await fetch(entry.path);
+      if (!response.ok) throw new Error("Default custom library is unavailable.");
+      const { library } = validateProjectCustomLibraryDocument(await response.json());
+      await customAssets.saveLibrary(library);
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Could not reset custom library.");
+      return;
+    }
     clearItemEditor();
     setMessage("Custom library reset.");
     setValidationError("");

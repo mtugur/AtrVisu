@@ -4,6 +4,7 @@ import {
   ATRVISU_DB_NAME,
   ATRVISU_DB_VERSION,
   ASSET_BROWSER_PREFERENCES_STORE_NAME,
+  IMPORTED_MODELS_STORE_NAME,
   PROJECTS_STORE_NAME,
   UI_PREFERENCES_STORE_NAME,
   openAtrVisuDatabase,
@@ -56,7 +57,7 @@ const createVersionTwoDatabase = (
   request.onerror = () => reject(request.error);
 });
 
-describe("AtrVisu IndexedDB version 3", () => {
+describe("AtrVisu IndexedDB version 4", () => {
   beforeEach(async () => {
     resetAtrVisuDatabaseConnectionForTests();
     await deleteDatabase();
@@ -68,6 +69,7 @@ describe("AtrVisu IndexedDB version 3", () => {
     expect(database.version).toBe(ATRVISU_DB_VERSION);
     expect([...database.objectStoreNames]).toEqual([
       ASSET_BROWSER_PREFERENCES_STORE_NAME,
+      IMPORTED_MODELS_STORE_NAME,
       PROJECTS_STORE_NAME,
       UI_PREFERENCES_STORE_NAME
     ]);
@@ -91,7 +93,7 @@ describe("AtrVisu IndexedDB version 3", () => {
     const database = await openAtrVisuDatabase();
     const persisted = await database.get(PROJECTS_STORE_NAME, project.projectId);
 
-    expect(database.version).toBe(3);
+    expect(database.version).toBe(4);
     expect(database.objectStoreNames.contains(UI_PREFERENCES_STORE_NAME)).toBe(true);
     expect(database.objectStoreNames.contains(ASSET_BROWSER_PREFERENCES_STORE_NAME)).toBe(true);
     expect(persisted).toEqual(project);
@@ -116,7 +118,7 @@ describe("AtrVisu IndexedDB version 3", () => {
 
     const database = await openAtrVisuDatabase();
 
-    expect(database.version).toBe(3);
+    expect(database.version).toBe(4);
     expect(database.objectStoreNames.contains(ASSET_BROWSER_PREFERENCES_STORE_NAME)).toBe(true);
     expect(await database.get(PROJECTS_STORE_NAME, project.projectId)).toEqual(project);
     expect(await database.get(UI_PREFERENCES_STORE_NAME, "workbench")).toEqual(preferences);
@@ -137,9 +139,10 @@ describe("AtrVisu IndexedDB version 3", () => {
     })).rejects.toThrow("injected production open failure");
 
     const recovered = await openAtrVisuDatabase();
-    expect(recovered.version).toBe(3);
+    expect(recovered.version).toBe(4);
     expect([...recovered.objectStoreNames]).toEqual([
       ASSET_BROWSER_PREFERENCES_STORE_NAME,
+      IMPORTED_MODELS_STORE_NAME,
       PROJECTS_STORE_NAME,
       UI_PREFERENCES_STORE_NAME
     ]);

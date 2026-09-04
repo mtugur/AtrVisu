@@ -4,6 +4,7 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
+import { Upload } from "lucide-react";
 import {
   EMPTY_ASSET_BROWSER_FILTERS,
   createAssetBrowserPreferencesRuntime,
@@ -38,6 +39,8 @@ type LibrarySelection = {
 };
 
 type MachineLibraryProps = {
+  onImportAsset?: () => void;
+  onCreateVariant?: (selection: LibrarySelection) => Promise<void>;
   onAddMachine: (selection: LibrarySelection) => Promise<boolean>;
   isLibraryManagerOpen: boolean;
   isTaxonomyManagerOpen: boolean;
@@ -112,6 +115,8 @@ const EmptyState = ({ scope, filtered }: { scope: AssetBrowserScope; filtered: b
 };
 
 export function MachineLibrary({
+  onImportAsset,
+  onCreateVariant,
   onAddMachine,
   isLibraryManagerOpen,
   isTaxonomyManagerOpen,
@@ -137,6 +142,19 @@ export function MachineLibrary({
   const [scope, setScope] = useState<AssetBrowserScope>("all");
   const [filters, setFilters] = useState<AssetBrowserFilters>(EMPTY_ASSET_BROWSER_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [assetMessage, setAssetMessage] = useState("");
+
+  useEffect(() => {
+    const reload = () => setReloadToken((value) => value + 1);
+    window.addEventListener("atrvisu-custom-library-changed", reload);
+    return () => window.removeEventListener("atrvisu-custom-library-changed", reload);
+  }, []);
+  const createVariant = onCreateVariant ? async (record: AssetBrowserRecord) => {
+    try {
+      await onCreateVariant({ libraryId: record.libraryId, item: record.item, definition: toMachineDefinition(record.item) });
+      setAssetMessage(`Created ${record.item.name} Custom in Project Custom Library.`);
+    } catch (error) { setAssetMessage(error instanceof Error ? error.message : "Could not create custom variant."); }
+  } : undefined;
 
   useEffect(() => {
     void runtime.hydrate();
@@ -213,6 +231,8 @@ export function MachineLibrary({
       data-testid="machine-library-panel"
       data-asset-preferences-status={preferenceSnapshot.status}
     >
+      {onImportAsset && <button type="button" className="native-asset-import-trigger" onClick={onImportAsset}><Upload size={16} /><span>Import 3D Asset</span></button>}
+      {assetMessage && <p role="status">{assetMessage}</p>}
       <label className="panel-search asset-browser-search">
         <WorkbenchIcon iconId="search" />
         <input
@@ -310,6 +330,7 @@ export function MachineLibrary({
             favoriteAssetKeys={favoriteAssetKeys}
             onToggleFavorite={(assetKey) => void runtime.toggleFavorite(assetKey)}
             onAdd={addAsset}
+            onCreateVariant={createVariant}
           />
         ) : null}
         {!isLoading && !loadError && visibleRecords.length > 0 && !showHierarchy ? (
@@ -321,6 +342,7 @@ export function MachineLibrary({
                 favorite={favoriteAssetKeys.has(record.assetKey)}
                 onToggleFavorite={(assetKey) => void runtime.toggleFavorite(assetKey)}
                 onAdd={addAsset}
+                onCreateVariant={createVariant}
               />
             ))}
           </div>

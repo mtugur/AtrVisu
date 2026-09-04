@@ -180,6 +180,12 @@ export const platformFeatureAccessMatrix = [
     panelIds: ["panel.libraryManager"],
     requiresSurfaceExecutionEvidence: true
   }),
+  feature("library.importAsset", "Import 3D Asset", ["menu", "panel", "modal"], {
+    commandIds: ["library.importAsset"], requiresSurfaceExecutionEvidence: true
+  }),
+  feature("library.createCustomVariant", "Create Custom Variant", ["panel"], {
+    commandIds: ["library.createCustomVariant"], panelIds: ["panel.machineLibrary"], requiresSurfaceExecutionEvidence: true
+  }),
   feature("library.taxonomyManager", "Taxonomy Manager", ["panel", "modal"], {
     commandIds: ["library.taxonomyManager"],
     panelIds: ["panel.taxonomyManager"],

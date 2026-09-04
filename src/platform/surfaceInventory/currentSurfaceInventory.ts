@@ -2,6 +2,17 @@ import type { PlatformSurfaceInventoryItem } from "./surfaceInventoryTypes";
 
 export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryItem[] = [
   {
+    surfaceId: "surface.nativeAssetImport", surfaceType: "modal", label: "Import 3D Asset", owner: "existing-ui",
+    sourceFiles: ["src/components/NativeAssetImport.tsx", "src/components/MachineLibrary.tsx", "src/App.tsx"],
+    commandIds: ["library.importAsset"], featureIds: ["library.importAsset"],
+    notes: "Library and Insert project one registered import command into the isolated GLB wizard."
+  },
+  {
+    surfaceId: "surface.customVariant", surfaceType: "panel", label: "Create Custom Variant", owner: "existing-ui",
+    sourceFiles: ["src/components/assetBrowser/AssetBrowserCard.tsx", "src/App.tsx"],
+    commandIds: ["library.createCustomVariant"], featureIds: ["library.createCustomVariant"], panelIds: ["panel.machineLibrary"]
+  },
+  {
     surfaceId: "surface.workbenchApplicationBar",
     surfaceType: "toolbar-action",
     label: "Workbench Application Bar",

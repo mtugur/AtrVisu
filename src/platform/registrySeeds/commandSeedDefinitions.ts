@@ -54,6 +54,8 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("view.showMeasurements", "tools", "Precision Placement Helpers", "Show or hide precision placement helpers for the selected machine.", false, undefined, "measurement"),
 
   createCommandSeed("library.addMachine", "insert", "Machine From Library", "Add a machine from the machine library.", true),
+  createCommandSeed("library.importAsset", "insert", "Import 3D Asset", "Import a local GLB into Project Custom Library."),
+  createCommandSeed("library.createCustomVariant", "insert", "Create Custom Variant", "Create an editable Project Custom copy of a Library asset.", true),
   createCommandSeed("annotations.create", "insert", "Create Annotation", "Create a layout annotation.", true),
   createCommandSeed("civil.addFloor", "insert", "Add Floor Area", "Add a civil floor or reference zone.", true),
   createCommandSeed("civil.addWall", "insert", "Add Wall", "Add a civil wall reference.", true),

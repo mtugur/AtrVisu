@@ -4,6 +4,7 @@ import type { LibraryGroup, LoadedMachineLibrary } from "../../types/machine";
 import { AssetBrowserCard } from "./AssetBrowserCard";
 
 type SharedProps = {
+  onCreateVariant?: (record: AssetBrowserRecord) => Promise<void>;
   recordsByKey: ReadonlyMap<string, AssetBrowserRecord>;
   favoriteAssetKeys: ReadonlySet<string>;
   onToggleFavorite: (assetKey: string) => void;
@@ -57,6 +58,7 @@ function GroupNode({
                   favorite={shared.favoriteAssetKeys.has(record.assetKey)}
                   onToggleFavorite={shared.onToggleFavorite}
                   onAdd={shared.onAdd}
+                  onCreateVariant={shared.onCreateVariant}
                 />
               </div>
             ) : null;

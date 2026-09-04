@@ -6,10 +6,12 @@ import {
   allowedE2EPorts,
   assertAtrVisuServerProvenance,
   createExternalServer,
+  createE2EPhases,
   createOwnedServer,
   createPlaywrightEnvironment,
   readGitSourceProvenance,
   resolveE2EServerMode,
+  runE2EPhases,
   selectAvailableE2EPort,
   stopOwnedE2EServer
 } from "./e2eRunnerHelpers.mjs";
@@ -132,15 +134,17 @@ try {
   }
 
   await waitForServer(baseUrl);
-  const result = await run(process.execPath, [
-    "./node_modules/@playwright/test/cli.js",
-    "test",
-    ...process.argv.slice(2)
-  ], {
-    env: createPlaywrightEnvironment({
-      ...process.env,
-      ATRVISU_E2E_EXPECTED_SOURCE_HEAD: source.head
-    }, baseUrl)
+  const env = createPlaywrightEnvironment({
+    ...process.env,
+    ATRVISU_E2E_EXPECTED_SOURCE_HEAD: source.head
+  }, baseUrl);
+  const result = await runE2EPhases(createE2EPhases(process.argv.slice(2)), (phase) => {
+    console.log(`AtrVisu E2E phase: ${phase.name}`);
+    return run(process.execPath, [
+      "./node_modules/@playwright/test/cli.js",
+      "test",
+      ...phase.args
+    ], { env });
   });
   await teardown();
 

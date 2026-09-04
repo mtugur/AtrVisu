@@ -1,4 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { modelKeyFromPath } from "../nativeAssets/modelContract";
+import { resolveImportedModel } from "../nativeAssets/modelStorage";
+import { loadImportedModelRoot, calibrateImportedRoot } from "../nativeAssets/modelRendering";
 import {
   AbstractMesh,
   Camera,
@@ -10,6 +13,7 @@ import {
   MeshBuilder,
   Nullable,
   Observer,
+  Quaternion,
   PointerEventTypes,
   PointerInfo,
   Scene,
@@ -65,7 +69,7 @@ import {
   type CivilDragState,
   type MachineDragState
 } from "./babylonScene/dragPlacement";
-import { getMachinePlaceholderVisualParts } from "./babylonScene/objectRendering";
+import { getMachinePlaceholderVisualParts, getMachineVerticalRenderPositions } from "./babylonScene/objectRendering";
 import { drawMachineLabelText } from "./babylonScene/machineLabelLifecycle";
 import {
   captureOrthographicFraming,
@@ -884,6 +888,33 @@ const loadVisualModel = async (
   }
 
   try {
+    if (modelKeyFromPath(modelPath)) {
+      const resolved = await resolveImportedModel(modelPath);
+      try {
+        if (scene.isDisposed || rootBox.isDisposed()) throw new Error("Model owner was disposed.");
+        const loaded = await loadImportedModelRoot(scene, resolved.url, `visual-root-${machine.instanceId}`);
+        if (rootBox.isDisposed()) { loaded.root.dispose(); throw new Error("Model owner was disposed."); }
+        const projection = calibrateImportedRoot(loaded.root, loaded.bounds, visualModel.unit, visualModel.calibration);
+        const dimensions = getMachineDimensionsMeters(machine.definition);
+        let appliedScale = { x: loaded.root.scaling.x, y: loaded.root.scaling.y, z: loaded.root.scaling.z };
+        if (visualModel.scaleMode === "metadata-box") {
+          const fit = calculateMetadataBoxScale(dimensions, { width: projection.widthMm / 1000, depth: projection.depthMm / 1000, height: projection.heightMm / 1000 }, visualModel.calibration.preserveAspectRatio);
+          loaded.root.scaling.multiplyInPlace(new Vector3(fit.x, fit.y, fit.z));
+          loaded.root.position.multiplyInPlace(new Vector3(fit.x, fit.y, fit.z));
+          appliedScale = { x: loaded.root.scaling.x, y: loaded.root.scaling.y, z: loaded.root.scaling.z };
+        }
+        const rotation = getRotationVectorRadians(visualModel.rotationOffsetDeg);
+        loaded.root.rotationQuaternion = Quaternion.RotationYawPitchRoll(rotation.y, rotation.x, rotation.z).multiply(loaded.root.rotationQuaternion!);
+        loaded.root.position.y -= dimensions.height / 2;
+        loaded.root.position.addInPlace(new Vector3(mmToMeters(visualModel.positionOffsetMm.xMm), mmToMeters(visualModel.positionOffsetMm.yMm), mmToMeters(visualModel.positionOffsetMm.zMm)));
+        loaded.root.parent = rootBox;
+        applyMachinePickMetadataToHierarchy(loaded.root, machine.instanceId);
+        loaded.root.isPickable = false;
+        return { visualRoot: loaded.root, loadedVisualMeshes: loaded.meshes,
+          visualBoundsMm: { widthMm: projection.widthMm, depthMm: projection.depthMm, heightMm: projection.heightMm },
+          appliedScale, calibrationWarnings: [] as string[] };
+      } finally { resolved.release(); }
+    }
     const { rootUrl, fileName } = splitModelPath(modelPath);
     const result = await SceneLoader.ImportMeshAsync("", rootUrl, fileName, scene);
     const visualRoot = new Mesh(`visual-root-${machine.instanceId}`, scene);
@@ -1066,6 +1097,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.machinePlanPositions;
         delete canvas.dataset.civilPlanPositions;
         delete canvas.dataset.machineSceneLabels;
+        delete canvas.dataset.machineLoadedModelCounts;
+        delete canvas.dataset.machineRenderTransforms;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -2029,6 +2062,19 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             yMm: item.positionMm.yMm
           }])
         ));
+        canvas.dataset.machineLoadedModelCounts = JSON.stringify(Object.fromEntries(
+          [...machineNodesRef.current].map(([id, node]) => [id, node.loadedVisualMeshes.filter((mesh) => !mesh.isDisposed() && mesh.getTotalVertices() > 0).length])
+        ));
+        canvas.dataset.machineRenderTransforms = JSON.stringify(Object.fromEntries(
+          [...machineNodesRef.current].slice(0, 16).map(([id, node]) => {
+            const worldPosition = (mesh: AbstractMesh) => mesh.getAbsolutePosition().asArray();
+            return [id, {
+              box: worldPosition(node.box),
+              label: worldPosition(node.label),
+              children: node.box.getChildMeshes().map((mesh) => ({ name: mesh.name, position: worldPosition(mesh) }))
+            }];
+          })
+        ));
         canvas.dataset.machineSceneLabels = JSON.stringify(scene.meshes
           .filter((mesh) => typeof mesh.metadata?.machineLabelInstanceId === "string")
           .map((mesh) => {
@@ -2161,6 +2207,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
       const { definition, instanceId } = machine;
       const dimensions = getMachineDimensionsMeters(definition);
+      const vertical = getMachineVerticalRenderPositions(machine);
       const renderCenterMm = getMachineRenderCenterMm(machine);
       const renderCenter = {
         x: mmToMeters(renderCenterMm.xMm),
@@ -2180,13 +2227,13 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         },
         scene
       );
-      box.position = new Vector3(renderCenter.x, dimensions.height / 2, renderCenter.z);
+      box.position = new Vector3(renderCenter.x, vertical.centerY, renderCenter.z);
       applyPlanRotationY(box, machine.rotationY);
       box.material = material;
       box.metadata = { instanceId };
       box.visibility = 0;
 
-      const { label, texture } = createLabel(scene, instanceId, displayName, dimensions.height + 0.85);
+      const { label, texture } = createLabel(scene, instanceId, displayName, vertical.labelY);
       label.metadata = {
         machineLabelInstanceId: instanceId,
         platformEntityId: createLegacyPlatformEntityId("machine", instanceId)
@@ -2329,7 +2376,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         return;
       }
 
-      const dimensions = getMachineDimensionsMeters(machine.definition);
+      const vertical = getMachineVerticalRenderPositions(machine);
       const renderCenterMm = getMachineRenderCenterMm(machine);
       const renderCenter = {
         x: mmToMeters(renderCenterMm.xMm),
@@ -2352,14 +2399,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         });
       }
       node.box.position.x = renderCenter.x;
-      node.box.position.y = dimensions.height / 2;
+      node.box.position.y = vertical.centerY;
       node.box.position.z = renderCenter.z;
       applyPlanRotationY(node.box, machine.rotationY);
       if (node.flowArrow) {
         node.flowArrow.rotation.y = machine.flowDirection === "reverse" ? Math.PI : 0;
       }
       node.label.position.x = renderCenter.x;
-      node.label.position.y = dimensions.height + 0.85;
+      node.label.position.y = vertical.labelY;
       node.label.position.z = renderCenter.z;
       node.selectionFrame.isVisible =
         selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showSelectionBox;

@@ -6,6 +6,8 @@ import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene
 import { EditorHost } from "./components/EditorHost";
 import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
 import { HelpModal, type HelpSection } from "./components/HelpModal";
+import { NativeAssetImport } from "./components/NativeAssetImport";
+import { customAssets } from "./nativeAssets/customAssets";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import {
   CommandPalette,
@@ -607,6 +609,7 @@ export function App() {
   const [isAdvancedAlignmentOpen, setIsAdvancedAlignmentOpen] = useState(false);
   const [isConnectionPointSnapOpen, setIsConnectionPointSnapOpen] = useState(false);
   const [helpSection, setHelpSection] = useState<HelpSection>("quick-start");
+  const [isAssetImportOpen, setIsAssetImportOpen] = useState(false);
   const [renameRequest, setRenameRequest] = useState<{ entityId: string; version: number } | null>(null);
   const [isBenchmarkMode, setIsBenchmarkMode] = useState(false);
   const [latestPerformanceMetrics, setLatestPerformanceMetrics] = useState<ScenePerformanceMetrics | null>(null);
@@ -3511,6 +3514,23 @@ export function App() {
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
+    [RUNTIME_FEATURE_COMMAND_IDS.importAsset]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: () => {
+        if (!closeMachineLibraryManagers()) return { handled: false, status: "cancelled", reason: "Library editor remains open." };
+        setIsAssetImportOpen(true);
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.createCustomVariant]: {
+      getEnableState: (context) => ({ enabled: isMachineLibrarySelection(context.payload), reason: "Choose a Library asset." }),
+      execute: async (context) => {
+        if (!isMachineLibrarySelection(context.payload)) return { handled: false, status: "disabled", reason: "Choose a Library asset." };
+        const definition = context.payload.definition;
+        await customAssets.createVariant({ ...definition, type: definition.machineType ?? definition.category });
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.libraryManager]: {
       getEnableState: () => ({ enabled: true }),
       execute: () => {
@@ -3678,6 +3698,7 @@ export function App() {
     applyPairAlignmentAction,
     applyPairAnchorSnap,
     commitEntityRename,
+    closeMachineLibraryManagers,
     connectionPointSnapContext.available,
     connectionPointSnapReason,
     commercialOutputSnapshot,
@@ -4766,6 +4787,8 @@ export function App() {
               label: "Library",
               content: (
                 <MachineLibrary
+                  onImportAsset={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.importAsset); }}
+                  onCreateVariant={async (selection) => { const result = await executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.createCustomVariant, selection); if (!result.handled) throw new Error(result.reason); }}
                   onAddMachine={async (selection) =>
                     (await executeRuntimeFeatureCommand(
                       RUNTIME_FEATURE_COMMAND_IDS.addMachine,
@@ -4957,6 +4980,8 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.machineLibrary)}
           >
             <MachineLibrary
+              onImportAsset={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.importAsset); }}
+              onCreateVariant={async (selection) => { const result = await executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.createCustomVariant, selection); if (!result.handled) throw new Error(result.reason); }}
               onAddMachine={async (selection) =>
                 (await executeRuntimeFeatureCommand(
                   RUNTIME_FEATURE_COMMAND_IDS.addMachine,
@@ -5564,6 +5589,7 @@ export function App() {
               onRequestProjectImport={requestProjectImportFile}
             />
           ) : null}
+          {isAssetImportOpen && <NativeAssetImport onClose={() => setIsAssetImportOpen(false)} />}
           {isHelpOpen ? (
             <HelpModal
               initialSection={helpSection}

@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { CopyPlus } from "lucide-react";
 import type { AssetBrowserRecord } from "../../assetBrowser";
 import { WorkbenchIcon } from "../../workbench/icons";
 
 type AssetBrowserCardProps = {
+  onCreateVariant?: (record: AssetBrowserRecord) => Promise<void>;
   record: AssetBrowserRecord;
   favorite: boolean;
   onToggleFavorite: (assetKey: string) => void;
@@ -26,6 +28,7 @@ export function AssetBrowserCard({
   record,
   favorite,
   onToggleFavorite,
+  onCreateVariant,
   onAdd
 }: AssetBrowserCardProps) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
@@ -74,6 +77,7 @@ export function AssetBrowserCard({
         <small className="asset-card-source" title={record.libraryName}>{record.sourceLabel}</small>
       </div>
       <div className="asset-card-actions">
+        {onCreateVariant && <button type="button" title="Create Custom Variant" aria-label={`Create Custom Variant of ${record.item.name}`} onClick={() => void onCreateVariant(record)}><CopyPlus size={16} /></button>}
         <button
           className="asset-favorite-button"
           type="button"

@@ -33,6 +33,8 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   showMeasurements: "view.showMeasurements",
   renameSelected: "edit.renameSelected",
   addMachine: "library.addMachine",
+  importAsset: "library.importAsset",
+  createCustomVariant: "library.createCustomVariant",
   libraryManager: "library.manager",
   taxonomyManager: "library.taxonomyManager",
   createAnnotation: "annotations.create",

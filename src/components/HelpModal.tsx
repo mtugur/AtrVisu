@@ -81,6 +81,8 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
               <article><h3>Workbench</h3><dl className="help-feature-list">
                 <div><dt>Library</dt><dd>Search assets, browse categories and families, and narrow results by source, category, or family. Use Favorites for equipment you want to keep handy, Recent for equipment you have added, and Add to place the selected asset.</dd></div>
                 <div><dt>Explorer</dt><dd>Review layout items and control the current selection.</dd></div>
+                <div><dt>Import 3D Asset</dt><dd>Use Library or Insert to choose a local GLB. Check the preview, choose model units and perpendicular forward/up axes, and set floor and footprint calibration. Enter a name and category, then Validate &amp; Save to Project Custom. Imported models are stored in this browser.</dd></div>
+                <div><dt>Create Custom Variant</dt><dd>Use the copy action on a Library asset to create an editable Project Custom variant. The source remains unchanged. Edit the copy in Library Manager; copies of imported assets share the stored model.</dd></div>
                 <div><dt>Viewport</dt><dd>Navigate and edit the 3D layout.</dd></div>
                 <div><dt>Inspector</dt><dd>Edit properties for the current object or selection.</dd></div>
                 <div><dt>Primary Dock</dt><dd>Switch between Library, Explorer, Layers, Groups, and Viewpoints without covering the layout.</dd></div>

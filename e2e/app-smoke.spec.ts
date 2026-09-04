@@ -2,6 +2,15 @@ import { expect, type Dialog, type Locator, type Page, test } from "@playwright/
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
+import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
+import {
+  capture as captureNativeAssetEvidence,
+  start as startNativeAssetTest,
+  openImport as openNativeAssetImport,
+  prepare as prepareNativeAsset,
+  expectPreviewPixels as expectNativePreviewPixels,
+  expectRealModel as expectNativeRealModel
+} from "./nativeAssetHelpers";
 
 const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE === "1";
 const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5064733007");
@@ -215,7 +224,7 @@ const waitForUiPreferences = async (page: Page, status = "ready") => {
 
 const readRawUiPreferencesJson = async (page: Page) => page.evaluate(() =>
   new Promise<string>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -973,10 +982,14 @@ test("runtime feature access complete gate is bound to observed visible command 
   const diagnostics = await getRuntimeFeatureAccessDiagnostics(page);
   const completions: Awaited<ReturnType<typeof expectOneRuntimeCommandExecution>>[] = [];
   const observe = async (commandId: string, action: () => Promise<unknown>) => {
-    completions.push(await expectOneRuntimeCommandExecution(page, commandId, action));
+    completions.push(await test.step(commandId, () => expectOneRuntimeCommandExecution(page, commandId, action)));
   };
 
   expect((await getRuntimeFeatureAccessGate(page, true)).passed).toBe(false);
+
+  await observe("library.importAsset", () => page.getByTestId("machine-library-panel").getByRole("button", { name: "Import 3D Asset", exact: true }).click());
+  await page.getByRole("button", { name: "Close import", exact: true }).click();
+  await observe("library.createCustomVariant", () => page.getByRole("button", { name: /^Create Custom Variant of / }).first().click());
 
   const machineCard = page.locator(".machine-card").first();
   await observe("library.addMachine", () => machineCard.click());
@@ -1428,148 +1441,6 @@ test("app loads and core panels have no red console errors", async ({ page }) =>
   await toolsMenu.locator('[data-command-id="collision.check"]').click();
   await expect(page.getByTestId("collision-check-tool-surface")).toBeVisible();
   await page.getByRole("button", { name: "Close Collision Check" }).click();
-
-  expect(errors).toEqual([]);
-});
-
-test("PF-1 premium command information architecture is accessible and responsive", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openCleanApp(page);
-  const welcome = page.getByTestId("empty-project-welcome");
-  await expect(welcome).toBeVisible();
-  await expect(welcome.getByRole("button", { name: "New Layout" })).toBeVisible();
-  await expect(welcome.getByRole("button", { name: "Open Project" })).toBeVisible();
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-
-  const menuBar = page.getByTestId("workbench-menu-bar");
-  expect(await menuBar.locator(".workbench-menu-trigger").allTextContents()).toEqual([
-    "File", "Edit", "View", "Insert", "Arrange", "Tools", "Help"
-  ]);
-
-  const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(8);
-  await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
-  await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
-  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
-  for (const button of await commandButtons.all()) {
-    await expect(button.locator(":scope > svg")).toHaveCount(1);
-    await expect(button.locator(":scope > .visually-hidden")).toHaveCount(1);
-    expect(await button.getAttribute("aria-label")).toBeTruthy();
-    expect(await button.getAttribute("title")).toBeTruthy();
-  }
-  expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
-    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Labels", "Connection Points", "Viewpoints"
-  ]);
-  await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
-  await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
-  const fileMenuForSave = await openWorkbenchMenu(page, "File");
-  await expect(fileMenuForSave.locator('[data-command-id="project.save"]')).toBeVisible();
-  await page.keyboard.press("Escape");
-
-  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
-  await expect(page.getByTestId("command-palette")).toBeVisible();
-  await expect(page.getByTestId("command-palette").getByRole("listbox", { name: "Commands" })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("command-palette")).toHaveCount(0);
-
-  const createNewLayout = welcome.getByRole("button", { name: "New Layout" });
-  await createNewLayout.click();
-  const projectManager = page.getByTestId("project-manager-modal");
-  await expect(projectManager).toHaveAttribute("data-entry-intent", "create");
-  await expect(page.getByTestId("new-project-name")).toBeFocused();
-  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
-  await page.keyboard.press("Escape");
-  await expect(projectManager).toHaveCount(0);
-  await expect(createNewLayout).toBeFocused();
-
-  const openExistingProject = welcome.getByRole("button", { name: "Open Project" });
-  await openExistingProject.click();
-  await expect(projectManager).toHaveAttribute("data-entry-intent", "open");
-  await expect(page.getByRole("button", { name: "Start a New Project" })).toBeFocused();
-  await expect(page.getByTestId("project-manager-empty-state")).toContainText("No existing projects are available.");
-  await page.keyboard.press("Escape");
-  await expect(projectManager).toHaveCount(0);
-  await expect(openExistingProject).toBeFocused();
-
-  await openProjectManagerFromFileMenu(page);
-  await expect(projectManager).toHaveAttribute("data-entry-intent", "neutral");
-  await expect(page.getByTestId("close-project-manager")).toBeFocused();
-  await page.getByTestId("close-project-manager").click();
-  await expect(projectManager).toHaveCount(0);
-  await expect(welcome).toBeVisible();
-  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
-  await expect(page.getByTestId("editor-host")).toHaveCount(1);
-  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-
-  const helpTrigger = menuBar.getByRole("menuitem", { name: "Help", exact: true });
-  const helpMenu = await openWorkbenchMenu(page, "Help");
-  await helpMenu.locator('[data-command-id="help.quickStart"]').click();
-  const help = page.getByTestId("help-modal");
-  await expect(help).toBeVisible();
-  await expect(help.locator(".help-task-card")).toHaveCount(4);
-  const helpSections = ["Quick Start", "Workbench", "Arrange & Snap", "Measurements", "Viewpoints", "Outputs", "Keyboard Shortcuts", "About"];
-  for (const section of helpSections) {
-    await help.getByRole("button", { name: section, exact: true }).click();
-    const customerText = (await help.locator(".help-dialog-content").innerText()).toLowerCase();
-    for (const forbidden of ["pull request", "product rule", "canonical", "registry", "phase", "pf-"]) {
-      expect(customerText).not.toContain(forbidden);
-    }
-  }
-  await expect(help.locator("kbd")).toHaveCount(0);
-  await help.getByRole("button", { name: "Keyboard Shortcuts", exact: true }).click();
-  expect(await help.locator("kbd").count()).toBeGreaterThan(0);
-  await page.keyboard.press("Escape");
-  await expect(help).toHaveCount(0);
-  await expect(helpTrigger).toBeFocused();
-
-  for (const viewport of [
-    { width: 1440, height: 900 },
-    { width: 1024, height: 768 },
-    { width: 640, height: 800 }
-  ]) {
-    await page.setViewportSize(viewport);
-    await expect.poll(() => page.evaluate(() =>
-      document.documentElement.scrollWidth <= document.documentElement.clientWidth
-    )).toBe(true);
-    await expect(menuBar).toBeVisible();
-    await expect(page.getByTestId("workbench-command-bar")).toBeVisible();
-    await expect(page.getByTestId("editor-host")).toHaveCount(1);
-    await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
-    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-    if (viewport.width === 640) {
-      await expect(getCommandBarCommand(page, "project.save")).toBeVisible();
-      const more = page.getByLabel("More commands");
-      await expect(more).toBeVisible();
-      await more.focus();
-      await page.keyboard.press("Shift+Tab");
-      await expect(more).not.toBeFocused();
-      await page.keyboard.press("Tab");
-      await expect(more).toBeFocused();
-      await page.keyboard.press("Enter");
-      await expect(page.locator(".workbench-command-overflow-menu")).toBeVisible();
-      await expect(getCommandBarCommand(page, "edit.duplicateSelected")).toBeVisible();
-      await page.keyboard.press("Tab");
-      const focusedOverflowPlacement = await page.evaluate(() =>
-        (document.activeElement as HTMLElement | null)?.dataset.commandPlacement ?? null
-      );
-      expect(focusedOverflowPlacement).toBe("overflow");
-      await page.keyboard.press("Escape");
-      await expect(more).toBeFocused();
-      await expect(page.locator(".workbench-command-overflow-menu")).not.toBeVisible();
-      expect(await page.locator('[data-command-placement="overflow"]').evaluateAll((buttons) =>
-        buttons.length === 0
-      )).toBe(true);
-      await page.keyboard.press("ArrowRight");
-      await expect(more).toBeFocused();
-      const welcomeLeft = await welcome.evaluate((element) => element.getBoundingClientRect().left);
-      const primaryDockRight = await page.locator(".workbench-primary-dock")
-        .evaluate((element) => element.getBoundingClientRect().right);
-      expect(welcomeLeft).toBeGreaterThanOrEqual(primaryDockRight);
-    }
-  }
 
   expect(errors).toEqual([]);
 });
@@ -4982,7 +4853,7 @@ test("legacy panel preferences migrate once to IndexedDB and preserve unrelated 
       .find((panel) => panel.panelId === "panel.layers")?.collapsed
   )).toBe(false);
   const persisted = await page.evaluate(() => new Promise<{ width?: number }>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -5084,7 +4955,7 @@ test("visible panel updates survive a deliberately pending preference hydration"
   expect(finalSnapshot?.preferences.panels.find((panel) => panel.panelId === "panel.layers"))
     .toMatchObject({ collapsed: false });
   const persisted = await page.evaluate(() => new Promise<unknown>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -5864,7 +5735,7 @@ test("PF-2A asset discovery preserves domain state and persists Favorites while 
   await favoriteFlow.click();
   await expect(flowCard.locator(".asset-favorite-button")).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => page.evaluate(() => new Promise<readonly string[]>((resolve, reject) => {
-    const request = indexedDB.open("atrvisu-db", 3);
+    const request = indexedDB.open("atrvisu-db");
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -5958,4 +5829,281 @@ test("PF-2A asset browser remains reachable without horizontal overflow at respo
   await capturePf2aScreenshot(page, "10-library-640.png");
   expect(errors).toEqual([]);
 });
+
+// Keep the additional GPU-heavy acceptance cases sequential with the long shell
+// smoke scenarios; the original import suite retains its independent worker.
+type RenderTransform = { box: number[]; label: number[]; children: { name: string; position: number[] }[] };
+const renderTransforms = async (page: Page): Promise<Record<string, RenderTransform>> =>
+  JSON.parse(await page.getByLabel("AtrVisu 3D workspace").getAttribute("data-machine-render-transforms") ?? "{}");
+const expectVerticalOffset = (before: RenderTransform, after: RenderTransform, delta: number) => {
+  const expectPosition = (start: number[], end: number[]) => {
+    expect(end[0]).toBeCloseTo(start[0]);
+    expect(end[1]).toBeCloseTo(start[1] + delta);
+    expect(end[2]).toBeCloseTo(start[2]);
+  };
+  expectPosition(before.box, after.box);
+  expectPosition(before.label, after.label);
+  expect(after.children.map((child) => child.name)).toEqual(before.children.map((child) => child.name));
+  expect(before.children.length).toBeGreaterThan(0);
+  before.children.forEach((child, index) => {
+    // Product animation may advance along the conveyor, but its elevation is inherited too.
+    expect(after.children[index].position[1]).toBeCloseTo(child.position[1] + delta);
+  });
+};
+const openProjects = async (page: Page) => {
+  await page.getByRole("menuitem", { name: "File", exact: true }).click();
+  await page.locator('[role="menu"] [data-command-id="project.manager"]').click();
+  await expect(page.getByTestId("project-manager-modal")).toBeVisible();
+};
+
+// Keep this existing graphics-heavy check after the parallel native-preview startup load.
+test("PF-1 premium command information architecture is accessible and responsive", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const welcome = page.getByTestId("empty-project-welcome");
+  await expect(welcome).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "New Layout" })).toBeVisible();
+  await expect(welcome.getByRole("button", { name: "Open Project" })).toBeVisible();
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  const menuBar = page.getByTestId("workbench-menu-bar");
+  expect(await menuBar.locator(".workbench-menu-trigger").allTextContents()).toEqual([
+    "File", "Edit", "View", "Insert", "Arrange", "Tools", "Help"
+  ]);
+
+  const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
+  await expect(commandButtons).toHaveCount(8);
+  await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
+  await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
+  await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
+  for (const button of await commandButtons.all()) {
+    await expect(button.locator(":scope > svg")).toHaveCount(1);
+    await expect(button.locator(":scope > .visually-hidden")).toHaveCount(1);
+    expect(await button.getAttribute("aria-label")).toBeTruthy();
+    expect(await button.getAttribute("title")).toBeTruthy();
+  }
+  expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
+    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Labels", "Connection Points", "Viewpoints"
+  ]);
+  await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
+  await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
+  const fileMenuForSave = await openWorkbenchMenu(page, "File");
+  await expect(fileMenuForSave.locator('[data-command-id="project.save"]')).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
+  await expect(page.getByTestId("command-palette")).toBeVisible();
+  await expect(page.getByTestId("command-palette").getByRole("listbox", { name: "Commands" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("command-palette")).toHaveCount(0);
+
+  const createNewLayout = welcome.getByRole("button", { name: "New Layout" });
+  await createNewLayout.click();
+  const projectManager = page.getByTestId("project-manager-modal");
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "create");
+  await expect(page.getByTestId("new-project-name")).toBeFocused();
+  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(projectManager).toHaveCount(0);
+  await expect(createNewLayout).toBeFocused();
+
+  const openExistingProject = welcome.getByRole("button", { name: "Open Project" });
+  await openExistingProject.click();
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "open");
+  await expect(page.getByRole("button", { name: "Start a New Project" })).toBeFocused();
+  await expect(page.getByTestId("project-manager-empty-state")).toContainText("No existing projects are available.");
+  await page.keyboard.press("Escape");
+  await expect(projectManager).toHaveCount(0);
+  await expect(openExistingProject).toBeFocused();
+
+  await openProjectManagerFromFileMenu(page);
+  await expect(projectManager).toHaveAttribute("data-entry-intent", "neutral");
+  await expect(page.getByTestId("close-project-manager")).toBeFocused();
+  await page.getByTestId("close-project-manager").click();
+  await expect(projectManager).toHaveCount(0);
+  await expect(welcome).toBeVisible();
+  await expect(page.getByTestId("project-manager-project-option")).toHaveCount(0);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  const helpTrigger = menuBar.getByRole("menuitem", { name: "Help", exact: true });
+  const helpMenu = await openWorkbenchMenu(page, "Help");
+  await helpMenu.locator('[data-command-id="help.quickStart"]').click();
+  const help = page.getByTestId("help-modal");
+  await expect(help).toBeVisible();
+  await expect(help.locator(".help-task-card")).toHaveCount(4);
+  const helpSections = ["Quick Start", "Workbench", "Arrange & Snap", "Measurements", "Viewpoints", "Outputs", "Keyboard Shortcuts", "About"];
+  for (const section of helpSections) {
+    await help.getByRole("button", { name: section, exact: true }).click();
+    const customerText = (await help.locator(".help-dialog-content").innerText()).toLowerCase();
+    for (const forbidden of ["pull request", "product rule", "canonical", "registry", "phase", "pf-"]) {
+      expect(customerText).not.toContain(forbidden);
+    }
+  }
+  await expect(help.locator("kbd")).toHaveCount(0);
+  await help.getByRole("button", { name: "Keyboard Shortcuts", exact: true }).click();
+  expect(await help.locator("kbd").count()).toBeGreaterThan(0);
+  await page.keyboard.press("Escape");
+  await expect(help).toHaveCount(0);
+  await expect(helpTrigger).toBeFocused();
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+    { width: 640, height: 800 }
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )).toBe(true);
+    await expect(menuBar).toBeVisible();
+    await expect(page.getByTestId("workbench-command-bar")).toBeVisible();
+    await expect(page.getByTestId("editor-host")).toHaveCount(1);
+    await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+    if (viewport.width === 640) {
+      await expect(getCommandBarCommand(page, "project.save")).toBeVisible();
+      const more = page.getByLabel("More commands");
+      await expect(more).toBeVisible();
+      await more.focus();
+      await page.keyboard.press("Shift+Tab");
+      await expect(more).not.toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(more).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(page.locator(".workbench-command-overflow-menu")).toBeVisible();
+      await expect(getCommandBarCommand(page, "edit.duplicateSelected")).toBeVisible();
+      await page.keyboard.press("Tab");
+      const focusedOverflowPlacement = await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.dataset.commandPlacement ?? null
+      );
+      expect(focusedOverflowPlacement).toBe("overflow");
+      await page.keyboard.press("Escape");
+      await expect(more).toBeFocused();
+      await expect(page.locator(".workbench-command-overflow-menu")).not.toBeVisible();
+      expect(await page.locator('[data-command-placement="overflow"]').evaluateAll((buttons) =>
+        buttons.length === 0
+      )).toBe(true);
+      await page.keyboard.press("ArrowRight");
+      await expect(more).toBeFocused();
+      const welcomeLeft = await welcome.evaluate((element) => element.getBoundingClientRect().left);
+      const primaryDockRight = await page.locator(".workbench-primary-dock")
+        .evaluate((element) => element.getBoundingClientRect().right);
+      expect(welcomeLeft).toBeGreaterThanOrEqual(primaryDockRight);
+    }
+  }
+
+  expect(errors).toEqual([]);
+});
+
+test("PF-2B picker has one accessible selected-file state and supports same-file reselection", async ({ page }) => {
+  const errors = await startNativeAssetTest(page);
+  const dialog = await openNativeAssetImport(page);
+  const input = dialog.getByLabel("GLB file", { exact: true });
+  const button = dialog.getByRole("button", { name: "Choose GLB file", exact: true });
+  const status = dialog.getByTestId("native-asset-selected-file");
+  await expect(input).toBeHidden();
+  await expect(status).toHaveText("No GLB selected");
+  const buffer = Buffer.from(createNativeGlbFixture());
+  for (const key of ["Enter", "Space"]) {
+    await button.focus();
+    await expect(button).toBeFocused();
+    const chooserEvent = page.waitForEvent("filechooser");
+    await button.press(key);
+    const chooser = await chooserEvent;
+    await chooser.setFiles({ name: "Selected Equipment.glb", mimeType: "model/gltf-binary", buffer });
+    await expect(dialog.getByTestId("native-asset-preview")).toHaveAttribute("data-ready", "true");
+    await expectNativePreviewPixels(page);
+    const text = `Selected Equipment.glb (${(buffer.byteLength / 1024).toFixed(1)} KB)`;
+    await expect(status).toHaveCount(1);
+    await expect(status).toHaveText(text);
+    await expect(dialog.getByText(text, { exact: true })).toHaveCount(1);
+    await expect(button).toHaveAccessibleDescription(text);
+    await expect(input).toBeHidden();
+    await expect(input).toHaveValue("");
+    expect(await dialog.innerText()).not.toMatch(/No file selected|Dosya seçilmedi|No GLB selected/i);
+  }
+  // Cancelling leaves the application-owned selection intact.
+  await input.dispatchEvent("cancel");
+  await expect(status).toContainText("Selected Equipment.glb");
+  await captureNativeAssetEvidence(page, "12-truthful-selected-file.png");
+  expect(errors).toEqual([]);
+});
+
+for (const imported of [false, true]) {
+  test(`PF-2B ${imported ? "persisted GLB" : "Standard machine"} elevation moves root label and child affordances without changing Plan X/Y`, async ({ page }) => {
+    const errors = await startNativeAssetTest(page);
+    const canvas = page.getByLabel("AtrVisu 3D workspace");
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", /\d+/);
+    const generation = await canvas.getAttribute("data-scene-lifecycle-generation");
+    const canvasHandle = await canvas.elementHandle();
+    if (imported) {
+      await openProjects(page);
+      await page.getByTestId("new-project-name").fill("Elevated GLB Project");
+      await page.getByTestId("new-customer-name").fill("E2E Customer");
+      await page.getByTestId("create-project").click();
+      await expect(page.getByTestId("project-manager-project-list")).toContainText("Elevated GLB Project");
+      await page.getByTestId("close-project-manager").click();
+      // Calibration controls are exercised by the dedicated import/responsive cases.
+      const dialog = await prepareNativeAsset(page, { exerciseCalibration: false });
+      await dialog.getByRole("button", { name: "Validate & Save", exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+    const name = imported ? "Imported Test Equipment" : "Flow Pack Machine";
+    const library = page.getByTestId("machine-library-panel");
+    await library.getByLabel("Search assets").fill(name);
+    await library.getByRole("button", { name: `Add ${name} to layout`, exact: true }).click();
+    if (imported) await expectNativeRealModel(page);
+    await expect.poll(async () => Object.keys(await renderTransforms(page)).length).toBe(1);
+    const [id, before] = Object.entries(await renderTransforms(page))[0];
+    const plan = await canvas.getAttribute("data-machine-plan-positions");
+    const planX = await page.getByRole("textbox", { name: "Plan X", exact: true }).inputValue();
+    const planY = await page.getByRole("textbox", { name: "Plan Y", exact: true }).inputValue();
+    const elevation = page.getByRole("textbox", { name: "Elevation", exact: true });
+    const screenBefore = JSON.parse(await canvas.getAttribute("data-machine-screen-points") ?? "{}")[id];
+    await elevation.fill("1500");
+    await elevation.press("Tab");
+    await expect.poll(async () => (await renderTransforms(page))[id]?.box[1]).toBeCloseTo(before.box[1] + 1.5);
+    expectVerticalOffset(before, (await renderTransforms(page))[id], 1.5);
+    await expect.poll(async () => JSON.parse(await canvas.getAttribute("data-machine-screen-points") ?? "{}")[id]?.y).toBeLessThan(screenBefore.y - 5);
+    await expect(canvas).toHaveAttribute("data-machine-plan-positions", plan!);
+    await expect(page.getByRole("textbox", { name: "Plan X", exact: true })).toHaveValue(planX);
+    await expect(page.getByRole("textbox", { name: "Plan Y", exact: true })).toHaveValue(planY);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", generation!);
+    expect(await canvasHandle?.evaluate((element) => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'))).toBe(true);
+    if (imported) {
+      await expectNativeRealModel(page);
+      await captureNativeAssetEvidence(page, "13-imported-model-elevated.png");
+      let prompts = 0;
+      page.on("dialog", async (dialog) => { if (dialog.type() === "prompt") await dialog.accept(prompts++ === 0 ? "Elevated" : "1500 mm above floor"); });
+      await page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]').click();
+      await expect.poll(() => page.evaluate(() => window.__atrvisuProjectCommands?.getActiveContext().hasUnsavedChanges)).toBe(false);
+      const saved = await page.evaluate(() => window.__atrvisuProjectCommands!.getActiveContext());
+      expect(saved.revisionId).not.toBeNull();
+      await page.reload();
+      await expect(page.getByTestId("empty-project-welcome")).toBeVisible();
+      await page.getByTestId("empty-project-welcome").getByRole("button", { name: "Open Project", exact: true }).click();
+      const manager = page.getByTestId("project-manager-modal");
+      await manager.getByTestId("project-manager-project-option").filter({ hasText: "Elevated GLB Project" }).click();
+      await manager.getByRole("button", { name: "Load Revision", exact: true }).click();
+      await manager.getByTestId("close-project-manager").click();
+      await expectNativeRealModel(page);
+      await expect.poll(async () => (await renderTransforms(page))[id]?.box[1]).toBeCloseTo(before.box[1] + 1.5);
+      expectVerticalOffset(before, (await renderTransforms(page))[id], 1.5);
+      await expect(canvas).toHaveAttribute("data-machine-plan-positions", plan!);
+      expect(await page.evaluate(() => window.__atrvisuProjectCommands!.getActiveContext())).toMatchObject(saved);
+      await captureNativeAssetEvidence(page, "14-elevated-model-project-reload.png");
+    } else {
+      await elevation.fill("0");
+      await elevation.press("Tab");
+      await expect.poll(async () => (await renderTransforms(page))[id]?.box[1]).toBeCloseTo(before.box[1]);
+      expectVerticalOffset(before, (await renderTransforms(page))[id], 0);
+      await expect(canvas).toHaveAttribute("data-machine-plan-positions", plan!);
+    }
+    expect(errors).toEqual([]);
+  });
+}
 
