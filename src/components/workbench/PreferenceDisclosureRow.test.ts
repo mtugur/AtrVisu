@@ -31,7 +31,8 @@ describe("PreferenceDisclosureRow", () => {
       expanded,
       controlsId: "theme-child",
       testId: "theme-row",
-      onClick: vi.fn()
+      onClick: vi.fn(),
+      onKeyDown: vi.fn()
     }));
 
     expect(render(false)).toContain('aria-expanded="false"');
