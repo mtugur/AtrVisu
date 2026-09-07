@@ -20,6 +20,15 @@ AtrVisu is an engineering layout tool. Interactions should feel predictable to u
 - Select/dropdown controls must remain readable in the dark theme without relying on hover.
 - Delete, Escape, Ctrl+Z, and Ctrl+Y behavior should be consistent across layout features.
 
+### Iconography And Density
+
+- Frequent and repeated local actions are icon-only when their immediate context makes the target and result unambiguous.
+- Infrequent or mode-changing workflows use an icon with a short visible label.
+- Engineering labels, values, units, names, validation, menu headings, workflow decisions and destructive confirmations remain visible text.
+- Maintained product UI icons must use the Workbench icon registry and shared compact action primitive. Product components do not import the icon package directly.
+- Registered icons replace standalone pseudo-glyph controls. Icon-only controls expose an action-oriented `aria-label`, matching tooltip, visible focus, truthful state and one decorative SVG.
+- Standard desktop compact-action geometry is 32 by 32 pixels. Density changes must not shrink engineering information, the frozen 292 pixel Primary Dock, or usable focus targets.
+
 ### Engineering Correctness
 
 - Coordinate, offset, delta, local position, and Plan X/Y inputs must support negative values.
