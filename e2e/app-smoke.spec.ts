@@ -16,6 +16,8 @@ const capturePf1ReviewEvidence = process.env.ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE
 const pf1ReviewEvidenceDirectory = join(process.cwd(), "test-results", "pf1-review-5064733007");
 const capturePf2aEvidence = process.env.ATRVISU_CAPTURE_PF2A_EVIDENCE === "1";
 const pf2aEvidenceDirectory = join(process.cwd(), "test-results", "pf2a-asset-browser-discovery");
+const capturePf3aEvidence = process.env.ATRVISU_CAPTURE_PF3A_EVIDENCE === "1";
+const pf3aEvidenceDirectory = join(process.cwd(), "test-results", "pf3a-global-iconography-density");
 
 const capturePf2aScreenshot = async (page: Page, fileName: string) => {
   if (!capturePf2aEvidence) {
@@ -34,6 +36,12 @@ const capturePf2aElementScreenshot = async (locator: Locator, fileName: string) 
   }
   await mkdir(pf2aEvidenceDirectory, { recursive: true });
   await locator.screenshot({ path: join(pf2aEvidenceDirectory, fileName) });
+};
+
+const capturePf3aScreenshot = async (page: Page, fileName: string) => {
+  if (!capturePf3aEvidence) return;
+  await mkdir(pf3aEvidenceDirectory, { recursive: true });
+  await page.screenshot({ path: join(pf3aEvidenceDirectory, fileName), fullPage: false });
 };
 
 const expectExactHeadServer = async (page: Page) => {
@@ -437,7 +445,7 @@ const addCanonicalAtaraMachine = async (
   groupPath: readonly string[]
 ) => {
   await openPrimaryDockPanel(page, "panel.machineLibrary");
-  const machineCard = page.locator(`.machine-card[title="Add ${machineName}"]`);
+  const machineCard = page.locator(`.machine-card[title="Add ${machineName} to layout"]`);
   for (const groupName of groupPath) {
     if (await machineCard.isVisible().catch(() => false)) {
       break;
@@ -863,7 +871,7 @@ const createTwoMachineAssembly = async (
   await machineCard.click();
   await waitForMachineDiagnostics(page, 2);
   await openPrimaryDockPanel(page, "panel.groups");
-  await group.getByRole("button", { name: "Add Selected" }).click();
+  await group.getByRole("button", { name: /^Add Selected to / }).click();
   await expect(group).toContainText("2 items");
   await group.locator(".assembly-group-button").click();
   const canvas = page.getByLabel("AtrVisu 3D workspace");
@@ -1808,7 +1816,7 @@ test("PF-1 Explorer F2 rename preserves canonical identity and history", async (
   await expectOneSceneLabelPerMachine(page, ["Flow Pack Machine - Line 2"]);
 
   await openPrimaryDockPanel(page, "panel.machineLibrary");
-  await expect(page.locator('.machine-card[title="Add Flow Pack Machine"]')).toBeVisible();
+  await expect(page.locator('.machine-card[title="Add Flow Pack Machine to layout"]')).toBeVisible();
   await getCommandBarCommand(page, "view.toggleLabels").click();
   await expect.poll(async () => (await readMachineSceneLabels(page))[0]?.visible).toBe(false);
   await getCommandBarCommand(page, "view.toggleLabels").click();
@@ -2386,7 +2394,7 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
   await expect(page.getByTestId("bottom-dock")).toHaveCount(0);
   await page.getByTestId("viewpoint-name-input").fill("ATARA Sales Review");
   await page.getByTestId("capture-viewpoint").click();
-  await expect(page.getByRole("button", { name: /ATARA Sales Review/i })).toBeVisible();
+  await expect(page.locator(".viewpoint-list-item").filter({ hasText: "ATARA Sales Review" })).toBeVisible();
 
   const toolsMenu = await openWorkbenchMenu(page, "Tools");
   await toolsMenu.locator('[data-command-id="library.manager"]').click();
@@ -3317,14 +3325,13 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
   const capture = async (name: string) => {
     await page.getByTestId("viewpoint-name-input").fill(name);
     await page.getByTestId("capture-viewpoint").click();
-    await expect(page.getByRole("button", { name: new RegExp(name, "i") })).toBeVisible();
+    await expect(page.locator(".viewpoint-list-item").filter({ hasText: name })).toBeVisible();
   };
   const expectSelectedCardRevealed = async (index: number) => {
     const item = page.locator(".viewpoint-list-item").nth(index - 1);
     await expect(item).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("viewpoint-context-actions")).toBeVisible();
-    await expect(page.getByTestId("viewpoint-context-actions").getByRole("button"))
-      .toHaveText(["Apply", "Update", "Rename", "Delete"]);
+    await expect(page.getByTestId("viewpoint-context-actions").getByRole("button")).toHaveCount(4);
     await expect.poll(() => item.evaluate((element) => {
       const strip = element.closest('[data-testid="viewpoint-strip"]');
       if (!strip) {
@@ -3438,8 +3445,12 @@ test("populated Viewpoints stays bounded across desktop, medium, and narrow work
     await capture(viewpointName);
   }
   await expect(page.locator(".viewpoint-list-item")).toHaveCount(8);
-  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button"))
-    .toHaveText(["Apply", "Update", "Rename", "Delete"]);
+  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button")).toHaveCount(4);
+  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button").nth(0)).toHaveAccessibleName("Apply / Go To");
+  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button").nth(1)).toHaveAccessibleName("Update From Current View");
+  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button").nth(2)).toHaveAccessibleName("Rename Viewpoint 8");
+  await expect(page.getByTestId("viewpoint-context-actions").getByRole("button").nth(3)).toHaveAccessibleName("Delete Viewpoint 8");
+  await capturePf3aScreenshot(page, "06-viewpoints-icon-actions.png");
   await expect(page.getByTestId("viewpoint-strip-scroll-backward")).toBeVisible();
   await expect(page.getByTestId("viewpoint-strip-scroll-forward")).toBeVisible();
   await expectSelectedCardRevealed(8);
@@ -3937,18 +3948,19 @@ test("rigid assembly projection renders without exposing member arrange actions"
   const group = page.locator(".assembly-group-row").filter({ hasText: "Alignment Smoke Group" });
   await expect(group).toBeVisible();
   await expect(group).toContainText("1 item");
+  await capturePf3aScreenshot(page, "05-groups-icon-actions.png");
 
   await openPrimaryDockPanel(page, "panel.machineLibrary");
   await firstMachineCard.click();
   await openPrimaryDockPanel(page, "panel.groups");
-  await group.getByRole("button", { name: "Add Selected" }).click();
+  await group.getByRole("button", { name: /^Add Selected to / }).click();
   await expect(group).toContainText("2 items");
   await group.locator(".assembly-group-button").click();
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("assembly");
 
   await expect(page.getByTestId("create-group-from-selection")).toBeDisabled();
-  await expect(group.getByRole("button", { name: "Add Selected" })).toBeDisabled();
-  await expect(group.getByRole("button", { name: "Remove Selected" })).toBeDisabled();
+  await expect(group.getByRole("button", { name: /^Add Selected to / })).toBeDisabled();
+  await expect(group.getByRole("button", { name: /^Remove Selected from / })).toBeDisabled();
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
   expect(await getRuntimePanel(page, "panel.connectionPointSnap")).toMatchObject({ available: false });
 
@@ -4037,7 +4049,7 @@ test("locked member blocks atomic multi-selection movement without red console e
   await openPrimaryDockPanel(page, "panel.machineLibrary");
   await firstMachineCard.click();
   await openPrimaryDockPanel(page, "panel.groups");
-  await group.getByRole("button", { name: "Add Selected" }).click();
+  await group.getByRole("button", { name: /^Add Selected to / }).click();
   await expect(group).toContainText("2 items");
   await openPrimaryDockPanel(page, "panel.layers");
   await lockedLayerRow.getByRole("button", { name: "Lock", exact: true }).click();
@@ -4237,11 +4249,11 @@ test("group edit mode moves one member and restores rigid scene selection on exi
   await group.getByRole("button", { name: /Edit Group Editable Rigid Assembly/i }).click();
   await expect(canvas).toHaveAttribute("data-active-group-edit-id", groupId ?? "");
   await expect(group).toContainText("Editing members");
-  await expect(group.getByRole("button", { name: "Remove Selected" })).toBeDisabled();
+  await expect(group.getByRole("button", { name: /^Remove Selected from / })).toBeDisabled();
   await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[0]);
   await page.keyboard.up("Control");
-  await expect(group.getByRole("button", { name: "Remove Selected" })).toBeEnabled();
+  await expect(group.getByRole("button", { name: /^Remove Selected from / })).toBeEnabled();
   await expect(canvas).not.toHaveAttribute("data-selected-assembly-id", /.+/);
 
   await page.keyboard.down("Control");
@@ -4501,7 +4513,7 @@ test("orthographic viewpoint framing can be captured, updated, and applied", asy
   await expect(page.getByTestId("viewpoints-panel")).toBeVisible();
   await page.getByTestId("viewpoint-name-input").fill("Orthographic Review");
   await page.getByTestId("capture-viewpoint").click();
-  const viewpointItem = page.getByRole("button", { name: /Orthographic Review/i });
+  const viewpointItem = page.locator(".viewpoint-list-item").filter({ hasText: "Orthographic Review" });
   await expect(viewpointItem).toBeVisible();
   await viewpointItem.click();
   await expect(page.getByTestId("apply-viewpoint")).toBeEnabled();
@@ -4565,10 +4577,12 @@ test("layers can be created, assigned, hidden, and shown without red console err
   await page.getByTestId("add-layer").click();
   const layerRow = page.locator(".layer-row").filter({ hasText: "Test Layer" });
   await expect(layerRow).toBeVisible();
+  await expect(layerRow.locator(".layer-row-actions .workbench-action-button")).toHaveCount(5);
+  await capturePf3aScreenshot(page, "04-layers-icon-actions.png");
   const defaultLayerRow = page.locator(".layer-row").filter({ hasText: "Default" });
   await expect(defaultLayerRow).toContainText("default system");
-  await expect(defaultLayerRow.getByRole("button", { name: "Hide" })).toHaveCount(0);
-  await expect(defaultLayerRow.getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await expect(defaultLayerRow.getByRole("button", { name: /^Hide / })).toHaveCount(0);
+  await expect(defaultLayerRow.getByRole("button", { name: /^Delete / })).toHaveCount(0);
 
   await openPrimaryDockPanel(page, "panel.machineLibrary");
   await page.locator(".machine-card").first().click();
@@ -4584,10 +4598,10 @@ test("layers can be created, assigned, hidden, and shown without red console err
   await page.getByLabel("Selected machine properties").getByLabel("Layer").selectOption({ label: "Test Layer" });
   await expect(layerRow).toContainText("1 item");
   await expect(defaultLayerRow).toContainText("0 items");
-  await layerRow.getByRole("button", { name: "Hide" }).click();
+  await layerRow.getByRole("button", { name: "Hide Test Layer" }).click();
   await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toContainText("None");
-  await layerRow.getByRole("button", { name: "Show" }).click();
-  await layerRow.getByRole("button", { name: "Isolate" }).click();
+  await layerRow.getByRole("button", { name: "Show Test Layer" }).click();
+  await layerRow.getByRole("button", { name: "Isolate Test Layer" }).click();
   await expect(defaultLayerRow).not.toHaveClass(/is-hidden/);
   await page.getByRole("button", { name: "Show All Layers" }).click();
 
@@ -5718,8 +5732,8 @@ test("PF-2A asset discovery preserves domain state and persists Favorites while 
   await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
   await expect(library.getByLabel("Search assets")).toBeVisible();
   await expect(page.locator(".workbench-activity-rail")).toHaveCount(0);
-  await expect(page.locator(".workbench-primary-dock-tabs button span"))
-    .toHaveText(["Library", "Explorer", "Layers", "Groups", "Viewpoints"]);
+  await expect(page.locator(".workbench-primary-dock-tabs button > span")).toHaveCount(0);
+  await expect(page.locator(".workbench-primary-dock-tabs button svg")).toHaveCount(5);
   await expectDefaultPrimaryDockTabsFit(page);
   await capturePf2aScreenshot(page, "01-library-1440.png");
 
@@ -5730,6 +5744,7 @@ test("PF-2A asset discovery preserves domain state and persists Favorites while 
   await expect(flowCard).toBeVisible();
   await expect(library.locator(".asset-card")).toHaveCount(1);
   await capturePf2aScreenshot(page, "02-search-results.png");
+  await capturePf3aScreenshot(page, "02-library-compact-actions.png");
 
   const favoriteFlow = flowCard.getByRole("button", { name: "Add Flow Pack Machine to favorites" });
   await favoriteFlow.click();
@@ -5827,6 +5842,80 @@ test("PF-2A asset browser remains reachable without horizontal overflow at respo
   await expectDefaultPrimaryDockTabsFit(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await capturePf2aScreenshot(page, "10-library-640.png");
+  expect(errors).toEqual([]);
+});
+
+test("PF-3A iconography keeps compact actions accessible while preserving engineering and workflow text", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+
+  const tabs = page.locator(".workbench-primary-dock-tabs button");
+  await expect(tabs).toHaveCount(5);
+  await expect(page.locator(".workbench-primary-dock-tabs button > span")).toHaveCount(0);
+  for (let index = 0; index < 5; index += 1) {
+    await expect(tabs.nth(index).locator("svg")).toHaveCount(1);
+    await expect(tabs.nth(index)).toHaveAttribute("title", /.+/);
+  }
+  await expectDefaultPrimaryDockTabsFit(page);
+  await capturePf3aScreenshot(page, "01-shell-primary-dock-icons-1440.png");
+
+  const library = page.getByTestId("machine-library-panel");
+  await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
+  await library.getByLabel("Search assets").fill("Flow Pack Machine");
+  const flowCard = library.locator('[data-asset-key="atara-standard::packaging-flowpack-01"]');
+  await expect(flowCard).toContainText("Flow Pack Machine");
+  await expect(flowCard).toContainText("Packaging");
+  await expect(flowCard).toContainText("mm");
+  await expect(flowCard.getByRole("button", { name: "Add Flow Pack Machine to layout" })).toBeVisible();
+  await expect(flowCard.getByRole("button", { name: "Create Custom Variant of Flow Pack Machine" })).toBeVisible();
+  await flowCard.getByRole("button", { name: "Add Flow Pack Machine to layout" }).click();
+  await waitForMachineDiagnostics(page, 1);
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await expect(page.getByTestId("layout-explorer")).toContainText("Flow Pack Machine");
+  await capturePf3aScreenshot(page, "03-explorer-density.png");
+
+  const propertiesToggle = page.getByRole("button", { name: /Selected Object Properties/i });
+  if ((await propertiesToggle.getAttribute("aria-expanded")) !== "true") await propertiesToggle.click();
+  const properties = page.getByLabel("Selected machine properties");
+  await expect(properties).toContainText("Plan X");
+  await expect(properties).toContainText("Plan Y");
+  await expect(properties).toContainText("Elevation");
+  await expect(properties).toContainText("Rotation Angle");
+  await capturePf3aScreenshot(page, "07-inspector-engineering-text.png");
+
+  await openPrimaryDockPanel(page, "panel.machineLibrary");
+  await library.getByRole("button", { name: "Import 3D Asset" }).click();
+  const importDialog = page.getByTestId("native-asset-import");
+  await expect(importDialog.getByRole("button", { name: "Choose GLB file" })).toContainText("Choose GLB file");
+  await expect(importDialog.getByRole("button", { name: "Back" })).toContainText("Back");
+  await expect(importDialog.getByRole("button", { name: "Next" })).toContainText("Next");
+  await capturePf3aScreenshot(page, "08-workflow-text-actions.png");
+  await importDialog.getByRole("button", { name: "Close import" }).click();
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await expect(page.getByTestId("primary-dock")).toBeVisible();
+  await expectDefaultPrimaryDockTabsFit(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await capturePf3aScreenshot(page, "09-shell-icons-1024.png");
+
+  await page.setViewportSize({ width: 640, height: 800 });
+  await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+  await page.getByTestId("primary-dock-collapse-toggle").click();
+  await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "false");
+  await expect(page.locator(".workbench-primary-dock-tabs button svg")).toHaveCount(5);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await capturePf3aScreenshot(page, "10-shell-icons-640.png");
+
+  const iconActions = page.locator(".workbench-action-button.is-icon-only:visible");
+  const iconActionCount = await iconActions.count();
+  expect(iconActionCount).toBeGreaterThan(0);
+  for (let index = 0; index < iconActionCount; index += 1) {
+    await expect(iconActions.nth(index)).toHaveAttribute("aria-label", /.+/);
+    await expect(iconActions.nth(index)).toHaveAttribute("title", /.+/);
+    await expect(iconActions.nth(index).locator("svg")).toHaveCount(1);
+  }
   expect(errors).toEqual([]);
 });
 

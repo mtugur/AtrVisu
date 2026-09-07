@@ -53,6 +53,7 @@ jobs:
           ATRVISU_CAPTURE_PF1_REVIEW_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 110 && '1' || '0' }}
           ATRVISU_CAPTURE_PF2A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-asset-browser-discovery-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_PF2B_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-native-asset-import-v01' && '1' || '0' }}
+          ATRVISU_CAPTURE_PF3A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-global-iconography-density-v01' && '1' || '0' }}
 
       - name: Upload PF-1 review evidence
         if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.number == 110 }}
@@ -78,5 +79,14 @@ jobs:
         with:
           name: pf2b-native-asset-import
           path: test-results/pf2b-native-asset-import
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload PF-3A iconography and density evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-global-iconography-density-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pf3a-global-iconography-density
+          path: test-results/pf3a-global-iconography-density
           if-no-files-found: error
           retention-days: 30
