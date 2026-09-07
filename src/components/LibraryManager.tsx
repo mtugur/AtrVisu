@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { WorkbenchIcon } from "../workbench/icons";
 import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 import type { CSSProperties } from "react";
 import type {
@@ -1191,9 +1192,11 @@ function ManagerTreeNode({
           className="manager-row-toggle"
           data-testid={`library-manager-group-toggle-${group.id}`}
           type="button"
+          aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.name}`}
+          aria-expanded={isOpen}
           onClick={() => setIsOpen((current) => !current)}
         >
-          {isOpen ? "-" : "+"}
+          <WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} />
         </button>
         <button className="manager-tree-label" type="button" onClick={() => onSelectGroup(group.id)}>
           <strong>{group.name}</strong>

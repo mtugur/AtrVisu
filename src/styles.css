@@ -327,9 +327,21 @@ select:disabled {
 }
 
 .workspace-preference-disclosure-chevron {
+  display: inline-grid;
+  width: var(--av-icon-size-md);
+  height: var(--av-icon-size-md);
+  place-items: center;
   color: var(--av-text-muted);
-  font-size: var(--av-font-size-lg);
-  line-height: 1;
+}
+
+.workspace-preference-disclosure-chevron svg,
+.workspace-preference-back svg,
+.workbench-context-contribution-header svg,
+.panel-section-disclosure svg,
+.library-tree-disclosure svg,
+.manager-row-toggle svg {
+  width: var(--av-icon-size-sm);
+  height: var(--av-icon-size-sm);
 }
 
 .cascading-flyout-surface {
@@ -2838,6 +2850,13 @@ body.is-resizing-workbench-dock {
   font-size: 0.75rem;
 }
 
+.library-tree-disclosure {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+}
+
 .library-section {
   min-height: 0;
   align-content: start;
@@ -2979,6 +2998,19 @@ body.is-resizing-workbench-dock {
 .asset-browser-clear:disabled {
   cursor: default;
   opacity: 0.48;
+}
+
+.asset-browser-clear {
+  justify-self: end;
+}
+
+.asset-browser-clear.workbench-action-button,
+.asset-browser-results-header .workbench-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
 }
 
 .asset-browser-results-header {

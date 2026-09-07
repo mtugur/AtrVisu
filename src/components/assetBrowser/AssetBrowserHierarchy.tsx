@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createAssetKey, type AssetBrowserRecord } from "../../assetBrowser";
 import type { LibraryGroup, LoadedMachineLibrary } from "../../types/machine";
+import { WorkbenchIcon } from "../../workbench/icons";
 import { AssetBrowserCard } from "./AssetBrowserCard";
 
 type SharedProps = {
@@ -34,7 +35,9 @@ function GroupNode({
         disabled={!hasChildren}
         aria-expanded={hasChildren ? isOpen : undefined}
       >
-        <span aria-hidden="true">{hasChildren ? (isOpen ? "−" : "+") : ""}</span>
+        <span className="library-tree-disclosure" aria-hidden="true">
+          {hasChildren ? <WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} /> : null}
+        </span>
         <strong>{group.name}</strong>
       </button>
 
@@ -94,7 +97,9 @@ export function AssetBrowserHierarchy({
               onClick={() => onToggleLibrary(library.libraryId)}
               aria-expanded={isOpen}
             >
-              <span aria-hidden="true">{isOpen ? "−" : "+"}</span>
+              <span className="library-tree-disclosure" aria-hidden="true">
+                <WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} />
+              </span>
               <strong title={library.libraryName}>{library.libraryName}</strong>
               <small>{library.loadError ?? (library.readonly ? "Read-only" : "Project")}</small>
             </button>

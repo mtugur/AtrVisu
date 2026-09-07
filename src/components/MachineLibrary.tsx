@@ -300,9 +300,13 @@ export function MachineLibrary({
                 {filterOptions.families.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            <button className="asset-browser-clear" type="button" disabled={activeFilterCount === 0} onClick={() => setFilters(EMPTY_ASSET_BROWSER_FILTERS)}>
-              Clear filters
-            </button>
+            <WorkbenchActionButton
+              className="asset-browser-clear"
+              iconId="clear"
+              label="Clear filters"
+              disabled={activeFilterCount === 0}
+              onClick={() => setFilters(EMPTY_ASSET_BROWSER_FILTERS)}
+            />
           </div>
         ) : null}
       </div>
@@ -318,7 +322,9 @@ export function MachineLibrary({
 
       <div className="asset-browser-results-header" aria-live="polite">
         <span>{isLoading ? "Loading assets…" : `${visibleRecords.length} asset${visibleRecords.length === 1 ? "" : "s"}`}</span>
-        {hasSearchOrFilters ? <button type="button" onClick={clearSearchAndFilters}>Clear search and filters</button> : null}
+        {hasSearchOrFilters ? (
+          <WorkbenchActionButton iconId="clear" label="Clear search and filters" onClick={clearSearchAndFilters} />
+        ) : null}
       </div>
 
       <section className="machine-list" aria-label="Available assets">

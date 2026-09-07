@@ -13,6 +13,13 @@ vi.mock("../utils/libraryValidation", () => ({
   loadMachineLibraries: vi.fn()
 }));
 
+const setNativeInputValue = (control: HTMLInputElement, value: string) => {
+  const prototype = HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  setter?.call(control, value);
+  control.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
 const item: LibraryMachineItem = {
   id: "custom-atara-machine",
   name: "Custom ATARA Machine",
@@ -88,6 +95,59 @@ describe("MachineLibrary definition conversion", () => {
     expect(name.getAttribute("title")).toBe(name.textContent);
     expect(title.title).toContain("Read-only");
     expect(status.textContent).toBe("Read-only");
+    expect(title.getAttribute("aria-expanded")).toBe("true");
+    expect(title.querySelectorAll("svg")).toHaveLength(1);
+
+    await act(async () => root.unmount());
+  });
+
+  it("keeps Library clear actions compact while preserving their existing state resets", async () => {
+    vi.mocked(loadMachineLibraries).mockResolvedValue({
+      libraries: [{
+        libraryId: "atara-standard",
+        libraryName: "Atara Standard Library",
+        readonly: true,
+        enabled: true,
+        path: "/library.json",
+        root: { id: "root", name: "Root", children: [], items: [item] }
+      }],
+      warnings: [],
+      loadError: ""
+    });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const preferencesRuntime = createAssetBrowserPreferencesRuntime({
+      read: async () => undefined,
+      write: async () => undefined
+    });
+    await act(async () => root.render(createElement(MachineLibrary, {
+      onAddMachine: vi.fn(async () => true),
+      isLibraryManagerOpen: false,
+      isTaxonomyManagerOpen: false,
+      onCloseLibraryManager: vi.fn(),
+      onCloseTaxonomyManager: vi.fn(),
+      preferencesRuntime
+    })));
+
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    await act(async () => {
+      setNativeInputValue(search, "Custom");
+    });
+    const clearAll = container.querySelector<HTMLButtonElement>('[aria-label="Clear search and filters"]')!;
+    expect(clearAll.title).toBe("Clear search and filters");
+    expect(clearAll.textContent).toBe("");
+    expect(clearAll.querySelectorAll("svg")).toHaveLength(1);
+    await act(async () => clearAll.click());
+    expect(search.value).toBe("");
+
+    const filtersToggle = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.includes("Filters"))!;
+    await act(async () => filtersToggle.click());
+    const clearFilters = container.querySelector<HTMLButtonElement>('[aria-label="Clear filters"]')!;
+    expect(clearFilters.disabled).toBe(true);
+    expect(clearFilters.title).toBe("Clear filters");
+    expect(clearFilters.textContent).toBe("");
+    expect(clearFilters.querySelectorAll("svg")).toHaveLength(1);
 
     await act(async () => root.unmount());
   });

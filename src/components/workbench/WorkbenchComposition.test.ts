@@ -203,8 +203,12 @@ describe("final workbench composition contracts", () => {
 
     expect(visibleMarkup).toContain('data-panel-id="panel.precisionPlacement"');
     expect(visibleMarkup).toContain('aria-expanded="true"');
+    expect(visibleMarkup.match(/<svg/g)).toHaveLength(1);
+    expect(visibleMarkup).not.toMatch(/>\s*[+-]\s*</);
     expect(visibleMarkup).toContain("placement-controls");
     expect(collapsedMarkup).toContain('aria-expanded="false"');
+    expect(collapsedMarkup.match(/<svg/g)).toHaveLength(1);
+    expect(collapsedMarkup).not.toMatch(/>\s*[+-]\s*</);
     expect(collapsedMarkup).not.toContain("placement-controls");
     expect(hiddenMarkup).toBe("");
 

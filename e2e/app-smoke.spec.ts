@@ -5858,10 +5858,21 @@ test("PF-3A iconography keeps compact actions accessible while preserving engine
     await expect(tabs.nth(index)).toHaveAttribute("title", /.+/);
   }
   await expectDefaultPrimaryDockTabsFit(page);
+  const libraryTitle = page.locator(".library-title").first();
+  await expect(libraryTitle.locator("svg")).toHaveCount(1);
+  await expect(libraryTitle).toHaveAttribute("aria-expanded", /true|false/);
+  await expect(page.locator(".library-tree-toggle").filter({ has: page.locator("svg") }).first()).toBeVisible();
   await capturePf3aScreenshot(page, "01-shell-primary-dock-icons-1440.png");
 
   const library = page.getByTestId("machine-library-panel");
   await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
+  await library.getByLabel("Search assets").fill("Flow Pack Machine");
+  const clearSearchAndFilters = library.getByRole("button", { name: "Clear search and filters", exact: true });
+  await expect(clearSearchAndFilters).toBeVisible();
+  await expect(clearSearchAndFilters.locator("svg")).toHaveCount(1);
+  await expect(clearSearchAndFilters).toHaveText("");
+  await clearSearchAndFilters.click();
+  await expect(library.getByLabel("Search assets")).toHaveValue("");
   await library.getByLabel("Search assets").fill("Flow Pack Machine");
   const flowCard = library.locator('[data-asset-key="atara-standard::packaging-flowpack-01"]');
   await expect(flowCard).toContainText("Flow Pack Machine");
@@ -5883,6 +5894,7 @@ test("PF-3A iconography keeps compact actions accessible while preserving engine
   await expect(properties).toContainText("Plan Y");
   await expect(properties).toContainText("Elevation");
   await expect(properties).toContainText("Rotation Angle");
+  await expect(propertiesToggle.locator("svg")).toHaveCount(1);
   await capturePf3aScreenshot(page, "07-inspector-engineering-text.png");
 
   await openPrimaryDockPanel(page, "panel.machineLibrary");
@@ -5893,6 +5905,16 @@ test("PF-3A iconography keeps compact actions accessible while preserving engine
   await expect(importDialog.getByRole("button", { name: "Next" })).toContainText("Next");
   await capturePf3aScreenshot(page, "08-workflow-text-actions.png");
   await importDialog.getByRole("button", { name: "Close import" }).click();
+
+  const preferences = await openWorkspacePreferences(page);
+  const disclosureRows = preferences.popover.locator(".workspace-preference-disclosure-row");
+  await expect(disclosureRows).toHaveCount(4);
+  for (let index = 0; index < 4; index += 1) {
+    await expect(disclosureRows.nth(index).locator("svg")).toHaveCount(1);
+  }
+  await capturePf3aScreenshot(page, "11-preference-disclosure-icons.png");
+  await preferences.trigger.click();
+  await expect(preferences.popover).toHaveCount(0);
 
   await page.setViewportSize({ width: 1024, height: 768 });
   await expect(page.getByTestId("primary-dock")).toBeVisible();

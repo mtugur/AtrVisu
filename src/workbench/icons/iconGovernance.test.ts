@@ -26,10 +26,29 @@ describe("PF-3A iconography governance", () => {
     expect(directImports).toEqual(["src/workbench/icons/iconRegistry.tsx"]);
   });
 
-  it("keeps migrated group and viewpoint controls free of standalone pseudo-icon glyphs", () => {
-    ["../../components/AssemblyTreePanel.tsx", "../../components/ViewpointsPanel.tsx"].forEach((path) => {
+  it("keeps maintained disclosure controls free of standalone pseudo-icon glyphs", () => {
+    const pseudoDisclosure = /(?:>\s*(?:&lt;|&gt;|\+|-|−|‹|›)\s*<|\{`\\u203(?:9|A)`\}|\?\s*["'](?:\+|-|−|‹|›)["']\s*:\s*["'](?:\+|-|−|‹|›)["'])/s;
+    [
+      "../../components/AssemblyTreePanel.tsx",
+      "../../components/ViewpointsPanel.tsx",
+      "../../components/assetBrowser/AssetBrowserHierarchy.tsx",
+      "../../components/PanelSection.tsx",
+      "../../components/workbench/PreferenceDisclosureRow.tsx",
+      "../../components/workbench/WorkspacePreferencesControl.tsx",
+      "../../components/LibraryManager.tsx",
+      "../../components/workbench/WorkbenchContextContribution.tsx"
+    ].forEach((path) => {
       const source = readFileSync(new URL(path, import.meta.url), "utf8");
-      expect(source).not.toMatch(/<button[^>]*>\s*(?:&lt;|&gt;|\+|-)\s*<\/button>/s);
+      expect(source).not.toMatch(pseudoDisclosure);
     });
+  });
+
+  it("keeps Library clear and reset controls on the canonical compact action primitive", () => {
+    const source = readFileSync(new URL("../../components/MachineLibrary.tsx", import.meta.url), "utf8");
+
+    expect(source.match(/iconId="clear"/g)).toHaveLength(2);
+    expect(source).toContain('label="Clear filters"');
+    expect(source).toContain('label="Clear search and filters"');
+    expect(source).not.toMatch(/>\s*Clear (?:filters|search and filters)\s*</);
   });
 });
