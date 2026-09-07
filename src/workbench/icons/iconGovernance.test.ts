@@ -5,7 +5,12 @@ import { describe, expect, it } from "vitest";
 
 const sourceRoot = new URL("../../", import.meta.url);
 
-const productSources = (directory: URL): URL[] => readdirSync(directory, { withFileTypes: true })
+type SourceDirectoryEntry = Readonly<{
+  name: string;
+  isDirectory: () => boolean;
+}>;
+
+const productSources = (directory: URL): URL[] => (readdirSync(directory, { withFileTypes: true }) as SourceDirectoryEntry[])
   .flatMap((entry) => {
     const child = new URL(entry.name + (entry.isDirectory() ? "/" : ""), directory);
     if (entry.isDirectory()) return productSources(child);
