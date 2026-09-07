@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 import type { CSSProperties } from "react";
 import type {
   LibraryGroup,
@@ -1800,9 +1801,7 @@ export function LibraryManager({
               {editable ? "Editable" : "Read-only"}
             </span>
           </div>
-          <button data-testid="close-library-manager-header" type="button" onClick={requestClose}>
-            Close
-          </button>
+          <WorkbenchActionButton iconId="close" label="Close Library Manager" data-testid="close-library-manager-header" onClick={requestClose} />
         </header>
 
         <div className="manager-layout" data-testid="library-manager-ready">

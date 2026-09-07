@@ -51,11 +51,11 @@ describe("final workbench composition contracts", () => {
   it("renders one active Primary Dock contribution and activates registry panel ids", () => {
     const onActivate = vi.fn();
     const items = [
-      { panelId: "panel.machineLibrary" as const, label: "Library", content: "library-content" },
-      { panelId: "panel.layoutExplorer" as const, label: "Explorer", content: "explorer-content" },
-      { panelId: "panel.layers" as const, label: "Layers", content: "layers-content" },
-      { panelId: "panel.groups" as const, label: "Groups", content: "groups-content" },
-      { panelId: "panel.viewpoints" as const, label: "Viewpoints", content: "viewpoints-content" }
+      { panelId: "panel.machineLibrary" as const, label: "Library", iconId: "library" as const, content: "library-content" },
+      { panelId: "panel.layoutExplorer" as const, label: "Explorer", iconId: "explorer" as const, badge: "4", content: "explorer-content" },
+      { panelId: "panel.layers" as const, label: "Layers", iconId: "layers" as const, content: "layers-content" },
+      { panelId: "panel.groups" as const, label: "Groups", iconId: "groups" as const, badge: "1", content: "groups-content" },
+      { panelId: "panel.viewpoints" as const, label: "Viewpoints", iconId: "viewpoints" as const, badge: "2", content: "viewpoints-content" }
     ];
     const markup = renderToStaticMarkup(createElement(WorkbenchPrimaryDock, {
       items,
@@ -82,6 +82,11 @@ describe("final workbench composition contracts", () => {
     expect(tabOrder).toEqual([...tabOrder].sort((left, right) => left - right));
     expect(markup.match(/data-panel-id=/g)).toHaveLength(items.length);
     expect(markup).not.toContain("<strong>Groups</strong>");
+    expect(markup).not.toContain("<span>Library</span>");
+    expect(markup).toContain('aria-label="Explorer, 4 entities"');
+    expect(markup).toContain('aria-label="Groups, 1 group"');
+    expect(markup).toContain('aria-label="Viewpoints, 2 saved viewpoints"');
+    expect(markup.match(/<svg/g)).toHaveLength(items.length + 1);
     expect(markup).toContain('aria-label="Resize Primary Dock"');
     expect(markup).toContain('aria-valuenow="304"');
     expect(markup).toContain('aria-label="Collapse Primary Dock"');

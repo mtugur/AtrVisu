@@ -13,6 +13,7 @@ import {
   CommandPalette,
   ViewportArrangeBar,
   WorkbenchApplicationBar,
+  WorkbenchActionButton,
   WorkbenchCommandBar,
   WorkbenchDockCollapseButton,
   WorkbenchMenuBar,
@@ -4631,7 +4632,7 @@ export function App() {
             />
             {isConnectionPointSnapOpen && connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false ? (
               <div className="viewport-connect-popover" role="dialog" aria-label="Connect & Snap" data-testid="connect-and-snap-popover">
-                <header><strong>Connect &amp; Snap</strong><button type="button" aria-label="Close Connect & Snap" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}>Close</button></header>
+                <header><strong>Connect &amp; Snap</strong><WorkbenchActionButton iconId="close" label="Close Connect & Snap" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap)} /></header>
                 <ConnectionPointSnapPanel
                   selectedMachines={selectedMachines}
                   primarySelectedMachine={selectedMachine}
@@ -4785,6 +4786,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.machineLibrary,
               label: "Library",
+              iconId: "library" as const,
               content: (
                 <MachineLibrary
                   onImportAsset={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.importAsset); }}
@@ -4805,6 +4807,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.layoutExplorer,
               label: "Explorer",
+              iconId: "explorer" as const,
               badge: platformEntities.length > 0 ? `${platformEntities.length}` : undefined,
               content: (
                 <LayoutExplorer
@@ -4826,6 +4829,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.layers,
               label: "Layers",
+              iconId: "layers" as const,
               badge: layers.length > 1 ? `${layers.length}` : undefined,
               content: (
                 <LayersPanel
@@ -4848,6 +4852,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.groups,
               label: "Groups",
+              iconId: "groups" as const,
               badge: groups.length > 0 ? `${groups.length}` : undefined,
               content: (
                 <AssemblyTreePanel
@@ -4876,6 +4881,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.viewpoints,
               label: "Viewpoints",
+              iconId: "viewpoints" as const,
               badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
               content: (
                 <ViewpointsPanel
@@ -5540,7 +5546,7 @@ export function App() {
               <section className="manager-dialog workbench-tool-dialog" role="dialog" aria-modal="true" aria-label="Advanced Alignment">
                 <header className="manager-header">
                   <div><span>Arrange</span><h2>Advanced Alignment</h2></div>
-                  <button type="button" aria-label="Close Advanced Alignment" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.alignmentTools)}>Close</button>
+                  <WorkbenchActionButton iconId="close" label="Close Advanced Alignment" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.alignmentTools)} />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <AlignmentToolsPanel
@@ -5647,13 +5653,11 @@ export function App() {
                     <span>View Tool</span>
                     <h2>Display / Overlay Controls</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Display / Overlay Controls"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Display / Overlay Controls"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.displayOverlayControls)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <DisplayOverlayControls
@@ -5683,13 +5687,11 @@ export function App() {
                     <span>Engineering Tool</span>
                     <h2>Collision Check</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Collision Check"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Collision Check"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.collisionCheck)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <CollisionCheckPanel
@@ -5714,13 +5716,11 @@ export function App() {
                     <span>File Tool</span>
                     <h2>Layout Import / Export</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Layout Import / Export"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Layout Import / Export"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.layoutControls)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
@@ -5736,13 +5736,11 @@ export function App() {
                     <span>Global Tool</span>
                     <h2>Simulation Controls</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Simulation Controls"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Simulation Controls"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.simulationControls)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <SimulationControls

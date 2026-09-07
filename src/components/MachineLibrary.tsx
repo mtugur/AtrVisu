@@ -4,7 +4,6 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
-import { Upload } from "lucide-react";
 import {
   EMPTY_ASSET_BROWSER_FILTERS,
   createAssetBrowserPreferencesRuntime,
@@ -31,6 +30,7 @@ import { AssetBrowserCard } from "./assetBrowser/AssetBrowserCard";
 import { AssetBrowserHierarchy } from "./assetBrowser/AssetBrowserHierarchy";
 import { LibraryManager, type LibraryManagerRuntimeController } from "./LibraryManager";
 import { TaxonomyManager } from "./TaxonomyManager";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 type LibrarySelection = {
   libraryId: string;
@@ -231,7 +231,15 @@ export function MachineLibrary({
       data-testid="machine-library-panel"
       data-asset-preferences-status={preferenceSnapshot.status}
     >
-      {onImportAsset && <button type="button" className="native-asset-import-trigger" onClick={onImportAsset}><Upload size={16} /><span>Import 3D Asset</span></button>}
+      {onImportAsset ? (
+        <WorkbenchActionButton
+          className="native-asset-import-trigger"
+          iconId="import"
+          label="Import 3D Asset"
+          visibleLabel="Import 3D Asset"
+          onClick={onImportAsset}
+        />
+      ) : null}
       {assetMessage && <p role="status">{assetMessage}</p>}
       <label className="panel-search asset-browser-search">
         <WorkbenchIcon iconId="search" />

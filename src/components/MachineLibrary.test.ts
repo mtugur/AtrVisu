@@ -135,7 +135,7 @@ describe("MachineLibrary definition conversion", () => {
     await act(async () => favorite.click());
     expect(favorite.getAttribute("aria-pressed")).toBe("true");
 
-    const add = container.querySelector<HTMLButtonElement>('.machine-card[title="Add Custom ATARA Machine"]')!;
+    const add = container.querySelector<HTMLButtonElement>('.machine-card[title="Add Custom ATARA Machine to layout"]')!;
     await act(async () => add.click());
     expect(onAddMachine).toHaveBeenCalledTimes(1);
     expect(writes.length).toBeGreaterThan(0);
