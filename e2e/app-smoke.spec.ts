@@ -4052,7 +4052,7 @@ test("locked member blocks atomic multi-selection movement without red console e
   await group.getByRole("button", { name: /^Add Selected to / }).click();
   await expect(group).toContainText("2 items");
   await openPrimaryDockPanel(page, "panel.layers");
-  await lockedLayerRow.getByRole("button", { name: "Lock", exact: true }).click();
+  await lockedLayerRow.getByRole("button", { name: "Lock Atomic Lock Layer" }).click();
   await openPrimaryDockPanel(page, "panel.groups");
   await group.locator(".assembly-group-button").click();
 
@@ -4228,7 +4228,7 @@ test("locked assembly member blocks pointer drag and keyboard nudge atomically",
   );
   expect(groupId).not.toBeNull();
   await openPrimaryDockPanel(page, "panel.layers");
-  await lockedLayer.getByRole("button", { name: "Lock", exact: true }).click();
+  await lockedLayer.getByRole("button", { name: "Lock Rigid Lock Layer" }).click();
   await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
 
   const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
