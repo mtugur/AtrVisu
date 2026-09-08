@@ -447,6 +447,7 @@ export function App() {
     height: window.innerHeight
   }));
   const [isResponsiveInspectorOpen, setIsResponsiveInspectorOpen] = useState(false);
+  const [inspectorVisibilityMode, setInspectorVisibilityMode] = useState<"auto" | "manual">("auto");
   const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
   const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
   const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
@@ -485,6 +486,9 @@ export function App() {
     );
     const current = !currentShell?.visible || Boolean(currentShell.collapsed);
     const collapsed = typeof next === "function" ? next(current) : next;
+    if (current === collapsed && currentShell?.visible !== false) {
+      return;
+    }
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.rightPanelShell, {
       visible: true,
       collapsed
@@ -1973,18 +1977,16 @@ export function App() {
       source: "scene"
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
-    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
+  }, [setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
-    openInspectorPresentation();
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, [openInspectorPresentation]);
+  }, []);
 
   const selectPlatformEntityForEditing = useCallback((entityId: EntityId, mode: SelectionMode = "replace") => {
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
@@ -1996,8 +1998,29 @@ export function App() {
       setAnnotationSelectionSignal((current) => current + 1);
       setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
-    openInspectorPresentation();
-  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
+  }, [setPanelSectionExpansionPreservingVisibility]);
+
+  const previousInspectorSelectionRef = useRef(runtimeSelection);
+  const previousInspectorVisibilityModeRef = useRef(inspectorVisibilityMode);
+  useEffect(() => {
+    const selectionChanged = previousInspectorSelectionRef.current !== runtimeSelection;
+    const modeChanged = previousInspectorVisibilityModeRef.current !== inspectorVisibilityMode;
+    previousInspectorSelectionRef.current = runtimeSelection;
+    previousInspectorVisibilityModeRef.current = inspectorVisibilityMode;
+    if (inspectorVisibilityMode !== "auto" || (!selectionChanged && !modeChanged)) {
+      return;
+    }
+    if (runtimeSelection.ids.length > 0) {
+      openInspectorPresentation();
+    } else {
+      closeInspectorPresentation();
+    }
+  }, [
+    closeInspectorPresentation,
+    inspectorVisibilityMode,
+    openInspectorPresentation,
+    runtimeSelection
+  ]);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
     const orderedIds = primaryId
@@ -2937,8 +2960,7 @@ export function App() {
     setRuntimeSelection(replaceRuntimeSelection([
       createLegacyPlatformEntityId("civil", item.id)
     ], "inspector"));
-    openInspectorPresentation();
-  }, [markLayoutChanged, openInspectorPresentation]);
+  }, [markLayoutChanged]);
 
   const updateSelectedCivilReference = useCallback((
     id: string,
@@ -3065,9 +3087,8 @@ export function App() {
       createLegacyPlatformEntityId("annotation", annotation.id)
     ], "inspector"));
     setAnnotationSelectionSignal((current) => current + 1);
-    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [markLayoutChanged, openInspectorPresentation, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
+  }, [markLayoutChanged, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
@@ -4954,13 +4975,24 @@ export function App() {
             onPointerDown={startPanelResize}
           />
           <header className="workbench-inspector-header">
-            <strong>Inspector</strong>
-            <WorkbenchDockCollapseButton
-              side="right"
-              collapsed={false}
-              onToggle={closeInspectorPresentation}
-              testId="right-dock-collapse-toggle"
-            />
+            <div className="workbench-inspector-heading">
+              <strong>Inspector</strong>
+              <small>{inspectorVisibilityMode === "manual" ? "Pinned" : "Auto"}</small>
+            </div>
+            <div className="workbench-inspector-header-actions">
+              <WorkbenchActionButton
+                iconId={inspectorVisibilityMode === "manual" ? "unpin" : "pin"}
+                label={inspectorVisibilityMode === "manual" ? "Unpin Inspector" : "Pin Inspector"}
+                aria-pressed={inspectorVisibilityMode === "manual"}
+                onClick={() => setInspectorVisibilityMode((current) => current === "auto" ? "manual" : "auto")}
+              />
+              <WorkbenchDockCollapseButton
+                side="right"
+                collapsed={false}
+                onToggle={closeInspectorPresentation}
+                testId="right-dock-collapse-toggle"
+              />
+            </div>
           </header>
           {showLegacyCompatibilityStack ? (
             <>

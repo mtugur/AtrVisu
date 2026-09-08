@@ -61,6 +61,10 @@ describe("AssemblyTreePanel", () => {
     expect(markup).toContain("Groups are rigid assemblies");
     expect(markup).toContain('aria-label="Edit Group Packaging module"');
     expect(markup).toContain('aria-label="Ungroup Packaging module"');
+    expect(markup).toContain("lucide-package-plus");
+    expect(markup).toContain("lucide-package-minus");
+    expect(markup).toContain("lucide-square-pen");
+    expect(markup).toContain("lucide-text-cursor-input");
     expect(markup).not.toContain("Delete Group");
   });
 
@@ -73,6 +77,8 @@ describe("AssemblyTreePanel", () => {
     expect(markup).toContain("is-editing");
     expect(markup).toContain("Editing members");
     expect(markup).toContain('aria-label="Exit Group Edit Packaging module"');
+    expect(markup).toContain("lucide-check");
+    expect(markup).not.toContain("lucide-square-pen");
   });
 
   it("keeps membership actions disabled when only a projected group root is selected", () => {

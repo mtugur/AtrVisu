@@ -2,6 +2,7 @@ import {
   Boxes,
   Camera,
   CameraIcon,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -22,7 +23,11 @@ import {
   Lock,
   MoreHorizontal,
   Package,
+  PackageMinus,
+  PackagePlus,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   Plug,
   RefreshCw,
@@ -31,15 +36,15 @@ import {
   Save,
   Search,
   SlidersHorizontal,
+  SquarePen,
   Star,
   Tag,
+  TextCursorInput,
   Trash2,
   Ungroup,
   Unlock,
   Undo2,
   Upload,
-  UserMinus,
-  UserPlus,
   X,
   type LucideIcon
 } from "lucide-react";
@@ -95,7 +100,12 @@ export const WORKBENCH_ICON_IDS = [
   "close",
   "import",
   "add-members",
-  "remove-members"
+  "remove-members",
+  "edit-assembly",
+  "finish-edit",
+  "rename-text",
+  "pin",
+  "unpin"
 ] as const;
 
 export type WorkbenchIconId = typeof WORKBENCH_ICON_IDS[number];
@@ -150,8 +160,13 @@ const iconById = Object.freeze({
   clear: X,
   close: X,
   import: Upload,
-  "add-members": UserPlus,
-  "remove-members": UserMinus
+  "add-members": PackagePlus,
+  "remove-members": PackageMinus,
+  "edit-assembly": SquarePen,
+  "finish-edit": Check,
+  "rename-text": TextCursorInput,
+  pin: Pin,
+  unpin: PinOff
 } satisfies Record<WorkbenchIconId, LucideIcon>);
 
 export const isWorkbenchIconId = (iconId: string): iconId is WorkbenchIconId =>

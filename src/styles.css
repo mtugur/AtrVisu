@@ -2752,7 +2752,11 @@ body.is-resizing-workbench-dock {
 .library-tree-node,
 .library-tree-children {
   display: grid;
-  gap: 6px;
+  gap: 4px;
+}
+
+.library-tree-children.is-root-content {
+  padding-top: 2px;
 }
 
 .library-tree-toggle {
@@ -2761,7 +2765,7 @@ body.is-resizing-workbench-dock {
   align-items: center;
   gap: 7px;
   width: 100%;
-  min-height: 34px;
+  min-height: 30px;
   border: 0;
   border-radius: 8px;
   color: var(--av-text-primary);
@@ -3052,12 +3056,11 @@ body.is-resizing-workbench-dock {
 .asset-card {
   display: grid;
   min-width: 0;
-  grid-template-columns: 54px minmax(0, 1fr);
-  grid-template-areas:
-    "visual content"
-    "actions actions";
-  gap: 8px 10px;
-  padding: 10px;
+  grid-template-columns: 44px minmax(0, 1fr) 28px;
+  grid-template-areas: "visual content actions";
+  gap: 6px;
+  min-height: 96px;
+  padding: 6px;
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 18%, transparent);
   border-radius: 6px;
   background: color-mix(in srgb, var(--av-surface-raised) 86%, transparent);
@@ -3070,8 +3073,8 @@ body.is-resizing-workbench-dock {
 .asset-card-visual {
   grid-area: visual;
   display: grid;
-  width: 54px;
-  height: 54px;
+  width: 44px;
+  height: 44px;
   overflow: hidden;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 18%, transparent);
@@ -3143,20 +3146,22 @@ body.is-resizing-workbench-dock {
   grid-area: actions;
   display: flex;
   min-width: 0;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+  justify-content: center;
+  gap: 2px;
 }
 
 .asset-card-actions .workbench-action-button {
   display: inline-flex;
-  width: 30px;
-  min-width: 30px;
-  min-height: 30px;
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  min-height: 26px;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 4px 8px;
+  padding: 3px;
   border: 1px solid color-mix(in srgb, var(--av-text-secondary) 22%, transparent);
   border-radius: 4px;
   color: var(--av-text-primary);
@@ -3180,8 +3185,8 @@ body.is-resizing-workbench-dock {
 }
 
 .asset-card-actions .asset-card-add {
-  width: 30px;
-  min-height: 30px;
+  width: 26px;
+  min-height: 26px;
   transform: none;
   font-size: 0.74rem;
   font-weight: 800;
@@ -3256,13 +3261,13 @@ body.is-resizing-workbench-dock {
 }
 
 .library-tree-children .asset-card {
-  grid-template-columns: 42px minmax(0, 1fr);
-  padding: 8px;
+  grid-template-columns: 40px minmax(0, 1fr) 28px;
+  padding: 6px;
 }
 
 .library-tree-children .asset-card-visual {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
 }
 
 .asset-browser-empty,
@@ -5518,6 +5523,27 @@ body.is-resizing-workbench-dock {
   margin: 0;
   border-bottom: 1px solid var(--av-border-subtle);
   font-size: var(--av-font-size-sm);
+}
+
+.workbench-inspector-heading,
+.workbench-inspector-header-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--av-spacing-xs);
+}
+
+.workbench-inspector-heading small {
+  color: var(--av-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.workbench-inspector-header-actions .workbench-action-button {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
 }
 .native-asset-steps [aria-current="step"] { font-weight: 700; color: var(--av-text-primary); }
 .native-asset-body {

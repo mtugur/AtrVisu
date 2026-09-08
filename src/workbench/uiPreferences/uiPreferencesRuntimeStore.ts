@@ -82,6 +82,11 @@ const freezePreferences = (preferences: WorkbenchUiPreferences): WorkbenchUiPref
   return Object.freeze(clone);
 };
 
+const arePreferencesEqual = (
+  left: WorkbenchUiPreferences,
+  right: WorkbenchUiPreferences
+) => JSON.stringify(left) === JSON.stringify(right);
+
 const createSnapshot = (
   preferences: WorkbenchUiPreferences,
   hydrationStatus: UiPreferencesHydrationStatus,
@@ -275,6 +280,9 @@ export const createUiPreferencesRuntimeStore = (
     const normalized = normalizeWorkbenchUiPreferences(candidate);
     if (normalized.rejectedDomainPayload) {
       return { accepted: false, persisted: Promise.resolve(false) };
+    }
+    if (arePreferencesEqual(snapshot.preferences, normalized.preferences)) {
+      return { accepted: true, persisted: Promise.resolve(true) };
     }
     const mutation = createReplayMutation(current, normalized.preferences);
     commit(normalized.preferences, snapshot.hydrationStatus === "idle" ? "ready" : snapshot.hydrationStatus, null);

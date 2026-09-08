@@ -4599,7 +4599,7 @@ test("layers can be created, assigned, hidden, and shown without red console err
   await expect(layerRow).toContainText("1 item");
   await expect(defaultLayerRow).toContainText("0 items");
   await layerRow.getByRole("button", { name: "Hide Test Layer" }).click();
-  await expect(page.getByRole("button", { name: /Selected Object Properties/i })).toContainText("None");
+  await expect(page.getByTestId("right-panel")).toHaveCount(0);
   await layerRow.getByRole("button", { name: "Show Test Layer" }).click();
   await layerRow.getByRole("button", { name: "Isolate Test Layer" }).click();
   await expect(defaultLayerRow).not.toHaveClass(/is-hidden/);
@@ -5938,6 +5938,91 @@ test("PF-3A iconography keeps compact actions accessible while preserving engine
     await expect(iconActions.nth(index)).toHaveAttribute("title", /.+/);
     await expect(iconActions.nth(index).locator("svg")).toHaveCount(1);
   }
+  expect(errors).toEqual([]);
+});
+
+test("PF-3A Inspector modes and group selection avoid React update-depth feedback", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  const updateDepthWarnings: string[] = [];
+  page.on("console", (message) => {
+    if (message.text().includes("Maximum update depth exceeded")) {
+      updateDepthWarnings.push(message.text());
+    }
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+
+  const library = page.getByTestId("machine-library-panel");
+  await expect(library).toHaveAttribute("data-asset-preferences-status", "ready");
+  const sourceName = "Atara Standard Library";
+  await expect(library.getByText(sourceName, { exact: true })).toHaveCount(1);
+  const firstAssetCard = library.locator(".asset-card").first();
+  const compactHeight = await firstAssetCard.evaluate((element) => element.getBoundingClientRect().height);
+  expect(compactHeight).toBeGreaterThanOrEqual(90);
+  expect(compactHeight).toBeLessThanOrEqual(100);
+  await capturePf3aScreenshot(page, "12-library-populated-hierarchy-292.png");
+
+  await firstAssetCard.getByRole("button", { name: /^Add .* to layout$/ }).click();
+  await waitForMachineDiagnostics(page, 1);
+  await firstAssetCard.getByRole("button", { name: /^Add .* to layout$/ }).click();
+  await waitForMachineDiagnostics(page, 2);
+  const machineIds = await getMachineIds(page);
+
+  const inspector = page.getByTestId("right-panel");
+  await expect(inspector).toBeVisible();
+  await expect(inspector.getByText("Auto", { exact: true })).toBeVisible();
+  await expect(inspector.getByRole("button", { name: "Pin Inspector", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await capturePf3aScreenshot(page, "13-inspector-auto.png");
+
+  await inspector.getByRole("button", { name: "Pin Inspector", exact: true }).click();
+  await expect(inspector.getByText("Pinned", { exact: true })).toBeVisible();
+  await expect(inspector.getByRole("button", { name: "Unpin Inspector", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await capturePf3aScreenshot(page, "14-inspector-pinned.png");
+
+  await inspector.getByRole("button", { name: "Collapse Inspector", exact: true }).click();
+  await expect(inspector).toHaveCount(0);
+  await clickSceneMachine(page, machineIds[0]);
+  await expect(inspector).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand Inspector", exact: true }).click();
+  await expect(inspector).toBeVisible();
+
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox) throw new Error("Scene canvas geometry is unavailable.");
+  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await expect(page.getByTestId("inspector-empty-state")).toBeVisible();
+  await expect(inspector).toBeVisible();
+
+  await inspector.getByRole("button", { name: "Unpin Inspector", exact: true }).click();
+  await expect(inspector).toHaveCount(0);
+  await clickSceneMachine(page, machineIds[0]);
+  await expect(inspector).toBeVisible();
+  await expect(inspector.getByText("Auto", { exact: true })).toBeVisible();
+
+  await openPrimaryDockPanel(page, "panel.groups");
+  page.once("dialog", (dialog) => dialog.accept("PF-3A Interaction Group"));
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: "PF-3A Interaction Group" });
+  await expect(group).toBeVisible();
+  await group.locator(".assembly-group-button").click();
+  await group.getByRole("button", { name: /Edit Group PF-3A Interaction Group/ }).click();
+  await group.getByRole("button", { name: /Exit Group Edit PF-3A Interaction Group/ }).click();
+  await capturePf3aScreenshot(page, "15-groups-corrected-action-rail.png");
+
+  const arrangeMenu = await openWorkbenchMenu(page, "Arrange");
+  await arrangeMenu.locator('[data-command-id="arrange.alignmentTools"]').click();
+  await expect(page.getByTestId("advanced-alignment-tool-surface")).toBeVisible();
+  await page.getByRole("button", { name: "Close Advanced Alignment", exact: true }).click();
+  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await expect(inspector).toHaveCount(0);
+
+  await page.setViewportSize({ width: 640, height: 800 });
+  await page.getByRole("button", { name: /Open Groups|Open Library/, exact: true }).click();
+  await openPrimaryDockPanel(page, "panel.machineLibrary");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await capturePf3aScreenshot(page, "16-library-hierarchy-640.png");
+
+  expect(updateDepthWarnings).toEqual([]);
   expect(errors).toEqual([]);
 });
 

@@ -101,6 +101,49 @@ describe("MachineLibrary definition conversion", () => {
     await act(async () => root.unmount());
   });
 
+  it("renders a redundant library root identity once and promotes its real children", async () => {
+    vi.mocked(loadMachineLibraries).mockResolvedValue({
+      libraries: [{
+        libraryId: "atara-standard",
+        libraryName: "Atara Standard Library",
+        readonly: true,
+        enabled: true,
+        path: "/library.json",
+        root: {
+          id: "root",
+          name: "Atara Standard Library",
+          children: [{ id: "packaging", name: "Packaging Lines", children: [], items: [item] }],
+          items: []
+        }
+      }],
+      warnings: [],
+      loadError: ""
+    });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const preferencesRuntime = createAssetBrowserPreferencesRuntime({
+      read: async () => undefined,
+      write: async () => undefined
+    });
+
+    await act(async () => root.render(createElement(MachineLibrary, {
+      onAddMachine: vi.fn(async () => true),
+      isLibraryManagerOpen: false,
+      isTaxonomyManagerOpen: false,
+      onCloseLibraryManager: vi.fn(),
+      onCloseTaxonomyManager: vi.fn(),
+      preferencesRuntime
+    })));
+
+    expect(container.querySelectorAll(".library-title strong")).toHaveLength(1);
+    expect(container.querySelectorAll(".library-tree-toggle strong")).toHaveLength(1);
+    expect(container.querySelector(".library-title strong")?.textContent).toBe("Atara Standard Library");
+    expect(container.querySelector(".library-tree-toggle strong")?.textContent).toBe("Packaging Lines");
+    expect(container.querySelector(".library-tree-children.is-root-content")).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it("keeps Library clear actions compact while preserving their existing state resets", async () => {
     vi.mocked(loadMachineLibraries).mockResolvedValue({
       libraries: [{

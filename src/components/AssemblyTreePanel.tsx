@@ -125,12 +125,12 @@ export function AssemblyTreePanel({
                   onClick={() => onRemoveSelectionFromGroup(group.id)}
                 />
                 {isEditing ? (
-                  <WorkbenchActionButton iconId="edit" label={`Exit Group Edit ${group.name}`} visibleLabel="Done" aria-pressed="true" onClick={() => onExitGroupEdit(group.id)} />
+                  <WorkbenchActionButton iconId="finish-edit" label={`Exit Group Edit ${group.name}`} visibleLabel="Done" aria-pressed="true" onClick={() => onExitGroupEdit(group.id)} />
                 ) : (
-                  <WorkbenchActionButton iconId="edit" label={`Edit Group ${group.name}`} visibleLabel="Edit" aria-pressed="false" onClick={() => onEnterGroupEdit(group.id)} />
+                  <WorkbenchActionButton iconId="edit-assembly" label={`Edit Group ${group.name}`} visibleLabel="Edit" aria-pressed="false" onClick={() => onEnterGroupEdit(group.id)} />
                 )}
                 <WorkbenchActionButton
-                  iconId="rename"
+                  iconId="rename-text"
                   label={`Rename ${group.name}`}
                   onClick={() => {
                     const name = window.prompt("Group name", group.name);

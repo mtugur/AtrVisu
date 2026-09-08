@@ -19,6 +19,9 @@ PF-3A establishes one Workbench icon authority and a bounded compact-action gram
 - Library asset metadata stays textual; Favorite, Add and Custom Variant are target-specific icon actions; Import 3D Asset remains icon plus text.
 - Library hierarchy, Inspector sections, contextual contributions, Library Manager groups and Workspace preference navigation use registered disclosure icons; Library filter reset actions use the canonical compact clear action.
 - Layers, Groups and Viewpoints retain their domain handlers while replacing repeated text-button walls and pseudo-glyph controls with compact action rails.
+- Group membership, edit, completion, rename and ungroup actions use distinct package, assembly-edit, check, text-rename and danger semantics without changing their handlers.
+- Inspector visibility has one shell-owned Auto/Pinned mode: Auto follows Runtime Selection while Pinned leaves open/collapse control entirely manual. Same-value preference updates do not publish or persist another snapshot.
+- Library sources render their identity once, omit an equivalent semantic root row and expose real category/family children in a compact hierarchy with 90-100 pixel asset rows and a fixed action rail.
 - Quick Toolbar retains its registered command set and existing 32 pixel geometry.
 - Inspector engineering labels and workflow decision text remain visible.
 
@@ -28,6 +31,7 @@ PF-3A establishes one Workbench icon authority and a bounded compact-action gram
 - Source governance rejects direct `lucide-react` imports outside the registry, standalone pseudo-glyph disclosure controls across maintained surfaces and text regressions in the Library clear/reset actions.
 - Component tests protect the shared action primitive, disclosure semantics, Primary Dock labels/counts, Group actions, Viewpoint actions and Library reset behavior.
 - Chromium coverage exercises the real Primary Dock, Library, Explorer, Layers, Groups, Viewpoints, Inspector and Native Import surfaces with no red console/page errors.
+- Chromium coverage exercises selection, Inspector Auto/Pin/collapse, floor clear, Groups edit completion and Arrange access, and fails explicitly if React emits `Maximum update depth exceeded`.
 - Responsive evidence covers 1440 by 900, 1024 by 768 and 640 by 800 without document-level horizontal overflow.
 
 ## Preserved Boundaries
@@ -40,6 +44,6 @@ PF-3A establishes one Workbench icon authority and a bounded compact-action gram
 ## Acceptance State
 
 - Automated technical acceptance: exact-head Quality Gate required.
-- Evidence artifact: `pf3a-global-iconography-density` with eleven named runtime captures, including Workspace preference disclosure evidence.
+- Evidence artifact: `pf3a-global-iconography-density` with sixteen named runtime captures, including corrected Group actions, Inspector Auto/Pinned modes and populated Library hierarchy at 292 pixel and 640 pixel widths.
 - Manual visual acceptance: required after green exact-head CI.
 - PF-3 overall: not complete; PF-3B remains open.
