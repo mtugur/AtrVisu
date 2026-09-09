@@ -882,6 +882,61 @@ const dragSceneEntityAtScreenBounds = async (
   await page.mouse.up();
 };
 
+const getPlanDelta = (before: PlanPosition, after: PlanPosition) => ({
+  xMm: after.xMm - before.xMm,
+  yMm: after.yMm - before.yMm
+});
+
+const expectFiniteOppositePlanDeltas = (
+  first: PlanPosition,
+  opposite: PlanPosition
+) => {
+  expect(Object.values(first).every(Number.isFinite)).toBe(true);
+  expect(Object.values(opposite).every(Number.isFinite)).toBe(true);
+  expect(Math.hypot(first.xMm, first.yMm)).toBeGreaterThan(0);
+  expect(Math.hypot(opposite.xMm, opposite.yMm)).toBeGreaterThan(0);
+  expect(first.xMm * opposite.xMm + first.yMm * opposite.yMm).toBeLessThan(0);
+};
+
+const dragEntityAndUndo = async ({
+  page,
+  entityId,
+  recordAttribute,
+  getBounds,
+  deltaX,
+  deltaY,
+  relativeHeight
+}: {
+  page: Page;
+  entityId: string;
+  recordAttribute: "data-machine-plan-positions" | "data-civil-plan-positions";
+  getBounds: () => Promise<ScreenBounds>;
+  deltaX: number;
+  deltaY: number;
+  relativeHeight: number;
+}) => {
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const before = (await readCanvasRecord<PlanPosition>(page, recordAttribute))[entityId];
+  await dragSceneEntityAtScreenBounds(page, await getBounds(), deltaX, deltaY, relativeHeight);
+  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
+  await expect.poll(async () => {
+    const current = (await readCanvasRecord<PlanPosition>(page, recordAttribute))[entityId];
+    return current.xMm !== before.xMm || current.yMm !== before.yMm;
+  }).toBe(true);
+  const pointerPlaneErrorPx = Number(
+    await canvas.getAttribute("data-last-drag-pointer-plane-error-px")
+  );
+  expect(Number.isFinite(pointerPlaneErrorPx)).toBe(true);
+  expect(pointerPlaneErrorPx).toBeLessThan(120);
+  const after = (await readCanvasRecord<PlanPosition>(page, recordAttribute))[entityId];
+  const delta = getPlanDelta(before, after);
+  await page.keyboard.press("Control+z");
+  await expect.poll(async () => (
+    await readCanvasRecord<PlanPosition>(page, recordAttribute)
+  )[entityId]).toEqual(before);
+  return delta;
+};
+
 const createTwoMachineAssembly = async (
   page: Page,
   name: string,
@@ -4391,6 +4446,8 @@ test("high-grab drag preserves machine civil and rigid-group elevations", async 
   const machineId = (await getMachineIds(page))[0];
   const machineElevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
   await dragSceneEntityAtScreenBounds(page, await getMachineScreenBounds(page, machineId), 55, 18, 0.22);
+  await expect(canvas).toHaveAttribute("data-last-machine-drag-preflight", "true");
+  await expect(canvas).toHaveAttribute("data-last-drag-projection-mode", /horizontal|camera-facing/);
   await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
   expect(Number(await canvas.getAttribute("data-last-drag-plane-elevation-meters"))).toBeGreaterThan(0.5);
   expect(Number(await canvas.getAttribute("data-last-drag-pointer-plane-error-px"))).toBeLessThan(1.5);
@@ -4435,6 +4492,253 @@ test("high-grab drag preserves machine civil and rigid-group elevations", async 
   expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(groupMachineElevation);
   expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(groupCivilElevation);
   await capturePf3aScreenshot(page, "19-group-drag-high-grab.png");
+  expect(errors).toEqual([]);
+});
+
+test("camera-conditioned plan drag stays directional for 20 m and 50 m columns", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const insertMenu = await openWorkbenchMenu(page, "Insert");
+  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
+  await expect.poll(async () => Object.keys(
+    await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")
+  ).length).toBe(1);
+  const civilId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
+  const heightInput = page.getByRole("textbox", { name: "Civil Height", exact: true });
+  const elevationBefore = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
+
+  for (const heightMm of [20_000, 50_000]) {
+    await heightInput.fill(String(heightMm));
+    await heightInput.press("Tab");
+    const plan = (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[civilId];
+    const targetY = heightMm / 2000;
+    expect(await applyRuntimeViewportCameraState(page, {
+      mode: "perspective",
+      alpha: 0.78,
+      beta: 1.35,
+      radius: heightMm === 20_000 ? 28 : 60,
+      targetX: plan.xMm / 1000,
+      targetY,
+      targetZ: plan.yMm / 1000
+    })).toBe(true);
+
+    const right = await dragEntityAndUndo({
+      page,
+      entityId: civilId,
+      recordAttribute: "data-civil-plan-positions",
+      getBounds: () => getCivilScreenBounds(page, civilId),
+      deltaX: 65,
+      deltaY: 0,
+      relativeHeight: 0.18
+    });
+    await expect(canvas).toHaveAttribute("data-last-drag-projection-mode", "camera-facing");
+    const left = await dragEntityAndUndo({
+      page,
+      entityId: civilId,
+      recordAttribute: "data-civil-plan-positions",
+      getBounds: () => getCivilScreenBounds(page, civilId),
+      deltaX: -65,
+      deltaY: 0,
+      relativeHeight: 0.18
+    });
+    expectFiniteOppositePlanDeltas(right, left);
+    expect(Math.hypot(right.xMm, right.yMm)).toBeLessThan(20_000);
+
+    if (heightMm === 20_000) {
+      const forward = await dragEntityAndUndo({
+        page,
+        entityId: civilId,
+        recordAttribute: "data-civil-plan-positions",
+        getBounds: () => getCivilScreenBounds(page, civilId),
+        deltaX: 0,
+        deltaY: -45,
+        relativeHeight: 0.18
+      });
+      const back = await dragEntityAndUndo({
+        page,
+        entityId: civilId,
+        recordAttribute: "data-civil-plan-positions",
+        getBounds: () => getCivilScreenBounds(page, civilId),
+        deltaX: 0,
+        deltaY: 45,
+        relativeHeight: 0.18
+      });
+      expectFiniteOppositePlanDeltas(forward, back);
+      await capturePf3aScreenshot(page, "20-high-column-camera-crossing.png");
+    }
+  }
+
+  expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(elevationBefore);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("camera-conditioned plan drag preserves an elevated standard machine", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  await addCanonicalAtaraMachine(
+    page,
+    "Flow Pack Machine",
+    ["Primary Packaging", "Horizontal Flow Pack"]
+  );
+  await waitForMachineDiagnostics(page, 1);
+  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
+  const machineId = (await getMachineIds(page))[0];
+  const elevationInput = page.getByRole("textbox", { name: "Elevation", exact: true });
+  await elevationInput.fill("25000");
+  await elevationInput.press("Tab");
+  const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: 0.78,
+    beta: 1.35,
+    radius: 28,
+    targetX: plan.xMm / 1000,
+    targetY: 20,
+    targetZ: plan.yMm / 1000
+  })).toBe(true);
+  const standardRight = await dragEntityAndUndo({
+    page,
+    entityId: machineId,
+    recordAttribute: "data-machine-plan-positions",
+    getBounds: () => getMachineScreenBounds(page, machineId),
+    deltaX: 60,
+    deltaY: 12,
+    relativeHeight: 0.2
+  });
+  const standardLeft = await dragEntityAndUndo({
+    page,
+    entityId: machineId,
+    recordAttribute: "data-machine-plan-positions",
+    getBounds: () => getMachineScreenBounds(page, machineId),
+    deltaX: -60,
+    deltaY: -12,
+    relativeHeight: 0.2
+  });
+  expectFiniteOppositePlanDeltas(standardRight, standardLeft);
+  expect((await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[machineId]).toBe(25_000);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("camera-conditioned plan drag preserves an elevated imported GLB machine", async ({ page }) => {
+  const errors = await startNativeAssetTest(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await openProjects(page);
+  await page.getByTestId("new-project-name").fill("Height Agnostic Drag Project");
+  await page.getByTestId("new-customer-name").fill("E2E Customer");
+  await page.getByTestId("create-project").click();
+  await page.getByTestId("close-project-manager").click();
+  const importDialog = await prepareNativeAsset(page, { exerciseCalibration: false });
+  await importDialog.getByRole("button", { name: "Validate & Save", exact: true }).click();
+  await expect(importDialog).toHaveCount(0);
+  const library = page.getByTestId("machine-library-panel");
+  await library.getByLabel("Search assets").fill("Imported Test Equipment");
+  await library.getByRole("button", { name: "Add Imported Test Equipment to layout", exact: true }).click();
+  await expectNativeRealModel(page);
+  const machineId = (await getMachineIds(page)).at(-1) ?? "";
+  const elevationInput = page.getByRole("textbox", { name: "Elevation", exact: true });
+  await elevationInput.fill("25000");
+  await elevationInput.press("Tab");
+  const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: 0.78,
+    beta: 1.35,
+    radius: 28,
+    targetX: plan.xMm / 1000,
+    targetY: 20,
+    targetZ: plan.yMm / 1000
+  })).toBe(true);
+  const importedRight = await dragEntityAndUndo({
+    page,
+    entityId: machineId,
+    recordAttribute: "data-machine-plan-positions",
+    getBounds: () => getMachineScreenBounds(page, machineId),
+    deltaX: 62,
+    deltaY: 15,
+    relativeHeight: 0.2
+  });
+  const importedLeft = await dragEntityAndUndo({
+    page,
+    entityId: machineId,
+    recordAttribute: "data-machine-plan-positions",
+    getBounds: () => getMachineScreenBounds(page, machineId),
+    deltaX: -62,
+    deltaY: -15,
+    relativeHeight: 0.2
+  });
+  expectFiniteOppositePlanDeltas(importedRight, importedLeft);
+  expect((await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[machineId]).toBe(25_000);
+  await expect(canvas).toHaveAttribute("data-last-drag-projection-mode", "camera-facing");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await capturePf3aScreenshot(page, "21-elevated-machine-drag.png");
+  expect(errors).toEqual([]);
+});
+
+test("mixed-elevation group drag is rigid from low and high members", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await page.locator(".machine-card").first().click();
+  await waitForMachineDiagnostics(page, 1);
+  const machineId = (await getMachineIds(page))[0];
+  await openPrimaryDockPanel(page, "panel.groups");
+  page.once("dialog", async (dialog) => dialog.accept("Mixed Height Drag Group"));
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: "Mixed Height Drag Group" });
+  const insertMenu = await openWorkbenchMenu(page, "Insert");
+  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
+  await expect.poll(async () => Object.keys(
+    await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")
+  ).length).toBe(1);
+  const resolvedCivilId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
+  await page.getByRole("textbox", { name: "Civil Elevation", exact: true }).fill("25000");
+  await page.getByRole("textbox", { name: "Civil Elevation", exact: true }).press("Tab");
+  await openPrimaryDockPanel(page, "panel.groups");
+  await group.getByRole("button", { name: /^Add Selected to / }).click();
+  await group.locator(".assembly-group-button").click();
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  const machinePlan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: 0.78,
+    beta: 1.35,
+    radius: 40,
+    targetX: machinePlan.xMm / 1000,
+    targetY: 15,
+    targetZ: machinePlan.yMm / 1000
+  })).toBe(true);
+
+  const assertRigidGroupDrag = async (bounds: ScreenBounds, relativeHeight: number) => {
+    const beforeMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+    const beforeCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+    const machineElevations = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
+    const civilElevations = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
+    await dragSceneEntityAtScreenBounds(page, bounds, 70, 20, relativeHeight);
+    await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
+    const afterMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+    const afterCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+    expect(getPlanDelta(beforeMachines[machineId], afterMachines[machineId]))
+      .toEqual(getPlanDelta(beforeCivil[resolvedCivilId], afterCivil[resolvedCivilId]));
+    expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(machineElevations);
+    expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(civilElevations);
+    await page.keyboard.press("Control+z");
+    await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(beforeMachines);
+    await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")).toEqual(beforeCivil);
+  };
+
+  await assertRigidGroupDrag(await getMachineScreenBounds(page, machineId), 0.5);
+  await assertRigidGroupDrag(await getCivilScreenBounds(page, resolvedCivilId), 0.2);
+  await expect(canvas).toHaveAttribute("data-last-drag-projection-mode", "camera-facing");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  await capturePf3aScreenshot(page, "22-high-mixed-group-drag.png");
   expect(errors).toEqual([]);
 });
 

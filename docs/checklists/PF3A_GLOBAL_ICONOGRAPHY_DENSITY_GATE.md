@@ -21,9 +21,9 @@
 | Group Arrange movement | Group/Machine, Group/Civil, Group/Group and mixed 3+ operations use the generic alignment engine; every resolved member receives one identical atomic delta; Undo/Redo remains one transaction; locked, hidden or unresolved members prevent partial movement |
 | Edit Group Arrange | Explicitly selected member machines/civils remain independent Arrange entities and do not translate unselected members or substitute the Group root |
 | Continuous drag result | Machine, Civil and Group drag distinguish `applied`, valid snapped `noop` and `blocked`; no-op writes no state/history and keeps the gesture active until later movement applies or pointer-up ends it |
-| Grab-height plane | Real finite picked-point elevation fixes one horizontal plane for the complete Machine/Civil/Group gesture; pointer deltas remain plan-only and preserve every domain Elevation value |
+| Height-agnostic plan drag | Real finite pick data selects one camera-conditioned projection for the complete Machine/Civil/Group gesture: a well-conditioned horizontal plane or a camera-facing fallback when the pointer ray is shallow, parallel, or crosses the camera elevation. The mode never changes mid-gesture; pointer deltas remain plan-only and preserve every domain Elevation value without a height threshold |
 | Complete local gate | Audit low, dependency tree, token governance, build, full unit, two-phase Chromium E2E and diff check |
 | Exact-head CI | GitHub Quality Gate succeeds on the delivered head |
-| Visual evidence | `pf3a-global-iconography-density` contains nineteen exact-head captures, retaining the accepted sixteen and adding `17-group-plus-machine-arrange.png`, `18-group-plus-group-arrange.png` and `19-group-drag-high-grab.png` |
+| Visual evidence | `pf3a-global-iconography-density` contains twenty-two exact-head captures, retaining the accepted nineteen and adding `20-high-column-camera-crossing.png`, `21-elevated-machine-drag.png` and `22-high-mixed-group-drag.png` |
 | Manual acceptance | Required after automated and evidence gates pass |
 | PF-3B boundary | Viewport engineering visual language remains open and unchanged |
