@@ -24,6 +24,10 @@ PF-3A establishes one Workbench icon authority and a bounded compact-action gram
 - Library sources render their identity once, omit an equivalent semantic root row and expose real category/family children in a compact hierarchy with 90-100 pixel asset rows and a fixed action rail.
 - Quick Toolbar retains its registered command set and existing 32 pixel geometry.
 - Inspector engineering labels and workflow decision text remain visible.
+- Correction B promotes a selected Group to one derived spatial Arrange entity outside Edit Group mode. Its canonical bounds are the rotation-aware union of machine and civil member footprints, and Arrange results translate every resolved member by one atomic center delta without persisting a Group transform.
+- Arrange uses a projection derived from Runtime Selection: selected Group roots suppress duplicate member entities in normal mode, while explicitly selected members remain independent inside Edit Group mode. Group, machine and civil entities share the existing alignment, pair-gap, distribution and equal-gap engine.
+- Scene drag mutation now distinguishes `applied`, valid snapped `noop` and safety `blocked` outcomes. A no-op frame keeps the gesture and camera-detach state active without writing domain state or history; a later frame in the same gesture can cross the next snap threshold and apply normally.
+- Machine, civil and rigid Group drag capture the real finite Babylon pick elevation and intersect every pointer ray with that fixed horizontal plane. Plan movement therefore preserves the physical grab point and every domain Elevation value; truthful entity-height fallback is used only when the real picked point is unavailable.
 
 ## Governance Evidence
 
@@ -32,6 +36,8 @@ PF-3A establishes one Workbench icon authority and a bounded compact-action gram
 - Component tests protect the shared action primitive, disclosure semantics, Primary Dock labels/counts, Group actions, Viewpoint actions and Library reset behavior.
 - Chromium coverage exercises the real Primary Dock, Library, Explorer, Layers, Groups, Viewpoints, Inspector and Native Import surfaces with no red console/page errors.
 - Chromium coverage exercises selection, Inspector Auto/Pin/collapse, floor clear, Groups edit completion and Arrange access, and fails explicitly if React emits `Maximum update depth exceeded`.
+- Correction B unit coverage protects composite Group bounds, mixed/group alignment, rigid atomic movement, Edit Group member projection, no-op drag continuation and fixed-height ray-plane intersection.
+- Correction B Chromium coverage exercises Group plus Machine Arrange, Group plus Group Arrange, Edit Group member alignment, one-gesture snap no-op continuation and high-grab Machine/Civil/Group movement with unchanged Elevation and no native dialog or red runtime error.
 - Responsive evidence covers 1440 by 900, 1024 by 768 and 640 by 800 without document-level horizontal overflow.
 
 ## Preserved Boundaries
@@ -44,6 +50,6 @@ PF-3A establishes one Workbench icon authority and a bounded compact-action gram
 ## Acceptance State
 
 - Automated technical acceptance: exact-head Quality Gate required.
-- Evidence artifact: `pf3a-global-iconography-density` with sixteen named runtime captures, including corrected Group actions, Inspector Auto/Pinned modes and populated Library hierarchy at 292 pixel and 640 pixel widths.
+- Evidence artifact: `pf3a-global-iconography-density` with nineteen named exact-head runtime captures. The original sixteen remain, and `17-group-plus-machine-arrange.png`, `18-group-plus-group-arrange.png` and `19-group-drag-high-grab.png` cover Correction B.
 - Manual visual acceptance: required after green exact-head CI.
 - PF-3 overall: not complete; PF-3B remains open.

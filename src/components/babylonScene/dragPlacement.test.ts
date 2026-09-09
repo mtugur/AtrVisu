@@ -7,6 +7,10 @@ import {
   getMachineDragInstanceIds,
   getMachineStartPositionMm,
   getPlanDragDeltaMm,
+  intersectRayWithHorizontalDragPlane,
+  didSceneDragApplyMutation,
+  resolveDragPlaneElevationMeters,
+  shouldKeepSceneDragActive,
   type DraggableMachine,
   type MachineDragState
 } from "./dragPlacement";
@@ -55,6 +59,7 @@ describe("drag placement helpers", () => {
     const dragState = createMachineDragState({
       targetInstanceId: "m1",
       floorPoint: { x: 1, z: -2 },
+      planeElevationMeters: 2.4,
       selectedInstanceIds: ["m1", "m2"],
       lockedInstanceIds: [],
       machines: [
@@ -66,6 +71,7 @@ describe("drag placement helpers", () => {
 
     expect(dragState).toEqual({
       instanceIds: ["m1", "m2"],
+      planeElevationMeters: 2.4,
       startFloorX: 1,
       startFloorZ: -2,
       startPositions: {
@@ -80,6 +86,7 @@ describe("drag placement helpers", () => {
       createMachineDragState({
         targetInstanceId: "m1",
         floorPoint: { x: 0, z: 0 },
+        planeElevationMeters: 0.5,
         selectedInstanceIds: ["m1"],
         lockedInstanceIds: ["m1"],
         machines: [machine("m1", 0, 0)],
@@ -93,6 +100,7 @@ describe("drag placement helpers", () => {
       createMachineDragState({
         targetInstanceId: "m1",
         floorPoint: { x: 0, z: 0 },
+        planeElevationMeters: 0.5,
         selectedInstanceIds: ["m1", "missing"],
         lockedInstanceIds: [],
         machines: [machine("m1", 0, 0)],
@@ -109,7 +117,7 @@ describe("drag placement helpers", () => {
   });
 
   it("calculates civil drag position from original position plus floor delta", () => {
-    const dragState = createCivilDragState("column-1", { x: 2, z: 1 }, { xMm: -200, yMm: 300 });
+    const dragState = createCivilDragState("column-1", { x: 2, z: 1 }, { xMm: -200, yMm: 300 }, 2.75);
 
     expect(calculateCivilDragPosition(dragState, { x: 1.5, z: 2.25 })).toEqual({
       xMm: -700,
@@ -120,6 +128,7 @@ describe("drag placement helpers", () => {
   it("calculates machine drag updates from original positions plus floor delta", () => {
     const dragState: MachineDragState = {
       instanceIds: ["m1", "m2", "missing"],
+      planeElevationMeters: 1.5,
       startFloorX: 0,
       startFloorZ: 0,
       startPositions: {
@@ -138,6 +147,7 @@ describe("drag placement helpers", () => {
     const dragState = createMachineDragState({
       targetInstanceId: "m2",
       floorPoint: { x: 4, z: -1 },
+      planeElevationMeters: 3.2,
       selectedInstanceIds: ["m1", "m2", "m3"],
       lockedInstanceIds: [],
       machines: [
@@ -158,5 +168,43 @@ describe("drag placement helpers", () => {
     expect(byId.get("m3")).toMatchObject({ xMm: 2250, yMm: 0 });
     expect((byId.get("m2")?.xMm ?? 0) - (byId.get("m1")?.xMm ?? 0)).toBe(1250);
     expect((byId.get("m3")?.yMm ?? 0) - (byId.get("m2")?.yMm ?? 0)).toBe(2000);
+  });
+
+  it("keeps valid no-op drag frames active and distinguishes blocked movement", () => {
+    expect(shouldKeepSceneDragActive("applied")).toBe(true);
+    expect(shouldKeepSceneDragActive("noop")).toBe(true);
+    expect(shouldKeepSceneDragActive("blocked")).toBe(false);
+    expect(didSceneDragApplyMutation("noop")).toBe(false);
+    expect(didSceneDragApplyMutation("blocked")).toBe(false);
+    expect(didSceneDragApplyMutation("applied")).toBe(true);
+  });
+
+  it("uses the actual finite grab height and a truthful fallback otherwise", () => {
+    expect(resolveDragPlaneElevationMeters(4.25, 1.5)).toBe(4.25);
+    expect(resolveDragPlaneElevationMeters(Number.NaN, 1.5)).toBe(1.5);
+    expect(resolveDragPlaneElevationMeters(undefined, 2.75)).toBe(2.75);
+  });
+
+  it("calculates drag delta from two intersections on the same captured plane", () => {
+    const origin = { x: 0, y: 10, z: 10 };
+    const start = intersectRayWithHorizontalDragPlane(origin, { x: 0.1, y: -1, z: -1 }, 4);
+    const current = intersectRayWithHorizontalDragPlane(origin, { x: 0.2, y: -1, z: -1 }, 4);
+    const incorrectFloorCurrent = intersectRayWithHorizontalDragPlane(origin, { x: 0.2, y: -1, z: -1 }, 0);
+
+    expect(start).not.toBeNull();
+    expect(current).not.toBeNull();
+    expect(incorrectFloorCurrent).not.toBeNull();
+    const samePlaneDelta = getPlanDragDeltaMm(
+      { startFloorX: start?.x ?? 0, startFloorZ: start?.z ?? 0 },
+      { x: current?.x ?? 0, z: current?.z ?? 0 }
+    );
+    const mixedPlaneDelta = getPlanDragDeltaMm(
+      { startFloorX: start?.x ?? 0, startFloorZ: start?.z ?? 0 },
+      { x: incorrectFloorCurrent?.x ?? 0, z: incorrectFloorCurrent?.z ?? 0 }
+    );
+
+    expect(samePlaneDelta.deltaXMm).toBeCloseTo(600);
+    expect(samePlaneDelta.deltaYMm).toBeCloseTo(0);
+    expect(mixedPlaneDelta).not.toEqual(samePlaneDelta);
   });
 });

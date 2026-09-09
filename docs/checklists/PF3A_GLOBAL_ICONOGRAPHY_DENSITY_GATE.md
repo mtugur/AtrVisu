@@ -17,8 +17,13 @@
 | Responsive | 1440 by 900, 1024 by 768 and 640 by 800 remain operable without document horizontal overflow |
 | Inspector visibility | Auto follows selection and closes on floor clear; Pinned makes open/collapse manual without changing selection or Inspector property authority |
 | Runtime safety | Same-value UI-preference writes emit no snapshot; the real selection/Inspector/Groups/Arrange/floor sequence produces no React maximum-update-depth warning or red console/page error |
+| Group Arrange projection | Outside Edit Group, a selected Group is one derived composite entity with rotation-aware member-union bounds; selected group children are not duplicated; Runtime Selection primary ordering remains authoritative |
+| Group Arrange movement | Group/Machine, Group/Civil, Group/Group and mixed 3+ operations use the generic alignment engine; every resolved member receives one identical atomic delta; Undo/Redo remains one transaction; locked, hidden or unresolved members prevent partial movement |
+| Edit Group Arrange | Explicitly selected member machines/civils remain independent Arrange entities and do not translate unselected members or substitute the Group root |
+| Continuous drag result | Machine, Civil and Group drag distinguish `applied`, valid snapped `noop` and `blocked`; no-op writes no state/history and keeps the gesture active until later movement applies or pointer-up ends it |
+| Grab-height plane | Real finite picked-point elevation fixes one horizontal plane for the complete Machine/Civil/Group gesture; pointer deltas remain plan-only and preserve every domain Elevation value |
 | Complete local gate | Audit low, dependency tree, token governance, build, full unit, two-phase Chromium E2E and diff check |
 | Exact-head CI | GitHub Quality Gate succeeds on the delivered head |
-| Visual evidence | `pf3a-global-iconography-density` contains sixteen exact-head captures, including Groups action rail, Inspector Auto/Pinned and populated Library hierarchy at 292 pixel and 640 pixel widths |
+| Visual evidence | `pf3a-global-iconography-density` contains nineteen exact-head captures, retaining the accepted sixteen and adding `17-group-plus-machine-arrange.png`, `18-group-plus-group-arrange.png` and `19-group-drag-high-grab.png` |
 | Manual acceptance | Required after automated and evidence gates pass |
 | PF-3B boundary | Viewport engineering visual language remains open and unchanged |
