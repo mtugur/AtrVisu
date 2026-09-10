@@ -65,10 +65,11 @@ import {
   calculateMachineDragPositionUpdates,
   createCivilDragState,
   createMachineDragState,
-  createPlanDragBasis,
+  createPlanDragProjection,
   didSceneDragApplyMutation,
   getMachineStartPositionMm,
   intersectRayWithHorizontalDragPlane,
+  resolvePlanDragFrame,
   shouldKeepSceneDragActive,
   type CivilDragState,
   type MachineDragState,
@@ -1112,9 +1113,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.lastDragPlaneElevationMeters;
         delete canvas.dataset.lastDragPointerPlaneErrorPx;
         delete canvas.dataset.lastDragProjectionMode;
-        delete canvas.dataset.lastDragPlanRight;
-        delete canvas.dataset.lastDragPlanForwardAway;
-        delete canvas.dataset.lastDragWorldUnitsPerCssPixel;
+        delete canvas.dataset.lastDragAnchorWorld;
+        delete canvas.dataset.lastDragAnchorScreen;
+        delete canvas.dataset.lastDragPointerScreen;
+        delete canvas.dataset.lastDragResolveStatus;
+        delete canvas.dataset.lastDragFrameGeneration;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -1611,7 +1614,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const { floor } = createSceneVisualContext(scene);
     floorRef.current = floor;
 
-    const createPointerRay = () => {
+    const createPointerRay = (event?: PointerEvent) => {
       const activeScene = sceneRef.current;
       const activeCamera = cameraRef.current;
       if (!activeScene || !activeCamera) {
@@ -1619,8 +1622,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
 
       return activeScene.createPickingRay(
-        activeScene.pointerX,
-        activeScene.pointerY,
+        event?.offsetX ?? activeScene.pointerX,
+        event?.offsetY ?? activeScene.pointerY,
         Matrix.Identity(),
         activeCamera
       );
@@ -1641,37 +1644,122 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     const pickFloorPoint = () => pickPlanePoint(0);
 
-    const createPointerPlanDragBasis = (event: PointerEvent | undefined) => {
+    const projectWorldPointToCanvasCss = (point: {
+      x: number;
+      y: number;
+      z: number;
+    }) => {
       const activeCamera = cameraRef.current;
-      const viewportCssWidth = canvas.clientWidth;
-      const viewportCssHeight = canvas.clientHeight;
-      if (!activeCamera || !event || viewportCssWidth <= 0 || viewportCssHeight <= 0) {
+      const renderWidth = engine.getRenderWidth();
+      const renderHeight = engine.getRenderHeight();
+      if (
+        !activeCamera
+        || renderWidth <= 0
+        || renderHeight <= 0
+        || canvas.clientWidth <= 0
+        || canvas.clientHeight <= 0
+      ) {
         return null;
       }
 
-      const aspectRatio = viewportCssWidth / viewportCssHeight;
-      const verticalFovRadians = activeCamera.fovMode === Camera.FOVMODE_HORIZONTAL_FIXED
-        ? 2 * Math.atan(Math.tan(activeCamera.fov / 2) / aspectRatio)
-        : activeCamera.fov;
-      const orthographicVerticalWorldSpan = activeCamera.orthoTop !== null
-        && activeCamera.orthoBottom !== null
+      const viewport = activeCamera.viewport.toGlobal(renderWidth, renderHeight);
+      const projected = Vector3.Project(
+        new Vector3(point.x, point.y, point.z),
+        Matrix.Identity(),
+        scene.getTransformMatrix(),
+        viewport
+      );
+      const screenPoint = {
+        x: projected.x * canvas.clientWidth / renderWidth,
+        y: projected.y * canvas.clientHeight / renderHeight
+      };
+      return Number.isFinite(screenPoint.x) && Number.isFinite(screenPoint.y)
+        ? screenPoint
+        : null;
+    };
+
+    const createPointerPlanDragProjection = (
+      pickedPoint: Vector3 | null | undefined,
+      event: PointerEvent | undefined
+    ) => {
+      const ray = createPointerRay(event);
+      const activeCamera = cameraRef.current;
+      if (!ray || !activeCamera || !pickedPoint) {
+        return null;
+      }
+      const orthographicSpan = activeCamera.orthoTop !== null && activeCamera.orthoBottom !== null
         ? Math.abs(activeCamera.orthoTop - activeCamera.orthoBottom)
         : null;
+      const framingSpan = activeCamera.mode === Camera.ORTHOGRAPHIC_CAMERA
+        ? orthographicSpan
+        : activeCamera.radius;
+      const maxIncrementMeters = Math.min(10, Math.max(0.5, (framingSpan ?? 20) * 0.25));
 
-      return createPlanDragBasis({
-        cameraPosition: activeCamera.position,
-        cameraTarget: activeCamera.target,
-        cameraAlpha: activeCamera.alpha,
-        cameraMode: activeCamera.mode === Camera.ORTHOGRAPHIC_CAMERA
-          ? "orthographic"
-          : "perspective",
-        radius: activeCamera.radius,
-        verticalFovRadians,
-        viewportCssHeight,
-        orthographicVerticalWorldSpan,
-        pointerStartClientX: event.clientX,
-        pointerStartClientY: event.clientY
+      return createPlanDragProjection({
+        rayOrigin: ray.origin,
+        rayDirection: ray.direction,
+        pickedPoint,
+        maxIncrementMeters
       });
+    };
+
+    const resolvePointerPlanDragFrame = (
+      projection: MachineDragState["projection"],
+      event: PointerEvent
+    ) => {
+      const ray = createPointerRay(event);
+      if (!ray) {
+        if (enableE2EDiagnosticsRef.current) {
+          canvas.dataset.lastDragResolveStatus = "missing-ray";
+        }
+        return null;
+      }
+      const bounds = canvas.getBoundingClientRect();
+      let projectionFailed = false;
+      const frame = resolvePlanDragFrame({
+        projection,
+        rayOrigin: ray.origin,
+        rayDirection: ray.direction,
+        pointerScreen: {
+          x: event.clientX - bounds.left,
+          y: event.clientY - bounds.top
+        },
+        projectToScreen: (point) => {
+          const projected = projectWorldPointToCanvasCss(point);
+          projectionFailed = projectionFailed || !projected;
+          return projected;
+        }
+      });
+      if (enableE2EDiagnosticsRef.current) {
+        canvas.dataset.lastDragResolveStatus = frame
+          ? "resolved"
+          : projectionFailed
+            ? "unprojectable-anchor"
+            : "invalid-frame";
+      }
+      return frame;
+    };
+
+    let planDragFrameGeneration = 0;
+    const recordPlanDragFrame = (
+      frame: ReturnType<typeof resolvePointerPlanDragFrame>,
+      event: PointerEvent
+    ) => {
+      if (!frame || !enableE2EDiagnosticsRef.current) {
+        return;
+      }
+      const bounds = canvas.getBoundingClientRect();
+      const anchorScreen = projectWorldPointToCanvasCss(frame.anchorPoint);
+      canvas.dataset.lastDragProjectionMode = frame.mode;
+      canvas.dataset.lastDragPointerPlaneErrorPx = String(frame.pointerErrorPx);
+      canvas.dataset.lastDragAnchorWorld = JSON.stringify(frame.anchorPoint);
+      canvas.dataset.lastDragAnchorScreen = JSON.stringify(anchorScreen);
+      canvas.dataset.lastDragPointerScreen = JSON.stringify({
+        x: event.clientX - bounds.left,
+        y: event.clientY - bounds.top
+      });
+      planDragFrameGeneration += 1;
+      canvas.dataset.lastDragFrameGeneration = String(planDragFrameGeneration);
     };
 
     const pickPlanPointMm = (planeElevationMeters: number) => {
@@ -1828,9 +1916,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (civilReferenceId) {
           const civilReference = civilReferencesRef.current.find((item) => item.id === civilReferenceId);
-          const basis = createPointerPlanDragBasis(sourceEvent);
-          const dragAnchor = pick?.pickedPoint
-            ?? civilReferenceNodesRef.current.get(civilReferenceId)?.mesh.getAbsolutePosition();
+          const projection = createPointerPlanDragProjection(pick?.pickedPoint, sourceEvent);
           sourceEvent?.preventDefault();
           dragStateRef.current = null;
           civilDragStateRef.current = null;
@@ -1840,19 +1926,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           const civilEntityId = createLegacyPlatformEntityId("civil", civilReferenceId);
           if (
             civilReference
-            && basis
+            && projection
             && !lockedCivilReferenceIdsRef.current.includes(civilReferenceId)
             && canBeginObjectDrag(civilEntityId, !isToggleSelection)
           ) {
-            civilDragStateRef.current = createCivilDragState(civilReferenceId, basis, {
+            civilDragStateRef.current = createCivilDragState(civilReferenceId, projection, {
               xMm: civilReference.positionMm.xMm,
               yMm: civilReference.positionMm.yMm
             });
-            canvas.dataset.lastDragPlaneElevationMeters = String(dragAnchor?.y ?? 0);
-            canvas.dataset.lastDragProjectionMode = "screen-plan-basis";
-            canvas.dataset.lastDragPlanRight = JSON.stringify(basis.planRight);
-            canvas.dataset.lastDragPlanForwardAway = JSON.stringify(basis.planForwardAwayFromCamera);
-            canvas.dataset.lastDragWorldUnitsPerCssPixel = String(basis.worldUnitsPerCssPixel);
+            canvas.dataset.lastDragPlaneElevationMeters = String(projection.anchorPoint.y);
+            canvas.dataset.lastDragProjectionMode = "horizontal";
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);
@@ -1865,9 +1948,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (instanceId) {
           const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
-          const basis = createPointerPlanDragBasis(sourceEvent);
-          const dragAnchor = pick?.pickedPoint
-            ?? machineNodesRef.current.get(instanceId)?.box.getAbsolutePosition();
+          const projection = createPointerPlanDragProjection(pick?.pickedPoint, sourceEvent);
           dragStateRef.current = null;
           civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
@@ -1876,7 +1957,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           const machineEntityId = createLegacyPlatformEntityId("machine", instanceId);
           const dragPreflightAllowed = Boolean(
             machine
-            && basis
+            && projection
             && !lockedMachineIdsRef.current.includes(instanceId)
             && canBeginObjectDrag(machineEntityId, !isToggleSelection)
           );
@@ -1884,11 +1965,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           if (
             dragPreflightAllowed
             && machine
-            && basis
+            && projection
           ) {
             const nextDragState = createMachineDragState({
               targetInstanceId: instanceId,
-              basis,
+              projection,
               selectedInstanceIds: activeGroupEditMachineIdsRef.current.includes(instanceId)
                 ? [instanceId]
                 : selectedMachineIdsRef.current,
@@ -1903,11 +1984,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
               return;
             }
             dragStateRef.current = nextDragState;
-            canvas.dataset.lastDragPlaneElevationMeters = String(dragAnchor?.y ?? 0);
-            canvas.dataset.lastDragProjectionMode = "screen-plan-basis";
-            canvas.dataset.lastDragPlanRight = JSON.stringify(basis.planRight);
-            canvas.dataset.lastDragPlanForwardAway = JSON.stringify(basis.planForwardAwayFromCamera);
-            canvas.dataset.lastDragWorldUnitsPerCssPixel = String(basis.worldUnitsPerCssPixel);
+            canvas.dataset.lastDragPlaneElevationMeters = String(projection.anchorPoint.y);
+            canvas.dataset.lastDragProjectionMode = "horizontal";
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);
@@ -1979,11 +2057,20 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           if (!sourceEvent) {
             return;
           }
+          const frame = resolvePointerPlanDragFrame(civilDragState.projection, sourceEvent);
+          if (!frame) {
+            return;
+          }
+          civilDragStateRef.current = {
+            ...civilDragState,
+            projection: frame.projection
+          };
           const result = onSetCivilReferencePosition(
             civilDragState.id,
-            calculateCivilDragPosition(civilDragState, sourceEvent),
+            calculateCivilDragPosition(civilDragState, frame.deltaMeters),
             { recordHistory: !dragHistoryRecordedRef.current }
           );
+          recordPlanDragFrame(frame, sourceEvent);
           canvas.dataset.lastSceneDragResult = result;
           dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || didSceneDragApplyMutation(result);
           if (!shouldKeepSceneDragActive(result)) {
@@ -2001,11 +2088,20 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (!sourceEvent) {
           return;
         }
-        const machinePositionUpdates = calculateMachineDragPositionUpdates(dragState, sourceEvent);
+        const frame = resolvePointerPlanDragFrame(dragState.projection, sourceEvent);
+        if (!frame) {
+          return;
+        }
+        dragStateRef.current = {
+          ...dragState,
+          projection: frame.projection
+        };
+        const machinePositionUpdates = calculateMachineDragPositionUpdates(dragState, frame.deltaMeters);
         const result = onSetMachinePositions(
           machinePositionUpdates,
           { recordHistory: !dragHistoryRecordedRef.current }
         );
+        recordPlanDragFrame(frame, sourceEvent);
         canvas.dataset.lastSceneDragResult = result;
         canvas.dataset.lastMachineDragApplied = String(didSceneDragApplyMutation(result));
         dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || didSceneDragApplyMutation(result);
