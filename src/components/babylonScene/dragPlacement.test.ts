@@ -4,19 +4,15 @@ import {
   calculateMachineDragPositionUpdates,
   createCivilDragState,
   createMachineDragState,
-  createPlanDragProjection,
+  createPlanDragBasis,
+  didSceneDragApplyMutation,
   getMachineDragInstanceIds,
   getMachineStartPositionMm,
-  getHeightPreservingPlanDragPoint,
   getPlanDragDeltaMm,
   intersectRayWithHorizontalDragPlane,
-  projectRayToPlanDrag,
-  didSceneDragApplyMutation,
   shouldKeepSceneDragActive,
   type DraggableMachine,
-  type MachineDragState,
-  type PlanDragProjection,
-  type RayPointMeters
+  type PlanDragBasis
 } from "./dragPlacement";
 
 const machine = (
@@ -30,118 +26,48 @@ const machine = (
   ...(positionMm ? { positionMm } : {})
 });
 
-const normalize = (point: RayPointMeters): RayPointMeters => {
-  const length = Math.hypot(point.x, point.y, point.z);
-  return { x: point.x / length, y: point.y / length, z: point.z / length };
-};
-
-const subtract = (left: RayPointMeters, right: RayPointMeters): RayPointMeters => ({
-  x: left.x - right.x,
-  y: left.y - right.y,
-  z: left.z - right.z
-});
-
-const cross = (left: RayPointMeters, right: RayPointMeters): RayPointMeters => ({
-  x: left.y * right.z - left.z * right.y,
-  y: left.z * right.x - left.x * right.z,
-  z: left.x * right.y - left.y * right.x
-});
-
-const addScaled = (
-  point: RayPointMeters,
-  first: RayPointMeters,
-  firstScale: number,
-  second: RayPointMeters,
-  secondScale: number
-): RayPointMeters => normalize({
-  x: point.x + first.x * firstScale + second.x * secondScale,
-  y: point.y + first.y * firstScale + second.y * secondScale,
-  z: point.z + first.z * firstScale + second.z * secondScale
-});
-
-const createTestProjection = (
-  anchorPoint: RayPointMeters = { x: 1, y: 2.4, z: -2 },
-  rayOrigin: RayPointMeters = { x: 0, y: 10, z: 10 }
-) => {
-  const projection = createPlanDragProjection({
-    rayOrigin,
-    rayDirection: subtract(anchorPoint, rayOrigin),
-    pickedPoint: anchorPoint
+const createTestBasis = (overrides: Partial<Parameters<typeof createPlanDragBasis>[0]> = {}) => {
+  const basis = createPlanDragBasis({
+    cameraPosition: { x: 20, y: 16, z: 30 },
+    cameraTarget: { x: 0, y: 0, z: 0 },
+    cameraAlpha: Math.atan2(30, 20),
+    cameraMode: "perspective",
+    radius: 40,
+    verticalFovRadians: Math.PI / 3,
+    viewportCssHeight: 800,
+    pointerStartClientX: 400,
+    pointerStartClientY: 300,
+    ...overrides
   });
-  if (!projection) {
-    throw new Error("Expected a valid test plan-drag projection.");
+  if (!basis) {
+    throw new Error("Expected a valid test plan-drag basis.");
   }
-  return projection;
+  return basis;
 };
 
-type TestCamera = {
-  name: string;
-  mode: "perspective" | "orthographic";
-  position: RayPointMeters;
-  target: RayPointMeters;
-};
+const dot = (
+  delta: { deltaXMm: number; deltaYMm: number },
+  direction: { x: number; z: number }
+) => delta.deltaXMm * direction.x + delta.deltaYMm * direction.z;
 
-const getCameraRay = (
-  camera: TestCamera,
-  pickedPoint: RayPointMeters,
-  screenX: number,
-  screenY: number
-) => {
-  const cameraForward = normalize(subtract(camera.target, camera.position));
-  const cameraRight = normalize(cross(cameraForward, { x: 0, y: 1, z: 0 }));
-  const cameraUp = normalize(cross(cameraRight, cameraForward));
-  if (camera.mode === "orthographic") {
-    const distance = Math.hypot(
-      pickedPoint.x - camera.position.x,
-      pickedPoint.y - camera.position.y,
-      pickedPoint.z - camera.position.z
-    );
-    return {
-      origin: {
-        x: pickedPoint.x - cameraForward.x * distance + cameraRight.x * screenX + cameraUp.x * screenY,
-        y: pickedPoint.y - cameraForward.y * distance + cameraRight.y * screenX + cameraUp.y * screenY,
-        z: pickedPoint.z - cameraForward.z * distance + cameraRight.z * screenX + cameraUp.z * screenY
-      },
-      direction: cameraForward
-    };
-  }
-
-  return {
-    origin: camera.position,
-    direction: addScaled(
-      normalize(subtract(pickedPoint, camera.position)),
-      cameraRight,
-      screenX * 0.04,
-      cameraUp,
-      screenY * 0.04
-    )
+const expectScreenSemantics = (basis: PlanDragBasis) => {
+  const right = getPlanDragDeltaMm(basis, { clientX: 460, clientY: 300 });
+  const left = getPlanDragDeltaMm(basis, { clientX: 340, clientY: 300 });
+  const down = getPlanDragDeltaMm(basis, { clientX: 400, clientY: 360 });
+  const up = getPlanDragDeltaMm(basis, { clientX: 400, clientY: 240 });
+  const towardCamera = {
+    x: -basis.planForwardAwayFromCamera.x,
+    z: -basis.planForwardAwayFromCamera.z
   };
-};
 
-const getPlanDelta = (projection: PlanDragProjection, point: RayPointMeters) => ({
-  x: point.x - projection.startPoint.x,
-  z: point.z - projection.startPoint.z
-});
-
-const planLength = (delta: { x: number; z: number }) => Math.hypot(delta.x, delta.z);
-
-const expectOppositeFinitePlanMovement = (
-  projection: PlanDragProjection,
-  first: RayPointMeters | null,
-  opposite: RayPointMeters | null
-) => {
-  expect(first).not.toBeNull();
-  expect(opposite).not.toBeNull();
-  if (!first || !opposite) return;
-  const firstDelta = getPlanDelta(projection, first);
-  const oppositeDelta = getPlanDelta(projection, opposite);
-  expect(Object.values(firstDelta).every(Number.isFinite)).toBe(true);
-  expect(Object.values(oppositeDelta).every(Number.isFinite)).toBe(true);
-  expect(planLength(firstDelta)).toBeGreaterThan(0.000001);
-  expect(planLength(oppositeDelta)).toBeGreaterThan(0.000001);
-  expect(planLength(firstDelta)).toBeLessThan(200);
-  expect(planLength(oppositeDelta)).toBeLessThan(200);
-  expect(firstDelta.x * oppositeDelta.x + firstDelta.z * oppositeDelta.z).toBeLessThan(0);
+  expect(dot(right, basis.planRight)).toBeGreaterThan(0);
+  expect(dot(left, basis.planRight)).toBeLessThan(0);
+  expect(dot(down, towardCamera)).toBeGreaterThan(0);
+  expect(dot(up, towardCamera)).toBeLessThan(0);
+  expect(right.deltaXMm).toBeCloseTo(-left.deltaXMm);
+  expect(right.deltaYMm).toBeCloseTo(-left.deltaYMm);
+  expect(down.deltaXMm).toBeCloseTo(-up.deltaXMm);
+  expect(down.deltaYMm).toBeCloseTo(-up.deltaYMm);
 };
 
 describe("drag placement helpers", () => {
@@ -173,11 +99,11 @@ describe("drag placement helpers", () => {
     });
   });
 
-  it("creates machine drag state with selected unlocked start positions", () => {
-    const projection = createTestProjection();
+  it("creates machine drag state with one frozen basis and unlocked start positions", () => {
+    const basis = createTestBasis();
     const dragState = createMachineDragState({
       targetInstanceId: "m1",
-      projection,
+      basis,
       selectedInstanceIds: ["m1", "m2"],
       lockedInstanceIds: [],
       machines: [
@@ -189,10 +115,7 @@ describe("drag placement helpers", () => {
 
     expect(dragState).toEqual({
       instanceIds: ["m1", "m2"],
-      projection,
-      planeElevationMeters: 2.4,
-      startFloorX: 1,
-      startFloorZ: -2,
+      basis,
       startPositions: {
         m1: { xMm: 100, yMm: -200 },
         m2: { xMm: 500, yMm: 600 }
@@ -200,74 +123,149 @@ describe("drag placement helpers", () => {
     });
   });
 
-  it("returns null when every candidate machine is locked", () => {
-    expect(
-      createMachineDragState({
-        targetInstanceId: "m1",
-        projection: createTestProjection({ x: 0, y: 0.5, z: 0 }),
-        selectedInstanceIds: ["m1"],
-        lockedInstanceIds: ["m1"],
-        machines: [machine("m1", 0, 0)],
-        isToggleSelection: false
-      })
-    ).toBeNull();
+  it("returns null for locked or unresolved machine drag members", () => {
+    const basis = createTestBasis();
+    expect(createMachineDragState({
+      targetInstanceId: "m1",
+      basis,
+      selectedInstanceIds: ["m1"],
+      lockedInstanceIds: ["m1"],
+      machines: [machine("m1", 0, 0)],
+      isToggleSelection: false
+    })).toBeNull();
+    expect(createMachineDragState({
+      targetInstanceId: "m1",
+      basis,
+      selectedInstanceIds: ["m1", "missing"],
+      lockedInstanceIds: [],
+      machines: [machine("m1", 0, 0)],
+      isToggleSelection: false
+    })).toBeNull();
   });
 
-  it("returns null without a partial drag state when any selected machine is unresolved", () => {
-    expect(
-      createMachineDragState({
-        targetInstanceId: "m1",
-        projection: createTestProjection({ x: 0, y: 0.5, z: 0 }),
-        selectedInstanceIds: ["m1", "missing"],
-        lockedInstanceIds: [],
-        machines: [machine("m1", 0, 0)],
-        isToggleSelection: false
-      })
-    ).toBeNull();
+  it("maps screen directions to explicit camera-relative plan semantics", () => {
+    const basis = createTestBasis();
+    const headingLength = Math.hypot(20, 30);
+    expect(basis.planForwardAwayFromCamera.x).toBeCloseTo(-20 / headingLength);
+    expect(basis.planForwardAwayFromCamera.z).toBeCloseTo(-30 / headingLength);
+    expect(basis.planRight.x).toBeCloseTo(-30 / headingLength);
+    expect(basis.planRight.z).toBeCloseTo(20 / headingLength);
+    expectScreenSemantics(basis);
   });
 
-  it("calculates plan drag delta in millimeters including negative coordinates", () => {
-    const delta = getPlanDragDeltaMm({ startFloorX: 1.2, startFloorZ: -2.4 }, { x: -0.3, z: -3.1 });
+  it("keeps screen semantics invariant above, level with, and below camera targets", () => {
+    const pitchCases = [
+      { name: "above", cameraY: 40, targetY: 0 },
+      { name: "slightly-above", cameraY: 25.1, targetY: 25 },
+      { name: "level", cameraY: 25, targetY: 25 },
+      { name: "slightly-below", cameraY: 24.9, targetY: 25 },
+      { name: "below", cameraY: -15, targetY: 25 }
+    ];
 
-    expect(delta.deltaXMm).toBeCloseTo(-1500);
-    expect(delta.deltaYMm).toBeCloseTo(-700);
+    for (const pitchCase of pitchCases) {
+      const basis = createTestBasis({
+        cameraPosition: { x: 20, y: pitchCase.cameraY, z: 30 },
+        cameraTarget: { x: 0, y: pitchCase.targetY, z: 0 }
+      });
+      expectScreenSemantics(basis);
+      expect(basis.planForwardAwayFromCamera, pitchCase.name).toEqual(
+        createTestBasis().planForwardAwayFromCamera
+      );
+    }
   });
 
-  it("calculates civil drag position from original position plus floor delta", () => {
-    const dragState = createCivilDragState(
-      "column-1",
-      createTestProjection({ x: 2, y: 2.75, z: 1 }),
-      { xMm: -200, yMm: 300 }
-    );
+  it("keeps semantic direction across shallow steep and near-top-down pitches at two headings", () => {
+    const headings = [
+      { positionX: 30, positionZ: 10, alpha: Math.atan2(10, 30) },
+      { positionX: -18, positionZ: 24, alpha: Math.atan2(24, -18) }
+    ];
+    const pitchCases = [
+      { cameraY: 1, targetY: 0 },
+      { cameraY: 35, targetY: 0 },
+      { cameraY: 80, targetY: 25 }
+    ];
 
-    const position = calculateCivilDragPosition(dragState, { x: 1.5, z: 2.25 });
-    expect(position.xMm).toBeCloseTo(-700);
-    expect(position.yMm).toBeCloseTo(1550);
-  });
-
-  it("calculates machine drag updates from original positions plus floor delta", () => {
-    const dragState: MachineDragState = {
-      instanceIds: ["m1", "m2", "missing"],
-      projection: createTestProjection({ x: 0, y: 1.5, z: 0 }),
-      planeElevationMeters: 1.5,
-      startFloorX: 0,
-      startFloorZ: 0,
-      startPositions: {
-        m1: { xMm: 100, yMm: 200 },
-        m2: { xMm: -500, yMm: -800 }
+    for (const heading of headings) {
+      for (const pitch of pitchCases) {
+        expectScreenSemantics(createTestBasis({
+          cameraPosition: { x: heading.positionX, y: pitch.cameraY, z: heading.positionZ },
+          cameraTarget: { x: 0, y: pitch.targetY, z: 0 },
+          cameraAlpha: heading.alpha
+        }));
       }
-    };
-
-    expect(calculateMachineDragPositionUpdates(dragState, { x: 1.25, z: -0.5 })).toEqual([
-      { instanceId: "m1", xMm: 1350, yMm: -300 },
-      { instanceId: "m2", xMm: 750, yMm: -1300 }
-    ]);
+    }
   });
 
-  it("preserves relative offsets when multiple selected machines move together", () => {
-    const dragState = createMachineDragState({
+  it("uses ArcRotate alpha when the horizontal camera-to-target heading is degenerate", () => {
+    for (const alpha of [0, Math.PI * 0.75]) {
+      const basis = createTestBasis({
+        cameraPosition: { x: 4, y: 50, z: -7 },
+        cameraTarget: { x: 4, y: 0, z: -7 },
+        cameraAlpha: alpha
+      });
+      expect(basis.planForwardAwayFromCamera.x).toBeCloseTo(-Math.cos(alpha));
+      expect(basis.planForwardAwayFromCamera.z).toBeCloseTo(-Math.sin(alpha));
+      expectScreenSemantics(basis);
+    }
+  });
+
+  it("derives frozen perspective and orthographic world scale from camera framing", () => {
+    const perspective = createTestBasis({ radius: 40, verticalFovRadians: Math.PI / 3 });
+    const perspectiveZoomed = createTestBasis({ radius: 20, verticalFovRadians: Math.PI / 3 });
+    const orthographic = createTestBasis({
+      cameraMode: "orthographic",
+      orthographicVerticalWorldSpan: 24
+    });
+
+    expect(perspective.worldUnitsPerCssPixel).toBeCloseTo(2 * 40 * Math.tan(Math.PI / 6) / 800);
+    expect(perspectiveZoomed.worldUnitsPerCssPixel).toBeCloseTo(perspective.worldUnitsPerCssPixel / 2);
+    expect(orthographic.worldUnitsPerCssPixel).toBeCloseTo(24 / 800);
+    expectScreenSemantics(orthographic);
+  });
+
+  it("rejects invalid camera framing instead of producing non-finite movement", () => {
+    expect(createPlanDragBasis({
+      cameraPosition: { x: 0, y: 10, z: 10 },
+      cameraTarget: { x: 0, y: 0, z: 0 },
+      cameraAlpha: 0,
+      cameraMode: "orthographic",
+      radius: 20,
+      verticalFovRadians: Math.PI / 3,
+      viewportCssHeight: 0,
+      orthographicVerticalWorldSpan: null,
+      pointerStartClientX: 0,
+      pointerStartClientY: 0
+    })).toBeNull();
+  });
+
+  it("keeps plan delta independent of object and picked-point height matrices", () => {
+    const basis = createTestBasis();
+    const pointer = { clientX: 455, clientY: 335 };
+    const expected = getPlanDragDeltaMm(basis, pointer);
+    const objectCases = [
+      ["standard-machine", 0],
+      ["standard-machine", 25],
+      ["imported-glb", 25],
+      ["civil-normal", 0],
+      ["civil-20m", 20],
+      ["civil-50m", 50],
+      ["civil-elevated", 25],
+      ["group-low-high-mixed", 25]
+    ] as const;
+
+    for (const [name, pickedHeightMeters] of objectCases) {
+      expect(Number.isFinite(pickedHeightMeters), name).toBe(true);
+      expect(getPlanDragDeltaMm(basis, pointer), name).toEqual(expected);
+    }
+  });
+
+  it("calculates civil and rigid-group positions from the same screen delta", () => {
+    const basis = createTestBasis({ pointerStartClientX: 100, pointerStartClientY: 200 });
+    const pointer = { clientX: 140, clientY: 230 };
+    const civilState = createCivilDragState("column-1", basis, { xMm: -200, yMm: 300 });
+    const machineState = createMachineDragState({
       targetInstanceId: "m2",
-      projection: createTestProjection({ x: 4, y: 3.2, z: -1 }),
+      basis,
       selectedInstanceIds: ["m1", "m2", "m3"],
       lockedInstanceIds: [],
       machines: [
@@ -277,17 +275,33 @@ describe("drag placement helpers", () => {
       ],
       isToggleSelection: false
     });
+    expect(machineState).not.toBeNull();
+    if (!machineState) return;
 
-    expect(dragState).not.toBeNull();
+    const delta = getPlanDragDeltaMm(basis, pointer);
+    expect(calculateCivilDragPosition(civilState, pointer)).toEqual({
+      xMm: -200 + delta.deltaXMm,
+      yMm: 300 + delta.deltaYMm
+    });
+    const updates = calculateMachineDragPositionUpdates(machineState, pointer);
+    expect(updates).toEqual([
+      { instanceId: "m1", xMm: -1000 + delta.deltaXMm, yMm: 500 + delta.deltaYMm },
+      { instanceId: "m2", xMm: 250 + delta.deltaXMm, yMm: -750 + delta.deltaYMm },
+      { instanceId: "m3", xMm: 1750 + delta.deltaXMm, yMm: 1250 + delta.deltaYMm }
+    ]);
+    expect(updates[1].xMm - updates[0].xMm).toBe(1250);
+    expect(updates[2].yMm - updates[1].yMm).toBe(2000);
+  });
 
-    const updates = calculateMachineDragPositionUpdates(dragState as MachineDragState, { x: 4.5, z: -2.25 });
-    const byId = new Map(updates.map((update) => [update.instanceId, update]));
-
-    expect(byId.get("m1")).toMatchObject({ xMm: -500, yMm: -750 });
-    expect(byId.get("m2")).toMatchObject({ xMm: 750, yMm: -2000 });
-    expect(byId.get("m3")).toMatchObject({ xMm: 2250, yMm: 0 });
-    expect((byId.get("m2")?.xMm ?? 0) - (byId.get("m1")?.xMm ?? 0)).toBe(1250);
-    expect((byId.get("m3")?.yMm ?? 0) - (byId.get("m2")?.yMm ?? 0)).toBe(2000);
+  it("keeps horizontal ray-plane intersection available for annotation and pan", () => {
+    const point = intersectRayWithHorizontalDragPlane(
+      { x: 0, y: 10, z: 10 },
+      { x: 0.2, y: -1, z: -1 },
+      4
+    );
+    expect(point?.x).toBeCloseTo(1.2);
+    expect(point?.y).toBeCloseTo(4);
+    expect(point?.z).toBeCloseTo(4);
   });
 
   it("keeps valid no-op drag frames active and distinguishes blocked movement", () => {
@@ -297,152 +311,5 @@ describe("drag placement helpers", () => {
     expect(didSceneDragApplyMutation("noop")).toBe(false);
     expect(didSceneDragApplyMutation("blocked")).toBe(false);
     expect(didSceneDragApplyMutation("applied")).toBe(true);
-  });
-
-  it("uses the actual finite grab point and a truthful object-center fallback otherwise", () => {
-    const picked = createPlanDragProjection({
-      rayOrigin: { x: 0, y: 10, z: 10 },
-      rayDirection: { x: 1, y: -5.75, z: -12 },
-      pickedPoint: { x: 1, y: 4.25, z: -2 },
-      fallbackPoint: { x: 3, y: 1.5, z: 4 }
-    });
-    const fallback = createPlanDragProjection({
-      rayOrigin: { x: 0, y: 10, z: 10 },
-      rayDirection: { x: 3, y: -8.5, z: -6 },
-      pickedPoint: { x: Number.NaN, y: 4, z: 2 },
-      fallbackPoint: { x: 3, y: 1.5, z: 4 }
-    });
-
-    expect(picked?.anchorPoint).toEqual({ x: 1, y: 4.25, z: -2 });
-    expect(fallback?.anchorPoint).toEqual({ x: 3, y: 1.5, z: 4 });
-  });
-
-  it("calculates drag delta from two intersections on the same captured plane", () => {
-    const origin = { x: 0, y: 10, z: 10 };
-    const start = intersectRayWithHorizontalDragPlane(origin, { x: 0.1, y: -1, z: -1 }, 4);
-    const current = intersectRayWithHorizontalDragPlane(origin, { x: 0.2, y: -1, z: -1 }, 4);
-    const incorrectFloorCurrent = intersectRayWithHorizontalDragPlane(origin, { x: 0.2, y: -1, z: -1 }, 0);
-
-    expect(start).not.toBeNull();
-    expect(current).not.toBeNull();
-    expect(incorrectFloorCurrent).not.toBeNull();
-    const samePlaneDelta = getPlanDragDeltaMm(
-      { startFloorX: start?.x ?? 0, startFloorZ: start?.z ?? 0 },
-      { x: current?.x ?? 0, z: current?.z ?? 0 }
-    );
-    const mixedPlaneDelta = getPlanDragDeltaMm(
-      { startFloorX: start?.x ?? 0, startFloorZ: start?.z ?? 0 },
-      { x: incorrectFloorCurrent?.x ?? 0, z: incorrectFloorCurrent?.z ?? 0 }
-    );
-
-    expect(samePlaneDelta.deltaXMm).toBeCloseTo(600);
-    expect(samePlaneDelta.deltaYMm).toBeCloseTo(0);
-    expect(mixedPlaneDelta).not.toEqual(samePlaneDelta);
-  });
-
-  it("selects one camera-conditioned projection mode for the complete gesture", () => {
-    const horizontal = createPlanDragProjection({
-      rayOrigin: { x: 0, y: 17, z: 30 },
-      rayDirection: { x: 0, y: -17, z: -30 },
-      pickedPoint: { x: 0, y: 0, z: 0 }
-    });
-    const aboveCamera = createPlanDragProjection({
-      rayOrigin: { x: 0, y: 17, z: 30 },
-      rayDirection: { x: 0, y: 3, z: -30 },
-      pickedPoint: { x: 0, y: 20, z: 0 }
-    });
-    const shallow = createPlanDragProjection({
-      rayOrigin: { x: 0, y: 20, z: 30 },
-      rayDirection: { x: 0, y: -1, z: -30 },
-      pickedPoint: { x: 0, y: 19, z: 0 }
-    });
-
-    expect(horizontal?.mode).toBe("horizontal");
-    expect(aboveCamera?.mode).toBe("camera-facing");
-    expect(shallow?.mode).toBe("camera-facing");
-    expect(projectRayToPlanDrag(aboveCamera!, { x: 0, y: 17, z: 30 }, { x: 0.1, y: 3, z: -30 }))
-      .not.toBeNull();
-    expect(aboveCamera?.mode).toBe("camera-facing");
-  });
-
-  it("falls back when a downward horizontal-plane candidate lies behind the pointer ray", () => {
-    const projection = createPlanDragProjection({
-      rayOrigin: { x: 0, y: 10, z: 10 },
-      rayDirection: { x: 0, y: -2, z: -10 },
-      fallbackPoint: { x: 0, y: 15, z: 0 }
-    });
-
-    expect(projection?.mode).toBe("camera-facing");
-    expect(projection?.anchorPoint).toEqual({ x: 0, y: 15, z: 0 });
-    expect(projection?.planeNormal).toEqual(normalize({ x: 0, y: -2, z: -10 }));
-    expect(projection?.startPoint).not.toEqual(projection?.anchorPoint);
-    expect(projection?.startPoint.x).toBeCloseTo(0);
-    expect(projection?.startPoint.y).toBeCloseTo(8.2692307692);
-    expect(projection?.startPoint.z).toBeCloseTo(1.3461538462);
-  });
-
-  it("keeps plan projection directional and finite across height and camera matrices", () => {
-    const cameras: TestCamera[] = [
-      { name: "normal", mode: "perspective", position: { x: 22, y: 17, z: 28 }, target: { x: 0, y: 0, z: 0 } },
-      { name: "near", mode: "perspective", position: { x: 8, y: 7, z: 10 }, target: { x: 0, y: 0, z: 0 } },
-      { name: "far", mode: "perspective", position: { x: 52, y: 40, z: 68 }, target: { x: 0, y: 0, z: 0 } },
-      { name: "shallow", mode: "perspective", position: { x: 24, y: 4, z: 36 }, target: { x: 0, y: 0, z: 0 } },
-      { name: "elevated-target", mode: "perspective", position: { x: 22, y: 42, z: 28 }, target: { x: 0, y: 25, z: 0 } },
-      { name: "orthographic", mode: "orthographic", position: { x: 22, y: 42, z: 28 }, target: { x: 0, y: 25, z: 0 } }
-    ];
-    const elevations = [0, 5, 15, 20, 25, 40, 50];
-    const objectCases = ["tall-object", "elevated-ordinary-object"];
-
-    for (const camera of cameras) {
-      for (const elevation of elevations) {
-        for (const objectCase of objectCases) {
-          const pickedPoint = { x: 1.5, y: elevation, z: -2.25 };
-          const startRay = getCameraRay(camera, pickedPoint, 0, 0);
-          const projection = createPlanDragProjection({
-            rayOrigin: startRay.origin,
-            rayDirection: startRay.direction,
-            pickedPoint
-          });
-          expect(projection, `${camera.name}/${objectCase}/${elevation}m`).not.toBeNull();
-          if (!projection) continue;
-
-          const project = (screenX: number, screenY: number) => {
-            const ray = getCameraRay(camera, pickedPoint, screenX, screenY);
-            return projectRayToPlanDrag(projection, ray.origin, ray.direction);
-          };
-          expectOppositeFinitePlanMovement(projection, project(1, 0), project(-1, 0));
-          expectOppositeFinitePlanMovement(projection, project(0, 1), project(0, -1));
-          expect(projection.anchorPoint.y).toBe(elevation);
-          expect(["horizontal", "camera-facing"]).toContain(projection.mode);
-        }
-      }
-    }
-  });
-
-  it("remains continuous when the picked elevation crosses the camera elevation", () => {
-    const camera: TestCamera = {
-      name: "camera-crossing",
-      mode: "perspective",
-      position: { x: 0, y: 20, z: 30 },
-      target: { x: 0, y: 0, z: 0 }
-    };
-
-    for (const elevation of [19.99, 20, 20.01, 25, 40, 50]) {
-      const pickedPoint = { x: 0, y: elevation, z: 0 };
-      const startRay = getCameraRay(camera, pickedPoint, 0, 0);
-      const projection = createPlanDragProjection({
-        rayOrigin: startRay.origin,
-        rayDirection: startRay.direction,
-        pickedPoint
-      });
-      expect(projection?.mode).toBe("camera-facing");
-      if (!projection) continue;
-      const rightRay = getCameraRay(camera, pickedPoint, 0.5, 0);
-      const right = projectRayToPlanDrag(projection, rightRay.origin, rightRay.direction);
-      expect(right).not.toBeNull();
-      if (!right) continue;
-      expect(planLength(getPlanDelta(projection, right))).toBeLessThan(50);
-      expect(getHeightPreservingPlanDragPoint(projection, right).y).toBe(elevation);
-    }
   });
 });

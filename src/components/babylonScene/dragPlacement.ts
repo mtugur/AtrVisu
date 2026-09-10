@@ -12,13 +12,12 @@ export type FloorPointMeters = {
 
 export type RayPointMeters = FloorPointMeters & { y: number };
 
-export type PlanDragProjectionMode = "horizontal" | "camera-facing";
-
-export type PlanDragProjection = {
-  readonly mode: PlanDragProjectionMode;
-  readonly anchorPoint: RayPointMeters;
-  readonly planeNormal: RayPointMeters;
-  readonly startPoint: RayPointMeters;
+export type PlanDragBasis = {
+  readonly planRight: FloorPointMeters;
+  readonly planForwardAwayFromCamera: FloorPointMeters;
+  readonly worldUnitsPerCssPixel: number;
+  readonly pointerStartClientX: number;
+  readonly pointerStartClientY: number;
 };
 
 export type SceneDragMutationResult = "applied" | "noop" | "blocked";
@@ -34,19 +33,13 @@ export type DraggableMachine = {
 
 export type MachineDragState = {
   instanceIds: string[];
-  projection: PlanDragProjection;
-  planeElevationMeters: number;
-  startFloorX: number;
-  startFloorZ: number;
+  basis: PlanDragBasis;
   startPositions: Record<string, PlanPositionMm>;
 };
 
 export type CivilDragState = {
   id: string;
-  projection: PlanDragProjection;
-  planeElevationMeters: number;
-  startFloorX: number;
-  startFloorZ: number;
+  basis: PlanDragBasis;
   startPosition: PlanPositionMm;
 };
 
@@ -77,14 +70,14 @@ export const getMachineStartPositionMm = (machine: DraggableMachine): PlanPositi
 
 export const createMachineDragState = ({
   targetInstanceId,
-  projection,
+  basis,
   selectedInstanceIds,
   lockedInstanceIds,
   machines,
   isToggleSelection
 }: {
   targetInstanceId: string;
-  projection: PlanDragProjection;
+  basis: PlanDragBasis;
   selectedInstanceIds: readonly string[];
   lockedInstanceIds: readonly string[];
   machines: readonly DraggableMachine[];
@@ -113,48 +106,29 @@ export const createMachineDragState = ({
 
   return {
     instanceIds,
-    projection,
-    planeElevationMeters: projection.anchorPoint.y,
-    startFloorX: projection.startPoint.x,
-    startFloorZ: projection.startPoint.z,
+    basis,
     startPositions
   };
 };
 
 export const createCivilDragState = (
   id: string,
-  projection: PlanDragProjection,
+  basis: PlanDragBasis,
   startPosition: PlanPositionMm
 ): CivilDragState => ({
   id,
-  projection,
-  planeElevationMeters: projection.anchorPoint.y,
-  startFloorX: projection.startPoint.x,
-  startFloorZ: projection.startPoint.z,
+  basis,
   startPosition
 });
 
-const MIN_HORIZONTAL_DOWNWARD_COSINE = 0.12;
 const MIN_RAY_PLANE_DOT = 0.000001;
+const MIN_PLAN_HEADING_LENGTH = 0.000001;
 
 const isFiniteRayPoint = (point: RayPointMeters | null | undefined): point is RayPointMeters =>
   Boolean(point && Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z));
 
-const normalizeRayPoint = (point: RayPointMeters): RayPointMeters | null => {
-  const length = Math.hypot(point.x, point.y, point.z);
-  return Number.isFinite(length) && length > MIN_RAY_PLANE_DOT
-    ? { x: point.x / length, y: point.y / length, z: point.z / length }
-    : null;
-};
-
 const dotRayPoints = (left: RayPointMeters, right: RayPointMeters) =>
   left.x * right.x + left.y * right.y + left.z * right.z;
-
-const copyRayPoint = (point: RayPointMeters): RayPointMeters => ({
-  x: point.x,
-  y: point.y,
-  z: point.z
-});
 
 export const intersectRayWithPlanDragPlane = (
   origin: RayPointMeters,
@@ -185,78 +159,76 @@ export const intersectRayWithPlanDragPlane = (
   return isFiniteRayPoint(point) ? point : null;
 };
 
-export const createPlanDragProjection = ({
-  rayOrigin,
-  rayDirection,
-  pickedPoint,
-  fallbackPoint
+export const createPlanDragBasis = ({
+  cameraPosition,
+  cameraTarget,
+  cameraAlpha,
+  cameraMode,
+  radius,
+  verticalFovRadians,
+  viewportCssHeight,
+  orthographicVerticalWorldSpan,
+  pointerStartClientX,
+  pointerStartClientY
 }: {
-  rayOrigin: RayPointMeters;
-  rayDirection: RayPointMeters;
-  pickedPoint?: RayPointMeters | null;
-  fallbackPoint?: RayPointMeters | null;
-}): PlanDragProjection | null => {
-  const anchorPoint = isFiniteRayPoint(pickedPoint) ? pickedPoint : fallbackPoint;
-  const normalizedDirection = normalizeRayPoint(rayDirection);
-  if (!isFiniteRayPoint(rayOrigin) || !isFiniteRayPoint(anchorPoint) || !normalizedDirection) {
+  cameraPosition: RayPointMeters;
+  cameraTarget: RayPointMeters;
+  cameraAlpha: number;
+  cameraMode: "perspective" | "orthographic";
+  radius: number;
+  verticalFovRadians: number;
+  viewportCssHeight: number;
+  orthographicVerticalWorldSpan?: number | null;
+  pointerStartClientX: number;
+  pointerStartClientY: number;
+}): PlanDragBasis | null => {
+  if (
+    !isFiniteRayPoint(cameraPosition)
+    || !isFiniteRayPoint(cameraTarget)
+    || ![
+      cameraAlpha,
+      radius,
+      verticalFovRadians,
+      viewportCssHeight,
+      pointerStartClientX,
+      pointerStartClientY
+    ].every(Number.isFinite)
+    || viewportCssHeight <= 0
+  ) {
     return null;
   }
 
-  if (normalizedDirection.y <= -MIN_HORIZONTAL_DOWNWARD_COSINE) {
-    const horizontalNormal = { x: 0, y: 1, z: 0 };
-    const horizontalStartPoint = intersectRayWithPlanDragPlane(
-      rayOrigin,
-      normalizedDirection,
-      anchorPoint,
-      horizontalNormal
-    );
-    if (horizontalStartPoint) {
-      return {
-        mode: "horizontal",
-        anchorPoint: copyRayPoint(anchorPoint),
-        planeNormal: horizontalNormal,
-        startPoint: horizontalStartPoint
-      };
-    }
-  }
+  const headingX = cameraTarget.x - cameraPosition.x;
+  const headingZ = cameraTarget.z - cameraPosition.z;
+  const headingLength = Math.hypot(headingX, headingZ);
+  const planForwardAwayFromCamera = headingLength > MIN_PLAN_HEADING_LENGTH
+    ? { x: headingX / headingLength, z: headingZ / headingLength }
+    : { x: -Math.cos(cameraAlpha), z: -Math.sin(cameraAlpha) };
+  const planRight = {
+    x: planForwardAwayFromCamera.z,
+    z: -planForwardAwayFromCamera.x
+  };
 
-  const cameraFacingStartPoint = intersectRayWithPlanDragPlane(
-    rayOrigin,
-    normalizedDirection,
-    anchorPoint,
-    normalizedDirection
-  );
-  if (!cameraFacingStartPoint) {
+  const worldUnitsPerCssPixel = cameraMode === "orthographic"
+    ? Number.isFinite(orthographicVerticalWorldSpan) && (orthographicVerticalWorldSpan ?? 0) > 0
+      ? (orthographicVerticalWorldSpan as number) / viewportCssHeight
+      : Number.NaN
+    : radius > 0 && verticalFovRadians > 0 && verticalFovRadians < Math.PI
+      ? 2 * radius * Math.tan(verticalFovRadians / 2) / viewportCssHeight
+      : Number.NaN;
+
+  if (!Number.isFinite(worldUnitsPerCssPixel) || worldUnitsPerCssPixel <= 0) {
     return null;
   }
 
   return {
-    mode: "camera-facing",
-    anchorPoint: copyRayPoint(anchorPoint),
-    planeNormal: copyRayPoint(normalizedDirection),
-    startPoint: cameraFacingStartPoint
+    planRight,
+    planForwardAwayFromCamera,
+    worldUnitsPerCssPixel,
+    pointerStartClientX,
+    pointerStartClientY
   };
 };
-
-export const projectRayToPlanDrag = (
-  projection: PlanDragProjection,
-  rayOrigin: RayPointMeters,
-  rayDirection: RayPointMeters
-) => intersectRayWithPlanDragPlane(
-  rayOrigin,
-  rayDirection,
-  projection.anchorPoint,
-  projection.planeNormal
-);
-
-export const getHeightPreservingPlanDragPoint = (
-  projection: PlanDragProjection,
-  projectedPoint: FloorPointMeters
-): RayPointMeters => ({
-  x: projection.anchorPoint.x + projectedPoint.x - projection.startPoint.x,
-  y: projection.anchorPoint.y,
-  z: projection.anchorPoint.z + projectedPoint.z - projection.startPoint.z
-});
 
 export const intersectRayWithHorizontalDragPlane = (
   origin: RayPointMeters,
@@ -276,18 +248,31 @@ export const shouldKeepSceneDragActive = (result: SceneDragMutationResult) => re
 export const didSceneDragApplyMutation = (result: SceneDragMutationResult) => result === "applied";
 
 export const getPlanDragDeltaMm = (
-  dragStart: Pick<MachineDragState | CivilDragState, "startFloorX" | "startFloorZ">,
-  floorPoint: FloorPointMeters
-) => ({
-  deltaXMm: metersToMm(floorPoint.x - dragStart.startFloorX),
-  deltaYMm: metersToMm(floorPoint.z - dragStart.startFloorZ)
-});
+  basis: PlanDragBasis,
+  pointer: { readonly clientX: number; readonly clientY: number }
+) => {
+  const deltaCssX = pointer.clientX - basis.pointerStartClientX;
+  const deltaCssY = pointer.clientY - basis.pointerStartClientY;
+  const rightWorldUnits = deltaCssX * basis.worldUnitsPerCssPixel;
+  const forwardWorldUnits = -deltaCssY * basis.worldUnitsPerCssPixel;
+
+  return {
+    deltaXMm: metersToMm(
+      basis.planRight.x * rightWorldUnits
+      + basis.planForwardAwayFromCamera.x * forwardWorldUnits
+    ),
+    deltaYMm: metersToMm(
+      basis.planRight.z * rightWorldUnits
+      + basis.planForwardAwayFromCamera.z * forwardWorldUnits
+    )
+  };
+};
 
 export const calculateCivilDragPosition = (
   dragState: CivilDragState,
-  floorPoint: FloorPointMeters
+  pointer: { readonly clientX: number; readonly clientY: number }
 ): PlanPositionMm => {
-  const { deltaXMm, deltaYMm } = getPlanDragDeltaMm(dragState, floorPoint);
+  const { deltaXMm, deltaYMm } = getPlanDragDeltaMm(dragState.basis, pointer);
 
   return {
     xMm: dragState.startPosition.xMm + deltaXMm,
@@ -297,9 +282,9 @@ export const calculateCivilDragPosition = (
 
 export const calculateMachineDragPositionUpdates = (
   dragState: MachineDragState,
-  floorPoint: FloorPointMeters
+  pointer: { readonly clientX: number; readonly clientY: number }
 ): MachineDragPositionUpdate[] => {
-  const { deltaXMm, deltaYMm } = getPlanDragDeltaMm(dragState, floorPoint);
+  const { deltaXMm, deltaYMm } = getPlanDragDeltaMm(dragState.basis, pointer);
 
   return dragState.instanceIds.flatMap((instanceId) => {
     const startPosition = dragState.startPositions[instanceId];
