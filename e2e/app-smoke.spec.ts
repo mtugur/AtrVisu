@@ -886,14 +886,15 @@ const dragSceneEntityAtScreenBounds = async (
   bounds: ScreenBounds,
   deltaX: number,
   deltaY: number,
-  relativeHeight = 0.25
+  relativeHeight = 0.25,
+  relativeWidth = 0.5
 ) => {
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const box = await canvas.boundingBox();
   if (!box) {
     throw new Error("Scene canvas bounds are unavailable.");
   }
-  const startX = box.x + bounds.left + bounds.width / 2;
+  const startX = box.x + bounds.left + bounds.width * relativeWidth;
   const startY = box.y + bounds.top + bounds.height * relativeHeight;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
@@ -906,219 +907,57 @@ const getPlanDelta = (before: PlanPosition, after: PlanPosition) => ({
   yMm: after.yMm - before.yMm
 });
 
-type DiagnosticGrabLock = {
-  anchorWorld: { x: number; y: number; z: number };
-  anchorScreen: { x: number; y: number };
-  pointerScreen: { x: number; y: number };
-  pointerErrorPx: number;
-  mode: "horizontal" | "screen-stable";
-  conditioning: {
-    determinant: number;
-    conditionNumber: number;
-    worldMmPerCssPixel: number;
-    orientationScore: number;
-    orientationPreserving: boolean;
-    exactSafe: boolean;
-    coherenceLimitPx: number;
-  };
-  planRight: { x: number; z: number };
-  planForward: { x: number; z: number };
+type PlanMoveManipulatorDiagnostic = {
+  available: boolean;
+  activeAxis: "x" | "plan-y" | "plane" | null;
+  proxy: { x: number; y: number; z: number } | null;
+  handles: Partial<Record<"x" | "plan-y" | "plane", ScreenPoint>>;
 };
 
-const readDiagnosticGrabLock = async (page: Page): Promise<DiagnosticGrabLock> => {
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const anchorWorldAttribute = await canvas.getAttribute("data-last-drag-anchor-world");
-  const anchorScreenAttribute = await canvas.getAttribute("data-last-drag-anchor-screen");
-  const pointerScreenAttribute = await canvas.getAttribute("data-last-drag-pointer-screen");
-  const pointerErrorAttribute = await canvas.getAttribute("data-last-drag-pointer-plane-error-px");
-  expect(anchorWorldAttribute).not.toBeNull();
-  expect(anchorScreenAttribute).not.toBeNull();
-  expect(pointerScreenAttribute).not.toBeNull();
-  expect(pointerErrorAttribute).not.toBeNull();
-  const anchorWorld = JSON.parse(
-    anchorWorldAttribute ?? "{}"
-  ) as DiagnosticGrabLock["anchorWorld"];
-  const anchorScreen = JSON.parse(
-    anchorScreenAttribute ?? "{}"
-  ) as DiagnosticGrabLock["anchorScreen"];
-  const pointerScreen = JSON.parse(
-    pointerScreenAttribute ?? "{}"
-  ) as DiagnosticGrabLock["pointerScreen"];
-  const pointerErrorPx = Number(pointerErrorAttribute);
-  const mode = await canvas.getAttribute("data-last-drag-projection-mode") as DiagnosticGrabLock["mode"];
-  const conditioning = {
-    determinant: Number(await canvas.getAttribute("data-last-drag-jacobian-determinant")),
-    conditionNumber: Number(await canvas.getAttribute("data-last-drag-condition-number")),
-    worldMmPerCssPixel: Number(await canvas.getAttribute("data-last-drag-world-mm-per-css-pixel")),
-    orientationScore: Number(await canvas.getAttribute("data-last-drag-orientation-score")),
-    orientationPreserving: await canvas.getAttribute("data-last-drag-orientation-preserving") === "true",
-    exactSafe: await canvas.getAttribute("data-last-drag-exact-safe") === "true",
-    coherenceLimitPx: Number(await canvas.getAttribute("data-last-drag-coherence-limit-px"))
-  };
-  const planRight = JSON.parse(await canvas.getAttribute("data-last-drag-plan-right") ?? "{}") as DiagnosticGrabLock["planRight"];
-  const planForward = JSON.parse(await canvas.getAttribute("data-last-drag-plan-forward") ?? "{}") as DiagnosticGrabLock["planForward"];
-
-  expect(Object.values(anchorWorld).every(Number.isFinite)).toBe(true);
-  expect(Object.values(anchorScreen).every(Number.isFinite)).toBe(true);
-  expect(Object.values(pointerScreen).every(Number.isFinite)).toBe(true);
-  expect(Number.isFinite(pointerErrorPx)).toBe(true);
-  expect(["horizontal", "screen-stable"]).toContain(mode);
-  expect([
-    conditioning.determinant,
-    conditioning.conditionNumber,
-    conditioning.worldMmPerCssPixel,
-    conditioning.orientationScore,
-    conditioning.coherenceLimitPx
-  ].every((value) => !Number.isNaN(value))).toBe(true);
-  expect(Object.values(planRight).every(Number.isFinite)).toBe(true);
-  expect(Object.values(planForward).every(Number.isFinite)).toBe(true);
-  expect(Math.hypot(
-    anchorScreen.x - pointerScreen.x,
-    anchorScreen.y - pointerScreen.y
-  )).toBeCloseTo(pointerErrorPx, 4);
-  return { anchorWorld, anchorScreen, pointerScreen, pointerErrorPx, mode, conditioning, planRight, planForward };
+const readPlanMoveManipulator = async (page: Page): Promise<PlanMoveManipulatorDiagnostic> => {
+  const raw = await page.getByLabel("AtrVisu 3D workspace").getAttribute("data-plan-move-manipulator");
+  return JSON.parse(raw ?? "{}") as PlanMoveManipulatorDiagnostic;
 };
 
-const expectDiagnosticPointerCoherence = (
-  diagnostic: DiagnosticGrabLock,
-  maxExactPointerErrorPx = 2
+const dragPlanMoveHandle = async (
+  page: Page,
+  axis: "x" | "plan-y" | "plane",
+  deltaX: number,
+  deltaY: number
 ) => {
-  expect(diagnostic.pointerErrorPx).toBeLessThanOrEqual(
-    diagnostic.mode === "horizontal"
-      ? maxExactPointerErrorPx
-      : Math.max(maxExactPointerErrorPx, diagnostic.conditioning.coherenceLimitPx)
-  );
-};
-
-const dragSceneEntityWithGrabLock = async ({
-  page,
-  bounds,
-  deltaX,
-  deltaY,
-  relativeHeight,
-  maxPointerErrorPx = 2,
-  steps = 3,
-  label = "plan drag"
-}: {
-  page: Page;
-  bounds: ScreenBounds;
-  deltaX: number;
-  deltaY: number;
-  relativeHeight: number;
-  maxPointerErrorPx?: number;
-  steps?: number;
-  label?: string;
-}) => {
   const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const box = await canvas.boundingBox();
-  if (!box) {
-    throw new Error("Scene canvas bounds are unavailable.");
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(true);
+  const canvasBox = await canvas.boundingBox();
+  await expect.poll(async () => {
+    const current = await readPlanMoveManipulator(page);
+    const points = Object.values(current.handles);
+    const target = current.handles[axis];
+    if (!canvasBox || !target || points.length !== 3) return false;
+    const spread = Math.max(...points.flatMap((point, index) =>
+      points.slice(index + 1).map((other) => Math.hypot(point.x - other.x, point.y - other.y))
+    ));
+    return target.x >= 0
+      && target.x <= canvasBox.width
+      && target.y >= 0
+      && target.y <= canvasBox.height
+      && spread >= 20;
+  }).toBe(true);
+  const diagnostics = await readPlanMoveManipulator(page);
+  const handle = diagnostics.handles[axis];
+  if (!canvasBox || !handle) {
+    throw new Error(`Plan Move ${axis} handle is unavailable.`);
   }
-  await canvas.evaluate((element) => {
-    delete element.dataset.lastDragPlaneElevationMeters;
-    delete element.dataset.lastDragResolveStatus;
-    delete element.dataset.lastDragPointerScreen;
-    delete element.dataset.lastDragAnchorScreen;
-    delete element.dataset.lastDragPointerPlaneErrorPx;
-  });
-  const startX = box.x + bounds.left + bounds.width / 2;
-  const startY = box.y + bounds.top + bounds.height * relativeHeight;
+  const startX = canvasBox.x + handle.x;
+  const startY = canvasBox.y + handle.y;
   await page.mouse.move(startX, startY);
   await page.mouse.down();
-  await expect(canvas, `${label} must begin from a picked entity surface`)
-    .toHaveAttribute("data-last-drag-plane-elevation-meters", /.+/);
-  let lastDiagnostic: DiagnosticGrabLock | null = null;
-  for (let step = 1; step <= steps; step += 1) {
-    const x = startX + deltaX * step / steps;
-    const y = startY + deltaY * step / steps;
-    const previousGeneration = Number(
-      await canvas.getAttribute("data-last-drag-frame-generation") ?? 0
-    );
-    await page.mouse.move(x, y);
-    await expect(canvas).toHaveAttribute("data-last-drag-resolve-status", "resolved");
-    await expect.poll(async () => Number(
-      await canvas.getAttribute("data-last-drag-frame-generation") ?? 0
-    )).toBeGreaterThan(previousGeneration);
-    lastDiagnostic = await readDiagnosticGrabLock(page);
-    const currentBox = await canvas.boundingBox();
-    if (!currentBox) {
-      throw new Error("Scene canvas bounds became unavailable during Plan drag.");
-    }
-    expect(Math.hypot(
-      lastDiagnostic.pointerScreen.x - (x - currentBox.x),
-      lastDiagnostic.pointerScreen.y - (y - currentBox.y)
-    )).toBeLessThan(0.75);
-    const allowedPointerErrorPx = lastDiagnostic.mode === "horizontal"
-      ? maxPointerErrorPx
-      : Math.max(maxPointerErrorPx, lastDiagnostic.conditioning.coherenceLimitPx);
-    expect(
-      lastDiagnostic.pointerErrorPx,
-      `${label}/${lastDiagnostic.mode}/${JSON.stringify({
-        anchor: lastDiagnostic.anchorScreen,
-        pointer: lastDiagnostic.pointerScreen
-      })}`
-    )
-      .toBeLessThanOrEqual(allowedPointerErrorPx);
-  }
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).activeAxis, {
+    message: `Expected ${axis} handle at ${JSON.stringify(handle)} from ${JSON.stringify(diagnostics.handles)}`
+  }).toBe(axis);
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 6 });
   await page.mouse.up();
-  if (!lastDiagnostic) {
-    throw new Error("Plan drag did not publish grab-lock diagnostics.");
-  }
-  return lastDiagnostic;
-};
-
-const dragEntityAndUndo = async ({
-  page,
-  entityId,
-  recordAttribute,
-  getBounds,
-  deltaX,
-  deltaY,
-  relativeHeight,
-  beforeUndo,
-  maxPointerErrorPx = 2,
-  steps,
-  label
-}: {
-  page: Page;
-  entityId: string;
-  recordAttribute: "data-machine-plan-positions" | "data-civil-plan-positions";
-  getBounds: () => Promise<ScreenBounds>;
-  deltaX: number;
-  deltaY: number;
-  relativeHeight: number;
-  beforeUndo?: () => Promise<void>;
-  maxPointerErrorPx?: number;
-  steps?: number;
-  label?: string;
-}) => {
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const before = (await readCanvasRecord<PlanPosition>(page, recordAttribute))[entityId];
-  const diagnostic = await dragSceneEntityWithGrabLock({
-    page,
-    bounds: await getBounds(),
-    deltaX,
-    deltaY,
-    relativeHeight,
-    maxPointerErrorPx,
-    steps,
-    label
-  });
-  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
-  await expect.poll(async () => {
-    const current = (await readCanvasRecord<PlanPosition>(page, recordAttribute))[entityId];
-    return current.xMm !== before.xMm || current.yMm !== before.yMm;
-  }).toBe(true);
-  expectDiagnosticPointerCoherence(diagnostic, maxPointerErrorPx);
-  const after = (await readCanvasRecord<PlanPosition>(page, recordAttribute))[entityId];
-  const delta = getPlanDelta(before, after);
-  await beforeUndo?.();
-  await page.keyboard.press("Control+z");
-  await expect.poll(async () => (
-    await readCanvasRecord<PlanPosition>(page, recordAttribute)
-  )[entityId]).toEqual(before);
-  await waitForSceneRenderFrames(page);
-  return delta;
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).activeAxis).toBeNull();
+  await expect.poll(async () => canvas.evaluate((element) => getComputedStyle(element).cursor)).not.toBe("grabbing");
 };
 
 const createTwoMachineAssembly = async (
@@ -4589,6 +4428,7 @@ test("scene member click selects and rigidly moves the complete assembly", async
   await page.mouse.move(startX + 90, startY + 35);
   await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
   await page.mouse.up();
+  await expect.poll(async () => canvas.evaluate((element) => getComputedStyle(element).cursor)).not.toBe("grabbing");
   await expect(canvas).toHaveAttribute("data-last-machine-drag-preflight", "true");
   await expect(canvas).toHaveAttribute("data-last-machine-drag-member-count", "2");
   await expect(canvas).toHaveAttribute("data-last-machine-drag-applied", "true");
@@ -4613,91 +4453,14 @@ test("scene member click selects and rigidly moves the complete assembly", async
   await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
   await page.keyboard.press("Control+y");
   await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(moved);
+
+  const movedScreenPoint = await getMachineScreenPoint(page, machineIds[0]);
+  expect(movedScreenPoint?.x).toBeCloseTo(dragStart.x + 90, -1);
+  expect(movedScreenPoint?.y).toBeCloseTo(dragStart.y + 35, -1);
   expect(errors).toEqual([]);
 });
 
-test("high-grab drag preserves machine civil and rigid-group elevations", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await openCleanApp(page);
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-
-  await addCanonicalAtaraMachine(
-    page,
-    "Robot Palletizer",
-    ["Palletizing", "Robot Palletizers"]
-  );
-  await waitForMachineDiagnostics(page, 1);
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
-  const machineId = (await getMachineIds(page))[0];
-  const machineElevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
-  await dragSceneEntityWithGrabLock({
-    page,
-    bounds: await getMachineScreenBounds(page, machineId),
-    deltaX: 55,
-    deltaY: 18,
-    relativeHeight: 0.22
-  });
-  await expect(canvas).toHaveAttribute("data-last-machine-drag-preflight", "true");
-  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
-  expect(Number(await canvas.getAttribute("data-last-drag-plane-elevation-meters"))).toBeGreaterThan(0.5);
-  expectDiagnosticPointerCoherence(await readDiagnosticGrabLock(page));
-  expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(machineElevationBefore);
-
-  await openPrimaryDockPanel(page, "panel.groups");
-  page.once("dialog", async (dialog) => dialog.accept("High Grab Group"));
-  await page.getByTestId("create-group-from-selection").click();
-  const group = page.locator(".assembly-group-row").filter({ hasText: "High Grab Group" });
-  await expect(group).toContainText("1 item");
-
-  const insertMenu = await openWorkbenchMenu(page, "Insert");
-  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
-  await expect.poll(async () => Object.keys(
-    await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")
-  ).length).toBe(1);
-  const civilId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
-  const civilElevationBefore = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
-  await dragSceneEntityWithGrabLock({
-    page,
-    bounds: await getCivilScreenBounds(page, civilId),
-    deltaX: 45,
-    deltaY: 15,
-    relativeHeight: 0.2
-  });
-  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
-  expect(Number(await canvas.getAttribute("data-last-drag-plane-elevation-meters"))).toBeGreaterThan(1);
-  expectDiagnosticPointerCoherence(await readDiagnosticGrabLock(page));
-  expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(civilElevationBefore);
-
-  await openPrimaryDockPanel(page, "panel.groups");
-  await group.getByRole("button", { name: /^Add Selected to / }).click();
-  await expect(group).toContainText("2 items");
-  await group.locator(".assembly-group-button").click();
-  const beforeGroupDragMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
-  const beforeGroupDragCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
-  const groupMachineElevation = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
-  const groupCivilElevation = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
-  await dragSceneEntityWithGrabLock({
-    page,
-    bounds: await getMachineScreenBounds(page, machineId),
-    deltaX: 70,
-    deltaY: 22,
-    relativeHeight: 0.22
-  });
-  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
-  expectDiagnosticPointerCoherence(await readDiagnosticGrabLock(page));
-  const afterGroupDragMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
-  const afterGroupDragCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
-  expect(afterGroupDragMachines[machineId].xMm - beforeGroupDragMachines[machineId].xMm)
-    .toBeCloseTo(afterGroupDragCivil[civilId].xMm - beforeGroupDragCivil[civilId].xMm);
-  expect(afterGroupDragMachines[machineId].yMm - beforeGroupDragMachines[machineId].yMm)
-    .toBeCloseTo(afterGroupDragCivil[civilId].yMm - beforeGroupDragCivil[civilId].yMm);
-  expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(groupMachineElevation);
-  expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(groupCivilElevation);
-  await capturePf3aScreenshot(page, "19-group-drag-high-grab.png");
-  expect(errors).toEqual([]);
-});
-
-test("perspective plan drag stays intuitive through a continuous machine camera-pitch sweep", async ({ page }) => {
+test("Plan Move Manipulator moves a machine on world axes across camera pitches", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
@@ -4707,99 +4470,126 @@ test("perspective plan drag stays intuitive through a continuous machine camera-
     ["Palletizing", "Robot Palletizers"]
   );
   await waitForMachineDiagnostics(page, 1);
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
   const machineId = (await getMachineIds(page))[0];
-  const elevationInput = page.getByRole("textbox", { name: "Elevation", exact: true });
-  await elevationInput.fill("5000");
-  await elevationInput.press("Tab");
-  const elevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-  const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
+  const elevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
 
-  const cameraPitches = [
-    { name: "clearly-above", beta: 0.8, captures: [] },
-    { name: "moderate-above", beta: 1.1, captures: [
-      "23-plan-drag-camera-above.png",
-      "26-machine-grab-lock-camera-above.png",
-      "30-drag-stable-moderate-camera.png"
-    ] },
-    { name: "shallow-above", beta: 1.42, captures: ["31-drag-stable-shallow-camera.png"] },
-    { name: "near-level", beta: 1.565, captures: [] },
-    { name: "shallow-below", beta: 1.59, captures: [] },
-    { name: "moderate-below", beta: 2.05, captures: [
-      "24-plan-drag-camera-below.png",
-      "27-machine-grab-lock-camera-below.png",
-      "32-drag-stable-camera-below.png"
-    ] },
-    { name: "clearly-below", beta: 2.5, captures: [] }
-  ] as const;
-  let previousGain: number | null = null;
-  let previousDiagnostic: DiagnosticGrabLock | null = null;
-  for (const cameraPitch of cameraPitches) {
+  const beforeX = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  await dragPlanMoveHandle(page, "x", 54, 0);
+  const afterX = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(afterX.xMm).not.toBe(beforeX.xMm);
+  expect(afterX.yMm).toBe(beforeX.yMm);
+
+  await dragPlanMoveHandle(page, "plan-y", 0, 54);
+  const afterY = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(afterY.xMm).toBe(afterX.xMm);
+  expect(afterY.yMm).not.toBe(afterX.yMm);
+
+  const beforePlane = afterY;
+  await dragPlanMoveHandle(page, "plane", 42, 34);
+  const afterPlane = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(afterPlane.xMm).not.toBe(beforePlane.xMm);
+  expect(afterPlane.yMm).not.toBe(beforePlane.yMm);
+  await page.keyboard.press("Control+z");
+  await expect.poll(async () => (
+    await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  )[machineId]).toEqual(beforePlane);
+  await page.keyboard.press("Control+y");
+  await expect.poll(async () => (
+    await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+  )[machineId]).toEqual(afterPlane);
+
+  for (const beta of [0.8, 1.1, 1.42, 1.565, 2.3]) {
+    const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
     expect(await applyRuntimeViewportCameraState(page, {
       mode: "perspective",
       alpha: 0.78,
-      beta: cameraPitch.beta,
-      radius: 12,
+      beta,
+      radius: 18,
       targetX: plan.xMm / 1000,
-      targetY: cameraPitch.name === "clearly-below" ? 10 : 6.35,
+      targetY: 1,
       targetZ: plan.yMm / 1000
     })).toBe(true);
     await waitForSceneRenderFrames(page);
-
-    const moved = await dragEntityAndUndo({
-      page,
-      entityId: machineId,
-      recordAttribute: "data-machine-plan-positions",
-      getBounds: () => getMachineScreenBounds(page, machineId),
-      deltaX: 28,
-      deltaY: 22,
-      relativeHeight: 0.5,
-      steps: 2,
-      label: cameraPitch.name,
-      beforeUndo: async () => {
-        for (const capture of cameraPitch.captures) {
-          await capturePf3aScreenshot(page, capture);
-        }
-      }
-    });
-    const diagnostic = await readDiagnosticGrabLock(page);
-    const rightMovement = moved.xMm / 1000 * diagnostic.planRight.x
-      + moved.yMm / 1000 * diagnostic.planRight.z;
-    const forwardMovement = moved.xMm / 1000 * diagnostic.planForward.x
-      + moved.yMm / 1000 * diagnostic.planForward.z;
-    const gain = Math.hypot(moved.xMm, moved.yMm) / Math.hypot(28, 22);
-    expect(gain, JSON.stringify({ pitch: cameraPitch.name, gain, diagnostic })).toBeLessThanOrEqual(60);
-    expect([moved.xMm, moved.yMm, gain].every(Number.isFinite)).toBe(true);
-    expect(rightMovement).toBeGreaterThanOrEqual(-0.001);
-    expect(forwardMovement).toBeGreaterThanOrEqual(-0.001);
-    expect(Math.hypot(moved.xMm, moved.yMm)).toBeGreaterThan(0);
-    expect(Math.hypot(moved.xMm, moved.yMm)).toBeLessThan(10_000);
-    if (previousGain !== null) {
-      const gainRatio = Math.max(gain, previousGain) / Math.max(Math.min(gain, previousGain), 0.001);
-      expect(gainRatio, JSON.stringify({
-        pitch: cameraPitch.name,
-        gain,
-        previousGain,
-        diagnostic,
-        previousDiagnostic
-      }))
-        .toBeLessThanOrEqual(4);
-    }
-    previousGain = gain;
-    previousDiagnostic = diagnostic;
+    const before = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    await dragPlanMoveHandle(page, "plane", 28, beta > Math.PI / 2 ? -20 : 20);
+    const after = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    expect(Math.hypot(after.xMm - before.xMm, after.yMm - before.yMm)).toBeGreaterThan(0);
+    await page.keyboard.press("Control+z");
+    await expect.poll(async () => (
+      await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
+    )[machineId]).toEqual(before);
   }
 
+  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).check();
+  const snapBefore = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  await dragPlanMoveHandle(page, "x", 39, 0);
+  const snapAfter = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(Math.abs(snapAfter.xMm % 100)).toBe(0);
+  expect(snapAfter.yMm).toBe(snapBefore.yMm);
   expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(elevationBefore);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  await capturePf3aScreenshot(page, "34-plan-move-machine.png");
   expect(errors).toEqual([]);
 });
 
-test("perspective plan drag stays intuitive through 20 m and 50 m column pitch sweeps", async ({ page }) => {
+test("near-parallel body drag stays unavailable while Plan Move remains usable", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const { machineIds } = await createTwoMachineAssembly(page, "Near Parallel Assembly");
+  const machineId = machineIds[0];
+  const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const renderTransform = await readCanvasRecord<{ box: number[] }>(page, "data-machine-render-transforms");
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: 0.78,
+    beta: Math.PI / 2,
+    radius: 18,
+    targetX: before[machineId].xMm / 1000,
+    targetY: renderTransform[machineId].box[1],
+    targetZ: before[machineId].yMm / 1000
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: 0.78,
+    beta: Math.PI / 2,
+    radius: 18,
+    targetX: before[machineId].xMm / 1000,
+    targetY: renderTransform[machineId].box[1],
+    targetZ: before[machineId].yMm / 1000
+  })).toBe(true);
+  expect((await getRuntimeViewportSnapshot(page)).camera?.beta).toBeCloseTo(Math.PI / 2, 5);
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(false);
+  await dragSceneMachine(page, machineId, 90, 0);
+  await expect(page.getByLabel("AtrVisu 3D workspace")).toHaveAttribute("data-last-machine-drag-preflight", "false");
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(true);
+  await dragPlanMoveHandle(page, "x", 28, 0);
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).not.toEqual(before);
+  expect(errors).toEqual([]);
+});
+
+test("Plan Move Manipulator moves Civil, rigid Group, and independent selection atomically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await addCanonicalAtaraMachine(
+    page,
+    "Flow Pack Machine",
+    ["Primary Packaging", "Horizontal Flow Pack"]
+  );
+  await waitForMachineDiagnostics(page, 1);
+  const machineId = (await getMachineIds(page))[0];
+
+  await openPrimaryDockPanel(page, "panel.groups");
+  page.once("dialog", (dialog) => dialog.accept("Plan Move Group"));
+  await page.getByTestId("create-group-from-selection").click();
+  const group = page.locator(".assembly-group-row").filter({ hasText: "Plan Move Group" });
+
   const insertMenu = await openWorkbenchMenu(page, "Insert");
   await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
   await expect.poll(async () => Object.keys(
@@ -4807,116 +4597,67 @@ test("perspective plan drag stays intuitive through 20 m and 50 m column pitch s
   ).length).toBe(1);
   const civilId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
   const heightInput = page.getByRole("textbox", { name: "Civil Height", exact: true });
-  const elevationBefore = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
-
   for (const heightMm of [20_000, 50_000]) {
     await heightInput.fill(String(heightMm));
     await heightInput.press("Tab");
-    const plan = (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[civilId];
-    const targetY = heightMm / 2000;
-    const pitchSweep = heightMm === 20_000
-      ? [0.65, 1.1, 1.42, 1.565, 1.59, 2.05, 2.2]
-      : [1.1, 2.05];
-    for (const beta of pitchSweep) {
-      const cameraTargetY = beta >= 2.2
-        ? targetY + 12
-        : beta > Math.PI / 2
-          ? targetY + 10
-          : targetY;
-      expect(await applyRuntimeViewportCameraState(page, {
-        mode: "perspective",
-        alpha: 1.35,
-        beta,
-        radius: heightMm === 20_000 ? 28 : 60,
-        targetX: plan.xMm / 1000,
-        targetY: cameraTargetY,
-        targetZ: plan.yMm / 1000
-      })).toBe(true);
-      await waitForSceneRenderFrames(page);
-
-      const moved = await dragEntityAndUndo({
-        page,
-        entityId: civilId,
-        recordAttribute: "data-civil-plan-positions",
-        getBounds: () => beta > 1.8 && heightMm === 20_000
-          ? getCivilScreenBounds(page, civilId)
-          : getCivilCenterGrabBounds(page, civilId),
-        deltaX: 24,
-        deltaY: 20,
-        relativeHeight: beta > 1.8 && heightMm === 20_000 ? 0.2 : 0.5,
-        beforeUndo: heightMm === 50_000 && beta === 2.05
-          ? () => capturePf3aScreenshot(page, "28-civil-grab-lock-elevated.png")
-          : undefined,
-        label: `${heightMm}/${beta}/well-conditioned-vertical`
-      });
-      const diagnostic = await readDiagnosticGrabLock(page);
-      const rightMovement = moved.xMm / 1000 * diagnostic.planRight.x
-        + moved.yMm / 1000 * diagnostic.planRight.z;
-      const forwardMovement = moved.xMm / 1000 * diagnostic.planForward.x
-        + moved.yMm / 1000 * diagnostic.planForward.z;
-      expect(rightMovement).toBeGreaterThanOrEqual(-0.001);
-      expect(forwardMovement).toBeGreaterThanOrEqual(-0.001);
-      expect(Math.hypot(moved.xMm, moved.yMm)).toBeGreaterThan(0);
-      expect(Math.hypot(moved.xMm, moved.yMm)).toBeLessThan(80_001);
-    }
-  }
-
-  expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(elevationBefore);
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-  expect(errors).toEqual([]);
-});
-
-test("perspective grab-point drag preserves an elevated standard machine", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await openCleanApp(page);
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-
-  await addCanonicalAtaraMachine(
-    page,
-    "Flow Pack Machine",
-    ["Primary Packaging", "Horizontal Flow Pack"]
-  );
-  await waitForMachineDiagnostics(page, 1);
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
-  const machineId = (await getMachineIds(page))[0];
-  const elevationInput = page.getByRole("textbox", { name: "Elevation", exact: true });
-  await elevationInput.fill("25000");
-  await elevationInput.press("Tab");
-  const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-  for (const beta of [0.8, 2.3]) {
+    const elevationBefore = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
+    const before = (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[civilId];
     expect(await applyRuntimeViewportCameraState(page, {
       mode: "perspective",
       alpha: 0.78,
-      beta,
-      radius: 28,
-      targetX: plan.xMm / 1000,
-      targetY: 20,
-      targetZ: plan.yMm / 1000
+      beta: 1.1,
+      radius: Math.max(24, heightMm / 800),
+      targetX: before.xMm / 1000,
+      targetY: heightMm / 2000,
+      targetZ: before.yMm / 1000
     })).toBe(true);
     await waitForSceneRenderFrames(page);
-    const standardMove = await dragEntityAndUndo({
-      page,
-      entityId: machineId,
-      recordAttribute: "data-machine-plan-positions",
-      getBounds: () => getMachineScreenBounds(page, machineId),
-      deltaX: 24,
-      deltaY: beta < Math.PI / 2 ? 32 : -32,
-      relativeHeight: 0.2
-    });
-    expect(Math.hypot(standardMove.xMm, standardMove.yMm)).toBeGreaterThan(0);
+    const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+    await dragPlanMoveHandle(page, "plane", 36, 24);
+    const after = (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[civilId];
+    expect(getPlanDelta(before, after)).not.toEqual({ xMm: 0, yMm: 0 });
+    expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(elevationBefore);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+    await page.keyboard.press("Control+z");
   }
-  expect((await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[machineId]).toBe(25_000);
+  await capturePf3aScreenshot(page, "35-plan-move-civil.png");
+
+  await openPrimaryDockPanel(page, "panel.groups");
+  await group.getByRole("button", { name: /^Add Selected to / }).click();
+  await group.locator(".assembly-group-button").click();
+  const beforeGroupMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const beforeGroupCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  await dragPlanMoveHandle(page, "plane", 46, 28);
+  const afterGroupMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const afterGroupCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  expect(getPlanDelta(beforeGroupMachines[machineId], afterGroupMachines[machineId]))
+    .toEqual(getPlanDelta(beforeGroupCivil[civilId], afterGroupCivil[civilId]));
+  await page.keyboard.press("Control+z");
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(beforeGroupMachines);
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")).toEqual(beforeGroupCivil);
+  await capturePf3aScreenshot(page, "36-plan-move-group.png");
+
+  await group.getByRole("button", { name: /Edit Group Plan Move Group/ }).click();
+  await page.keyboard.down("Control");
+  await clickSceneMachine(page, machineId);
+  await page.keyboard.up("Control");
+  const independentBeforeMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const independentBeforeCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await dragPlanMoveHandle(page, "plane", 32, 18);
+  const independentAfterMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  const independentAfterCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  expect(getPlanDelta(independentBeforeMachines[machineId], independentAfterMachines[machineId]))
+    .toEqual(getPlanDelta(independentBeforeCivil[civilId], independentAfterCivil[civilId]));
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
 
-test("perspective grab-point drag preserves an elevated imported GLB machine", async ({ page }) => {
+test("Plan Move Manipulator moves an imported GLB without changing elevation", async ({ page }) => {
   const errors = await startNativeAssetTest(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
   await openProjects(page);
-  await page.getByTestId("new-project-name").fill("Height Agnostic Drag Project");
+  await page.getByTestId("new-project-name").fill("Plan Move Imported Asset");
   await page.getByTestId("new-customer-name").fill("E2E Customer");
   await page.getByTestId("create-project").click();
   await page.getByTestId("close-project-manager").click();
@@ -4928,151 +4669,28 @@ test("perspective grab-point drag preserves an elevated imported GLB machine", a
   await library.getByRole("button", { name: "Add Imported Test Equipment to layout", exact: true }).click();
   await expectNativeRealModel(page);
   const machineId = (await getMachineIds(page)).at(-1) ?? "";
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
   const elevationInput = page.getByRole("textbox", { name: "Elevation", exact: true });
   await elevationInput.fill("25000");
   await elevationInput.press("Tab");
-  const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-  for (const beta of [0.8, 2.3]) {
-    expect(await applyRuntimeViewportCameraState(page, {
-      mode: "perspective",
-      alpha: 0.78,
-      beta,
-      radius: 28,
-      targetX: plan.xMm / 1000,
-      targetY: 20,
-      targetZ: plan.yMm / 1000
-    })).toBe(true);
-    await waitForSceneRenderFrames(page);
-    const importedMove = await dragEntityAndUndo({
-      page,
-      entityId: machineId,
-      recordAttribute: "data-machine-plan-positions",
-      getBounds: () => getMachineScreenBounds(page, machineId),
-      deltaX: 24,
-      deltaY: beta < Math.PI / 2 ? 32 : -32,
-      relativeHeight: 0.2
-    });
-    expect(Math.hypot(importedMove.xMm, importedMove.yMm)).toBeGreaterThan(0);
-  }
-  expect((await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[machineId]).toBe(25_000);
-  expectDiagnosticPointerCoherence(await readDiagnosticGrabLock(page));
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-  await capturePf3aScreenshot(page, "21-elevated-machine-drag.png");
-  expect(errors).toEqual([]);
-});
-
-test("mixed-elevation group drag is rigid from low and high members", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await openCleanApp(page);
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  await page.locator(".machine-card").first().click();
-  await waitForMachineDiagnostics(page, 1);
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
-  const machineId = (await getMachineIds(page))[0];
-  await openPrimaryDockPanel(page, "panel.groups");
-  page.once("dialog", async (dialog) => dialog.accept("Mixed Height Drag Group"));
-  await page.getByTestId("create-group-from-selection").click();
-  const group = page.locator(".assembly-group-row").filter({ hasText: "Mixed Height Drag Group" });
-  const insertMenu = await openWorkbenchMenu(page, "Insert");
-  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
-  await expect.poll(async () => Object.keys(
-    await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")
-  ).length).toBe(1);
-  const resolvedCivilId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
-  await page.getByRole("textbox", { name: "Civil Elevation", exact: true }).fill("25000");
-  await page.getByRole("textbox", { name: "Civil Elevation", exact: true }).press("Tab");
-  await openPrimaryDockPanel(page, "panel.groups");
-  await group.getByRole("button", { name: /^Add Selected to / }).click();
-  await group.locator(".assembly-group-button").click();
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-  const machinePlan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-  const assertRigidGroupDrag = async (
-    bounds: ScreenBounds,
-    relativeHeight: number,
-    deltaX: number,
-    deltaY: number,
-    captureFileName?: string
-  ) => {
-    const beforeMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
-    const beforeCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
-    const machineElevations = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
-    const civilElevations = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
-    const diagnostic = await dragSceneEntityWithGrabLock({
-      page,
-      bounds,
-      deltaX,
-      deltaY,
-      relativeHeight
-    });
-    await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
-    const afterMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
-    const afterCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
-    const machineDelta = getPlanDelta(beforeMachines[machineId], afterMachines[machineId]);
-    expect(machineDelta).toEqual(getPlanDelta(beforeCivil[resolvedCivilId], afterCivil[resolvedCivilId]));
-    expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(machineElevations);
-    expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(civilElevations);
-    if (captureFileName) {
-      await capturePf3aScreenshot(page, captureFileName);
-    }
-    await page.keyboard.press("Control+z");
-    await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(beforeMachines);
-    await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")).toEqual(beforeCivil);
-    return { diagnostic, machineDelta };
-  };
-
-  for (const beta of [0.95, 1.2]) {
-    await group.locator(".assembly-group-button").click();
-    await expect(canvas).toHaveAttribute("data-selected-assembly-id", /.+/);
-    expect(await applyRuntimeViewportCameraState(page, {
-      mode: "perspective",
-      alpha: 0.78,
-      beta,
-      radius: 40,
-      targetX: machinePlan.xMm / 1000,
-      targetY: 15,
-      targetZ: machinePlan.yMm / 1000
-    })).toBe(true);
-    await waitForSceneRenderFrames(page);
-    const { diagnostic, machineDelta } = await assertRigidGroupDrag(
-      await getMachineScreenBounds(page, machineId),
-      0.5,
-      24,
-      20
-    );
-    const rightMovement = machineDelta.xMm / 1000 * diagnostic.planRight.x
-      + machineDelta.yMm / 1000 * diagnostic.planRight.z;
-    const forwardMovement = machineDelta.xMm / 1000 * diagnostic.planForward.x
-      + machineDelta.yMm / 1000 * diagnostic.planForward.z;
-    expect(rightMovement).toBeGreaterThanOrEqual(-0.001);
-    expect(forwardMovement).toBeGreaterThanOrEqual(-0.001);
-  }
-  await group.locator(".assembly-group-button").click();
-  await expect(canvas).toHaveAttribute("data-selected-assembly-id", /.+/);
+  const elevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
+  const before = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
   expect(await applyRuntimeViewportCameraState(page, {
     mode: "perspective",
     alpha: 0.78,
-    beta: 0.95,
-    radius: 40,
-    targetX: machinePlan.xMm / 1000,
-    targetY: 15,
-    targetZ: machinePlan.yMm / 1000
+    beta: 1.1,
+    radius: 18,
+    targetX: before.xMm / 1000,
+    targetY: 25.5,
+    targetZ: before.yMm / 1000
   })).toBe(true);
   await waitForSceneRenderFrames(page);
-  await assertRigidGroupDrag(
-    await getCivilScreenBounds(page, resolvedCivilId),
-    0.2,
-    0,
-    -45,
-    "29-group-grab-lock.png"
-  );
-  expectDiagnosticPointerCoherence(await readDiagnosticGrabLock(page));
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-  await capturePf3aScreenshot(page, "25-plan-drag-elevated-group.png");
-  await capturePf3aScreenshot(page, "22-high-mixed-group-drag.png");
+  await dragPlanMoveHandle(page, "plane", 38, 24);
+  const after = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(getPlanDelta(before, after)).not.toEqual({ xMm: 0, yMm: 0 });
+  expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(elevationBefore);
+  await capturePf3aScreenshot(page, "37-plan-move-imported-glb.png");
   expect(errors).toEqual([]);
 });
-
 test("locked assembly member blocks pointer drag and keyboard nudge atomically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -6824,15 +6442,13 @@ test("PF-3A iconography keeps compact actions accessible while preserving engine
 test("PF-3A Inspector modes and group selection avoid React update-depth feedback", async ({ page }) => {
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await seedUiPreferences(page, createE2EUiPreferences({
-    width: 360,
-    primaryDockWidth: 292,
-    panelOverrides: {
-      "panel.rightPanelShell": { visible: true, collapsed: false },
-      "panel.primaryDockShell": { visible: true, collapsed: false },
-      "panel.inspector": { visible: true, collapsed: false }
-    }
-  }));
+  await page.addInitScript(() => {
+    if (window.sessionStorage.getItem("atrvisu.e2e.pf3aLegacySeeded") === "true") return;
+    window.localStorage.clear();
+    window.localStorage.setItem("atrvisu.rightPanelWidth.v1", "360");
+    window.localStorage.setItem("atrvisu.panelSection.layers.v1", "expanded");
+    window.sessionStorage.setItem("atrvisu.e2e.pf3aLegacySeeded", "true");
+  });
   await page.goto("/?e2eDiagnostics=1");
   await expect(page.getByTestId("app-root")).toBeVisible();
   await waitForUiPreferences(page);
@@ -6907,6 +6523,21 @@ test("PF-3A Inspector modes and group selection avoid React update-depth feedbac
   await page.getByRole("button", { name: "Close Advanced Alignment", exact: true }).click();
   await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
   await expect(inspector).toHaveCount(0);
+
+  await openPrimaryDockPanel(page, "panel.groups");
+  await group.locator(".assembly-group-button").click();
+  const positionsBeforeManipulator = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
+  await dragPlanMoveHandle(page, "x", 32, 0);
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))
+    .not.toEqual(positionsBeforeManipulator);
+
+  await page.reload();
+  await expect(page.getByTestId("app-root")).toBeVisible();
+  await waitForUiPreferences(page);
+  await expect(page.getByTestId("editor-host")).toHaveCount(1);
+  await expect(page.locator("canvas.scene-canvas")).toHaveCount(1);
+  expect(await page.evaluate(() => window.localStorage.getItem("atrvisu.rightPanelWidth.v1"))).toBeNull();
+  await capturePf3aScreenshot(page, "38-console-clean-migrated-current-session.png");
 
   await page.setViewportSize({ width: 640, height: 800 });
   await page.getByRole("button", { name: /Open Groups|Open Library/, exact: true }).click();

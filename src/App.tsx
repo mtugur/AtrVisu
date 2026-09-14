@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import type { PlanMovePositionUpdates } from "./components/babylonScene/planMoveManipulator";
 import { EditorHost } from "./components/EditorHost";
 import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
 import { HelpModal, type HelpSection } from "./components/HelpModal";
@@ -24,6 +25,7 @@ import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDoc
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
 import {
+  getInspectorSelectionSignature,
   isResponsiveInspectorPresentation,
   isResponsivePrimaryDockPresentation,
   resolveInspectorPresentationCollapsed,
@@ -2014,12 +2016,14 @@ export function App() {
     }
   }, [setPanelSectionExpansionPreservingVisibility]);
 
-  const previousInspectorSelectionRef = useRef(runtimeSelection);
+  const runtimeSelectionSignature = getInspectorSelectionSignature(runtimeSelection.ids);
+  // Auto presentation reacts to canonical selection meaning, not a recreated selection object.
+  const previousInspectorSelectionSignatureRef = useRef(runtimeSelectionSignature);
   const previousInspectorVisibilityModeRef = useRef(inspectorVisibilityMode);
   useEffect(() => {
-    const selectionChanged = previousInspectorSelectionRef.current !== runtimeSelection;
+    const selectionChanged = previousInspectorSelectionSignatureRef.current !== runtimeSelectionSignature;
     const modeChanged = previousInspectorVisibilityModeRef.current !== inspectorVisibilityMode;
-    previousInspectorSelectionRef.current = runtimeSelection;
+    previousInspectorSelectionSignatureRef.current = runtimeSelectionSignature;
     previousInspectorVisibilityModeRef.current = inspectorVisibilityMode;
     if (inspectorVisibilityMode !== "auto" || (!selectionChanged && !modeChanged)) {
       return;
@@ -2033,7 +2037,8 @@ export function App() {
     closeInspectorPresentation,
     inspectorVisibilityMode,
     openInspectorPresentation,
-    runtimeSelection
+    runtimeSelection.ids.length,
+    runtimeSelectionSignature
   ]);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
@@ -2749,6 +2754,81 @@ export function App() {
       mutate: () => {
         placedMachinesRef.current = nextMachines;
         setPlacedMachines(nextMachines);
+      }
+    });
+    return mutation.allowed ? "applied" as const : "blocked" as const;
+  }, [markLayoutChanged]);
+
+  const setSelectionPlanPositions = useCallback((
+    updates: PlanMovePositionUpdates,
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    const currentSelection = runtimeSelectionRef.current;
+    const currentEntities = platformEntitiesRef.current;
+    const projectedSelection = projectRuntimeSelection(currentSelection, currentEntities);
+    const expectedEntityIds = new Set(projectedSelection.selectedAlignableEntityIds);
+    const updateEntityIds = [
+      ...updates.machines.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
+      ...updates.civilReferences.map((update) => createLegacyPlatformEntityId("civil", update.id))
+    ];
+    const uniqueUpdateEntityIds = new Set(updateEntityIds);
+    if (
+      updateEntityIds.length === 0
+      || updateEntityIds.length !== expectedEntityIds.size
+      || uniqueUpdateEntityIds.size !== updateEntityIds.length
+      || updateEntityIds.some((entityId) => !expectedEntityIds.has(entityId))
+      || [...expectedEntityIds].some((entityId) => !uniqueUpdateEntityIds.has(entityId))
+      || updates.machines.some((update) => !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm))
+      || updates.civilReferences.some((update) => !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm))
+    ) {
+      return "blocked" as const;
+    }
+
+    const currentMachines = placedMachinesRef.current;
+    const currentCivilReferences = civilReferencesRef.current;
+    if (
+      updates.machines.some((update) => !currentMachines.some((machine) => machine.instanceId === update.instanceId))
+      || updates.civilReferences.some((update) => !currentCivilReferences.some((item) => item.id === update.id))
+    ) {
+      return "blocked" as const;
+    }
+
+    const nextMachines = applyMachinePositionUpdates(currentMachines, [...updates.machines]);
+    const civilUpdates = new Map(updates.civilReferences.map((update) => [update.id, update]));
+    const nextCivilReferences = currentCivilReferences.map((item) => {
+      const update = civilUpdates.get(item.id);
+      return update
+        ? { ...item, positionMm: { ...item.positionMm, xMm: update.xMm, yMm: update.yMm } }
+        : item;
+    });
+    const changed = nextMachines.some((machine, index) => {
+      const before = getMachinePlanPositionMm(currentMachines[index]);
+      const after = getMachinePlanPositionMm(machine);
+      return before.xMm !== after.xMm || before.yMm !== after.yMm;
+    }) || nextCivilReferences.some((item, index) =>
+      item.positionMm.xMm !== currentCivilReferences[index].positionMm.xMm
+      || item.positionMm.yMm !== currentCivilReferences[index].positionMm.yMm
+    );
+    if (!changed) {
+      return "noop" as const;
+    }
+
+    const affectedEntityIds = getAtomicMovementEntityIds(
+      currentSelection,
+      updateEntityIds,
+      true,
+      currentEntities,
+      activeGroupEditIdRef.current
+    );
+    const mutation = executeAtomicSelectionMutation({
+      entityIds: affectedEntityIds,
+      entities: currentEntities,
+      beforeMutation: () => markLayoutChanged(options),
+      mutate: () => {
+        placedMachinesRef.current = nextMachines;
+        civilReferencesRef.current = nextCivilReferences;
+        setPlacedMachines(nextMachines);
+        setCivilReferences(nextCivilReferences);
       }
     });
     return mutation.allowed ? "applied" as const : "blocked" as const;
@@ -4676,6 +4756,7 @@ export function App() {
             primarySelectedMachineId={primarySelectedMachineId}
             selectedCivilReferenceId={selectedCivilReferenceId}
             selectedCivilReferenceIds={selectedCivilReferenceIds}
+            selectedPlanEntityIds={selectedAlignableEntityIds}
             selectedAnnotationId={selectedAnnotationId}
             lockedMachineIds={lockedMachineIds}
             lockedCivilReferenceIds={lockedCivilReferenceIds}
@@ -4690,7 +4771,9 @@ export function App() {
             onSetMachinePositions={setMachinePositions}
             onSetAnnotationPosition={setAnnotationPosition}
             onSetCivilReferencePosition={setCivilReferencePosition}
+            onSetSelectionPlanPositions={setSelectionPlanPositions}
             canBeginObjectDrag={canBeginObjectDrag}
+            placementSettings={placementSettings}
             isSimulationRunning={isSimulationRunning}
             simulationSpeed={simulationSpeed}
             overlaySettings={overlaySettings}

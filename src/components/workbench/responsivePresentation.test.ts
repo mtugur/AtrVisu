@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getInspectorSelectionSignature,
   isResponsiveInspectorPresentation,
   isResponsivePrimaryDockPresentation,
   resolveInspectorPresentationCollapsed,
@@ -7,6 +8,13 @@ import {
 } from "./responsivePresentation";
 
 describe("responsive workbench presentation", () => {
+  it("uses ordered semantic selection identity instead of render-volatile snapshot identity", () => {
+    expect(getInspectorSelectionSignature(["machine:a", "civil:b"]))
+      .toBe(getInspectorSelectionSignature(["machine:a", "civil:b"]));
+    expect(getInspectorSelectionSignature(["civil:b", "machine:a"]))
+      .not.toBe(getInspectorSelectionSignature(["machine:a", "civil:b"]));
+  });
+
   it("collapses the Inspector presentation by default at the 1024-class breakpoint", () => {
     expect(isResponsiveInspectorPresentation(1024)).toBe(true);
     expect(resolveInspectorPresentationCollapsed({
