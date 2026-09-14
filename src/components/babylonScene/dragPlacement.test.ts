@@ -62,6 +62,11 @@ const scale = (point: Vector3Like, amount: number): Vector3Like => ({
 const dot = (left: Vector3Like, right: Vector3Like) =>
   left.x * right.x + left.y * right.y + left.z * right.z;
 
+const dotPlanPointsForTest = (
+  left: { x: number; z: number },
+  right: { x: number; z: number }
+) => left.x * right.x + left.z * right.z;
+
 const cross = (left: Vector3Like, right: Vector3Like): Vector3Like => ({
   x: left.y * right.z - left.z * right.y,
   y: left.z * right.x - left.x * right.z,
@@ -100,13 +105,13 @@ const projectToScreen = (camera: TestCamera, point: Vector3Like): ScreenPointCss
     const verticalSpan = camera.orthographicVerticalSpan ?? 20;
     return {
       x: width / 2 + cameraX * height / verticalSpan,
-      y: height / 2 - cameraY * height / verticalSpan
+      y: height / 2 + cameraY * height / verticalSpan
     };
   }
   const tangent = Math.tan((camera.verticalFovRadians ?? Math.PI / 3) / 2);
   return {
     x: width / 2 + cameraX / (cameraZ * tangent) * height / 2,
-    y: height / 2 - cameraY / (cameraZ * tangent) * height / 2
+    y: height / 2 + cameraY / (cameraZ * tangent) * height / 2
   };
 };
 
@@ -115,7 +120,7 @@ const createPointerRay = (camera: TestCamera, pointer: ScreenPointCss) => {
   const height = camera.height ?? 800;
   const { forward, right, up } = getCameraAxes(camera);
   const normalizedX = (pointer.x - width / 2) / (height / 2);
-  const normalizedY = -(pointer.y - height / 2) / (height / 2);
+  const normalizedY = (pointer.y - height / 2) / (height / 2);
   if (camera.mode === "orthographic") {
     const verticalSpan = camera.orthographicVerticalSpan ?? 20;
     return {
@@ -146,11 +151,23 @@ const createProjection = (
     throw new Error("Expected anchor to project in front of the test camera.");
   }
   const ray = createPointerRay(camera, pointer);
+  const axes = getCameraAxes(camera);
+  const planForwardLength = Math.hypot(axes.forward.x, axes.forward.z);
+  const planForward = {
+    x: -axes.forward.x / planForwardLength,
+    z: -axes.forward.z / planForwardLength
+  };
   const projection = createPlanDragProjection({
     rayOrigin: ray.origin,
     rayDirection: ray.direction,
     pickedPoint: anchorPoint,
-    maxIncrementMeters
+    pointerScreen: pointer,
+    planRight: { x: axes.right.x, z: axes.right.z },
+    planForward,
+    projectedObjectSizePx: 120,
+    targetPlanSizeMeters: 4,
+    maxIncrementMeters,
+    projectToScreen: (point) => projectToScreen(camera, point)
   });
   if (!projection) {
     throw new Error("Expected a valid plan-drag projection.");
@@ -187,11 +204,15 @@ const expectGrabLock = (
   const { pointer, projection } = createProjection(camera, anchorPoint);
   const target = { x: pointer.x + deltaX, y: pointer.y + deltaY };
   const frame = resolveFrame(camera, projection, target);
-  expect(frame.pointerErrorPx, label).toBeLessThanOrEqual(2);
-  expect(projectToScreen(camera, frame.anchorPoint)).toEqual(expect.objectContaining({
-    x: expect.closeTo(target.x, 5),
-    y: expect.closeTo(target.y, 5)
-  }));
+  if (frame.mode === "horizontal") {
+    expect(frame.pointerErrorPx, label).toBeLessThanOrEqual(2);
+    expect(projectToScreen(camera, frame.anchorPoint)).toEqual(expect.objectContaining({
+      x: expect.closeTo(target.x, 5),
+      y: expect.closeTo(target.y, 5)
+    }));
+  } else {
+    expect(frame.pointerErrorPx, label).toBeLessThanOrEqual(projection.coherenceLimitPx);
+  }
   expect(frame.anchorPoint.y).toBe(anchorPoint.y);
   expect([frame.deltaMeters.x, frame.deltaMeters.z].every(Number.isFinite)).toBe(true);
   return frame;
@@ -246,7 +267,13 @@ describe("drag placement helpers", () => {
       rayOrigin: { x: 0, y: 10, z: 10 },
       rayDirection: { x: 0, y: -1, z: -1 },
       pickedPoint: { x: Number.NaN, y: 0, z: 0 },
-      maxIncrementMeters: 4
+      pointerScreen: { x: 0, y: 0 },
+      planRight: { x: 1, z: 0 },
+      planForward: { x: 0, z: -1 },
+      projectedObjectSizePx: 100,
+      targetPlanSizeMeters: 4,
+      maxIncrementMeters: 4,
+      projectToScreen: () => ({ x: 0, y: 0 })
     })).toBeNull();
   });
 
@@ -322,7 +349,7 @@ describe("drag placement helpers", () => {
           x: created.pointer.x + 35,
           y: created.pointer.y + deltaY
         });
-        expect(frame.mode).toBe("screen-jacobian");
+        expect(frame.mode).toBe("screen-stable");
         expect([frame.deltaMeters.x, frame.deltaMeters.z, frame.pointerErrorPx].every(Number.isFinite)).toBe(true);
         if (previous) {
           expect(Math.hypot(
@@ -358,6 +385,51 @@ describe("drag placement helpers", () => {
       leaving.deltaMeters.x - near.deltaMeters.x,
       leaving.deltaMeters.z - near.deltaMeters.z
     )).toBeLessThanOrEqual(2.000001);
+  });
+
+  it("keeps drag direction finite bounded and pitch-stable across azimuth sweeps", () => {
+    const anchor = { x: 1.25, y: 4, z: -1.5 };
+    const verticalOffsets = [24, 12, 4, 0.5, -0.5, -4, -12, -24];
+    for (const alpha of [0.35, 1.1, 2.45]) {
+      let previousGain: number | null = null;
+      for (const verticalOffset of verticalOffsets) {
+        const camera: TestCamera = {
+          mode: "perspective",
+          position: {
+            x: anchor.x + Math.sin(alpha) * 35,
+            y: anchor.y + verticalOffset,
+            z: anchor.z + Math.cos(alpha) * 35
+          },
+          target: { ...anchor }
+        };
+        const created = createProjection(camera, anchor, 2);
+        const target = {
+          x: created.pointer.x + 28,
+          y: created.pointer.y + 22
+        };
+        const frame = resolveFrame(camera, created.projection, target);
+        const components = {
+          right: dotPlanPointsForTest(frame.deltaMeters, created.projection.planRight),
+          forward: dotPlanPointsForTest(frame.deltaMeters, created.projection.planForward)
+        };
+        const gain = Math.hypot(frame.deltaMeters.x, frame.deltaMeters.z) / Math.hypot(28, 22);
+        expect([frame.deltaMeters.x, frame.deltaMeters.z, gain].every(Number.isFinite)).toBe(true);
+        expect(components.right).toBeGreaterThanOrEqual(-0.000000001);
+        expect(components.forward).toBeGreaterThanOrEqual(-0.000000001);
+        expect(gain).toBeLessThanOrEqual(created.projection.maxIncrementMeters / 8);
+        expect(frame.anchorPoint.y).toBe(anchor.y);
+        if (frame.mode === "horizontal") {
+          expect(frame.pointerErrorPx).toBeLessThanOrEqual(2);
+        } else {
+          expect(frame.pointerErrorPx).toBeLessThanOrEqual(created.projection.coherenceLimitPx);
+        }
+        if (previousGain !== null) {
+          const ratio = Math.max(gain, previousGain) / Math.max(Math.min(gain, previousGain), 0.000001);
+          expect(ratio).toBeLessThanOrEqual(4);
+        }
+        previousGain = gain;
+      }
+    }
   });
 
   it("covers machine imported GLB civil and mixed-elevation anchor matrices", () => {
@@ -415,7 +487,7 @@ describe("drag placement helpers", () => {
     const updates = calculateMachineDragPositionUpdates(machineState, frame.deltaMeters);
     expect(updates[0].xMm + 800).toBeCloseTo(civil.xMm);
     expect(updates[0].yMm - 200).toBeCloseTo(civil.yMm);
-    expect(updates[1].xMm - updates[0].xMm).toBe(1250);
+    expect(updates[1].xMm - updates[0].xMm).toBeCloseTo(1250);
     expect(updates[2].yMm - updates[1].yMm).toBeCloseTo(2000);
   });
 

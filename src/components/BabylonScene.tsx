@@ -1118,6 +1118,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.lastDragPointerScreen;
         delete canvas.dataset.lastDragResolveStatus;
         delete canvas.dataset.lastDragFrameGeneration;
+        delete canvas.dataset.lastDragJacobianDeterminant;
+        delete canvas.dataset.lastDragConditionNumber;
+        delete canvas.dataset.lastDragWorldMmPerCssPixel;
+        delete canvas.dataset.lastDragOrientationScore;
+        delete canvas.dataset.lastDragOrientationPreserving;
+        delete canvas.dataset.lastDragExactSafe;
+        delete canvas.dataset.lastDragCoherenceLimitPx;
+        delete canvas.dataset.lastDragPlanRight;
+        delete canvas.dataset.lastDragPlanForward;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -1680,6 +1689,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     const createPointerPlanDragProjection = (
       pickedPoint: Vector3 | null | undefined,
+      pickedMesh: AbstractMesh | null | undefined,
       event: PointerEvent | undefined
     ) => {
       const ray = createPointerRay(event);
@@ -1695,11 +1705,61 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         : activeCamera.radius;
       const maxIncrementMeters = Math.min(10, Math.max(0.5, (framingSpan ?? 20) * 0.25));
 
+      const cameraForward = activeCamera.position.subtract(activeCamera.getTarget());
+      cameraForward.y = 0;
+      if (cameraForward.lengthSquared() <= 0.000001) {
+        return null;
+      }
+      cameraForward.normalize();
+      const cameraRight = new Vector3(-cameraForward.z, 0, cameraForward.x);
+      const bounds = canvas.getBoundingClientRect();
+      const targetMetrics = (() => {
+        if (!pickedMesh) {
+          return { projectedObjectSizePx: 48, targetPlanSizeMeters: 4 };
+        }
+        const hierarchyBounds = pickedMesh.getHierarchyBoundingVectors(true);
+        const targetPlanSizeMeters = Math.max(0.05, Math.hypot(
+          hierarchyBounds.max.x - hierarchyBounds.min.x,
+          hierarchyBounds.max.z - hierarchyBounds.min.z
+        ));
+        const corners = [hierarchyBounds.min.x, hierarchyBounds.max.x].flatMap((x) =>
+          [hierarchyBounds.min.y, hierarchyBounds.max.y].flatMap((y) =>
+            [hierarchyBounds.min.z, hierarchyBounds.max.z].map((z) => ({ x, y, z }))
+          )
+        );
+        const projectedCorners = corners.flatMap((corner) => {
+          const projected = projectWorldPointToCanvasCss(corner);
+          return projected ? [projected] : [];
+        });
+        if (projectedCorners.length === 0) {
+          return { projectedObjectSizePx: 48, targetPlanSizeMeters };
+        }
+        const xValues = projectedCorners.map((point) => point.x);
+        const yValues = projectedCorners.map((point) => point.y);
+        return {
+          projectedObjectSizePx: Math.max(
+            Math.max(...xValues) - Math.min(...xValues),
+            Math.max(...yValues) - Math.min(...yValues),
+            1
+          ),
+          targetPlanSizeMeters
+        };
+      })();
+
       return createPlanDragProjection({
         rayOrigin: ray.origin,
         rayDirection: ray.direction,
         pickedPoint,
-        maxIncrementMeters
+        pointerScreen: {
+          x: (event?.clientX ?? bounds.left) - bounds.left,
+          y: (event?.clientY ?? bounds.top) - bounds.top
+        },
+        planRight: { x: cameraRight.x, z: cameraRight.z },
+        planForward: { x: cameraForward.x, z: cameraForward.z },
+        projectedObjectSizePx: targetMetrics.projectedObjectSizePx,
+        targetPlanSizeMeters: targetMetrics.targetPlanSizeMeters,
+        maxIncrementMeters,
+        projectToScreen: projectWorldPointToCanvasCss
       });
     };
 
@@ -1758,6 +1818,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         x: event.clientX - bounds.left,
         y: event.clientY - bounds.top
       });
+      canvas.dataset.lastDragJacobianDeterminant = String(frame.conditioning.determinant);
+      canvas.dataset.lastDragConditionNumber = String(frame.conditioning.conditionNumber);
+      canvas.dataset.lastDragWorldMmPerCssPixel = String(frame.conditioning.worldMmPerCssPixel);
+      canvas.dataset.lastDragOrientationScore = String(frame.conditioning.orientationScore);
+      canvas.dataset.lastDragOrientationPreserving = String(frame.conditioning.orientationPreserving);
+      canvas.dataset.lastDragExactSafe = String(frame.conditioning.exactSafe);
+      canvas.dataset.lastDragCoherenceLimitPx = String(frame.projection.coherenceLimitPx);
+      canvas.dataset.lastDragPlanRight = JSON.stringify(frame.projection.planRight);
+      canvas.dataset.lastDragPlanForward = JSON.stringify(frame.projection.planForward);
       planDragFrameGeneration += 1;
       canvas.dataset.lastDragFrameGeneration = String(planDragFrameGeneration);
     };
@@ -1916,7 +1985,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (civilReferenceId) {
           const civilReference = civilReferencesRef.current.find((item) => item.id === civilReferenceId);
-          const projection = createPointerPlanDragProjection(pick?.pickedPoint, sourceEvent);
+          const projection = createPointerPlanDragProjection(
+            pick?.pickedPoint,
+            civilReferenceNodesRef.current.get(civilReferenceId)?.mesh ?? pick?.pickedMesh,
+            sourceEvent
+          );
           sourceEvent?.preventDefault();
           dragStateRef.current = null;
           civilDragStateRef.current = null;
@@ -1935,7 +2008,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
               yMm: civilReference.positionMm.yMm
             });
             canvas.dataset.lastDragPlaneElevationMeters = String(projection.anchorPoint.y);
-            canvas.dataset.lastDragProjectionMode = "horizontal";
+            canvas.dataset.lastDragProjectionMode = projection.mode;
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);
@@ -1948,7 +2021,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (instanceId) {
           const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
-          const projection = createPointerPlanDragProjection(pick?.pickedPoint, sourceEvent);
+          const projection = createPointerPlanDragProjection(
+            pick?.pickedPoint,
+            machineNodesRef.current.get(instanceId)?.box ?? pick?.pickedMesh,
+            sourceEvent
+          );
           dragStateRef.current = null;
           civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
@@ -1985,7 +2062,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             }
             dragStateRef.current = nextDragState;
             canvas.dataset.lastDragPlaneElevationMeters = String(projection.anchorPoint.y);
-            canvas.dataset.lastDragProjectionMode = "horizontal";
+            canvas.dataset.lastDragProjectionMode = projection.mode;
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);

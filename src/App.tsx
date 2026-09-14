@@ -1731,10 +1731,23 @@ export function App() {
 
   useLayoutEffect(() => {
     runtimePanelBindingsRef.current = runtimePanelBindings;
-    setWorkspacePanelReachability(liveWorkspacePanelDescriptors.flatMap(({ definition }) => {
+    const nextReachability = liveWorkspacePanelDescriptors.flatMap(({ definition }) => {
       const panel = runtimePanelBridge.getRuntimePanel(definition.id);
       return panel?.bound ? [panel] : [];
-    }));
+    });
+    setWorkspacePanelReachability((current) => {
+      const unchanged = current.length === nextReachability.length
+        && current.every((panel, index) => {
+          const next = nextReachability[index];
+          return next
+            && panel.panelId === next.panelId
+            && panel.title === next.title
+            && panel.bound === next.bound
+            && panel.available === next.available
+            && panel.reason === next.reason;
+        });
+      return unchanged ? current : nextReachability;
+    });
   }, [
     connectionPointSnapAvailable,
     editingAnnotationId,

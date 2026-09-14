@@ -17,21 +17,48 @@ export type ScreenPointCss = {
   y: number;
 };
 
+export type PlanDragJacobian = {
+  readonly xScreenDelta: ScreenPointCss;
+  readonly zScreenDelta: ScreenPointCss;
+};
+
+export type PlanDragConditioning = {
+  readonly determinant: number;
+  readonly conditionNumber: number;
+  readonly worldMmPerCssPixel: number;
+  readonly orientationScore: number;
+  readonly orientationPreserving: boolean;
+  readonly exactSafe: boolean;
+};
+
 export type PlanDragProjection = {
   readonly anchorPoint: RayPointMeters;
   readonly startPoint: RayPointMeters;
+  readonly startPointerScreen: ScreenPointCss;
+  readonly lastPointerScreen: ScreenPointCss;
+  readonly planRight: FloorPointMeters;
+  readonly planForward: FloorPointMeters;
+  readonly initialJacobian: PlanDragJacobian;
+  readonly initialConditioning: PlanDragConditioning;
   readonly lastDeltaMeters: FloorPointMeters;
+  readonly horizontalOriginPoint: RayPointMeters;
+  readonly horizontalOriginDeltaMeters: FloorPointMeters;
   readonly maxIncrementMeters: number;
+  readonly maxExactWorldMetersPerCssPixel: number;
+  readonly coherenceLimitPx: number;
+  readonly fallbackMetersPerCssPixel: number;
+  readonly mode: PlanDragFrameMode;
   readonly usedFallback: boolean;
 };
 
-export type PlanDragFrameMode = "horizontal" | "screen-jacobian";
+export type PlanDragFrameMode = "horizontal" | "screen-stable";
 
 export type PlanDragFrame = {
   readonly mode: PlanDragFrameMode;
   readonly deltaMeters: FloorPointMeters;
   readonly anchorPoint: RayPointMeters;
   readonly pointerErrorPx: number;
+  readonly conditioning: PlanDragConditioning;
   readonly projection: PlanDragProjection;
 };
 
@@ -137,11 +164,21 @@ export const createCivilDragState = (
 });
 
 const MIN_RAY_PLANE_DOT = 0.000001;
-const MIN_WELL_CONDITIONED_VERTICAL_COSINE = 0.015;
 const MAX_DIRECT_POINTER_ERROR_PX = 2;
 const JACOBIAN_SAMPLE_METERS = 0.05;
-const JACOBIAN_DAMPING_RATIO = 0.00000001;
-const JACOBIAN_ITERATIONS = 6;
+const JACOBIAN_DAMPING_RATIO = 0.015;
+const EXACT_ENTER_MAX_CONDITION = 40;
+const EXACT_EXIT_MAX_CONDITION = 55;
+const EXACT_ENTER_GAIN_FACTOR = 1;
+const EXACT_EXIT_GAIN_FACTOR = 1;
+const FALLBACK_WORLD_GAIN_SAFETY_FACTOR = 0.75;
+const FALLBACK_MIN_CORRECTION_WEIGHT = 0.05;
+const FALLBACK_MAX_CORRECTION_WEIGHT = 0.9;
+const FALLBACK_MIN_STEP_FACTOR = 1.1;
+const FALLBACK_MAX_STEP_FACTOR = 2;
+const FALLBACK_CORRECTION_PRESSURE_START_RATIO = 0.5;
+const MIN_PROJECTED_OBJECT_SIZE_PX = 24;
+const MAX_POINTER_COHERENCE_PX = 72;
 
 const isFiniteRayPoint = (point: RayPointMeters | null | undefined): point is RayPointMeters =>
   Boolean(point && Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z));
@@ -152,14 +189,17 @@ const isFiniteScreenPoint = (point: ScreenPointCss | null | undefined): point is
 const dotRayPoints = (left: RayPointMeters, right: RayPointMeters) =>
   left.x * right.x + left.y * right.y + left.z * right.z;
 
-const getNormalizedVerticalCosine = (direction: RayPointMeters) => {
-  const length = Math.hypot(direction.x, direction.y, direction.z);
+const getPlanLength = (point: FloorPointMeters) => Math.hypot(point.x, point.z);
+
+const normalizePlanPoint = (point: FloorPointMeters): FloorPointMeters | null => {
+  const length = getPlanLength(point);
   return Number.isFinite(length) && length > MIN_RAY_PLANE_DOT
-    ? Math.abs(direction.y / length)
-    : 0;
+    ? { x: point.x / length, z: point.z / length }
+    : null;
 };
 
-const getPlanLength = (point: FloorPointMeters) => Math.hypot(point.x, point.z);
+const dotPlanPoints = (left: FloorPointMeters, right: FloorPointMeters) =>
+  left.x * right.x + left.z * right.z;
 
 const clampPlanStep = (step: FloorPointMeters, maxLength: number): FloorPointMeters => {
   const length = getPlanLength(step);
@@ -233,17 +273,39 @@ export const createPlanDragProjection = ({
   rayOrigin,
   rayDirection,
   pickedPoint,
-  maxIncrementMeters
+  pointerScreen,
+  planRight,
+  planForward,
+  projectedObjectSizePx,
+  targetPlanSizeMeters,
+  maxIncrementMeters,
+  projectToScreen
 }: {
   rayOrigin: RayPointMeters;
   rayDirection: RayPointMeters;
   pickedPoint: RayPointMeters | null | undefined;
+  pointerScreen: ScreenPointCss;
+  planRight: FloorPointMeters;
+  planForward: FloorPointMeters;
+  projectedObjectSizePx: number;
+  targetPlanSizeMeters: number;
   maxIncrementMeters: number;
+  projectToScreen: (point: RayPointMeters) => ScreenPointCss | null;
 }): PlanDragProjection | null => {
+  const normalizedRight = normalizePlanPoint(planRight);
+  const normalizedForward = normalizePlanPoint(planForward);
   if (
     !isFiniteRayPoint(rayOrigin)
     || !isFiniteRayPoint(rayDirection)
     || !isFiniteRayPoint(pickedPoint)
+    || !isFiniteScreenPoint(pointerScreen)
+    || !normalizedRight
+    || !normalizedForward
+    || Math.abs(dotPlanPoints(normalizedRight, normalizedForward)) > 0.001
+    || !Number.isFinite(projectedObjectSizePx)
+    || projectedObjectSizePx <= 0
+    || !Number.isFinite(targetPlanSizeMeters)
+    || targetPlanSizeMeters <= 0
     || !Number.isFinite(maxIncrementMeters)
     || maxIncrementMeters <= 0
   ) {
@@ -256,6 +318,33 @@ export const createPlanDragProjection = ({
     pickedPoint.y
   );
 
+  const initialJacobian = samplePlanJacobian(pickedPoint, projectToScreen);
+  if (!initialJacobian) {
+    return null;
+  }
+  const coherenceLimitPx = Math.min(
+    MAX_POINTER_COHERENCE_PX,
+    Math.max(MIN_PROJECTED_OBJECT_SIZE_PX, projectedObjectSizePx * 0.6)
+  );
+  const maxExactWorldMetersPerCssPixel = Math.min(
+    maxIncrementMeters / coherenceLimitPx,
+    targetPlanSizeMeters * 0.5 / coherenceLimitPx
+  );
+  const initialConditioning = getPlanDragConditioning({
+    jacobian: initialJacobian,
+    planRight: normalizedRight,
+    planForward: normalizedForward,
+    maxWorldMetersPerCssPixel: maxExactWorldMetersPerCssPixel,
+    maxConditionNumber: EXACT_ENTER_MAX_CONDITION
+  });
+  const rightPixelsPerMeter = getScreenVectorLength(applyJacobian(initialJacobian, normalizedRight));
+  const forwardPixelsPerMeter = getScreenVectorLength(applyJacobian(initialJacobian, normalizedForward));
+  const fallbackMetersPerCssPixel = Math.min(
+    maxExactWorldMetersPerCssPixel,
+    targetPlanSizeMeters / projectedObjectSizePx,
+    1 / Math.max(rightPixelsPerMeter, forwardPixelsPerMeter, MIN_RAY_PLANE_DOT)
+  ) * FALLBACK_WORLD_GAIN_SAFETY_FACTOR;
+
   return {
     anchorPoint: {
       x: pickedPoint.x,
@@ -267,9 +356,112 @@ export const createPlanDragProjection = ({
       y: initialPlanePoint?.y ?? pickedPoint.y,
       z: initialPlanePoint?.z ?? pickedPoint.z
     },
+    startPointerScreen: { ...pointerScreen },
+    lastPointerScreen: { ...pointerScreen },
+    planRight: normalizedRight,
+    planForward: normalizedForward,
+    initialJacobian,
+    initialConditioning,
     lastDeltaMeters: { x: 0, z: 0 },
+    horizontalOriginPoint: {
+      x: initialPlanePoint?.x ?? pickedPoint.x,
+      y: initialPlanePoint?.y ?? pickedPoint.y,
+      z: initialPlanePoint?.z ?? pickedPoint.z
+    },
+    horizontalOriginDeltaMeters: { x: 0, z: 0 },
     maxIncrementMeters,
+    maxExactWorldMetersPerCssPixel,
+    coherenceLimitPx,
+    fallbackMetersPerCssPixel,
+    mode: initialConditioning.exactSafe ? "horizontal" : "screen-stable",
     usedFallback: false
+  };
+};
+
+const getScreenVectorLength = (point: ScreenPointCss) => Math.hypot(point.x, point.y);
+
+const applyJacobian = (
+  jacobian: PlanDragJacobian,
+  point: FloorPointMeters
+): ScreenPointCss => ({
+  x: jacobian.xScreenDelta.x / JACOBIAN_SAMPLE_METERS * point.x
+    + jacobian.zScreenDelta.x / JACOBIAN_SAMPLE_METERS * point.z,
+  y: jacobian.xScreenDelta.y / JACOBIAN_SAMPLE_METERS * point.x
+    + jacobian.zScreenDelta.y / JACOBIAN_SAMPLE_METERS * point.z
+});
+
+const samplePlanJacobian = (
+  point: RayPointMeters,
+  projectToScreen: (point: RayPointMeters) => ScreenPointCss | null
+): PlanDragJacobian | null => {
+  const anchorScreen = projectToScreen(point);
+  const xScreen = projectToScreen({
+    x: point.x + JACOBIAN_SAMPLE_METERS,
+    y: point.y,
+    z: point.z
+  });
+  const zScreen = projectToScreen({
+    x: point.x,
+    y: point.y,
+    z: point.z + JACOBIAN_SAMPLE_METERS
+  });
+  return anchorScreen && xScreen && zScreen
+    ? {
+        xScreenDelta: { x: xScreen.x - anchorScreen.x, y: xScreen.y - anchorScreen.y },
+        zScreenDelta: { x: zScreen.x - anchorScreen.x, y: zScreen.y - anchorScreen.y }
+      }
+    : null;
+};
+
+export const getPlanDragConditioning = ({
+  jacobian,
+  planRight,
+  planForward,
+  maxWorldMetersPerCssPixel,
+  maxConditionNumber
+}: {
+  jacobian: PlanDragJacobian;
+  planRight: FloorPointMeters;
+  planForward: FloorPointMeters;
+  maxWorldMetersPerCssPixel: number;
+  maxConditionNumber: number;
+}): PlanDragConditioning => {
+  const j00 = jacobian.xScreenDelta.x / JACOBIAN_SAMPLE_METERS;
+  const j10 = jacobian.xScreenDelta.y / JACOBIAN_SAMPLE_METERS;
+  const j01 = jacobian.zScreenDelta.x / JACOBIAN_SAMPLE_METERS;
+  const j11 = jacobian.zScreenDelta.y / JACOBIAN_SAMPLE_METERS;
+  const determinant = j00 * j11 - j01 * j10;
+  const trace = j00 * j00 + j10 * j10 + j01 * j01 + j11 * j11;
+  const discriminant = Math.sqrt(Math.max(0, trace * trace - 4 * determinant * determinant));
+  const maximumSingularValue = Math.sqrt(Math.max(0, (trace + discriminant) / 2));
+  const minimumSingularValue = Math.sqrt(Math.max(0, (trace - discriminant) / 2));
+  const conditionNumber = minimumSingularValue > MIN_RAY_PLANE_DOT
+    ? maximumSingularValue / minimumSingularValue
+    : Number.POSITIVE_INFINITY;
+  const worldMetersPerCssPixel = minimumSingularValue > MIN_RAY_PLANE_DOT
+    ? 1 / minimumSingularValue
+    : Number.POSITIVE_INFINITY;
+  const projectedRight = applyJacobian(jacobian, planRight);
+  const projectedForward = applyJacobian(jacobian, planForward);
+  const rightLength = getScreenVectorLength(projectedRight);
+  const forwardLength = getScreenVectorLength(projectedForward);
+  const orientationScore = rightLength > MIN_RAY_PLANE_DOT && forwardLength > MIN_RAY_PLANE_DOT
+    ? Math.min(projectedRight.x / rightLength, projectedForward.y / forwardLength)
+    : -1;
+  const orientationPreserving = orientationScore > 0;
+  const exactSafe = Number.isFinite(conditionNumber)
+    && Number.isFinite(worldMetersPerCssPixel)
+    && Math.abs(determinant) > MIN_RAY_PLANE_DOT
+    && conditionNumber <= maxConditionNumber
+    && worldMetersPerCssPixel <= maxWorldMetersPerCssPixel
+    && orientationPreserving;
+  return {
+    determinant,
+    conditionNumber,
+    worldMmPerCssPixel: worldMetersPerCssPixel * 1000,
+    orientationScore,
+    orientationPreserving,
+    exactSafe
   };
 };
 
@@ -317,6 +509,179 @@ const solveDampedPlanStep = ({
     : null;
 };
 
+const getPlanBasisComponents = (
+  value: FloorPointMeters,
+  right: FloorPointMeters,
+  forward: FloorPointMeters
+) => ({
+  right: dotPlanPoints(value, right),
+  forward: dotPlanPoints(value, forward)
+});
+
+const fromPlanBasisComponents = (
+  rightAmount: number,
+  forwardAmount: number,
+  right: FloorPointMeters,
+  forward: FloorPointMeters
+): FloorPointMeters => ({
+  x: right.x * rightAmount + forward.x * forwardAmount,
+  z: right.z * rightAmount + forward.z * forwardAmount
+});
+
+const preservePointerDirection = (
+  delta: FloorPointMeters,
+  pointerDelta: ScreenPointCss,
+  projection: PlanDragProjection
+) => {
+  const components = getPlanBasisComponents(delta, projection.planRight, projection.planForward);
+  const expectedRightSign = Math.sign(pointerDelta.x);
+  const expectedForwardSign = Math.sign(pointerDelta.y);
+  const rightAmount = expectedRightSign !== 0 && Math.sign(components.right) === -expectedRightSign
+    ? 0
+    : components.right;
+  const forwardAmount = expectedForwardSign !== 0 && Math.sign(components.forward) === -expectedForwardSign
+    ? 0
+    : components.forward;
+  return fromPlanBasisComponents(
+    rightAmount,
+    forwardAmount,
+    projection.planRight,
+    projection.planForward
+  );
+};
+
+const resolveScreenStableFrame = ({
+  projection,
+  pointerScreen,
+  projectToScreen,
+  conditioning
+}: {
+  projection: PlanDragProjection;
+  pointerScreen: ScreenPointCss;
+  projectToScreen: (point: RayPointMeters) => ScreenPointCss | null;
+  conditioning: PlanDragConditioning;
+}): PlanDragFrame | null => {
+  const pointerIncrement = {
+    x: pointerScreen.x - projection.lastPointerScreen.x,
+    y: pointerScreen.y - projection.lastPointerScreen.y
+  };
+  const pointerDelta = {
+    x: pointerScreen.x - projection.startPointerScreen.x,
+    y: pointerScreen.y - projection.startPointerScreen.y
+  };
+  const preferredStep = fromPlanBasisComponents(
+    pointerIncrement.x * projection.fallbackMetersPerCssPixel,
+    pointerIncrement.y * projection.fallbackMetersPerCssPixel,
+    projection.planRight,
+    projection.planForward
+  );
+  const currentAnchor = getTranslatedAnchor(projection.anchorPoint, projection.lastDeltaMeters);
+  const currentScreen = projectToScreen(currentAnchor);
+  const jacobian = samplePlanJacobian(currentAnchor, projectToScreen);
+  const currentPointerErrorPx = currentScreen
+    ? getScreenErrorLength(currentScreen, pointerScreen)
+    : projection.coherenceLimitPx;
+  const normalizedPointerError = currentPointerErrorPx / projection.coherenceLimitPx;
+  const coherencePressure = Math.min(1, Math.max(
+    0,
+    (normalizedPointerError - FALLBACK_CORRECTION_PRESSURE_START_RATIO)
+      / (1 - FALLBACK_CORRECTION_PRESSURE_START_RATIO)
+  ));
+  let correction = { x: 0, z: 0 };
+  if (currentScreen && jacobian) {
+    correction = solveDampedPlanStep({
+      screenError: getScreenError(currentScreen, pointerScreen),
+      xScreenDelta: jacobian.xScreenDelta,
+      zScreenDelta: jacobian.zScreenDelta,
+      maxStepMeters: projection.maxIncrementMeters
+    }) ?? correction;
+  }
+  const preferredLength = getPlanLength(preferredStep);
+  const pointerIncrementLength = Math.hypot(pointerIncrement.x, pointerIncrement.y);
+  const stepLimit = Math.min(
+    projection.maxIncrementMeters,
+    Math.max(
+      preferredLength * (
+        FALLBACK_MIN_STEP_FACTOR
+        + coherencePressure * (FALLBACK_MAX_STEP_FACTOR - FALLBACK_MIN_STEP_FACTOR)
+      ),
+      projection.fallbackMetersPerCssPixel * Math.max(1, pointerIncrementLength)
+    )
+  );
+  const correctionWeight = FALLBACK_MIN_CORRECTION_WEIGHT
+    + coherencePressure * (FALLBACK_MAX_CORRECTION_WEIGHT - FALLBACK_MIN_CORRECTION_WEIGHT);
+  const blendedStep = clampPlanStep({
+    x: preferredStep.x * (1 - correctionWeight) + correction.x * correctionWeight,
+    z: preferredStep.z * (1 - correctionWeight) + correction.z * correctionWeight
+  }, stepLimit);
+  let deltaMeters = preservePointerDirection({
+    x: projection.lastDeltaMeters.x + blendedStep.x,
+    z: projection.lastDeltaMeters.z + blendedStep.z
+  }, pointerDelta, projection);
+  let anchorPoint = getTranslatedAnchor(projection.anchorPoint, deltaMeters);
+  let projectedAnchor = projectToScreen(anchorPoint);
+  if (!projectedAnchor) {
+    return null;
+  }
+  let pointerErrorPx = getScreenErrorLength(projectedAnchor, pointerScreen);
+  if (!Number.isFinite(pointerErrorPx)) {
+    return null;
+  }
+  if (pointerErrorPx > projection.coherenceLimitPx) {
+    const repairJacobian = samplePlanJacobian(anchorPoint, projectToScreen);
+    const appliedStep = {
+      x: deltaMeters.x - projection.lastDeltaMeters.x,
+      z: deltaMeters.z - projection.lastDeltaMeters.z
+    };
+    const remainingStepMeters = Math.max(
+      0,
+      projection.maxIncrementMeters - getPlanLength(appliedStep)
+    );
+    const repair = repairJacobian && remainingStepMeters > 0
+      ? solveDampedPlanStep({
+          screenError: getScreenError(projectedAnchor, pointerScreen),
+          xScreenDelta: repairJacobian.xScreenDelta,
+          zScreenDelta: repairJacobian.zScreenDelta,
+          maxStepMeters: remainingStepMeters
+        })
+      : null;
+    if (repair) {
+      const repairedStep = clampPlanStep({
+        x: appliedStep.x + repair.x,
+        z: appliedStep.z + repair.z
+      }, projection.maxIncrementMeters);
+      const repairedDelta = preservePointerDirection({
+        x: projection.lastDeltaMeters.x + repairedStep.x,
+        z: projection.lastDeltaMeters.z + repairedStep.z
+      }, pointerDelta, projection);
+      const repairedAnchor = getTranslatedAnchor(projection.anchorPoint, repairedDelta);
+      const repairedScreen = projectToScreen(repairedAnchor);
+      const repairedErrorPx = repairedScreen
+        ? getScreenErrorLength(repairedScreen, pointerScreen)
+        : Number.POSITIVE_INFINITY;
+      if (repairedErrorPx < pointerErrorPx) {
+        deltaMeters = repairedDelta;
+        anchorPoint = repairedAnchor;
+        pointerErrorPx = repairedErrorPx;
+      }
+    }
+  }
+  return {
+    mode: "screen-stable",
+    deltaMeters,
+    anchorPoint,
+    pointerErrorPx,
+    conditioning,
+    projection: {
+      ...projection,
+      lastDeltaMeters: deltaMeters,
+      lastPointerScreen: { ...pointerScreen },
+      mode: "screen-stable",
+      usedFallback: true
+    }
+  };
+};
+
 export const resolvePlanDragFrame = ({
   projection,
   rayOrigin,
@@ -339,27 +704,58 @@ export const resolvePlanDragFrame = ({
     rayDirection,
     projection.anchorPoint.y
   );
-  if (horizontalPoint && getNormalizedVerticalCosine(rayDirection) >= MIN_WELL_CONDITIONED_VERTICAL_COSINE) {
+  const currentAnchor = getTranslatedAnchor(projection.anchorPoint, projection.lastDeltaMeters);
+  const jacobian = samplePlanJacobian(currentAnchor, projectToScreen);
+  if (!jacobian) {
+    return null;
+  }
+  const exactMode = projection.mode === "horizontal";
+  const conditioning = getPlanDragConditioning({
+    jacobian,
+    planRight: projection.planRight,
+    planForward: projection.planForward,
+    maxWorldMetersPerCssPixel: projection.maxExactWorldMetersPerCssPixel
+      * (exactMode ? EXACT_EXIT_GAIN_FACTOR : EXACT_ENTER_GAIN_FACTOR),
+    maxConditionNumber: exactMode ? EXACT_EXIT_MAX_CONDITION : EXACT_ENTER_MAX_CONDITION
+  });
+  if (horizontalPoint && conditioning.exactSafe && exactMode) {
     const deltaMeters = {
-      x: horizontalPoint.x - projection.startPoint.x,
-      z: horizontalPoint.z - projection.startPoint.z
-    };
-    const incrementalDelta = {
-      x: deltaMeters.x - projection.lastDeltaMeters.x,
-      z: deltaMeters.z - projection.lastDeltaMeters.z
+      x: projection.horizontalOriginDeltaMeters.x
+        + horizontalPoint.x - projection.horizontalOriginPoint.x,
+      z: projection.horizontalOriginDeltaMeters.z
+        + horizontalPoint.z - projection.horizontalOriginPoint.z
     };
     const anchorPoint = getTranslatedAnchor(projection.anchorPoint, deltaMeters);
     const projectedAnchor = projectToScreen(anchorPoint);
     const pointerErrorPx = projectedAnchor
       ? getScreenErrorLength(projectedAnchor, pointerScreen)
       : Number.POSITIVE_INFINITY;
+    const pointerIncrementPx = Math.hypot(
+      pointerScreen.x - projection.lastPointerScreen.x,
+      pointerScreen.y - projection.lastPointerScreen.y
+    );
+    const maximumExactIncrementMeters = projection.maxExactWorldMetersPerCssPixel
+      * Math.max(1, pointerIncrementPx)
+      * EXACT_EXIT_GAIN_FACTOR;
+    const totalPointerTravelPx = Math.hypot(
+      pointerScreen.x - projection.startPointerScreen.x,
+      pointerScreen.y - projection.startPointerScreen.y
+    );
+    const maximumExactDeltaMeters = projection.maxExactWorldMetersPerCssPixel
+      * Math.max(1, totalPointerTravelPx)
+      * EXACT_EXIT_GAIN_FACTOR;
     if (
-      (!projection.usedFallback || getPlanLength(incrementalDelta) <= projection.maxIncrementMeters)
+      getPlanLength({
+        x: deltaMeters.x - projection.lastDeltaMeters.x,
+        z: deltaMeters.z - projection.lastDeltaMeters.z
+      }) <= Math.min(projection.maxIncrementMeters, maximumExactIncrementMeters)
+      && getPlanLength(deltaMeters) <= maximumExactDeltaMeters
       && pointerErrorPx <= MAX_DIRECT_POINTER_ERROR_PX
     ) {
       const nextProjection = {
         ...projection,
         lastDeltaMeters: deltaMeters,
+        lastPointerScreen: { ...pointerScreen },
         usedFallback: projection.usedFallback
       };
       return {
@@ -367,74 +763,19 @@ export const resolvePlanDragFrame = ({
         deltaMeters,
         anchorPoint,
         pointerErrorPx,
+        conditioning,
         projection: nextProjection
       };
     }
   }
-
-  let deltaMeters = { ...projection.lastDeltaMeters };
-  let remainingStepMeters = projection.maxIncrementMeters;
-
-  for (let iteration = 0; iteration < JACOBIAN_ITERATIONS && remainingStepMeters > 0; iteration += 1) {
-    const anchorPoint = getTranslatedAnchor(projection.anchorPoint, deltaMeters);
-    const anchorScreen = projectToScreen(anchorPoint);
-    const xSampleScreen = projectToScreen({
-      x: anchorPoint.x + JACOBIAN_SAMPLE_METERS,
-      y: anchorPoint.y,
-      z: anchorPoint.z
-    });
-    const zSampleScreen = projectToScreen({
-      x: anchorPoint.x,
-      y: anchorPoint.y,
-      z: anchorPoint.z + JACOBIAN_SAMPLE_METERS
-    });
-    if (!anchorScreen || !xSampleScreen || !zSampleScreen) {
-      break;
-    }
-
-    const screenError = getScreenError(anchorScreen, pointerScreen);
-    if (Math.hypot(screenError.x, screenError.y) <= 0.25) {
-      break;
-    }
-    const step = solveDampedPlanStep({
-      screenError,
-      xScreenDelta: {
-        x: xSampleScreen.x - anchorScreen.x,
-        y: xSampleScreen.y - anchorScreen.y
-      },
-      zScreenDelta: {
-        x: zSampleScreen.x - anchorScreen.x,
-        y: zSampleScreen.y - anchorScreen.y
-      },
-      maxStepMeters: remainingStepMeters
-    });
-    if (!step) {
-      break;
-    }
-    deltaMeters = {
-      x: deltaMeters.x + step.x,
-      z: deltaMeters.z + step.z
-    };
-    remainingStepMeters -= getPlanLength(step);
-  }
-
-  const anchorPoint = getTranslatedAnchor(projection.anchorPoint, deltaMeters);
-  const projectedAnchor = projectToScreen(anchorPoint);
-  if (!projectedAnchor) {
-    return null;
-  }
-  const pointerErrorPx = getScreenErrorLength(projectedAnchor, pointerScreen);
-  if (!Number.isFinite(pointerErrorPx)) {
-    return null;
-  }
-  const nextProjection = { ...projection, lastDeltaMeters: deltaMeters, usedFallback: true };
-  return {
-    mode: "screen-jacobian",
-    deltaMeters,
-    anchorPoint,
-    pointerErrorPx,
-    projection: nextProjection
-  };
+  // Once exact projection becomes unsafe, keep this gesture in fallback mode to avoid boundary chatter.
+  const fallbackFrame = resolveScreenStableFrame({
+    projection,
+    pointerScreen,
+    projectToScreen,
+    conditioning
+  });
+  return fallbackFrame;
 };
 
 export const shouldKeepSceneDragActive = (result: SceneDragMutationResult) => result !== "blocked";
