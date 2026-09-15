@@ -198,6 +198,23 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       dragBehavior: PointerDragBehavior;
     }>;
   })._gizmoAxisCache;
+  const getHandlePresentationSignature = () => [...axisCache.values()]
+    .flatMap((candidate) => candidate.colliderMeshes)
+    .map((mesh) => {
+      const bounds = mesh.getBoundingInfo().boundingBox;
+      return [
+        mesh.uniqueId,
+        mesh.isEnabled(),
+        mesh.getWorldMatrix().updateFlag,
+        bounds.centerWorld.x,
+        bounds.centerWorld.y,
+        bounds.centerWorld.z,
+        bounds.extendSizeWorld.x,
+        bounds.extendSizeWorld.y,
+        bounds.extendSizeWorld.z
+      ].join(":");
+    })
+    .join("|");
   const projectWorldPoint = (world: Vector3) => {
     const engine = scene.getEngine();
     const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
@@ -246,9 +263,13 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
     return projectWorldPoint(world);
   };
   let handleProjectionSignature = "";
-  let handleProjectionUpdatedAt = 0;
+  let handleSignatureCheckedAt = 0;
   let projectedHandles: Partial<Record<PlanMoveAxis, { x: number; y: number }>> = {};
   const getProjectedHandles = () => {
+    if (gesture) return projectedHandles;
+    const now = performance.now();
+    if (now - handleSignatureCheckedAt < 100) return projectedHandles;
+    handleSignatureCheckedAt = now;
     const engine = scene.getEngine();
     const signature = [
       proxy.position.x,
@@ -261,10 +282,10 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       camera.target.y,
       camera.target.z,
       engine.getRenderWidth(),
-      engine.getRenderHeight()
+      engine.getRenderHeight(),
+      getHandlePresentationSignature()
     ].join("|");
-    const now = performance.now();
-    if (!gesture && (signature !== handleProjectionSignature || now - handleProjectionUpdatedAt >= 100)) {
+    if (signature !== handleProjectionSignature) {
       const nextHandles = {
         x: projectHandle(gizmo.xGizmo.dragBehavior),
         "plan-y": projectHandle(gizmo.zGizmo.dragBehavior),
@@ -284,7 +305,6 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       );
       projectedHandles = nextHandles;
       handleProjectionSignature = onCanvas && spread >= 20 ? signature : "";
-      handleProjectionUpdatedAt = now;
     }
     return projectedHandles;
   };
@@ -301,7 +321,7 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       proxy.position = new Vector3(selection.pivotMm.xMm / 1000, selection.pivotMm.zMm / 1000, selection.pivotMm.yMm / 1000);
       gizmo.attachedNode = proxy;
       handleProjectionSignature = "";
-      handleProjectionUpdatedAt = 0;
+      handleSignatureCheckedAt = 0;
     },
     updatePresentation(bodyDragActive = false) {
       canvas.style.cursor = gesture || bodyDragActive ? "grabbing" : gizmo.isHovered ? "grab" : "default";

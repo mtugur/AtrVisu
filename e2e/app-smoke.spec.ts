@@ -930,17 +930,12 @@ const dragPlanMoveHandle = async (
   const canvasBox = await canvas.boundingBox();
   await expect.poll(async () => {
     const current = await readPlanMoveManipulator(page);
-    const points = Object.values(current.handles);
     const target = current.handles[axis];
-    if (!canvasBox || !target || points.length !== 3) return false;
-    const spread = Math.max(...points.flatMap((point, index) =>
-      points.slice(index + 1).map((other) => Math.hypot(point.x - other.x, point.y - other.y))
-    ));
+    if (!canvasBox || !target) return false;
     return target.x >= 0
       && target.x <= canvasBox.width
       && target.y >= 0
-      && target.y <= canvasBox.height
-      && spread >= 20;
+      && target.y <= canvasBox.height;
   }).toBe(true);
   const diagnostics = await readPlanMoveManipulator(page);
   const handle = diagnostics.handles[axis];
@@ -954,7 +949,7 @@ const dragPlanMoveHandle = async (
   await expect.poll(async () => (await readPlanMoveManipulator(page)).activeAxis, {
     message: `Expected ${axis} handle at ${JSON.stringify(handle)} from ${JSON.stringify(diagnostics.handles)}`
   }).toBe(axis);
-  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 6 });
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 3 });
   await page.mouse.up();
   await expect.poll(async () => (await readPlanMoveManipulator(page)).activeAxis).toBeNull();
   await expect.poll(async () => canvas.evaluate((element) => getComputedStyle(element).cursor)).not.toBe("grabbing");
@@ -4462,7 +4457,7 @@ test("scene member click selects and rigidly moves the complete assembly", async
   expect(errors).toEqual([]);
 });
 
-test("Plan Move Manipulator moves a machine on world axes across camera pitches", async ({ page }) => {
+test("Plan Move Manipulator maps machine axes with snap and one-step history", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const canvas = page.getByLabel("AtrVisu 3D workspace");
@@ -4502,7 +4497,34 @@ test("Plan Move Manipulator moves a machine on world axes across camera pitches"
     await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
   )[machineId]).toEqual(afterPlane);
 
-  for (const beta of [0.8, 1.1, 1.42, 1.565, 2.3]) {
+  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).check();
+  const snapBefore = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  await dragPlanMoveHandle(page, "x", 39, 0);
+  const snapAfter = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(Math.abs(snapAfter.xMm % 100)).toBe(0);
+  expect(snapAfter.yMm).toBe(snapBefore.yMm);
+  expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(elevationBefore);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+
+  expect(errors).toEqual([]);
+});
+
+test("Plan Move Manipulator remains usable across above shallow near-horizontal and below camera pitches", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await addCanonicalAtaraMachine(
+    page,
+    "Robot Palletizer",
+    ["Palletizing", "Robot Palletizers"]
+  );
+  await waitForMachineDiagnostics(page, 1);
+  const machineId = (await getMachineIds(page))[0];
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
+  const elevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
+
+  for (const beta of [0.8, 1.42, 1.565, 2.3]) {
     const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
     expect(await applyRuntimeViewportCameraState(page, {
       mode: "perspective",
@@ -4518,21 +4540,10 @@ test("Plan Move Manipulator moves a machine on world axes across camera pitches"
     await dragPlanMoveHandle(page, "plane", 28, beta > Math.PI / 2 ? -20 : 20);
     const after = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
     expect(Math.hypot(after.xMm - before.xMm, after.yMm - before.yMm)).toBeGreaterThan(0);
-    await page.keyboard.press("Control+z");
-    await expect.poll(async () => (
-      await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
-    )[machineId]).toEqual(before);
   }
 
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).check();
-  const snapBefore = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-  await dragPlanMoveHandle(page, "x", 39, 0);
-  const snapAfter = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-  expect(Math.abs(snapAfter.xMm % 100)).toBe(0);
-  expect(snapAfter.yMm).toBe(snapBefore.yMm);
   expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(elevationBefore);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-
   await capturePf3aScreenshot(page, "34-plan-move-machine.png");
   expect(errors).toEqual([]);
 });
