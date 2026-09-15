@@ -2475,20 +2475,14 @@ test("View-owned display controls update the persisted overlay authority without
   expect(errors).toEqual([]);
 });
 
-test("real ATARA sales line uses the final workbench composition", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await openCleanApp(page);
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+const REAL_ATARA_SALES_LINE = [
+  { name: "Flow Pack Machine", groups: ["Primary Packaging", "Horizontal Flow Pack"], xMm: "0" },
+  { name: "Belt Conveyor", groups: ["Conveyors", "Belt Conveyors"], xMm: "4200" },
+  { name: "Robot Palletizer", groups: ["Palletizing", "Robot Palletizers"], xMm: "9800" }
+] as const;
 
-  const lineAssets = [
-    { name: "Flow Pack Machine", groups: ["Primary Packaging", "Horizontal Flow Pack"], xMm: "0" },
-    { name: "Belt Conveyor", groups: ["Conveyors", "Belt Conveyors"], xMm: "4200" },
-    { name: "Robot Palletizer", groups: ["Palletizing", "Robot Palletizers"], xMm: "9800" }
-  ] as const;
-
-  for (const [index, asset] of lineAssets.entries()) {
+const addRealAtaraSalesLine = async (page: Page) => {
+  for (const [index, asset] of REAL_ATARA_SALES_LINE.entries()) {
     await addCanonicalAtaraMachine(page, asset.name, asset.groups);
     await waitForMachineDiagnostics(page, index + 1);
     const properties = page.getByLabel("Selected machine properties");
@@ -2496,6 +2490,16 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
     await properties.getByLabel("Plan X").fill(asset.xMm);
     await properties.getByLabel("Plan X").blur();
   }
+};
+
+test("real ATARA sales line preserves identity and bidirectional selection", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  await addRealAtaraSalesLine(page);
 
   await expect(page.getByTestId("workbench-status-bar")).toContainText("Selected: 1");
   await expect(page.getByTestId("workbench-status-bar")).toContainText("Unit: mm");
@@ -2503,7 +2507,7 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
 
   await openPrimaryDockPanel(page, "panel.layoutExplorer");
   const explorer = page.getByTestId("layout-explorer");
-  for (const asset of lineAssets) {
+  for (const asset of REAL_ATARA_SALES_LINE) {
     await expect(explorer).toContainText(asset.name);
   }
   const flowPackRow = explorer.locator(".layout-explorer-row").filter({ hasText: "Flow Pack Machine" });
@@ -2527,6 +2531,28 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
   await palletizerRow.click({ modifiers: ["Control"] });
   await expect(page.getByTestId("workbench-status-bar")).toContainText("Selected: 3");
 
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("real ATARA sales line uses Layers and Groups composition", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await addRealAtaraSalesLine(page);
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const explorer = page.getByTestId("layout-explorer");
+  const rows = REAL_ATARA_SALES_LINE.map((asset) =>
+    explorer.locator(".layout-explorer-row").filter({ hasText: asset.name }).first()
+  );
+  await rows[0].click();
+  await rows[1].click({ modifiers: ["Control"] });
+  await rows[2].click({ modifiers: ["Control"] });
+  await expect(page.getByTestId("workbench-status-bar")).toContainText("Selected: 3");
+
   await openPrimaryDockPanel(page, "panel.layers");
   page.once("dialog", (dialog) => dialog.accept("ATARA Sales Line"));
   await page.getByTestId("add-layer").click();
@@ -2537,6 +2563,18 @@ test("real ATARA sales line uses the final workbench composition", async ({ page
   await page.getByTestId("create-group-from-selection").click();
   await expect(page.locator(".assembly-group-row").filter({ hasText: "ATARA Packaging Cell" }))
     .toContainText("3 items");
+
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+  expect(errors).toEqual([]);
+});
+
+test("real ATARA sales line reaches Viewpoints and Library Manager", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await addRealAtaraSalesLine(page);
 
   await getCommandBarCommand(page, "view.viewpoints").click();
   await expect(page.getByTestId("primary-dock-tab-panel.viewpoints")).toHaveAttribute("aria-pressed", "true");
