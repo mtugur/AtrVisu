@@ -2262,7 +2262,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
       }
       if (enableE2EDiagnosticsRef.current) {
-        canvas.dataset.planMoveManipulator = JSON.stringify(planMoveManipulator.getDiagnostics());
+        canvas.dataset.planMoveManipulator = JSON.stringify(planMoveManipulator.getDiagnostics(
+          canvas.dataset.planMoveHandleDiagnostics === "true"
+        ));
         canvas.dataset.machinePlanPositions = JSON.stringify(Object.fromEntries(
           placedMachinesRef.current.slice(0, 16).map((machine) => [machine.instanceId, getMachineStartPositionMm(machine)])
         ));

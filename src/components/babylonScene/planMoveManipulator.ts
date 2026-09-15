@@ -106,7 +106,7 @@ export type PlanMoveManipulator = {
   syncSelection: (selection: PlanMoveSelectionSnapshot | null) => void;
   updatePresentation: (bodyDragActive?: boolean) => void;
   dispose: () => void;
-  getDiagnostics: () => {
+  getDiagnostics: (includeHandles?: boolean) => {
     available: boolean;
     activeAxis: PlanMoveAxis | null;
     proxy: { x: number; y: number; z: number } | null;
@@ -198,23 +198,6 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       dragBehavior: PointerDragBehavior;
     }>;
   })._gizmoAxisCache;
-  const getHandlePresentationSignature = () => [...axisCache.values()]
-    .flatMap((candidate) => candidate.colliderMeshes)
-    .map((mesh) => {
-      const bounds = mesh.getBoundingInfo().boundingBox;
-      return [
-        mesh.uniqueId,
-        mesh.isEnabled(),
-        mesh.getWorldMatrix().updateFlag,
-        bounds.centerWorld.x,
-        bounds.centerWorld.y,
-        bounds.centerWorld.z,
-        bounds.extendSizeWorld.x,
-        bounds.extendSizeWorld.y,
-        bounds.extendSizeWorld.z
-      ].join(":");
-    })
-    .join("|");
   const projectWorldPoint = (world: Vector3) => {
     const engine = scene.getEngine();
     const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
@@ -263,13 +246,10 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
     return projectWorldPoint(world);
   };
   let handleProjectionSignature = "";
-  let handleSignatureCheckedAt = 0;
+  let handleProjectionRefreshFrames = 2;
   let projectedHandles: Partial<Record<PlanMoveAxis, { x: number; y: number }>> = {};
   const getProjectedHandles = () => {
     if (gesture) return projectedHandles;
-    const now = performance.now();
-    if (now - handleSignatureCheckedAt < 100) return projectedHandles;
-    handleSignatureCheckedAt = now;
     const engine = scene.getEngine();
     const signature = [
       proxy.position.x,
@@ -282,29 +262,20 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       camera.target.y,
       camera.target.z,
       engine.getRenderWidth(),
-      engine.getRenderHeight(),
-      getHandlePresentationSignature()
+      engine.getRenderHeight()
     ].join("|");
     if (signature !== handleProjectionSignature) {
+      handleProjectionSignature = signature;
+      handleProjectionRefreshFrames = 2;
+    }
+    if (handleProjectionRefreshFrames > 0) {
+      handleProjectionRefreshFrames -= 1;
       const nextHandles = {
         x: projectHandle(gizmo.xGizmo.dragBehavior),
         "plan-y": projectHandle(gizmo.zGizmo.dragBehavior),
         plane: projectHandle(gizmo.yPlaneGizmo.dragBehavior)
       };
-      const points = Object.values(nextHandles);
-      const spread = Math.max(...points.flatMap((point, index) =>
-        points.slice(index + 1).map((other) => Math.hypot(point.x - other.x, point.y - other.y))
-      ));
-      const onCanvas = points.every((point) =>
-        Number.isFinite(point.x)
-        && Number.isFinite(point.y)
-        && point.x >= 0
-        && point.x <= canvas.clientWidth
-        && point.y >= 0
-        && point.y <= canvas.clientHeight
-      );
       projectedHandles = nextHandles;
-      handleProjectionSignature = onCanvas && spread >= 20 ? signature : "";
     }
     return projectedHandles;
   };
@@ -321,18 +292,18 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       proxy.position = new Vector3(selection.pivotMm.xMm / 1000, selection.pivotMm.zMm / 1000, selection.pivotMm.yMm / 1000);
       gizmo.attachedNode = proxy;
       handleProjectionSignature = "";
-      handleSignatureCheckedAt = 0;
+      handleProjectionRefreshFrames = 2;
     },
     updatePresentation(bodyDragActive = false) {
       canvas.style.cursor = gesture || bodyDragActive ? "grabbing" : gizmo.isHovered ? "grab" : "default";
     },
-    getDiagnostics: () => {
+    getDiagnostics: (includeHandles = false) => {
       const available = Boolean(currentSelection && gizmo.attachedNode);
       return {
         available,
         activeAxis: gesture?.axis ?? null,
         proxy: currentSelection ? { x: proxy.position.x, y: proxy.position.y, z: proxy.position.z } : null,
-        handles: available ? getProjectedHandles() : {}
+        handles: available && includeHandles ? getProjectedHandles() : {}
       };
     },
     dispose() {

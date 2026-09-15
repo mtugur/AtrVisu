@@ -915,7 +915,11 @@ type PlanMoveManipulatorDiagnostic = {
 };
 
 const readPlanMoveManipulator = async (page: Page): Promise<PlanMoveManipulatorDiagnostic> => {
-  const raw = await page.getByLabel("AtrVisu 3D workspace").getAttribute("data-plan-move-manipulator");
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await canvas.evaluate((element) => {
+    element.dataset.planMoveHandleDiagnostics = "true";
+  });
+  const raw = await canvas.getAttribute("data-plan-move-manipulator");
   return JSON.parse(raw ?? "{}") as PlanMoveManipulatorDiagnostic;
 };
 
@@ -2105,6 +2109,14 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   const sceneLifecycleGeneration = await page.locator("canvas.scene-canvas")
     .getAttribute("data-scene-lifecycle-generation");
   const machineCard = page.locator(".machine-card").first();
+  const selectExplorerMachines = async (machineIds: readonly string[]) => {
+    await openPrimaryDockPanel(page, "panel.layoutExplorer");
+    const explorer = page.getByTestId("layout-explorer");
+    await explorer.getByTestId(`layout-explorer-entity-machine:${machineIds[0]}`).click();
+    for (const machineId of machineIds.slice(1)) {
+      await explorer.getByTestId(`layout-explorer-entity-machine:${machineId}`).click({ modifiers: ["Control"] });
+    }
+  };
 
   await machineCard.click();
   await waitForMachineDiagnostics(page, 1);
@@ -2113,25 +2125,41 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   await machineCard.click();
   await waitForMachineDiagnostics(page, 2);
   let machineIds = await getMachineIds(page);
-  await clickSceneMachine(page, machineIds[0]);
-  await page.keyboard.down("Control");
-  await clickSceneMachine(page, machineIds[1]);
-  await page.keyboard.up("Control");
+  await selectExplorerMachines([machineIds[0], machineIds[1]]);
   const arrangeBar = page.getByTestId("viewport-arrange-bar");
   await expect(arrangeBar).toBeVisible();
   await expect(arrangeBar.getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
   await expect(arrangeBar.getByRole("button", { name: "Advanced Alignment..." })).toBeVisible();
   await expect(arrangeBar.getByText("Distribute", { exact: true })).toHaveCount(0);
   await expect(arrangeBar.getByText("Equal Gap", { exact: true })).toHaveCount(0);
+  await expect(page.locator("canvas.scene-canvas")).toHaveAttribute(
+    "data-scene-lifecycle-generation",
+    sceneLifecycleGeneration ?? ""
+  );
+  expect(errors).toEqual([]);
+});
+
+test("PF-1C Connection Point Snap stays responsive for two eligible machines", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openCleanApp(page);
+  const sceneLifecycleGeneration = await page.locator("canvas.scene-canvas")
+    .getAttribute("data-scene-lifecycle-generation");
+  const selectExplorerMachines = async (machineIds: readonly string[]) => {
+    await openPrimaryDockPanel(page, "panel.layoutExplorer");
+    const explorer = page.getByTestId("layout-explorer");
+    await explorer.getByTestId(`layout-explorer-entity-machine:${machineIds[0]}`).click();
+    for (const machineId of machineIds.slice(1)) {
+      await explorer.getByTestId(`layout-explorer-entity-machine:${machineId}`).click({ modifiers: ["Control"] });
+    }
+  };
 
   await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
   await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
-  await waitForMachineDiagnostics(page, 4);
-  machineIds = await getMachineIds(page);
-  await clickSceneMachine(page, machineIds[2]);
-  await page.keyboard.down("Control");
-  await clickSceneMachine(page, machineIds[3]);
-  await page.keyboard.up("Control");
+  await waitForMachineDiagnostics(page, 2);
+  let machineIds = await getMachineIds(page);
+  await selectExplorerMachines([machineIds[0], machineIds[1]]);
+  const arrangeBar = page.getByTestId("viewport-arrange-bar");
   await page.setViewportSize({ width: 640, height: 800 });
   await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
   await expect(arrangeBar).toBeVisible();
@@ -2198,19 +2226,31 @@ test("PF-1C Connection Point Snap is disclosed only for two eligible machines", 
   );
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("PF-1C Connection Point Snap closes when eligible selection expands to three", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.locator("canvas.scene-canvas");
+  const sceneLifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await addCanonicalAtaraMachine(page, "Belt Conveyor", ["Conveyors", "Belt Conveyors"]);
+  await addCanonicalAtaraMachine(page, "Robot Palletizer", ["Palletizing", "Robot Palletizers"]);
+  await waitForMachineDiagnostics(page, 3);
+  const machineIds = await getMachineIds(page);
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const explorer = page.getByTestId("layout-explorer");
+  await explorer.getByTestId(`layout-explorer-entity-machine:${machineIds[0]}`).click();
+  await explorer.getByTestId(`layout-explorer-entity-machine:${machineIds[1]}`).click({ modifiers: ["Control"] });
+  const arrangeBar = page.getByTestId("viewport-arrange-bar");
   await arrangeBar.getByRole("button", { name: "Connect & Snap" }).click();
   await expect(page.getByTestId("connect-and-snap-popover")).toBeVisible();
-
-  await addCanonicalAtaraMachine(page, "Robot Palletizer", ["Palletizing", "Robot Palletizers"]);
-  await waitForMachineDiagnostics(page, 5);
-  machineIds = await getMachineIds(page);
-  await clickSceneMachine(page, machineIds[2]);
-  await page.keyboard.down("Control");
-  await clickSceneMachine(page, machineIds[3]);
-  await clickSceneMachine(page, machineIds[4]);
-  await page.keyboard.up("Control");
+  await explorer.getByTestId(`layout-explorer-entity-machine:${machineIds[2]}`).click({ modifiers: ["Control"] });
   await expect(page.getByTestId("connect-and-snap-popover")).toHaveCount(0);
   await expect(page.getByTestId("viewport-arrange-bar").getByRole("button", { name: "Connect & Snap" })).toHaveCount(0);
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", sceneLifecycleGeneration ?? "");
   expect(errors).toEqual([]);
 });
 
