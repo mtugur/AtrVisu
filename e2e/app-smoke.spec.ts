@@ -1218,7 +1218,9 @@ test("runtime feature access complete gate is bound to observed visible command 
     readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")
   ).not.toEqual(positionsBeforeAlignment);
 
-  await clickSceneMachine(page, machineIds[0]);
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.getByTestId(`layout-explorer-entity-machine:${machineIds[0]}`).click();
+  await expect(page.getByTestId("layout-explorer").locator('[data-entity-id][aria-pressed="true"]')).toHaveCount(1);
   await openPrimaryDockPanel(page, "panel.groups");
   const createGroupButton = page.getByTestId("create-group-from-selection");
   await expect(createGroupButton).toBeEnabled();
