@@ -281,21 +281,30 @@ export function MachineLibrary({
           <div id="asset-browser-filters" className="asset-browser-filters">
             <label>
               <span>Source</span>
-              <select aria-label="Asset source" value={filters.libraryId} onChange={(event) => setFilters((current) => ({ ...current, libraryId: event.currentTarget.value }))}>
+              <select aria-label="Asset source" value={filters.libraryId} onChange={(event) => {
+                const libraryId = event.currentTarget.value;
+                setFilters((current) => ({ ...current, libraryId }));
+              }}>
                 <option value="">All sources</option>
                 {filterOptions.sources.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label>
               <span>Category</span>
-              <select aria-label="Asset category" value={filters.category} onChange={(event) => setFilters((current) => ({ ...current, category: event.currentTarget.value }))}>
+              <select aria-label="Asset category" value={filters.category} onChange={(event) => {
+                const category = event.currentTarget.value;
+                setFilters((current) => ({ ...current, category }));
+              }}>
                 <option value="">All categories</option>
                 {filterOptions.categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label>
               <span>Family</span>
-              <select aria-label="Asset family" value={filters.family} onChange={(event) => setFilters((current) => ({ ...current, family: event.currentTarget.value }))}>
+              <select aria-label="Asset family" value={filters.family} onChange={(event) => {
+                const family = event.currentTarget.value;
+                setFilters((current) => ({ ...current, family }));
+              }}>
                 <option value="">All families</option>
                 {filterOptions.families.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>

@@ -20,6 +20,12 @@ const setNativeInputValue = (control: HTMLInputElement, value: string) => {
   control.dispatchEvent(new Event("input", { bubbles: true }));
 };
 
+const setNativeSelectValue = (control: HTMLSelectElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+  setter?.call(control, value);
+  control.dispatchEvent(new Event("change", { bubbles: true }));
+};
+
 const item: LibraryMachineItem = {
   id: "custom-atara-machine",
   name: "Custom ATARA Machine",
@@ -191,6 +197,56 @@ describe("MachineLibrary definition conversion", () => {
     expect(clearFilters.title).toBe("Clear filters");
     expect(clearFilters.textContent).toBe("");
     expect(clearFilters.querySelectorAll("svg")).toHaveLength(1);
+
+    await act(async () => root.unmount());
+  });
+
+  it("captures filter values before React releases the change event", async () => {
+    vi.mocked(loadMachineLibraries).mockResolvedValue({
+      libraries: [{
+        libraryId: "atara-standard",
+        libraryName: "Atara Standard Library",
+        readonly: true,
+        enabled: true,
+        path: "/library.json",
+        root: {
+          id: "root",
+          name: "Root",
+          children: [{ id: "conveying", name: "Conveying", children: [], items: [item] }],
+          items: []
+        }
+      }],
+      warnings: [],
+      loadError: ""
+    });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const preferencesRuntime = createAssetBrowserPreferencesRuntime({
+      read: async () => undefined,
+      write: async () => undefined
+    });
+    await act(async () => root.render(createElement(MachineLibrary, {
+      onAddMachine: vi.fn(async () => true),
+      isLibraryManagerOpen: false,
+      isTaxonomyManagerOpen: false,
+      onCloseLibraryManager: vi.fn(),
+      onCloseTaxonomyManager: vi.fn(),
+      preferencesRuntime
+    })));
+
+    const filtersToggle = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent?.includes("Filters"))!;
+    await act(async () => filtersToggle.click());
+    const source = container.querySelector<HTMLSelectElement>('[aria-label="Asset source"]')!;
+    const category = container.querySelector<HTMLSelectElement>('[aria-label="Asset category"]')!;
+    await act(async () => {
+      setNativeSelectValue(source, "atara-standard");
+      setNativeSelectValue(category, "Custom");
+    });
+
+    expect(source.value).toBe("atara-standard");
+    expect(category.value).toBe("Custom");
+    expect(container.querySelector('[aria-label="Clear filters"]')).not.toBeNull();
 
     await act(async () => root.unmount());
   });
