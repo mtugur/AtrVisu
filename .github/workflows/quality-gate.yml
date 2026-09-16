@@ -38,6 +38,9 @@ jobs:
       - name: Design token governance
         run: npm run check:design-tokens
 
+      - name: Interaction governance
+        run: npm run check:interaction-governance
+
       - name: Build
         run: npm run build
 
