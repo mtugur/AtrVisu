@@ -4697,12 +4697,14 @@ test("Plan Move Manipulator moves Civil, rigid Group, and independent selection 
       mode: "perspective",
       alpha: 0.78,
       beta: 1.1,
-      radius: Math.max(24, heightMm / 800),
+      radius: 24,
       targetX: before.xMm / 1000,
-      targetY: heightMm / 2000,
+      targetY: 0,
       targetZ: before.yMm / 1000
     })).toBe(true);
     await waitForSceneRenderFrames(page);
+    const civilManipulator = await readPlanMoveManipulator(page);
+    expect(civilManipulator.proxy?.y).toBeCloseTo(0, 5);
     const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
     await dragPlanMoveHandle(page, "plane", 36, 24);
     const after = (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[civilId];
@@ -4716,6 +4718,8 @@ test("Plan Move Manipulator moves Civil, rigid Group, and independent selection 
   await openPrimaryDockPanel(page, "panel.groups");
   await group.getByRole("button", { name: /^Add Selected to / }).click();
   await group.locator(".assembly-group-button").click();
+  const groupManipulator = await readPlanMoveManipulator(page);
+  expect(groupManipulator.proxy?.y).toBeCloseTo(0, 5);
   const beforeGroupMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   const beforeGroupCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
   await dragPlanMoveHandle(page, "plane", 46, 28);
@@ -4729,9 +4733,11 @@ test("Plan Move Manipulator moves Civil, rigid Group, and independent selection 
   await capturePf3aScreenshot(page, "36-plan-move-group.png");
 
   await group.getByRole("button", { name: /Edit Group Plan Move Group/ }).click();
-  await page.keyboard.down("Control");
-  await clickSceneMachine(page, machineId);
-  await page.keyboard.up("Control");
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const explorer = page.getByTestId("layout-explorer");
+  await explorer.getByTestId(`layout-explorer-entity-civil:${civilId}`).click();
+  await explorer.getByTestId(`layout-explorer-entity-machine:${machineId}`).click({ modifiers: ["Control"] });
+  await expect(page.getByTestId("workbench-status-bar")).toContainText("Selected: 2");
   const independentBeforeMachines = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   const independentBeforeCivil = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");

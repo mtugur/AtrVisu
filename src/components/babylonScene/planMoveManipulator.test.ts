@@ -37,13 +37,35 @@ const member = (
 describe("Plan Move Manipulator contract", () => {
   it("derives selection-bounds pivots for Machine, Civil, rigid Group members, and independent multi-selection", () => {
     expect(derivePlanMoveSelection(["machine:a"], [member("machine:a", 1000, 2000)])?.pivotMm)
-      .toEqual({ xMm: 1000, yMm: 2000, zMm: 500 });
+      .toEqual({ xMm: 1000, yMm: 2000, zMm: 0 });
     expect(derivePlanMoveSelection(["civil:c"], [member("civil:c", -500, 800, 20_000)])?.pivotMm)
-      .toEqual({ xMm: -500, yMm: 800, zMm: 20_500 });
+      .toEqual({ xMm: -500, yMm: 800, zMm: 20_000 });
     const groupMembers = [member("machine:a", 0, 0), member("civil:c", 4000, 2000, 50_000)];
     expect(derivePlanMoveSelection(groupMembers.map((item) => item.entityId), groupMembers)?.pivotMm)
-      .toEqual({ xMm: 2000, yMm: 1000, zMm: 50_500 });
+      .toEqual({ xMm: 2000, yMm: 1000, zMm: 0 });
     expect(derivePlanMoveSelection(["machine:a", "civil:c"], groupMembers)?.members).toHaveLength(2);
+  });
+
+  it("anchors presentation at the stable working elevation for tall and mixed selections", () => {
+    const tallColumn = member("civil:column", 0, 0, 0, { verticalCenterMm: 25_000 });
+    expect(derivePlanMoveSelection([tallColumn.entityId], [tallColumn])?.pivotMm.zMm).toBe(0);
+
+    const elevatedMachine = member("machine:elevated", 0, 0, 25_000, { verticalCenterMm: 25_500 });
+    expect(derivePlanMoveSelection([elevatedMachine.entityId], [elevatedMachine])?.pivotMm.zMm).toBe(25_000);
+
+    expect(derivePlanMoveSelection(
+      [tallColumn.entityId, elevatedMachine.entityId],
+      [tallColumn, elevatedMachine]
+    )?.pivotMm.zMm).toBe(0);
+
+    const rigidTallColumnGroup = [
+      member("machine:base", -1000, 0, 0),
+      member("civil:tall-column", 1000, 0, 0, { verticalCenterMm: 25_000 })
+    ];
+    expect(derivePlanMoveSelection(
+      rigidTallColumnGroup.map((item) => item.entityId),
+      rigidTallColumnGroup
+    )?.pivotMm.zMm).toBe(0);
   });
 
   it("maps world X, Babylon Z, and XZ plane handles to canonical domain Plan axes", () => {

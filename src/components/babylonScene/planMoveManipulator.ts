@@ -55,7 +55,7 @@ export const derivePlanMoveSelection = (
     pivotMm: {
       xMm: (minXMm + maxXMm) / 2,
       yMm: (minYMm + maxYMm) / 2,
-      zMm: Math.max(...resolved.map((member) => member.verticalCenterMm))
+      zMm: Math.min(...resolved.map((member) => member.elevationMm))
     }
   };
 };
