@@ -4879,6 +4879,9 @@ test("group edit mode moves one member and restores rigid scene selection on exi
 test("project and performance modals open and close deterministically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  await expect(canvas).toHaveAttribute("data-performance-metrics-publish-count", "0");
+  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
 
   await openProjectManagerFromFileMenu(page);
   await expect(page.getByTestId("project-manager-modal")).toBeVisible();
@@ -4893,9 +4896,17 @@ test("project and performance modals open and close deterministically", async ({
   await expectNoModalBackdrop(page);
 
   await openPerformanceBenchmarkFromToolsMenu(page);
+  await expect.poll(async () => Number(
+    await canvas.getAttribute("data-performance-metrics-publish-count")
+  )).toBeGreaterThan(0);
   await page.getByTestId("close-performance-benchmark").click();
   await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
   await expectNoModalBackdrop(page);
+  await waitForSceneRenderFrames(page);
+  const stoppedPublishCount = await canvas.getAttribute("data-performance-metrics-publish-count");
+  await waitForSceneRenderFrames(page);
+  await expect(canvas).toHaveAttribute("data-performance-metrics-publish-count", stoppedPublishCount ?? "");
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
 
   expect(errors).toEqual([]);
 });

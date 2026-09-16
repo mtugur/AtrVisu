@@ -102,6 +102,7 @@ export type CommandSurfaceAdapter = Readonly<{
     placement: CommandSurfacePlacement
   ) => CommandSurfaceItem | undefined;
   execute: (commandId: CommandId, payload?: unknown) => Promise<RuntimeCommandOperationResult>;
+  notifyRuntimeStateChanged: () => void;
   subscribe: (listener: () => void) => () => void;
   getRevision: () => number;
 }>;

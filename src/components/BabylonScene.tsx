@@ -47,7 +47,10 @@ import {
 } from "../utils/coordinateReference";
 import { getMachineDimensionsMeters, getMachineDimensionsMm } from "../utils/machineDimensions";
 import { getPlacedMachineDisplayName } from "../utils/entityNames";
-import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
+import {
+  collectScenePerformanceMetrics,
+  shouldPublishScenePerformanceMetrics
+} from "../utils/performanceBenchmark";
 import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
 import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
@@ -1139,6 +1142,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const collisionResultRef = useRef<CollisionCheckResult>(collisionResult);
   const placementSettingsRef = useRef(placementSettings);
   const onPerformanceMetricsChangeRef = useRef(onPerformanceMetricsChange);
+  const lastPerformanceMetricsPublishedAtRef = useRef<number | null>(null);
+  const performanceMetricsPublishCountRef = useRef(0);
   const enableE2EDiagnosticsRef = useRef(enableE2EDiagnostics);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<MachineDragState | null>(null);
@@ -1436,6 +1441,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
   useEffect(() => {
     onPerformanceMetricsChangeRef.current = onPerformanceMetricsChange;
+    lastPerformanceMetricsPublishedAtRef.current = null;
   }, [onPerformanceMetricsChange]);
 
   useImperativeHandle(ref, () => ({
@@ -2262,6 +2268,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
       }
       if (enableE2EDiagnosticsRef.current) {
+        canvas.dataset.performanceMetricsPublishCount = String(performanceMetricsPublishCountRef.current);
         canvas.dataset.planMoveManipulator = JSON.stringify(planMoveManipulator.getDiagnostics(
           canvas.dataset.planMoveHandleDiagnostics === "true"
         ));
@@ -2306,8 +2313,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           }));
       }
       scene.render();
-      if (onPerformanceMetricsChangeRef.current) {
-        onPerformanceMetricsChangeRef.current(collectScenePerformanceMetrics(scene, engine));
+      const publishPerformanceMetrics = onPerformanceMetricsChangeRef.current;
+      const currentTimeMs = performance.now();
+      if (publishPerformanceMetrics && shouldPublishScenePerformanceMetrics(
+        lastPerformanceMetricsPublishedAtRef.current,
+        currentTimeMs
+      )) {
+        lastPerformanceMetricsPublishedAtRef.current = currentTimeMs;
+        performanceMetricsPublishCountRef.current += 1;
+        publishPerformanceMetrics(collectScenePerformanceMetrics(scene, engine));
       }
     });
 

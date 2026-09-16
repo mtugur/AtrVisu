@@ -4482,6 +4482,24 @@ export function App() {
     commandSurfaceAdapter.getRevision
   );
 
+  const commandSurfaceStateSignatureRef = useRef("");
+  useEffect(() => {
+    const nextSignature = JSON.stringify(
+      commandSurfaceAdapter.getCommandPaletteItems().map((item) => ({
+        commandId: item.commandId,
+        disabled: item.disabled,
+        disabledReason: item.disabledReason,
+        pending: item.pending,
+        pressed: item.pressed
+      }))
+    );
+    if (commandSurfaceStateSignatureRef.current === nextSignature) {
+      return;
+    }
+    commandSurfaceStateSignatureRef.current = nextSignature;
+    commandSurfaceAdapter.notifyRuntimeStateChanged();
+  });
+
   const commandSurfaceMenus = commandSurfaceAdapter.getMenus();
   const commandBarItems = commandSurfaceAdapter.getCommandBarItems();
   const commandPaletteItems = commandSurfaceAdapter.getCommandPaletteItems();
@@ -4780,7 +4798,7 @@ export function App() {
             collisionResult={collisionResult}
             enableE2EDiagnostics={enableE2EDiagnostics}
             onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
-            onPerformanceMetricsChange={setLatestPerformanceMetrics}
+            onPerformanceMetricsChange={isPerformanceBenchmarkOpen ? setLatestPerformanceMetrics : undefined}
           />
           <div className="workbench-viewport-context-layer" aria-live="polite">
             <ViewportArrangeBar
