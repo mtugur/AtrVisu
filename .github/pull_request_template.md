@@ -11,6 +11,7 @@
 - [ ] Read `docs/product/ATRVISU_PRODUCT_CONSTITUTION.md`
 - Relevant standards / exact sections:
 - Existing canonical authorities preserved:
+- Master Plan / Project source sync status:
 
 ## Interaction declaration
 
@@ -19,15 +20,22 @@ Does this PR change user-facing interaction semantics (selection, move, rotate, 
 - [ ] No
 - [ ] Yes
 
+Interaction impact rationale (required for either answer):
+
 If **Yes**, complete all:
 
 - Interaction Standard section(s):
+- Benchmark evidence record path:
 - Named benchmark precedent(s):
+- Authoritative source(s):
 - Desired user-observable behavior:
 - Forbidden behavior / regressions:
-- [ ] The standard already defines this behavior, OR the standard is updated in this PR before implementation.
+- [ ] Benchmark evidence satisfies `docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDARD.md`.
+- [ ] Benchmark evidence existed before implementation or this PR is explicitly a governance/contract package.
+- [ ] The standard already defines this behavior, OR the contract delta was frozen before implementation.
 - [ ] Any intentional benchmark deviation has an ADR.
 - [ ] `docs/checklists/INTERACTION_CHANGE_GATE.md` is completed/evidenced.
+- [ ] `docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md` correction budget is respected.
 
 ## Runtime / console
 
@@ -49,5 +57,7 @@ Tests/evidence:
 - [ ] This is not a third tuning round for the same basic interaction.
 - [ ] No hidden fallback, camera-specific sign correction, catch-up, gain clamp, hysteresis or smoothing is being added merely to make a wrong interaction model feel usable.
 - [ ] The PR has not silently expanded into a different product/architecture objective.
+- [ ] Normative contract/benchmark files are not being changed post-hoc merely to bless implementation already written.
+- [ ] User is not being used as exploratory QA before reviewer-side runtime/contract verification.
 
 If any checkbox above is false, implementation/review must stop and return to benchmark + contract review.
