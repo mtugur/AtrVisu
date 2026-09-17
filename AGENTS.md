@@ -1,4 +1,4 @@
-# AGENTS.md — AtrVisu Agent Operating Rules v0.4
+# AGENTS.md — AtrVisu Agent Operating Rules v0.5
 
 AtrVisu, Atara Makine için web tabanlı endüstriyel 3D layout, teklif, mühendislik doğrulama, simülasyon ve gelecekte sanal devreye alma platformudur.
 
@@ -6,12 +6,13 @@ AtrVisu, Atara Makine için web tabanlı endüstriyel 3D layout, teklif, mühend
 Kod veya doküman değiştirmeden önce:
 1. `AGENTS.md`
 2. `docs/product/ATRVISU_PRODUCT_CONSTITUTION.md`
-3. Kullanıcı etkileşimi değişiyorsa `docs/standards/ATRVISU_INTERACTION_STANDARD.md`
-4. İlgili diğer dosyalar: `docs/standards/*`
-5. İlgili normatif ürün dosyaları: `docs/product/*`
-6. `docs/protocols/CODEX_SYNC_PROTOCOL.md`
-7. İlgili `docs/checklists/*`
-8. Gerekirse ilgili ADR dosyası
+3. `docs/protocols/MASTER_PLAN_SYNC_PROTOCOL.md`
+4. Kullanıcı etkileşimi değişiyorsa `docs/standards/ATRVISU_INTERACTION_STANDARD.md`
+5. İlgili diğer dosyalar: `docs/standards/*`
+6. İlgili normatif ürün dosyaları: `docs/product/*`
+7. `docs/protocols/CODEX_SYNC_PROTOCOL.md`
+8. İlgili `docs/checklists/*`
+9. Gerekirse ilgili ADR dosyası
 
 Bu sıra yalnızca okuma sırası değil, otorite sırasıdır. Alt sıradaki kaynak üst sıradaki kaynağı sessizce geçersiz kılamaz.
 
@@ -19,6 +20,7 @@ Bu sıra yalnızca okuma sırası değil, otorite sırasıdır. Alt sıradaki ka
 - Rastgele UX, veri modeli, komut, panel, birim, koordinat, simülasyon veya mimari kararı alınmaz.
 - Çelişki varsa kod yazılmaz; çelişki raporlanır.
 - Repo içindeki normatif ürün/standart sözleşmeleri geçici chat cevaplarından, mevcut koddan ve yeşil testlerden üstündür.
+- Project kaynaklarındaki Master Plan veya kullanıcı kararı durable davranışı değiştiriyorsa, ilgili repo contract/ADR senkronize edilmeden implementasyon yapılmaz.
 - User-facing interaction için normatif sözleşme yoksa implementasyon yapılmaz. Önce benchmark araştırması + interaction contract; gerekiyorsa ADR; sonra kod.
 - SolidWorks, AutoCAD/Autodesk Factory, Visual Components, Siemens Tecnomatix/RobotExpert ve benzeri olgun mühendislik ürünlerindeki yerleşik kullanıcı alışkanlıkları varsayılan precedents’tir. Bunlardan bilinçli sapma ADR ister.
 - Rendering framework/library default davranışı ürün standardı sayılmaz.
@@ -44,6 +46,7 @@ Aşağıdakilerden biri olursa aynı yaklaşım üzerinde başka tuning turu yas
 ## Geliştirme Disiplini
 - Contract-first.
 - Benchmark-first for user-facing interaction.
+- Project-to-repository contract sync before implementation.
 - Küçük branch/slice.
 - Legacy adapter ile kontrollü geçiş.
 - Feature erişim matrisi.
@@ -54,7 +57,7 @@ Aşağıdakilerden biri olursa aynı yaklaşım üzerinde başka tuning turu yas
 ## Repository-wide Delivery Protocol
 - One bounded development package normally uses one pull request. Do not split a package into routine micro-PRs.
 - Use logical commits as the work requires. Never predeclare or manufacture a commit count.
-- The normal delivery loop is: freeze contract/benchmark, implement, run CI, perform one comprehensive review, apply one correction batch when needed, rerun CI, complete one final manual acceptance when visible behavior changed, then merge.
+- The normal delivery loop is: sync/freeze contract + benchmark, implement, run CI, perform one comprehensive review, apply one correction batch when needed, rerun CI, complete one final manual acceptance when visible behavior changed, then merge.
 - Routine Git, test, and CI work is agent-owned. Ask the user only for genuine final manual visual/runtime acceptance or destructive/ambiguous decisions; do not use the user as an exploratory QA loop.
 - Use risk-based local validation during development. Run the complete gate once before delivery instead of repeating it after every trivial edit.
 - Complete repository documentation in the implementation PR. Avoid routine documentation-only `PENDING` to `PASS` closure commits.
