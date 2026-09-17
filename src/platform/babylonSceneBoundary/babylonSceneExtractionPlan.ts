@@ -207,28 +207,27 @@ export const babylonSceneExtractionPlan = {
         "viewport-camera-extraction",
         "object-rendering-extraction",
         "selection-picking-helper-extracted",
-        "drag-placement-helper-extracted",
+        "plan-movement-primitives-reconciled",
         "rotation-gizmo-helper-extracted",
-        "selection-and-drag-contract-tests-ready"
+        "selection-and-manipulator-contract-tests-ready"
       ],
       protectedBehaviors: [
         ...baselineProtectedBehaviors,
         "selection-picking-helper-contract",
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
-        "drag-placement-helper-contract",
-        "machine-drag-position-updates",
-        "civil-drag-position-calculation",
-        "floor-delta-mm-conversion",
+        "canonical-plan-position-primitive-contract",
+        "body-pointer-selection-only",
+        "manipulator-only-plan-move",
         "rotation-gizmo-helper-contract",
         "plan-rotation-degrees-to-radians",
         "manual-rotation-input-commit",
         "rotation-snap-nudge-calculation",
         "pointer-interaction-handling",
         "single-and-multi-selection-order",
-        "object-civil-annotation-drag-math",
+        "annotation-drag-math",
         "placement-and-rotation-controls",
-        "camera-controls-not-triggered-during-drag"
+        "camera-controls-detach-only-during-active-manipulation"
       ],
       forbiddenChanges: sharedForbiddenChanges,
       validationSignals: [
@@ -248,7 +247,7 @@ export const babylonSceneExtractionPlan = {
         "src/components/babylonScene/selectionPicking.test.ts",
         "src/scene/interactions/createScenePointerController.ts (conceptual)",
         "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)",
-        "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)",
+        "src/scene/interactions/createScenePointerSelectionController.ts (conceptual)",
         "src/scene/interactions/createAlignmentSnapPreparationAdapter.ts (conceptual)"
       ]
     },

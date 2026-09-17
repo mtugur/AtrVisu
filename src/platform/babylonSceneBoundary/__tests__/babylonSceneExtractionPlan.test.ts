@@ -125,10 +125,9 @@ describe("babylon scene extraction plan", () => {
         "selection-picking-helper-contract",
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
-        "drag-placement-helper-contract",
-        "machine-drag-position-updates",
-        "civil-drag-position-calculation",
-        "floor-delta-mm-conversion",
+        "canonical-plan-position-primitive-contract",
+        "body-pointer-selection-only",
+        "manipulator-only-plan-move",
         "rotation-gizmo-helper-contract",
         "plan-rotation-degrees-to-radians",
         "manual-rotation-input-commit",
@@ -136,7 +135,7 @@ describe("babylon scene extraction plan", () => {
         "pointer-interaction-handling",
       ])
     );
-    expect(interactionPhase?.prerequisites).toContain("drag-placement-helper-extracted");
+    expect(interactionPhase?.prerequisites).toContain("plan-movement-primitives-reconciled");
     expect(interactionPhase?.prerequisites).toContain("rotation-gizmo-helper-extracted");
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/dragPlacement.ts"
@@ -163,7 +162,7 @@ describe("babylon scene extraction plan", () => {
       "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
-      "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)"
+      "src/scene/interactions/createScenePointerSelectionController.ts (conceptual)"
     );
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/scene/interactions/createAlignmentSnapPreparationAdapter.ts (conceptual)"

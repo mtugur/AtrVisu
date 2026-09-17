@@ -4458,7 +4458,7 @@ test("scene lifecycle stays stable through selection and accepted pointer drag",
   expect(errors).toEqual([]);
 });
 
-test("scene member click selects and rigidly moves the complete assembly", async ({ page }) => {
+test("scene member body interaction selects only and Plan Move rigidly moves the complete assembly", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const { canvas, group, groupId, machineIds } = await createTwoMachineAssembly(
@@ -4489,24 +4489,12 @@ test("scene member click selects and rigidly moves the complete assembly", async
   await expect(page.getByTestId("selected-assembly-name")).toContainText("Rigid Move Assembly");
   await expect(page.getByTestId("multi-selection-panel")).toContainText("2 objects");
 
-  const canvasBounds = await canvas.boundingBox();
-  const dragStart = await getMachineScreenPoint(page, machineIds[0]);
-  if (!canvasBounds || !dragStart) {
-    throw new Error("Group drag start point is unavailable.");
-  }
-  const startX = canvasBounds.x + dragStart.x;
-  const startY = canvasBounds.y + dragStart.y;
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(startX + 1, startY + 1);
-  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "noop");
-  await page.mouse.move(startX + 90, startY + 35);
-  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
-  await page.mouse.up();
-  await expect.poll(async () => canvas.evaluate((element) => getComputedStyle(element).cursor)).not.toBe("grabbing");
-  await expect(canvas).toHaveAttribute("data-last-machine-drag-preflight", "true");
-  await expect(canvas).toHaveAttribute("data-last-machine-drag-member-count", "2");
-  await expect(canvas).toHaveAttribute("data-last-machine-drag-applied", "true");
+  await dragSceneMachine(page, machineIds[0], 90, 35);
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
+  await expect(canvas).toHaveAttribute("data-selected-assembly-id", groupId ?? "");
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(true);
+
+  await dragPlanMoveHandle(page, "plane", 90, 35);
   await expect.poll(async () => {
     const current = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
     return current[machineIds[0]]?.xMm !== before[machineIds[0]]?.xMm
@@ -4529,9 +4517,6 @@ test("scene member click selects and rigidly moves the complete assembly", async
   await page.keyboard.press("Control+y");
   await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(moved);
 
-  const movedScreenPoint = await getMachineScreenPoint(page, machineIds[0]);
-  expect(movedScreenPoint?.x).toBeCloseTo(dragStart.x + 90, -1);
-  expect(movedScreenPoint?.y).toBeCloseTo(dragStart.y + 35, -1);
   expect(errors).toEqual([]);
 });
 
@@ -4587,22 +4572,27 @@ test("Plan Move Manipulator maps machine axes with snap and one-step history", a
   expect(errors).toEqual([]);
 });
 
-test("Plan Move Manipulator remains usable across above shallow near-horizontal and below camera pitches", async ({ page }) => {
-  const errors = collectPageErrors(page);
-  await openCleanApp(page);
-  const canvas = page.getByLabel("AtrVisu 3D workspace");
-  await addCanonicalAtaraMachine(
-    page,
-    "Robot Palletizer",
-    ["Palletizing", "Robot Palletizers"]
-  );
-  await waitForMachineDiagnostics(page, 1);
-  const machineId = (await getMachineIds(page))[0];
-  const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
-  await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
-  const elevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
-
-  for (const beta of [0.8, 1.42, 1.565, 2.3]) {
+for (const { label, beta } of [
+  { label: "above", beta: 0.8 },
+  { label: "moderate", beta: 1.1 },
+  { label: "shallow", beta: 1.42 },
+  { label: "near-horizontal", beta: 1.565 },
+  { label: "below-target", beta: 2.3 }
+] as const) {
+  test(`Plan Move Manipulator preserves X Y and plane semantics from ${label} camera pitch`, async ({ page }) => {
+    const errors = collectPageErrors(page);
+    await openCleanApp(page);
+    const canvas = page.getByLabel("AtrVisu 3D workspace");
+    await addCanonicalAtaraMachine(
+      page,
+      "Robot Palletizer",
+      ["Palletizing", "Robot Palletizers"]
+    );
+    await waitForMachineDiagnostics(page, 1);
+    const machineId = (await getMachineIds(page))[0];
+    const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
+    await page.getByTestId("precision-placement-panel").getByLabel("Grid Snap", { exact: true }).uncheck();
+    const elevationBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
     const plan = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
     expect(await applyRuntimeViewportCameraState(page, {
       mode: "perspective",
@@ -4614,19 +4604,34 @@ test("Plan Move Manipulator remains usable across above shallow near-horizontal 
       targetZ: plan.yMm / 1000
     })).toBe(true);
     await waitForSceneRenderFrames(page);
-    const before = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    const beforeX = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    await dragPlanMoveHandle(page, "x", 28, 0);
+    const afterX = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    expect(afterX.xMm).not.toBe(beforeX.xMm);
+    expect(afterX.yMm).toBe(beforeX.yMm);
+
+    const beforeY = afterX;
+    await dragPlanMoveHandle(page, "plan-y", 0, beta > Math.PI / 2 ? -24 : 24);
+    const afterY = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    expect(afterY.xMm).toBe(beforeY.xMm);
+    expect(afterY.yMm).not.toBe(beforeY.yMm);
+
+    const beforePlane = afterY;
     await dragPlanMoveHandle(page, "plane", 28, beta > Math.PI / 2 ? -20 : 20);
-    const after = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-    expect(Math.hypot(after.xMm - before.xMm, after.yMm - before.yMm)).toBeGreaterThan(0);
-  }
+    const afterPlane = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+    expect(afterPlane.xMm).not.toBe(beforePlane.xMm);
+    expect(afterPlane.yMm).not.toBe(beforePlane.yMm);
 
-  expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(elevationBefore);
-  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-  await capturePf3aScreenshot(page, "34-plan-move-machine.png");
-  expect(errors).toEqual([]);
-});
+    expect(await readCanvasRecord<number>(page, "data-machine-elevations-mm")).toEqual(elevationBefore);
+    await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
+    if (label === "near-horizontal") {
+      await capturePf3aScreenshot(page, "34-plan-move-machine.png");
+    }
+    expect(errors).toEqual([]);
+  });
+}
 
-test("near-parallel body drag stays unavailable while Plan Move remains usable", async ({ page }) => {
+test("body interaction remains selection-only while Plan Move stays usable near horizontal", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   const { machineIds } = await createTwoMachineAssembly(page, "Near Parallel Assembly");
@@ -4656,7 +4661,6 @@ test("near-parallel body drag stays unavailable while Plan Move remains usable",
   await page.keyboard.press("Escape");
   await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(false);
   await dragSceneMachine(page, machineId, 90, 0);
-  await expect(page.getByLabel("AtrVisu 3D workspace")).toHaveAttribute("data-last-machine-drag-preflight", "false");
   await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
   await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(true);
   await dragPlanMoveHandle(page, "x", 28, 0);
@@ -4687,6 +4691,11 @@ test("Plan Move Manipulator moves Civil, rigid Group, and independent selection 
     await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")
   ).length).toBe(1);
   const civilId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
+  const civilBodyBefore = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  await dragSceneEntityAtScreenBounds(page, await getCivilCenterGrabBounds(page, civilId), 70, 30, 0.5);
+  await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))
+    .toEqual(civilBodyBefore);
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(true);
   const heightInput = page.getByRole("textbox", { name: "Civil Height", exact: true });
   for (const heightMm of [20_000, 50_000]) {
     await heightInput.fill(String(heightMm));
@@ -4788,7 +4797,7 @@ test("Plan Move Manipulator moves an imported GLB without changing elevation", a
   await capturePf3aScreenshot(page, "37-plan-move-imported-glb.png");
   expect(errors).toEqual([]);
 });
-test("locked assembly member blocks pointer drag and keyboard nudge atomically", async ({ page }) => {
+test("locked assembly member blocks Plan Move and keyboard nudge atomically", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await openPrimaryDockPanel(page, "panel.layers");
@@ -4815,6 +4824,7 @@ test("locked assembly member blocks pointer drag and keyboard nudge atomically",
 
   const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
   await clickSceneMachine(page, machineIds[1]);
+  await expect.poll(async () => (await readPlanMoveManipulator(page)).available).toBe(false);
   await dragSceneMachine(page, machineIds[1], 80, 30);
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions")).toEqual(before);
@@ -4864,8 +4874,10 @@ test("group edit mode moves one member and restores rigid scene selection on exi
   await expect(page.getByTestId("connection-point-snap-panel")).toHaveCount(0);
   await expect.poll(async () => (await getRuntimePanel(page, "panel.connectionPointSnap"))?.available).toBe(false);
 
+  await clickSceneMachine(page, machineIds[0]);
+  await expect(page.getByTestId("workbench-status-bar")).toContainText("Selected: 1");
   const before = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
-  await dragSceneMachine(page, machineIds[0], 85, 25);
+  await dragPlanMoveHandle(page, "plane", 85, 25);
   await expect.poll(async () => {
     const current = await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions");
     return current[machineIds[0]]?.xMm !== before[machineIds[0]]?.xMm;
@@ -6656,7 +6668,7 @@ test("PF-3A Inspector modes and group selection avoid React update-depth feedbac
   expect(errors).toEqual([]);
 });
 
-test("PF-3A persisted collapsed shells remain console-clean through drag and hard reload", async ({ page }) => {
+test("PF-3A persisted collapsed shells remain console-clean through Plan Move and hard reload", async ({ page }) => {
   const errors = collectPageErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await seedUiPreferences(page, createE2EUiPreferences({
@@ -6681,7 +6693,7 @@ test("PF-3A persisted collapsed shells remain console-clean through drag and har
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const lifecycleGeneration = await canvas.getAttribute("data-scene-lifecycle-generation");
   const before = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
-  await dragSceneEntityAtScreenBounds(page, await getMachineScreenBounds(page, machineId), 140, 80, 0.5);
+  await dragPlanMoveHandle(page, "plane", 70, 40);
   await expect.poll(async () => {
     const current = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
     return current.xMm !== before.xMm || current.yMm !== before.yMm;

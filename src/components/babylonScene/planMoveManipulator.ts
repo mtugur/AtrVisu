@@ -104,7 +104,7 @@ export const createPlanMoveGestureHistoryTracker = () => {
 
 export type PlanMoveManipulator = {
   syncSelection: (selection: PlanMoveSelectionSnapshot | null) => void;
-  updatePresentation: (bodyDragActive?: boolean) => void;
+  updatePresentation: (separateAnnotationDragActive?: boolean) => void;
   dispose: () => void;
   getDiagnostics: (includeHandles?: boolean) => {
     available: boolean;
@@ -294,8 +294,8 @@ export const createPlanMoveManipulator = ({ scene, canvas, camera, settings, onA
       handleProjectionSignature = "";
       handleProjectionRefreshFrames = 2;
     },
-    updatePresentation(bodyDragActive = false) {
-      canvas.style.cursor = gesture || bodyDragActive ? "grabbing" : gizmo.isHovered ? "grab" : "default";
+    updatePresentation(separateAnnotationDragActive = false) {
+      canvas.style.cursor = gesture || separateAnnotationDragActive ? "grabbing" : gizmo.isHovered ? "grab" : "default";
     },
     getDiagnostics: (includeHandles = false) => {
       const available = Boolean(currentSelection && gizmo.attachedNode);

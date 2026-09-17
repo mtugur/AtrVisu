@@ -371,7 +371,7 @@ describe("babylon scene boundary audit failures", () => {
     ).toBe(true);
   });
 
-  it("fails when drag placement contract loses extracted flow coverage", () => {
+  it("fails when the reconciled contract permits body Plan mutation again", () => {
     expect(
       hasIssue(
         withInventory({
@@ -379,7 +379,7 @@ describe("babylon scene boundary audit failures", () => {
             ...currentBabylonSceneBoundary.dragPlacementContract,
             extractedFlows: {
               ...currentBabylonSceneBoundary.dragPlacementContract.extractedFlows,
-              floorDeltaMmConversion: false
+              bodyPlanMutationRemoved: false
             }
           } as unknown as BabylonSceneBoundaryInventory["dragPlacementContract"]
         }),

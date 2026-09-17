@@ -70,18 +70,7 @@ import {
 } from "../utils/annotations";
 import { createBabylonCameraViewport } from "./babylonScene/cameraViewport";
 import {
-  calculateCivilDragPosition,
-  calculateMachineDragPositionUpdates,
-  createCivilDragState,
-  createMachineDragState,
-  createPlanDragProjection,
-  didSceneDragApplyMutation,
   getMachineStartPositionMm,
-  intersectRayWithHorizontalDragPlane,
-  resolvePlanDragFrame,
-  shouldKeepSceneDragActive,
-  type CivilDragState,
-  type MachineDragState,
   type SceneDragMutationResult
 } from "./babylonScene/dragPlacement";
 import {
@@ -164,7 +153,6 @@ type BabylonSceneProps = {
   lockedMachineIds?: string[];
   lockedCivilReferenceIds?: string[];
   lockedAnnotationIds?: string[];
-  activeGroupEditMachineIds?: string[];
   selectedAssemblyId?: string | null;
   activeGroupEditId?: string | null;
   onSelectMachine: (instanceId: string | null, mode?: "replace" | "toggle" | "clear") => void;
@@ -174,20 +162,11 @@ type BabylonSceneProps = {
     instanceId: string,
     updates: Partial<Pick<PlacedMachine, "position" | "positionMm" | "elevationMm" | "rotationDeg" | "rotationY" | "flowDirection">>
   ) => void;
-  onSetMachinePositions: (
-    updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
-    options?: { recordHistory?: boolean }
-  ) => SceneDragMutationResult;
   onSetAnnotationPosition: (
     annotationId: string,
     positionMm: { xMm: number; yMm: number },
     options?: { recordHistory?: boolean }
   ) => boolean;
-  onSetCivilReferencePosition: (
-    id: string,
-    positionMm: { xMm: number; yMm: number },
-    options?: { recordHistory?: boolean }
-  ) => SceneDragMutationResult;
   onSetSelectionPlanPositions: (
     updates: PlanMovePositionUpdates,
     options?: { recordHistory?: boolean }
@@ -1092,16 +1071,13 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   lockedMachineIds = [],
   lockedCivilReferenceIds = [],
   lockedAnnotationIds = [],
-  activeGroupEditMachineIds = [],
   selectedAssemblyId = null,
   activeGroupEditId = null,
   onSelectMachine,
   onSelectCivilReference,
   onSelectAnnotation,
   onUpdateMachine,
-  onSetMachinePositions,
   onSetAnnotationPosition,
-  onSetCivilReferencePosition,
   onSetSelectionPlanPositions,
   canBeginObjectDrag,
   placementSettings,
@@ -1134,7 +1110,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const lockedMachineIdsRef = useRef<string[]>(lockedMachineIds);
   const lockedCivilReferenceIdsRef = useRef<string[]>(lockedCivilReferenceIds);
   const lockedAnnotationIdsRef = useRef<string[]>(lockedAnnotationIds);
-  const activeGroupEditMachineIdsRef = useRef<string[]>(activeGroupEditMachineIds);
   const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
@@ -1146,9 +1121,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const performanceMetricsPublishCountRef = useRef(0);
   const enableE2EDiagnosticsRef = useRef(enableE2EDiagnostics);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
-  const dragStateRef = useRef<MachineDragState | null>(null);
-  const civilDragStateRef = useRef<CivilDragState | null>(null);
-  const dragHistoryRecordedRef = useRef(false);
+  const annotationDragHistoryRecordedRef = useRef(false);
   const annotationDragStateRef = useRef<{
     annotationId: string;
     planeElevationMeters: number;
@@ -1183,9 +1156,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.machineSceneLabels;
         delete canvas.dataset.machineLoadedModelCounts;
         delete canvas.dataset.machineRenderTransforms;
-        delete canvas.dataset.lastSceneDragResult;
-        delete canvas.dataset.lastDragPlaneElevationMeters;
-        delete canvas.dataset.lastDragResolveStatus;
         delete canvas.dataset.planMoveManipulator;
       }
     }
@@ -1194,10 +1164,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     annotationsRef.current = annotations;
   }, [annotations]);
-
-  useEffect(() => {
-    activeGroupEditMachineIdsRef.current = activeGroupEditMachineIds;
-  }, [activeGroupEditMachineIds]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1740,50 +1706,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       if (!ray) {
         return null;
       }
-      const point = intersectRayWithHorizontalDragPlane(
-        ray.origin,
-        ray.direction,
+      const point = getRayPlanePlanPointMm({
+        rayOrigin: ray.origin,
+        rayDirection: ray.direction,
         planeElevationMeters
-      );
-      return point ? new Vector3(point.x, point.y, point.z) : null;
+      });
+      return point
+        ? new Vector3(point.xMm / 1000, planeElevationMeters, point.yMm / 1000)
+        : null;
     };
 
     const pickFloorPoint = () => pickPlanePoint(0);
-
-    const createPointerPlanDragProjection = (
-      pickedPoint: Vector3 | null | undefined,
-      event: PointerEvent | undefined
-    ) => {
-      const ray = createPointerRay(event);
-      return ray && pickedPoint ? createPlanDragProjection({
-        rayOrigin: ray.origin,
-        rayDirection: ray.direction,
-        pickedPoint,
-        viewPlaneDot: Math.abs(Math.cos(camera.beta))
-      }) : null;
-    };
-
-    const resolvePointerPlanDragFrame = (
-      projection: MachineDragState["projection"],
-      event: PointerEvent
-    ) => {
-      const ray = createPointerRay(event);
-      if (!ray) {
-        if (enableE2EDiagnosticsRef.current) {
-          canvas.dataset.lastDragResolveStatus = "missing-ray";
-        }
-        return null;
-      }
-      const frame = resolvePlanDragFrame({
-        projection,
-        rayOrigin: ray.origin,
-        rayDirection: ray.direction
-      });
-      if (enableE2EDiagnosticsRef.current) {
-        canvas.dataset.lastDragResolveStatus = frame ? "resolved" : "unavailable-horizontal-plane";
-      }
-      return frame;
-    };
 
     const pickPlanPointMm = (planeElevationMeters: number) => {
       const ray = createPointerRay();
@@ -1894,8 +1827,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (isPanPointer(sourceEvent) && panPoint) {
           sourceEvent?.preventDefault();
           panStateRef.current = { lastFloorPoint: panPoint.clone() };
-          dragStateRef.current = null;
-          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
           cameraRef.current?.detachControl();
           return;
@@ -1903,10 +1834,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (annotationId) {
           sourceEvent?.preventDefault();
-          dragStateRef.current = null;
-          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
-          dragHistoryRecordedRef.current = false;
+          annotationDragHistoryRecordedRef.current = false;
           panStateRef.current = null;
           const annotation = annotationsRef.current.find((item) => item.id === annotationId);
           const annotationEntityId = createLegacyPlatformEntityId("annotation", annotationId);
@@ -1938,31 +1867,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
 
         if (civilReferenceId) {
-          const civilReference = civilReferencesRef.current.find((item) => item.id === civilReferenceId);
-          const projection = createPointerPlanDragProjection(
-            pick?.pickedPoint,
-            sourceEvent
-          );
-          sourceEvent?.preventDefault();
-          dragStateRef.current = null;
-          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
-          dragHistoryRecordedRef.current = false;
+          annotationDragHistoryRecordedRef.current = false;
           panStateRef.current = null;
-          const civilEntityId = createLegacyPlatformEntityId("civil", civilReferenceId);
-          if (
-            civilReference
-            && projection
-            && !lockedCivilReferenceIdsRef.current.includes(civilReferenceId)
-            && canBeginObjectDrag(civilEntityId, !isToggleSelection)
-          ) {
-            civilDragStateRef.current = createCivilDragState(civilReferenceId, projection, {
-              xMm: civilReference.positionMm.xMm,
-              yMm: civilReference.positionMm.yMm
-            });
-            canvas.dataset.lastDragPlaneElevationMeters = String(projection.anchorPoint.y);
-            cameraRef.current?.detachControl();
-          }
           onSelectAnnotation(null);
           if (!isToggleSelection) {
             onSelectMachine(null, "clear");
@@ -1972,49 +1879,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
 
         if (instanceId) {
-          const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
-          const projection = createPointerPlanDragProjection(
-            pick?.pickedPoint,
-            sourceEvent
-          );
-          dragStateRef.current = null;
-          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
-          dragHistoryRecordedRef.current = false;
+          annotationDragHistoryRecordedRef.current = false;
           panStateRef.current = null;
-          const machineEntityId = createLegacyPlatformEntityId("machine", instanceId);
-          const dragPreflightAllowed = Boolean(
-            machine
-            && projection
-            && !lockedMachineIdsRef.current.includes(instanceId)
-            && canBeginObjectDrag(machineEntityId, !isToggleSelection)
-          );
-          canvas.dataset.lastMachineDragPreflight = String(dragPreflightAllowed);
-          if (
-            dragPreflightAllowed
-            && machine
-            && projection
-          ) {
-            const nextDragState = createMachineDragState({
-              targetInstanceId: instanceId,
-              projection,
-              selectedInstanceIds: activeGroupEditMachineIdsRef.current.includes(instanceId)
-                ? [instanceId]
-                : selectedMachineIdsRef.current,
-              lockedInstanceIds: lockedMachineIdsRef.current,
-              machines: placedMachinesRef.current,
-              isToggleSelection
-            });
-            canvas.dataset.lastMachineDragMemberCount = String(nextDragState?.instanceIds.length ?? 0);
-            if (!nextDragState) {
-              onSelectAnnotation(null);
-              onSelectMachine(instanceId, isToggleSelection ? "toggle" : "replace");
-              return;
-            }
-            dragStateRef.current = nextDragState;
-            canvas.dataset.lastDragPlaneElevationMeters = String(projection.anchorPoint.y);
-            cameraRef.current?.detachControl();
-          }
           onSelectAnnotation(null);
           if (!isToggleSelection) {
             onSelectCivilReference(null);
@@ -2024,8 +1891,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
 
         if (pick?.pickedMesh === floorRef.current) {
-          dragStateRef.current = null;
-          civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
           onSelectAnnotation(null);
           onSelectCivilReference(null);
@@ -2034,7 +1899,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
-        const sourceEvent = pointerInfo.event as PointerEvent | undefined;
         const panState = panStateRef.current;
         if (panState) {
           const floorPoint = pickFloorPoint();
@@ -2048,10 +1912,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
-        const dragState = dragStateRef.current;
-        const civilDragState = civilDragStateRef.current;
         const annotationDragState = annotationDragStateRef.current;
-        if (!dragState && !civilDragState && !annotationDragState) {
+        if (!annotationDragState) {
           return;
         }
 
@@ -2069,84 +1931,30 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           const applied = onSetAnnotationPosition(
             annotationDragState.annotationId,
             nextPosition,
-            { recordHistory: !dragHistoryRecordedRef.current }
+            { recordHistory: !annotationDragHistoryRecordedRef.current }
           );
-          dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
+          annotationDragHistoryRecordedRef.current = annotationDragHistoryRecordedRef.current || applied;
           if (!applied) {
             annotationDragStateRef.current = null;
-            dragHistoryRecordedRef.current = false;
+            annotationDragHistoryRecordedRef.current = false;
             cameraRef.current?.attachControl(canvasRef.current, true);
           }
           return;
-        }
-
-        if (civilDragState) {
-          if (!sourceEvent) {
-            return;
-          }
-          const frame = resolvePointerPlanDragFrame(civilDragState.projection, sourceEvent);
-          if (!frame) {
-            return;
-          }
-          const result = onSetCivilReferencePosition(
-            civilDragState.id,
-            calculateCivilDragPosition(civilDragState, frame.deltaMeters),
-            { recordHistory: !dragHistoryRecordedRef.current }
-          );
-          canvas.dataset.lastSceneDragResult = result;
-          dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || didSceneDragApplyMutation(result);
-          if (!shouldKeepSceneDragActive(result)) {
-            civilDragStateRef.current = null;
-            dragHistoryRecordedRef.current = false;
-            cameraRef.current?.attachControl(canvasRef.current, true);
-          }
-          return;
-        }
-
-        if (!dragState) {
-          return;
-        }
-
-        if (!sourceEvent) {
-          return;
-        }
-        const frame = resolvePointerPlanDragFrame(dragState.projection, sourceEvent);
-        if (!frame) {
-          return;
-        }
-        const machinePositionUpdates = calculateMachineDragPositionUpdates(dragState, frame.deltaMeters);
-        const result = onSetMachinePositions(
-          machinePositionUpdates,
-          { recordHistory: !dragHistoryRecordedRef.current }
-        );
-        canvas.dataset.lastSceneDragResult = result;
-        canvas.dataset.lastMachineDragApplied = String(didSceneDragApplyMutation(result));
-        dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || didSceneDragApplyMutation(result);
-        if (!shouldKeepSceneDragActive(result)) {
-          dragStateRef.current = null;
-          dragHistoryRecordedRef.current = false;
-          cameraRef.current?.attachControl(canvasRef.current, true);
         }
       }
 
       if (pointerInfo.type === PointerEventTypes.POINTERUP) {
-        if (dragStateRef.current || civilDragStateRef.current || annotationDragStateRef.current || panStateRef.current) {
-          dragStateRef.current = null;
-          civilDragStateRef.current = null;
+        if (annotationDragStateRef.current || panStateRef.current) {
           annotationDragStateRef.current = null;
           panStateRef.current = null;
-          dragHistoryRecordedRef.current = false;
+          annotationDragHistoryRecordedRef.current = false;
           cameraRef.current?.attachControl(canvasRef.current, true);
         }
       }
     });
 
     lifecycle.startRenderLoop(() => {
-      planMoveManipulator.updatePresentation(Boolean(
-        dragStateRef.current
-        || civilDragStateRef.current
-        || annotationDragStateRef.current
-      ));
+      planMoveManipulator.updatePresentation(Boolean(annotationDragStateRef.current));
       const deltaSeconds = engine.getDeltaTime() / 1000;
       machineNodesRef.current.forEach((node, instanceId) => {
         const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
@@ -2382,8 +2190,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     onSelectCivilReference,
     onSelectMachine,
     onSetAnnotationPosition,
-    onSetCivilReferencePosition,
-    onSetMachinePositions,
     onSetSelectionPlanPositions,
     onUpdateMachine
   ]);
