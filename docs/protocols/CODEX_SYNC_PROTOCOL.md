@@ -1,4 +1,4 @@
-# Codex Sync Protocol v3.1
+# Codex Sync Protocol v3.2
 
 ## Amaç
 Codex, ChatGPT ve geliştirici aynı repository içi normatif standartlara bağlı çalışır. Ürün davranışı chat hafızasına veya implementer tercihine bırakılamaz.
@@ -7,13 +7,16 @@ Codex, ChatGPT ve geliştirici aynı repository içi normatif standartlara bağl
 Her görev başlamadan önce sırayla okunur:
 1. `AGENTS.md`
 2. `docs/product/ATRVISU_PRODUCT_CONSTITUTION.md`
-3. User-facing interaction değişiyorsa `docs/standards/ATRVISU_INTERACTION_STANDARD.md`
-4. İlgili diğer `docs/standards/*`
-5. İlgili normatif `docs/product/*`
-6. Bu protocol
-7. İlgili checklist ve ADR
+3. `docs/protocols/MASTER_PLAN_SYNC_PROTOCOL.md`
+4. User-facing interaction değişiyorsa `docs/standards/ATRVISU_INTERACTION_STANDARD.md`
+5. İlgili diğer `docs/standards/*`
+6. İlgili normatif `docs/product/*`
+7. Bu protocol
+8. İlgili checklist ve ADR
 
 Çelişki varsa implementasyon durur; alt seviye kaynak üst seviye contract’ı override edemez.
+
+Project resource, Master Plan veya chat içinde durable bir ürün kararı değiştiyse, ilgili repository contract/ADR senkronize edilmeden Codex implementasyona başlayamaz.
 
 ## Görev Öncesi zorunlu alanlar
 Her görev şunları açıkça belirtir:
@@ -45,6 +48,7 @@ Selection, move, rotate, resize, drag/drop, snapping, camera navigation, Group/m
 Rendering library/framework default davranışı benchmark değildir.
 
 ## Zorunlu kontroller
+- Master Plan / Project source ile repo contracts arasında sync gap var mı?
 - Görev Product Constitution ile uyumlu mu?
 - Interaction Standard değişen davranışı gerçekten tanımlıyor mu?
 - Benchmark precedent task ile gerçekten benzer mi?
@@ -72,7 +76,7 @@ User-reported runtime error sentetik testte görülmedi diye kapatılamaz. Test 
 
 ## Çalışma biçimi
 - Büyük UI rewrite yerine bounded slice.
-- Önce contract ve acceptance scenario; sonra adapter/domain implementation; sonra UI; sonra tests/evidence.
+- Önce source sync + contract + acceptance scenario; sonra adapter/domain implementation; sonra UI; sonra tests/evidence.
 - Mevcut çalışan feature silinmez.
 - Yeni command/panel ad-hoc eklenmez; registry yönü korunur.
 - Tests implementation-specific math thresholds yerine user-observable contract’ı doğrular.
