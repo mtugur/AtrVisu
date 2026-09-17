@@ -35,6 +35,9 @@ jobs:
       - name: Dependency security audit
         run: npm audit --audit-level=low
 
+      - name: Interaction governance
+        run: npm run check:interaction-governance
+
       - name: Design token governance
         run: npm run check:design-tokens
 
