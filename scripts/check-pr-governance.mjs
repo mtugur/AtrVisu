@@ -72,8 +72,9 @@ const noChecked = /^- \[[xX]\] No\s*$/m.test(interaction);
 const yesChecked = /^- \[[xX]\] Yes\s*$/m.test(interaction);
 if (noChecked === yesChecked) fail("Interaction declaration must check exactly one of Yes or No");
 
-const rationaleMatch = interaction.match(/Interaction impact rationale \(required for either answer\):\s*\n+([^\n#].*)/i);
-if (!rationaleMatch?.[1]?.trim()) fail("Interaction impact rationale is required");
+const rationaleMatch = interaction.match(/Interaction impact rationale \(required for either answer\):[ \t]*\r?\n([^\r\n]*)/i);
+const rationale = rationaleMatch?.[1]?.trim() ?? "";
+if (!isConcrete(rationale) || /^If\b/i.test(rationale)) fail("Interaction impact rationale is required");
 
 const baseSha = event.pull_request?.base?.sha;
 const headSha = event.pull_request?.head?.sha;
