@@ -16,7 +16,7 @@ Purpose: make the Project-level Master Plan decisions visible and durable inside
 | Office/CAD/engineering user habits are the UI basis. | Product Constitution benchmark-first rule; `docs/standards/ATRVISU_INTERACTION_STANDARD.md` |
 | UI should behave as a predictable engineering cockpit, not a website. | `docs/standards/ATRVISU_UX_STANDARD.md`; Interaction Standard |
 | Viewport/camera/pointer behavior must remain separate from engineering data. | Existing Viewport Contract + Interaction Standard camera/manipulation sections |
-| Normal use must have no red console; `Maximum update depth` is a blocker. | Product Constitution; Interaction Standard runtime-console contract; Interaction Change Gate; CI governance |
+| No-red-console: normal use must have no red console; `Maximum update depth` is a blocker. | Product Constitution; Interaction Standard runtime-console contract; Interaction Change Gate; CI governance |
 | Every new task must name contract, desired behavior, prohibitions, tests and closure criteria. | `docs/protocols/CODEX_SYNC_PROTOCOL.md`; PR template |
 | New architecture decisions require ADR/standard documentation. | Product Constitution deviation rule; Codex protocol |
 | Development order is contract -> registry -> UI -> test -> documentation. | Product Constitution contract-first delivery order; AGENTS; Codex protocol |
