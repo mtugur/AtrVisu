@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { PanelId } from "../../platform/contracts";
+import { WorkbenchIcon } from "../../workbench/icons";
 
 export type WorkbenchContextContributionProps = {
   panelId: PanelId;
@@ -37,7 +38,7 @@ export function WorkbenchContextContribution({
         data-testid={`contextual-panel-toggle-${panelId}`}
         onClick={() => onExpandedChange(!expanded)}
       >
-        <span aria-hidden="true">{expanded ? "-" : "+"}</span>
+        <span aria-hidden="true"><WorkbenchIcon iconId={expanded ? "collapse" : "expand"} /></span>
         <strong>{title}</strong>
         {badge ? <small>{badge}</small> : null}
       </button>

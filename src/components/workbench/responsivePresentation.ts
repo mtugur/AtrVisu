@@ -30,3 +30,6 @@ export const resolvePrimaryDockPresentationCollapsed = ({
 }>) => isResponsivePrimaryDockPresentation(viewportWidth)
   ? !responsivePrimaryDockOpen
   : persistedCollapsed;
+
+export const getInspectorSelectionSignature = (selectionIds: readonly string[]) =>
+  selectionIds.join("\u0000");

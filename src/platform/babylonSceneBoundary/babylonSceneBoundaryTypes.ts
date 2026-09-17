@@ -125,14 +125,15 @@ export type BabylonSceneDragPlacementContract = {
   separatedFromResponsibilityIds: readonly string[];
   protectedBehaviors: readonly string[];
   extractedFlows: {
-    machineDragInstanceSelection: true;
     machineStartPositionCapture: true;
-    floorDeltaMmConversion: true;
-    civilDragPositionCalculation: true;
-    machineDragPositionUpdates: true;
+    renderingMeterFallback: true;
+    atomicMovementResultContract: true;
+    bodyPlanMutationRemoved: true;
+    manipulatorOnlyPlanMove: true;
   };
   remainingInteractionFlows: {
-    pointerObserverOrchestration: true;
+    pointerObserverSelectionOrchestration: true;
+    annotationDragOrchestration: true;
   };
   futureModuleCandidates: readonly string[];
 };

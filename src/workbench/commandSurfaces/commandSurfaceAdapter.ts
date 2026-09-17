@@ -223,6 +223,7 @@ export const createCommandSurfaceAdapter = (
       .sort((left, right) => left.label.localeCompare(right.label)),
     getItem,
     execute,
+    notifyRuntimeStateChanged: emitChange,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

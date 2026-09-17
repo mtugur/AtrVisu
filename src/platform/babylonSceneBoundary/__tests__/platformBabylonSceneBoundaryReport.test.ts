@@ -81,7 +81,7 @@ describe("platform babylon scene boundary report", () => {
     ).toBe(true);
   });
 
-  it("keeps extracted drag move and placement responsibility visible in the report inventory", () => {
+  it("keeps reconciled Plan movement primitives visible in the report inventory", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
     const dragPlacementResponsibility = report.inventory.primaryResponsibilities.find(
       (item) => item.id === dragPlacementResponsibilityId
@@ -194,7 +194,7 @@ describe("platform babylon scene boundary report", () => {
     });
   });
 
-  it("exposes the drag move and placement contract in the report", () => {
+  it("exposes manipulator-only Plan movement and selection-only body interaction", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
 
     expect(report.dragPlacementContract.responsibilityId).toBe(dragPlacementResponsibilityId);
@@ -205,14 +205,15 @@ describe("platform babylon scene boundary report", () => {
     expect(report.dragPlacementContract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
     expect(report.dragPlacementContract.riskLevel).toBe("low");
     expect(report.dragPlacementContract.extractedFlows).toEqual({
-      machineDragInstanceSelection: true,
       machineStartPositionCapture: true,
-      floorDeltaMmConversion: true,
-      civilDragPositionCalculation: true,
-      machineDragPositionUpdates: true
+      renderingMeterFallback: true,
+      atomicMovementResultContract: true,
+      bodyPlanMutationRemoved: true,
+      manipulatorOnlyPlanMove: true
     });
     expect(report.dragPlacementContract.remainingInteractionFlows).toEqual({
-      pointerObserverOrchestration: true
+      pointerObserverSelectionOrchestration: true,
+      annotationDragOrchestration: true
     });
   });
 

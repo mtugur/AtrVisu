@@ -217,6 +217,32 @@ describe("ViewportArrangeBar", () => {
     expect(handlers.onUngroup).toHaveBeenCalledOnce();
     expect(handlers.onAlign).not.toHaveBeenCalled();
   });
+
+  it("keeps pair alignment available when a selected group can also be ungrouped", async () => {
+    const handlers = callbacks();
+    const container = await mount(createElement(ViewportArrangeBar, {
+      selectionCount: 2,
+      movementAllowed: true,
+      canDistribute: false,
+      canGroup: false,
+      canUngroup: true,
+      canOpenAdvancedAlignment: true,
+      connectAndSnapAvailable: false,
+      connectAndSnapOpen: false,
+      ...handlers
+    }));
+
+    const leftEdges = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Left edges") as HTMLButtonElement;
+    const ungroup = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "Ungroup") as HTMLButtonElement;
+    expect(leftEdges).toBeDefined();
+    expect(ungroup).toBeDefined();
+    await act(async () => leftEdges.click());
+    await act(async () => ungroup.click());
+    expect(handlers.onAlign).toHaveBeenCalledWith("left");
+    expect(handlers.onUngroup).toHaveBeenCalledOnce();
+  });
 });
 
 describe("WorkbenchDockCollapseButton", () => {

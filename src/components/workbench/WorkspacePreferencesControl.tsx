@@ -8,6 +8,7 @@ import {
   type PointerEvent
 } from "react";
 import type { DensityId, PanelId, ThemeId, WorkspaceId } from "../../platform/contracts";
+import { WorkbenchIcon } from "../../workbench/icons";
 import {
   CascadingFlyoutSurface,
   resolveCascadingFlyoutGeometry,
@@ -466,7 +467,7 @@ export function WorkspacePreferencesControl({
     >
       <header className="workspace-preferences-heading workspace-preference-drill-in-heading">
         <button type="button" className="workspace-preference-back" onClick={() => closeActiveBranch()}>
-          <span aria-hidden="true">{`\u2039`}</span>
+          <WorkbenchIcon iconId="chevron-left" />
           Workspace &amp; View
         </button>
         <strong id={branch.titleId}>{branch.label}</strong>

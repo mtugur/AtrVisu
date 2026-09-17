@@ -29,7 +29,7 @@ export const openImport = async (page: Page) => {
 };
 export const prepare = async (page: Page, { evidence = false, offsetUnindexed = false, exerciseCalibration = true } = {}) => {
   const dialog = await openImport(page);
-  await dialog.getByLabel("GLB file").setInputFiles({ name: "Imported Test Equipment.glb", mimeType: "model/gltf-binary", buffer: Buffer.from(createNativeGlbFixture({ unindexed: offsetUnindexed, offset: offsetUnindexed })) });
+  await dialog.getByLabel("GLB file", { exact: true }).setInputFiles({ name: "Imported Test Equipment.glb", mimeType: "model/gltf-binary", buffer: Buffer.from(createNativeGlbFixture({ unindexed: offsetUnindexed, offset: offsetUnindexed })) });
   await expect(dialog.getByTestId("native-asset-preview")).toHaveAttribute("data-ready", "true");
   if (evidence) await capture(page, "01-import-file-preview-1440.png");
   await dialog.getByRole("button", { name: "Next", exact: true }).click();

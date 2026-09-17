@@ -11,6 +11,7 @@ export { ViewportArrangeBar } from "./ViewportArrangeBar";
 export type { ViewportArrangeBarProps } from "./ViewportArrangeBar";
 export { WorkbenchDockCollapseButton } from "./WorkbenchDockCollapseButton";
 export type { WorkbenchDockCollapseButtonProps } from "./WorkbenchDockCollapseButton";
+export { WorkbenchActionButton } from "./WorkbenchActionButton";
 export { WorkbenchMenuBar } from "./WorkbenchMenuBar";
 export type { WorkbenchMenuBarProps } from "./WorkbenchMenuBar";
 export { RightPanelUtilityStrip } from "./RightPanelUtilityStrip";

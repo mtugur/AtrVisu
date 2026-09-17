@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { WorkbenchIcon } from "../workbench/icons";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 import type { CSSProperties } from "react";
 import type {
   LibraryGroup,
@@ -1190,9 +1192,11 @@ function ManagerTreeNode({
           className="manager-row-toggle"
           data-testid={`library-manager-group-toggle-${group.id}`}
           type="button"
+          aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.name}`}
+          aria-expanded={isOpen}
           onClick={() => setIsOpen((current) => !current)}
         >
-          {isOpen ? "-" : "+"}
+          <WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} />
         </button>
         <button className="manager-tree-label" type="button" onClick={() => onSelectGroup(group.id)}>
           <strong>{group.name}</strong>
@@ -1800,9 +1804,7 @@ export function LibraryManager({
               {editable ? "Editable" : "Read-only"}
             </span>
           </div>
-          <button data-testid="close-library-manager-header" type="button" onClick={requestClose}>
-            Close
-          </button>
+          <WorkbenchActionButton iconId="close" label="Close Library Manager" data-testid="close-library-manager-header" onClick={requestClose} />
         </header>
 
         <div className="manager-layout" data-testid="library-manager-ready">

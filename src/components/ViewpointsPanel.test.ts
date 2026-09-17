@@ -133,8 +133,10 @@ describe("ViewpointsPanel", () => {
       "viewpoints-toolbar",
       "viewpoints-results"
     ]);
-    expect(Array.from(contextActions?.querySelectorAll("button") ?? []).map((button) => button.textContent?.trim()))
-      .toEqual(["Apply", "Update", "Rename", "Delete"]);
+    expect(Array.from(contextActions?.querySelectorAll("button") ?? []).map((button) => button.getAttribute("aria-label")))
+      .toEqual(["Apply / Go To", "Update From Current View", "Rename Viewpoint 1", "Delete Viewpoint 1"]);
+    expect(Array.from(contextActions?.querySelectorAll("button") ?? []).every((button) => button.textContent?.trim() === ""))
+      .toBe(true);
 
     await setStripGeometry(strip as HTMLDivElement, {
       clientWidth: 720,
@@ -228,10 +230,8 @@ describe("ViewpointsPanel", () => {
     await act(async () => item.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Apply / Go To"]')?.click());
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Update From Current View"]')?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[data-testid="viewpoint-context-actions"] button'))
-      .find((button) => button.textContent === "Rename")?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[data-testid="viewpoint-context-actions"] button'))
-      .find((button) => button.textContent === "Delete")?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Rename Overview"]')?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Delete Overview"]')?.click());
 
     expect(handlers.onCaptureViewpoint).toHaveBeenCalledWith("Captured Overview");
     expect(handlers.onStepViewpoint).toHaveBeenNthCalledWith(1, "previous");

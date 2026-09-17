@@ -6,7 +6,8 @@ import {
   calculateMinFps,
   createBenchmarkGridPositions,
   createBenchmarkSummary,
-  estimateJsonSizeBytes
+  estimateJsonSizeBytes,
+  shouldPublishScenePerformanceMetrics
 } from "./performanceBenchmark";
 
 describe("performance benchmark helpers", () => {
@@ -54,5 +55,13 @@ describe("performance benchmark helpers", () => {
       latestCompletedAt: null,
       warnings: []
     });
+  });
+
+  it("bounds live scene metric publication to the requested interval", () => {
+    expect(shouldPublishScenePerformanceMetrics(null, 1000)).toBe(true);
+    expect(shouldPublishScenePerformanceMetrics(1000, 1249)).toBe(false);
+    expect(shouldPublishScenePerformanceMetrics(1000, 1250)).toBe(true);
+    expect(shouldPublishScenePerformanceMetrics(1000, Number.NaN)).toBe(false);
+    expect(shouldPublishScenePerformanceMetrics(1000, 1250, -1)).toBe(false);
   });
 });

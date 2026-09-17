@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { WorkbenchIcon } from "../workbench/icons";
 
 type PanelSectionProps = {
   storageKey?: string;
@@ -78,7 +79,9 @@ export function PanelSection({
         aria-expanded={isExpanded}
         onClick={() => setExpanded(!isExpanded)}
       >
-        <span className="panel-section-disclosure" aria-hidden="true">{isExpanded ? "-" : "+"}</span>
+        <span className="panel-section-disclosure" aria-hidden="true">
+          <WorkbenchIcon iconId={isExpanded ? "collapse" : "expand"} />
+        </span>
         <strong>{title}</strong>
         {badge ? <small>{badge}</small> : null}
       </button>

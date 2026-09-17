@@ -169,6 +169,17 @@ export const collectScenePerformanceMetrics = (
   };
 };
 
+export const SCENE_PERFORMANCE_METRICS_PUBLISH_INTERVAL_MS = 250;
+
+export const shouldPublishScenePerformanceMetrics = (
+  lastPublishedAtMs: number | null,
+  currentTimeMs: number,
+  intervalMs = SCENE_PERFORMANCE_METRICS_PUBLISH_INTERVAL_MS
+) => Number.isFinite(currentTimeMs)
+  && Number.isFinite(intervalMs)
+  && intervalMs >= 0
+  && (lastPublishedAtMs === null || currentTimeMs - lastPublishedAtMs >= intervalMs);
+
 export const createBenchmarkResult = (
   options: BenchmarkOptions,
   generationTimeMs: number,

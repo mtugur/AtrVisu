@@ -92,6 +92,29 @@ describe("UI preferences runtime store", () => {
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
+  it("does not publish or persist same-value preference writes", async () => {
+    const repository = createStorage();
+    const store = createUiPreferencesRuntimeStore({
+      storage: repository.storage,
+      legacyStorage: emptyLegacyStorage
+    });
+    const listener = vi.fn();
+    store.subscribe(listener);
+    const before = store.getSnapshot();
+    const inspector = getPanel(before.preferences, RUNTIME_PANEL_IDS.rightPanelShell);
+
+    const result = store.updatePanelPreference(RUNTIME_PANEL_IDS.rightPanelShell, {
+      visible: inspector.visible,
+      collapsed: inspector.collapsed
+    });
+
+    expect(result.accepted).toBe(true);
+    await expect(result.persisted).resolves.toBe(true);
+    expect(store.getSnapshot()).toBe(before);
+    expect(listener).not.toHaveBeenCalled();
+    expect(repository.storage.put).not.toHaveBeenCalled();
+  });
+
   it("keeps Primary and Bottom Dock size in the single persisted panel preference authority", async () => {
     const repository = createStorage();
     const store = createUiPreferencesRuntimeStore({

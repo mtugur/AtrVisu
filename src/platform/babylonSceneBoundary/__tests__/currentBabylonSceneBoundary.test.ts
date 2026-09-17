@@ -81,7 +81,7 @@ describe("current babylon scene boundary", () => {
     }
   });
 
-  it("marks drag move and placement responsibility as extracted helper work", () => {
+  it("marks canonical Plan primitives as extracted with body mutation removed", () => {
     const responsibility = currentBabylonSceneBoundary.primaryResponsibilities.find(
       (item) => item.id === dragPlacementResponsibilityId
     );
@@ -165,7 +165,7 @@ describe("current babylon scene boundary", () => {
     });
   });
 
-  it("tracks drag move and placement as an extracted helper contract", () => {
+  it("tracks manipulator-only Plan movement and selection-only body interaction", () => {
     const contract = currentBabylonSceneBoundary.dragPlacementContract;
 
     expect(contract.responsibilityId).toBe(dragPlacementResponsibilityId);
@@ -176,14 +176,15 @@ describe("current babylon scene boundary", () => {
     expect(contract.remainingPointerOrchestrationModule).toBe("src/components/BabylonScene.tsx");
     expect(contract.riskLevel).toBe("low");
     expect(contract.extractedFlows).toEqual({
-      machineDragInstanceSelection: true,
       machineStartPositionCapture: true,
-      floorDeltaMmConversion: true,
-      civilDragPositionCalculation: true,
-      machineDragPositionUpdates: true
+      renderingMeterFallback: true,
+      atomicMovementResultContract: true,
+      bodyPlanMutationRemoved: true,
+      manipulatorOnlyPlanMove: true
     });
     expect(contract.remainingInteractionFlows).toEqual({
-      pointerObserverOrchestration: true
+      pointerObserverSelectionOrchestration: true,
+      annotationDragOrchestration: true
     });
     expect(contract.separatedFromResponsibilityIds).toContain("pointer-interaction-handling");
     expect(contract.separatedFromResponsibilityIds).toContain("rotation-transform-interaction");

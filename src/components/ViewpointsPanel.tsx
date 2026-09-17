@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LayoutViewpoint } from "../types/viewpoints";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 type ViewpointsPanelProps = {
   viewpoints: LayoutViewpoint[];
@@ -163,38 +164,31 @@ export function ViewpointsPanel({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <button
+        <WorkbenchActionButton
           className="primary-action"
+          iconId="capture"
+          label="Capture Current View"
           data-testid="capture-viewpoint"
-          type="button"
-          aria-label="Capture Current View"
-          title="Capture Current View"
           disabled={!name.trim()}
           onClick={() => {
             onCaptureViewpoint(name);
             setName("");
           }}
-        >
-          Capture
-        </button>
+        />
 
         <div className="viewpoint-actions viewpoint-step-actions">
-          <button
-            type="button"
-            aria-label="Previous Viewpoint"
+          <WorkbenchActionButton
+            iconId="previous"
+            label="Previous Viewpoint"
             disabled={viewpoints.length === 0}
             onClick={() => onStepViewpoint("previous")}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            aria-label="Next Viewpoint"
+          />
+          <WorkbenchActionButton
+            iconId="next"
+            label="Next Viewpoint"
             disabled={viewpoints.length === 0}
             onClick={() => onStepViewpoint("next")}
-          >
-            Next
-          </button>
+          />
         </div>
       </div>
 
@@ -202,17 +196,14 @@ export function ViewpointsPanel({
         <span className="viewpoint-saved-label">Saved</span>
         <div className="viewpoint-navigation" data-testid="viewpoint-navigation">
           {stripNavigation.hasOverflow ? (
-            <button
+            <WorkbenchActionButton
               className="viewpoint-strip-scroll"
+              iconId="chevron-left"
+              label="Scroll saved viewpoints left"
               data-testid="viewpoint-strip-scroll-backward"
-              type="button"
-              aria-label="Scroll saved viewpoints left"
-              title="Scroll saved viewpoints left"
               disabled={!stripNavigation.canScrollBackward}
               onClick={() => scrollStrip("backward")}
-            >
-              &lt;
-            </button>
+            />
           ) : null}
           <div
             className="viewpoint-strip"
@@ -248,17 +239,14 @@ export function ViewpointsPanel({
           </div>
           </div>
           {stripNavigation.hasOverflow ? (
-            <button
+            <WorkbenchActionButton
               className="viewpoint-strip-scroll"
+              iconId="chevron-right"
+              label="Scroll saved viewpoints right"
               data-testid="viewpoint-strip-scroll-forward"
-              type="button"
-              aria-label="Scroll saved viewpoints right"
-              title="Scroll saved viewpoints right"
               disabled={!stripNavigation.canScrollForward}
               onClick={() => scrollStrip("forward")}
-            >
-              &gt;
-            </button>
+            />
           ) : null}
         </div>
 
@@ -268,37 +256,28 @@ export function ViewpointsPanel({
             data-testid="viewpoint-context-actions"
             aria-label={`Actions for ${selectedViewpoint.name}`}
           >
-              <button
+              <WorkbenchActionButton
                 data-testid="apply-viewpoint"
-                type="button"
-                aria-label="Apply / Go To"
-                title="Apply / Go To"
+                iconId="apply"
+                label="Apply / Go To"
                 onClick={() => onApplyViewpoint(selectedViewpoint.id)}
-              >
-                Apply
-              </button>
-              <button
-                type="button"
-                aria-label="Update From Current View"
-                title="Update From Current View"
+              />
+              <WorkbenchActionButton
+                iconId="update"
+                label="Update From Current View"
                 onClick={() => onUpdateViewpoint(selectedViewpoint.id)}
-              >
-                Update
-              </button>
-              <button
-                type="button"
+              />
+              <WorkbenchActionButton
+                iconId="rename"
+                label={`Rename ${selectedViewpoint.name}`}
                 onClick={() => {
                   const nextName = window.prompt("Viewpoint name", selectedViewpoint.name);
                   if (nextName?.trim()) {
                     onRenameViewpoint(selectedViewpoint.id, nextName);
                   }
                 }}
-              >
-                Rename
-              </button>
-              <button className="danger-action" type="button" onClick={() => onDeleteViewpoint(selectedViewpoint.id)}>
-                Delete
-              </button>
+              />
+              <WorkbenchActionButton iconId="delete" label={`Delete ${selectedViewpoint.name}`} tone="danger" onClick={() => onDeleteViewpoint(selectedViewpoint.id)} />
           </div>
         ) : null}
       </div>

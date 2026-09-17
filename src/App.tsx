@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import type { PlanMovePositionUpdates } from "./components/babylonScene/planMoveManipulator";
 import { EditorHost } from "./components/EditorHost";
 import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
 import { HelpModal, type HelpSection } from "./components/HelpModal";
@@ -13,6 +14,7 @@ import {
   CommandPalette,
   ViewportArrangeBar,
   WorkbenchApplicationBar,
+  WorkbenchActionButton,
   WorkbenchCommandBar,
   WorkbenchDockCollapseButton,
   WorkbenchMenuBar,
@@ -23,6 +25,7 @@ import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDoc
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
 import {
+  getInspectorSelectionSignature,
   isResponsiveInspectorPresentation,
   isResponsivePrimaryDockPresentation,
   resolveInspectorPresentationCollapsed,
@@ -94,8 +97,10 @@ import {
   getAlignableEntityKey,
   selectionHasLockedAlignableEntities,
   snapPrimaryEntityAnchorToSecondaryAnchor,
-  snapPrimaryAnchorToSecondaryAnchor
+  snapPrimaryAnchorToSecondaryAnchor,
+  type AlignableEntityPositionUpdate
 } from "./utils/alignment";
+import { projectArrangeSelection } from "./utils/arrangeSelection";
 import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./utils/layoutHistory";
 import { loadPlacementSettings, savePlacementSettings } from "./utils/placementSettings";
 import { listProjects } from "./utils/projectStorage";
@@ -201,8 +206,7 @@ import {
   ungroupObjectGroup
 } from "./utils/groups";
 import {
-  getCivilPositionUpdateDelta,
-  getMachinePositionUpdateDelta,
+  evaluateAssemblyMembersMovementByDelta,
   moveAssemblyMembersByDelta
 } from "./utils/assemblyRuntime";
 import {
@@ -446,6 +450,7 @@ export function App() {
     height: window.innerHeight
   }));
   const [isResponsiveInspectorOpen, setIsResponsiveInspectorOpen] = useState(false);
+  const [inspectorVisibilityMode, setInspectorVisibilityMode] = useState<"auto" | "manual">("auto");
   const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
   const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
   const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
@@ -484,6 +489,9 @@ export function App() {
     );
     const current = !currentShell?.visible || Boolean(currentShell.collapsed);
     const collapsed = typeof next === "function" ? next(current) : next;
+    if (current === collapsed && currentShell?.visible !== false) {
+      return;
+    }
     uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.rightPanelShell, {
       visible: true,
       collapsed
@@ -805,11 +813,6 @@ export function App() {
     : undefined;
   const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) : null;
   const activeGroupEdit = activeGroupEditId ? groups.find((group) => group.id === activeGroupEditId) : null;
-  const activeGroupEditMachineIds = useMemo(() => activeGroupEdit
-    ? activeGroupEdit.objectIds.flatMap((entityId) => entityId.startsWith("machine:")
-      ? [entityId.slice("machine:".length)]
-      : [])
-    : [], [activeGroupEdit]);
   const singleSelectedMachine = selectedMachineIds.length === 1 && !selectedGroup ? selectedMachine : undefined;
   const visiblePlacedMachines = useMemo(
     () => placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)),
@@ -910,25 +913,25 @@ export function App() {
     [civilReferences, selectedCivilReferenceIdSet]
   );
   const alignableEntities = useMemo(() => [
-    ...visiblePlacedMachines.map((machine) => ({
+    ...placedMachines.map((machine) => ({
       id: machine.instanceId,
       kind: "machine" as const,
       label: getPlacedMachineDisplayName(machine),
       bounds: getObjectPlanBounds(machine),
       positionMm: getMachinePlanPositionMm(machine),
       locked: isLayerLocked(machine.layerId, layers),
-      hidden: false
+      hidden: !isLayerVisible(machine.layerId, layers)
     })),
-    ...visibleCivilReferences.map((item) => ({
+    ...civilReferences.map((item) => ({
       id: item.id,
       kind: "civil" as const,
       label: item.name,
       bounds: { objectId: item.id, ...getCivilReferenceFootprintBoundsMm(item) },
       positionMm: item.positionMm,
       locked: Boolean(item.locked || isLayerLocked(item.layerId, layers)),
-      hidden: false
+      hidden: item.visible === false || !isLayerVisible(item.layerId, layers)
     }))
-  ], [layers, visibleCivilReferences, visiblePlacedMachines]);
+  ], [civilReferences, layers, placedMachines]);
   const selectedAlignableEntityIds = useMemo(() => [
     ...selectedEntityKeys
   ], [selectedEntityKeys]);
@@ -943,26 +946,18 @@ export function App() {
       return entity ? [entity] : [];
     });
   }, [alignableEntities, selectedAlignableEntityIds]);
-  const primarySelectedAlignableId = useMemo(() => {
-    return selectedAlignableEntityIds[0] ?? null;
-  }, [selectedAlignableEntityIds]);
-  const primarySelectedAlignable = primarySelectedAlignableId
-    ? selectedAlignableEntities.find((entity) => getAlignableEntityKey(entity.kind, entity.id) === primarySelectedAlignableId)
+  const arrangeSelectionProjection = useMemo(() => projectArrangeSelection({
+    selection: runtimeSelection,
+    platformEntities,
+    memberEntities: alignableEntities,
+    activeGroupEditId
+  }), [activeGroupEditId, alignableEntities, platformEntities, runtimeSelection]);
+  const arrangeAlignableEntities = arrangeSelectionProjection.entities;
+  const arrangeSelectedEntityIds = arrangeSelectionProjection.selectedEntityIds;
+  const primaryArrangeEntityId = arrangeSelectionProjection.primarySelectedEntityId;
+  const primaryArrangeEntity = primaryArrangeEntityId
+    ? arrangeAlignableEntities.find((entity) => getAlignableEntityKey(entity.kind, entity.id) === primaryArrangeEntityId)
     : undefined;
-  const selectedGroupHasLockedVisibleMembers = useMemo(() => {
-    if (!selectedGroup) {
-      return false;
-    }
-    return selectedGroup.objectIds.some((objectId) => {
-      if (objectId.startsWith("civil:")) {
-        const civil = civilReferences.find((item) => item.id === objectId.slice("civil:".length));
-        return civil ? isLayerVisible(civil.layerId, layers) && (civil.locked || isLayerLocked(civil.layerId, layers)) : false;
-      }
-      const machineId = objectId.replace(/^(object|machine):/, "");
-      const machine = placedMachines.find((item) => item.instanceId === machineId);
-      return machine ? isLayerVisible(machine.layerId, layers) && isLayerLocked(machine.layerId, layers) : false;
-    });
-  }, [civilReferences, layers, placedMachines, selectedGroup]);
   const selectionBounds = useMemo(() => getSelectionPlanBounds(selectedMachines), [selectedMachines]);
   const canUndo = layoutHistory.undoStack.length > 0;
   const canRedo = layoutHistory.redoStack.length > 0;
@@ -1214,15 +1209,21 @@ export function App() {
     if (isBenchmarkModeRef.current) {
       return;
     }
+    const machines = placedMachinesRef.current;
+    const annotationItems = annotationsRef.current;
+    const civilItems = civilReferencesRef.current;
+    const viewpointItems = viewpointsRef.current;
+    const layerItems = layersRef.current;
+    const groupItems = groupsRef.current;
     setLayoutHistory((current) =>
       pushHistorySnapshot(
         current,
-        placedMachinesRef.current,
-        annotationsRef.current,
-        civilReferencesRef.current,
-        viewpointsRef.current,
-        layersRef.current,
-        groupsRef.current
+        machines,
+        annotationItems,
+        civilItems,
+        viewpointItems,
+        layerItems,
+        groupItems
       )
     );
   }, []);
@@ -1725,10 +1726,23 @@ export function App() {
 
   useLayoutEffect(() => {
     runtimePanelBindingsRef.current = runtimePanelBindings;
-    setWorkspacePanelReachability(liveWorkspacePanelDescriptors.flatMap(({ definition }) => {
+    const nextReachability = liveWorkspacePanelDescriptors.flatMap(({ definition }) => {
       const panel = runtimePanelBridge.getRuntimePanel(definition.id);
       return panel?.bound ? [panel] : [];
-    }));
+    });
+    setWorkspacePanelReachability((current) => {
+      const unchanged = current.length === nextReachability.length
+        && current.every((panel, index) => {
+          const next = nextReachability[index];
+          return next
+            && panel.panelId === next.panelId
+            && panel.title === next.title
+            && panel.bound === next.bound
+            && panel.available === next.available
+            && panel.reason === next.reason;
+        });
+      return unchanged ? current : nextReachability;
+    });
   }, [
     connectionPointSnapAvailable,
     editingAnnotationId,
@@ -1972,18 +1986,16 @@ export function App() {
       source: "scene"
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
-    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
+  }, [setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
-    openInspectorPresentation();
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, [openInspectorPresentation]);
+  }, []);
 
   const selectPlatformEntityForEditing = useCallback((entityId: EntityId, mode: SelectionMode = "replace") => {
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
@@ -1995,8 +2007,32 @@ export function App() {
       setAnnotationSelectionSignal((current) => current + 1);
       setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
-    openInspectorPresentation();
-  }, [openInspectorPresentation, setPanelSectionExpansionPreservingVisibility]);
+  }, [setPanelSectionExpansionPreservingVisibility]);
+
+  const runtimeSelectionSignature = getInspectorSelectionSignature(runtimeSelection.ids);
+  // Auto presentation reacts to canonical selection meaning, not a recreated selection object.
+  const previousInspectorSelectionSignatureRef = useRef(runtimeSelectionSignature);
+  const previousInspectorVisibilityModeRef = useRef(inspectorVisibilityMode);
+  useEffect(() => {
+    const selectionChanged = previousInspectorSelectionSignatureRef.current !== runtimeSelectionSignature;
+    const modeChanged = previousInspectorVisibilityModeRef.current !== inspectorVisibilityMode;
+    previousInspectorSelectionSignatureRef.current = runtimeSelectionSignature;
+    previousInspectorVisibilityModeRef.current = inspectorVisibilityMode;
+    if (inspectorVisibilityMode !== "auto" || (!selectionChanged && !modeChanged)) {
+      return;
+    }
+    if (runtimeSelection.ids.length > 0) {
+      openInspectorPresentation();
+    } else {
+      closeInspectorPresentation();
+    }
+  }, [
+    closeInspectorPresentation,
+    inspectorVisibilityMode,
+    openInspectorPresentation,
+    runtimeSelection.ids.length,
+    runtimeSelectionSignature
+  ]);
 
   const replaceSelection = useCallback((ids: string[], primaryId: string | null = ids[0] ?? null) => {
     const orderedIds = primaryId
@@ -2591,122 +2627,79 @@ export function App() {
     activeGroupEditId: activeGroupEditIdRef.current
   })), []);
 
-  const setMachinePositions = useCallback((
-    updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
+  const setSelectionPlanPositions = useCallback((
+    updates: PlanMovePositionUpdates,
     options: { recordHistory?: boolean } = {}
   ) => {
     const currentSelection = runtimeSelectionRef.current;
     const currentEntities = platformEntitiesRef.current;
+    const projectedSelection = projectRuntimeSelection(currentSelection, currentEntities);
+    const expectedEntityIds = new Set(projectedSelection.selectedAlignableEntityIds);
+    const updateEntityIds = [
+      ...updates.machines.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
+      ...updates.civilReferences.map((update) => createLegacyPlatformEntityId("civil", update.id))
+    ];
+    const uniqueUpdateEntityIds = new Set(updateEntityIds);
+    if (
+      updateEntityIds.length === 0
+      || updateEntityIds.length !== expectedEntityIds.size
+      || uniqueUpdateEntityIds.size !== updateEntityIds.length
+      || updateEntityIds.some((entityId) => !expectedEntityIds.has(entityId))
+      || [...expectedEntityIds].some((entityId) => !uniqueUpdateEntityIds.has(entityId))
+      || updates.machines.some((update) => !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm))
+      || updates.civilReferences.some((update) => !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm))
+    ) {
+      return "blocked" as const;
+    }
+
+    const currentMachines = placedMachinesRef.current;
+    const currentCivilReferences = civilReferencesRef.current;
+    if (
+      updates.machines.some((update) => !currentMachines.some((machine) => machine.instanceId === update.instanceId))
+      || updates.civilReferences.some((update) => !currentCivilReferences.some((item) => item.id === update.id))
+    ) {
+      return "blocked" as const;
+    }
+
+    const nextMachines = applyMachinePositionUpdates(currentMachines, [...updates.machines]);
+    const civilUpdates = new Map(updates.civilReferences.map((update) => [update.id, update]));
+    const nextCivilReferences = currentCivilReferences.map((item) => {
+      const update = civilUpdates.get(item.id);
+      return update
+        ? { ...item, positionMm: { ...item.positionMm, xMm: update.xMm, yMm: update.yMm } }
+        : item;
+    });
+    const changed = nextMachines.some((machine, index) => {
+      const before = getMachinePlanPositionMm(currentMachines[index]);
+      const after = getMachinePlanPositionMm(machine);
+      return before.xMm !== after.xMm || before.yMm !== after.yMm;
+    }) || nextCivilReferences.some((item, index) =>
+      item.positionMm.xMm !== currentCivilReferences[index].positionMm.xMm
+      || item.positionMm.yMm !== currentCivilReferences[index].positionMm.yMm
+    );
+    if (!changed) {
+      return "noop" as const;
+    }
+
     const affectedEntityIds = getAtomicMovementEntityIds(
       currentSelection,
-      updates.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
+      updateEntityIds,
       true,
       currentEntities,
       activeGroupEditIdRef.current
     );
-    const evaluation = evaluateAtomicMovement(affectedEntityIds, currentEntities);
-    if (!evaluation.allowed) {
-      return false;
-    }
-
-    const hasRealPositionChange = updates.some((update) => {
-      const machine = placedMachinesRef.current.find((item) => item.instanceId === update.instanceId);
-      const currentPosition = machine ? getMachinePlanPositionMm(machine) : null;
-      return currentPosition ? currentPosition.xMm !== update.xMm || currentPosition.yMm !== update.yMm : false;
-    });
-    if (!hasRealPositionChange) {
-      return false;
-    }
-
-    const activeEditGroup = activeGroupEditIdRef.current
-      ? groupsRef.current.find((group) => group.id === activeGroupEditIdRef.current)
-      : undefined;
-    const updatesActiveEditMember = Boolean(activeEditGroup && updates.some((update) =>
-      activeEditGroup.objectIds.includes(createLegacyPlatformEntityId("machine", update.instanceId))
-    ));
-    const hasSelectedAssembly = !updatesActiveEditMember
-      && currentSelection.ids.some((entityId) => entityId.startsWith("group:"));
-    if (hasSelectedAssembly) {
-      const firstUpdate = updates.find((update) =>
-        placedMachinesRef.current.some((machine) => machine.instanceId === update.instanceId)
-      );
-      const firstMachine = firstUpdate
-        ? placedMachinesRef.current.find((machine) => machine.instanceId === firstUpdate.instanceId)
-        : undefined;
-      if (!firstUpdate || !firstMachine) {
-        return false;
-      }
-      const targetPosition = applyPositionSnap(
-        { xMm: firstUpdate.xMm, yMm: firstUpdate.yMm },
-        placementSettingsRef.current
-      );
-      const delta = getMachinePositionUpdateDelta(firstMachine, targetPosition);
-      const projection = projectRuntimeSelection(currentSelection, currentEntities);
-      const movement = moveAssemblyMembersByDelta({
-        machines: placedMachinesRef.current,
-        civilReferences: civilReferencesRef.current,
-        memberEntityIds: projection.selectedAlignableEntityIds,
-        ...delta
-      });
-      if (!movement) {
-        return false;
-      }
-
-      executeAtomicSelectionMutation({
-        entityIds: affectedEntityIds,
-        entities: currentEntities,
-        beforeMutation: () => markLayoutChanged(options),
-        mutate: () => {
-          setPlacedMachines(movement.machines);
-          setCivilReferences(movement.civilReferences);
-        }
-      });
-      return true;
-    }
-
-    executeAtomicSelectionMutation({
+    const mutation = executeAtomicSelectionMutation({
       entityIds: affectedEntityIds,
       entities: currentEntities,
       beforeMutation: () => markLayoutChanged(options),
-      mutate: () => setPlacedMachines((current) => {
-        if (!placementSettingsRef.current.gridSnapEnabled || updates.length === 1) {
-          const snappedUpdates = updates.map((update) => ({
-            ...update,
-            ...applyPositionSnap({ xMm: update.xMm, yMm: update.yMm }, placementSettingsRef.current)
-          }));
-          return applyMachinePositionUpdates(current, snappedUpdates);
-        }
-
-        const firstUpdate = updates[0];
-        const firstMachine = current.find((machine) => machine.instanceId === firstUpdate.instanceId);
-        if (!firstMachine) {
-          return current;
-        }
-
-        const firstPosition = getMachinePlanPositionMm(firstMachine);
-        const snappedFirstPosition = applyPositionSnap({ xMm: firstUpdate.xMm, yMm: firstUpdate.yMm }, placementSettingsRef.current);
-        const snappedDeltaXMm = snappedFirstPosition.xMm - firstPosition.xMm;
-        const snappedDeltaYMm = snappedFirstPosition.yMm - firstPosition.yMm;
-        const updateIds = new Set(updates.map((update) => update.instanceId));
-
-        return current.map((machine) => {
-          if (!updateIds.has(machine.instanceId)) {
-            return machine;
-          }
-
-          const position = getMachinePlanPositionMm(machine);
-          return applyMachinePositionUpdates(
-            [machine],
-            [{
-              instanceId: machine.instanceId,
-              xMm: position.xMm + snappedDeltaXMm,
-              yMm: position.yMm + snappedDeltaYMm
-            }]
-          )[0];
-        });
-      })
+      mutate: () => {
+        placedMachinesRef.current = nextMachines;
+        civilReferencesRef.current = nextCivilReferences;
+        setPlacedMachines(nextMachines);
+        setCivilReferences(nextCivilReferences);
+      }
     });
-    return true;
+    return mutation.allowed ? "applied" as const : "blocked" as const;
   }, [markLayoutChanged]);
 
   const moveSelectedByDelta = useCallback((
@@ -2793,109 +2786,151 @@ export function App() {
     });
   }, [getAssemblyCommandGroupId, markLayoutChanged]);
 
-  const applyAlignablePositionUpdates = useCallback((updates: Array<{ kind: "machine" | "civil"; id: string; xMm: number; yMm: number }>) => {
-    const machineUpdates = updates
-      .filter((update) => update.kind === "machine")
-      .map((update) => ({ instanceId: update.id, xMm: update.xMm, yMm: update.yMm }));
-    const civilUpdates = updates.filter((update) => update.kind === "civil");
+  const applyAlignablePositionUpdates = useCallback((updates: AlignableEntityPositionUpdate[]) => {
+    const currentEntities = platformEntitiesRef.current;
+    if (!evaluateAtomicMovement(runtimeSelectionRef.current.ids, currentEntities).allowed) {
+      return false;
+    }
 
-    if (machineUpdates.length > 0) {
-      setPlacedMachines((current) => applyMachinePositionUpdates(current, machineUpdates));
+    const entityByKey = new Map(arrangeAlignableEntities.map((entity) => [
+      getAlignableEntityKey(entity.kind, entity.id),
+      entity
+    ]));
+    const platformById = new Map(currentEntities.map((entity) => [entity.id, entity]));
+    const movedMemberIds = new Set<string>();
+    let nextMachines = placedMachinesRef.current;
+    let nextCivilReferences = civilReferencesRef.current;
+    let changed = false;
+
+    for (const update of updates) {
+      const key = getAlignableEntityKey(update.kind, update.id);
+      const entity = entityByKey.get(key);
+      if (!entity || !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm)) {
+        return false;
+      }
+
+      const deltaXMm = update.xMm - entity.positionMm.xMm;
+      const deltaYMm = update.yMm - entity.positionMm.yMm;
+      if (deltaXMm === 0 && deltaYMm === 0) {
+        continue;
+      }
+
+      const memberEntityIds = update.kind === "group"
+        ? platformById.get(key)?.childrenIds ?? []
+        : [key];
+      if (
+        memberEntityIds.length === 0
+        || memberEntityIds.some((memberId) => movedMemberIds.has(memberId))
+      ) {
+        return false;
+      }
+
+      const movement = evaluateAssemblyMembersMovementByDelta({
+        machines: nextMachines,
+        civilReferences: nextCivilReferences,
+        memberEntityIds,
+        deltaXMm,
+        deltaYMm
+      });
+      if (movement.status === "blocked") {
+        return false;
+      }
+      if (movement.status === "noop") {
+        continue;
+      }
+
+      memberEntityIds.forEach((memberId) => movedMemberIds.add(memberId));
+      nextMachines = movement.machines;
+      nextCivilReferences = movement.civilReferences;
+      changed = true;
     }
-    if (civilUpdates.length > 0) {
-      setCivilReferences((current) =>
-        civilUpdates.reduce(
-          (items, update) => updateCivilReference(items, update.id, { positionMm: { xMm: update.xMm, yMm: update.yMm } }),
-          current
-        )
-      );
+
+    if (!changed) {
+      return false;
     }
-  }, []);
+
+    markLayoutChanged();
+    placedMachinesRef.current = nextMachines;
+    civilReferencesRef.current = nextCivilReferences;
+    setPlacedMachines(nextMachines);
+    setCivilReferences(nextCivilReferences);
+    return true;
+  }, [arrangeAlignableEntities, markLayoutChanged]);
 
   const canApplyAlignableAction = useCallback(() => {
-    if (runtimeSelection.ids.some((entityId) => entityId.startsWith("group:"))) {
-      window.alert("Arrange the assembly as one rigid entity. Member alignment is available only in Edit Group mode.");
+    if (arrangeSelectedEntityIds.length < 2) {
       return false;
     }
-    if (selectedGroupHasLockedVisibleMembers) {
-      window.alert("Alignment is blocked because the selected group contains locked visible objects.");
-      return false;
-    }
-    if (selectedAlignableEntityIds.length < 2) {
-      return false;
-    }
-    if (selectionHasLockedAlignableEntities(alignableEntities, selectedAlignableEntityIds)) {
+    if (
+      !evaluateAtomicMovement(runtimeSelectionRef.current.ids, platformEntitiesRef.current).allowed
+      || selectionHasLockedAlignableEntities(arrangeAlignableEntities, arrangeSelectedEntityIds)
+    ) {
       window.alert("Alignment is blocked because the selection includes locked objects or civil references.");
       return false;
     }
     return true;
-  }, [alignableEntities, runtimeSelection.ids, selectedAlignableEntityIds, selectedGroupHasLockedVisibleMembers]);
+  }, [arrangeAlignableEntities, arrangeSelectedEntityIds]);
 
   const applyAlignmentAction = useCallback((action: AlignmentAction) => {
     if (!canApplyAlignableAction()) {
       return;
     }
-    const updates = alignEntitiesToAnchor(alignableEntities, selectedAlignableEntityIds, primarySelectedAlignableId, action);
+    const updates = alignEntitiesToAnchor(arrangeAlignableEntities, arrangeSelectedEntityIds, primaryArrangeEntityId, action);
     if (updates.length === 0) {
       return;
     }
-    markLayoutChanged();
     applyAlignablePositionUpdates(updates);
-  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, primarySelectedAlignableId, selectedAlignableEntityIds]);
+  }, [applyAlignablePositionUpdates, arrangeAlignableEntities, arrangeSelectedEntityIds, canApplyAlignableAction, primaryArrangeEntityId]);
 
   const applyDistributionAction = useCallback((action: DistributionAction) => {
     if (!canApplyAlignableAction()) {
       return;
     }
-    const updates = distributeEntitiesByCenter(alignableEntities, selectedAlignableEntityIds, action);
+    const updates = distributeEntitiesByCenter(arrangeAlignableEntities, arrangeSelectedEntityIds, action);
     if (updates.length === 0) {
       return;
     }
-    markLayoutChanged();
     applyAlignablePositionUpdates(updates);
-  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, selectedAlignableEntityIds]);
+  }, [applyAlignablePositionUpdates, arrangeAlignableEntities, arrangeSelectedEntityIds, canApplyAlignableAction]);
 
   const applyEqualGapAction = useCallback((action: EqualGapAction) => {
     if (!canApplyAlignableAction()) {
       return;
     }
-    const updates = equalizeEntityGaps(alignableEntities, selectedAlignableEntityIds, action);
+    const updates = equalizeEntityGaps(arrangeAlignableEntities, arrangeSelectedEntityIds, action);
     if (updates.length === 0) {
       return;
     }
-    markLayoutChanged();
     applyAlignablePositionUpdates(updates);
-  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, selectedAlignableEntityIds]);
+  }, [applyAlignablePositionUpdates, arrangeAlignableEntities, arrangeSelectedEntityIds, canApplyAlignableAction]);
 
   const applyPairAlignmentAction = useCallback((action: PairAlignmentAction, gapMm = 0) => {
     if (!canApplyAlignableAction()) {
       return;
     }
-    const updates = applyEntityPairAlignment(alignableEntities, selectedAlignableEntityIds, primarySelectedAlignableId, action, gapMm);
+    const updates = applyEntityPairAlignment(arrangeAlignableEntities, arrangeSelectedEntityIds, primaryArrangeEntityId, action, gapMm);
     if (updates.length === 0) {
       return;
     }
-    markLayoutChanged();
     applyAlignablePositionUpdates(updates);
-  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, primarySelectedAlignableId, selectedAlignableEntityIds]);
+  }, [applyAlignablePositionUpdates, arrangeAlignableEntities, arrangeSelectedEntityIds, canApplyAlignableAction, primaryArrangeEntityId]);
 
   const applyPairAnchorSnap = useCallback((primaryAnchor: FootprintAnchor, secondaryAnchor: FootprintAnchor) => {
     if (!canApplyAlignableAction()) {
       return;
     }
     const updates = snapPrimaryEntityAnchorToSecondaryAnchor(
-      alignableEntities,
-      selectedAlignableEntityIds,
-      primarySelectedAlignableId,
+      arrangeAlignableEntities,
+      arrangeSelectedEntityIds,
+      primaryArrangeEntityId,
       primaryAnchor,
       secondaryAnchor
     );
     if (updates.length === 0) {
       return;
     }
-    markLayoutChanged();
     applyAlignablePositionUpdates(updates);
-  }, [alignableEntities, applyAlignablePositionUpdates, canApplyAlignableAction, markLayoutChanged, primarySelectedAlignableId, selectedAlignableEntityIds]);
+  }, [applyAlignablePositionUpdates, arrangeAlignableEntities, arrangeSelectedEntityIds, canApplyAlignableAction, primaryArrangeEntityId]);
 
   const applyConnectionSnap = useCallback((
     selection: ConnectionPointSnapSelection,
@@ -2936,8 +2971,7 @@ export function App() {
     setRuntimeSelection(replaceRuntimeSelection([
       createLegacyPlatformEntityId("civil", item.id)
     ], "inspector"));
-    openInspectorPresentation();
-  }, [markLayoutChanged, openInspectorPresentation]);
+  }, [markLayoutChanged]);
 
   const updateSelectedCivilReference = useCallback((
     id: string,
@@ -2953,65 +2987,6 @@ export function App() {
     }
     markLayoutChanged(options);
     setCivilReferences((current) => updateCivilReference(current, id, updates));
-  }, [markLayoutChanged]);
-
-  const setCivilReferencePosition = useCallback((
-    id: string,
-    positionMm: { xMm: number; yMm: number },
-    options: { recordHistory?: boolean } = {}
-  ) => {
-    const item = civilReferencesRef.current.find((reference) => reference.id === id);
-    if (!item || (item.positionMm.xMm === positionMm.xMm && item.positionMm.yMm === positionMm.yMm)) {
-      return false;
-    }
-
-    const entityId = createLegacyPlatformEntityId("civil", id);
-    const currentSelection = runtimeSelectionRef.current;
-    const currentEntities = platformEntitiesRef.current;
-    const affectedEntityIds = getAtomicMovementEntityIds(
-      currentSelection,
-      [entityId],
-      true,
-      currentEntities,
-      activeGroupEditIdRef.current
-    );
-    const activeEditGroup = activeGroupEditIdRef.current
-      ? groupsRef.current.find((group) => group.id === activeGroupEditIdRef.current)
-      : undefined;
-    const updatesActiveEditMember = Boolean(activeEditGroup?.objectIds.includes(entityId));
-    const hasSelectedAssembly = !updatesActiveEditMember
-      && currentSelection.ids.some((selectedId) => selectedId.startsWith("group:"));
-    if (hasSelectedAssembly) {
-      const delta = getCivilPositionUpdateDelta(item, positionMm);
-      const projection = projectRuntimeSelection(currentSelection, currentEntities);
-      const movement = moveAssemblyMembersByDelta({
-        machines: placedMachinesRef.current,
-        civilReferences: civilReferencesRef.current,
-        memberEntityIds: projection.selectedAlignableEntityIds,
-        ...delta
-      });
-      if (!movement) {
-        return false;
-      }
-      const evaluation = executeAtomicSelectionMutation({
-        entityIds: affectedEntityIds,
-        entities: currentEntities,
-        beforeMutation: () => markLayoutChanged(options),
-        mutate: () => {
-          setPlacedMachines(movement.machines);
-          setCivilReferences(movement.civilReferences);
-        }
-      });
-      return evaluation.allowed;
-    }
-
-    const evaluation = executeAtomicSelectionMutation({
-      entityIds: affectedEntityIds,
-      entities: currentEntities,
-      beforeMutation: () => markLayoutChanged(options),
-      mutate: () => setCivilReferences((current) => updateCivilReference(current, id, { positionMm }))
-    });
-    return evaluation.allowed;
   }, [markLayoutChanged]);
 
   const changeCivilReferenceLayer = useCallback((id: string, layerId: string) => {
@@ -3064,9 +3039,8 @@ export function App() {
       createLegacyPlatformEntityId("annotation", annotation.id)
     ], "inspector"));
     setAnnotationSelectionSignal((current) => current + 1);
-    openInspectorPresentation();
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [markLayoutChanged, openInspectorPresentation, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
+  }, [markLayoutChanged, selectedMachine, setPanelSectionExpansionPreservingVisibility]);
 
   const updateSelectedAnnotation = useCallback((
     annotationId: string,
@@ -3597,7 +3571,7 @@ export function App() {
       }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.alignSelection]: {
-      getEnableState: () => selectedAlignableEntityIds.length >= 2
+      getEnableState: () => arrangeSelectedEntityIds.length >= 2
         && runtimeSelectionMovementEvaluation.allowed
         ? { enabled: true }
         : { enabled: false, reason: "Select at least two unlocked alignable entities." },
@@ -3621,7 +3595,7 @@ export function App() {
       }
     },
     ...createArrangeRuntimeCommandBindings({
-      selectedCount: selectedAlignableEntityIds.length,
+      selectedCount: arrangeSelectedEntityIds.length,
       movementAllowed: runtimeSelectionMovementEvaluation.allowed,
       align: applyAlignmentAction,
       distribute: applyDistributionAction,
@@ -3715,7 +3689,7 @@ export function App() {
     restoreAutosavedLayout,
     runtimePanelBridge,
     runtimeSelectionMovementEvaluation.allowed,
-    selectedAlignableEntityIds.length
+    arrangeSelectedEntityIds.length
   ]);
 
   useLayoutEffect(() => {
@@ -4303,6 +4277,24 @@ export function App() {
     commandSurfaceAdapter.getRevision
   );
 
+  const commandSurfaceStateSignatureRef = useRef("");
+  useEffect(() => {
+    const nextSignature = JSON.stringify(
+      commandSurfaceAdapter.getCommandPaletteItems().map((item) => ({
+        commandId: item.commandId,
+        disabled: item.disabled,
+        disabledReason: item.disabledReason,
+        pending: item.pending,
+        pressed: item.pressed
+      }))
+    );
+    if (commandSurfaceStateSignatureRef.current === nextSignature) {
+      return;
+    }
+    commandSurfaceStateSignatureRef.current = nextSignature;
+    commandSurfaceAdapter.notifyRuntimeStateChanged();
+  });
+
   const commandSurfaceMenus = commandSurfaceAdapter.getMenus();
   const commandBarItems = commandSurfaceAdapter.getCommandBarItems();
   const commandPaletteItems = commandSurfaceAdapter.getCommandPaletteItems();
@@ -4577,37 +4569,37 @@ export function App() {
             primarySelectedMachineId={primarySelectedMachineId}
             selectedCivilReferenceId={selectedCivilReferenceId}
             selectedCivilReferenceIds={selectedCivilReferenceIds}
+            selectedPlanEntityIds={selectedAlignableEntityIds}
             selectedAnnotationId={selectedAnnotationId}
             lockedMachineIds={lockedMachineIds}
             lockedCivilReferenceIds={lockedCivilReferenceIds}
             lockedAnnotationIds={lockedAnnotationIds}
-            activeGroupEditMachineIds={activeGroupEditMachineIds}
             selectedAssemblyId={selectedGroupId}
             activeGroupEditId={activeGroupEditId}
             onSelectMachine={selectMachine}
             onSelectCivilReference={selectCivilReferenceForEditing}
             onSelectAnnotation={selectAnnotationForEditing}
             onUpdateMachine={updateMachine}
-            onSetMachinePositions={setMachinePositions}
             onSetAnnotationPosition={setAnnotationPosition}
-            onSetCivilReferencePosition={setCivilReferencePosition}
+            onSetSelectionPlanPositions={setSelectionPlanPositions}
             canBeginObjectDrag={canBeginObjectDrag}
+            placementSettings={placementSettings}
             isSimulationRunning={isSimulationRunning}
             simulationSpeed={simulationSpeed}
             overlaySettings={overlaySettings}
             collisionResult={collisionResult}
             enableE2EDiagnostics={enableE2EDiagnostics}
             onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
-            onPerformanceMetricsChange={setLatestPerformanceMetrics}
+            onPerformanceMetricsChange={isPerformanceBenchmarkOpen ? setLatestPerformanceMetrics : undefined}
           />
           <div className="workbench-viewport-context-layer" aria-live="polite">
             <ViewportArrangeBar
-              selectionCount={selectedAlignableEntities.length}
-              movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
-              canDistribute={!selectedGroup && selectedAlignableEntities.length >= 3}
+              selectionCount={arrangeSelectedEntityIds.length}
+              movementAllowed={runtimeSelectionMovementEvaluation.allowed && arrangeSelectedEntityIds.length >= 2}
+              canDistribute={arrangeSelectedEntityIds.length >= 3}
               canGroup={!selectedGroup && selectedAlignableEntities.length >= 2}
               canUngroup={Boolean(selectedGroup)}
-              canOpenAdvancedAlignment={!selectedGroup && selectedAlignableEntities.length >= 2}
+              canOpenAdvancedAlignment={arrangeSelectedEntityIds.length >= 2}
               connectAndSnapAvailable={connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false}
               connectAndSnapOpen={isConnectionPointSnapOpen}
               onAlign={(action) => executeRuntimeFeatureCommand(
@@ -4631,7 +4623,7 @@ export function App() {
             />
             {isConnectionPointSnapOpen && connectionPointSnapAvailable && panelSectionVisibility[RUNTIME_PANEL_IDS.connectionPointSnap] !== false ? (
               <div className="viewport-connect-popover" role="dialog" aria-label="Connect & Snap" data-testid="connect-and-snap-popover">
-                <header><strong>Connect &amp; Snap</strong><button type="button" aria-label="Close Connect & Snap" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap)}>Close</button></header>
+                <header><strong>Connect &amp; Snap</strong><WorkbenchActionButton iconId="close" label="Close Connect & Snap" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap)} /></header>
                 <ConnectionPointSnapPanel
                   selectedMachines={selectedMachines}
                   primarySelectedMachine={selectedMachine}
@@ -4785,6 +4777,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.machineLibrary,
               label: "Library",
+              iconId: "library" as const,
               content: (
                 <MachineLibrary
                   onImportAsset={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.importAsset); }}
@@ -4805,6 +4798,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.layoutExplorer,
               label: "Explorer",
+              iconId: "explorer" as const,
               badge: platformEntities.length > 0 ? `${platformEntities.length}` : undefined,
               content: (
                 <LayoutExplorer
@@ -4826,6 +4820,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.layers,
               label: "Layers",
+              iconId: "layers" as const,
               badge: layers.length > 1 ? `${layers.length}` : undefined,
               content: (
                 <LayersPanel
@@ -4848,6 +4843,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.groups,
               label: "Groups",
+              iconId: "groups" as const,
               badge: groups.length > 0 ? `${groups.length}` : undefined,
               content: (
                 <AssemblyTreePanel
@@ -4876,6 +4872,7 @@ export function App() {
             {
               panelId: RUNTIME_PANEL_IDS.viewpoints,
               label: "Viewpoints",
+              iconId: "viewpoints" as const,
               badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
               content: (
                 <ViewpointsPanel
@@ -4948,13 +4945,24 @@ export function App() {
             onPointerDown={startPanelResize}
           />
           <header className="workbench-inspector-header">
-            <strong>Inspector</strong>
-            <WorkbenchDockCollapseButton
-              side="right"
-              collapsed={false}
-              onToggle={closeInspectorPresentation}
-              testId="right-dock-collapse-toggle"
-            />
+            <div className="workbench-inspector-heading">
+              <strong>Inspector</strong>
+              <small>{inspectorVisibilityMode === "manual" ? "Pinned" : "Auto"}</small>
+            </div>
+            <div className="workbench-inspector-header-actions">
+              <WorkbenchActionButton
+                iconId={inspectorVisibilityMode === "manual" ? "unpin" : "pin"}
+                label={inspectorVisibilityMode === "manual" ? "Unpin Inspector" : "Pin Inspector"}
+                aria-pressed={inspectorVisibilityMode === "manual"}
+                onClick={() => setInspectorVisibilityMode((current) => current === "auto" ? "manual" : "auto")}
+              />
+              <WorkbenchDockCollapseButton
+                side="right"
+                collapsed={false}
+                onToggle={closeInspectorPresentation}
+                testId="right-dock-collapse-toggle"
+              />
+            </div>
           </header>
           {showLegacyCompatibilityStack ? (
             <>
@@ -5222,12 +5230,13 @@ export function App() {
           <PanelSection
             title="Alignment Tools"
             defaultExpanded={false}
-            badge={selectedAlignableEntities.length >= 2 ? `${selectedAlignableEntities.length}` : undefined}
+            badge={arrangeSelectedEntityIds.length >= 2 ? `${arrangeSelectedEntityIds.length}` : undefined}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.alignmentTools)}
           >
             <AlignmentToolsPanel
-              selectedEntityCount={selectedAlignableEntities.length}
-              primarySelectionLabel={primarySelectedAlignable?.label}
+              selectedEntityCount={arrangeSelectedEntityIds.length}
+              primarySelectionLabel={primaryArrangeEntity?.label}
+              movementAllowed={runtimeSelectionMovementEvaluation.allowed && arrangeSelectedEntityIds.length >= 2}
               onAlign={(action) => executeRuntimeFeatureCommand(
                 RUNTIME_FEATURE_COMMAND_IDS.alignSelection,
                 { kind: "align", action } satisfies RuntimeAlignmentPayload
@@ -5540,13 +5549,13 @@ export function App() {
               <section className="manager-dialog workbench-tool-dialog" role="dialog" aria-modal="true" aria-label="Advanced Alignment">
                 <header className="manager-header">
                   <div><span>Arrange</span><h2>Advanced Alignment</h2></div>
-                  <button type="button" aria-label="Close Advanced Alignment" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.alignmentTools)}>Close</button>
+                  <WorkbenchActionButton iconId="close" label="Close Advanced Alignment" onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.alignmentTools)} />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <AlignmentToolsPanel
-                    selectedEntityCount={selectedAlignableEntities.length}
-                    primarySelectionLabel={primarySelectedAlignable?.label}
-                    movementAllowed={!selectedGroup && runtimeSelectionMovementEvaluation.allowed}
+                    selectedEntityCount={arrangeSelectedEntityIds.length}
+                    primarySelectionLabel={primaryArrangeEntity?.label}
+                    movementAllowed={runtimeSelectionMovementEvaluation.allowed && arrangeSelectedEntityIds.length >= 2}
                     onAlign={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "align", action } satisfies RuntimeAlignmentPayload)}
                     onDistribute={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "distribute", action } satisfies RuntimeAlignmentPayload)}
                     onEqualGap={(action) => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.alignSelection, { kind: "equal-gap", action } satisfies RuntimeAlignmentPayload)}
@@ -5647,13 +5656,11 @@ export function App() {
                     <span>View Tool</span>
                     <h2>Display / Overlay Controls</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Display / Overlay Controls"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Display / Overlay Controls"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.displayOverlayControls)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <DisplayOverlayControls
@@ -5683,13 +5690,11 @@ export function App() {
                     <span>Engineering Tool</span>
                     <h2>Collision Check</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Collision Check"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Collision Check"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.collisionCheck)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <CollisionCheckPanel
@@ -5714,13 +5719,11 @@ export function App() {
                     <span>File Tool</span>
                     <h2>Layout Import / Export</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Layout Import / Export"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Layout Import / Export"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.layoutControls)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <LayoutControls onExportLayout={exportLayout} onImportLayout={importLayout} />
@@ -5736,13 +5739,11 @@ export function App() {
                     <span>Global Tool</span>
                     <h2>Simulation Controls</h2>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="Close Simulation Controls"
+                  <WorkbenchActionButton
+                    iconId="close"
+                    label="Close Simulation Controls"
                     onClick={() => runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.simulationControls)}
-                  >
-                    Close
-                  </button>
+                  />
                 </header>
                 <div className="workbench-tool-dialog-body">
                   <SimulationControls

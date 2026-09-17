@@ -1,4 +1,5 @@
 import { forwardRef, type KeyboardEventHandler } from "react";
+import { WorkbenchIcon } from "../../workbench/icons";
 
 export type PreferenceDisclosureRowProps = Readonly<{
   label: string;
@@ -34,7 +35,9 @@ export const PreferenceDisclosureRow = forwardRef<HTMLButtonElement, PreferenceD
       >
         <span>{label}</span>
         <small>{summary}</small>
-        <span className="workspace-preference-disclosure-chevron" aria-hidden="true">{`\u203A`}</span>
+        <span className="workspace-preference-disclosure-chevron" aria-hidden="true">
+          <WorkbenchIcon iconId={expanded ? "collapse" : "expand"} />
+        </span>
       </button>
     );
   }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CommercialOutputKind, CommercialOutputSnapshot } from "../commercialOutputs";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 export type CommercialOutputActionState = {
   enabled: boolean;
@@ -43,7 +44,7 @@ export function CommercialOutputsModal({ snapshot, actions, onExport, onClose }:
             <span>File Output</span>
             <h2 id="commercial-outputs-title">Commercial Outputs</h2>
           </div>
-          <button type="button" data-testid="close-commercial-outputs" onClick={onClose}>Close</button>
+          <WorkbenchActionButton iconId="close" label="Close Commercial Outputs" data-testid="close-commercial-outputs" onClick={onClose} />
         </header>
         <div className="commercial-outputs-body">
           <dl className="commercial-output-summary" aria-label="Commercial output preflight summary">

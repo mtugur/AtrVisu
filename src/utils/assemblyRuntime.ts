@@ -14,6 +14,11 @@ export type AssemblyMovementResult = {
   civilReferences: CivilReferenceItem[];
 };
 
+export type AssemblyMovementEvaluation =
+  | ({ status: "applied" } & AssemblyMovementResult)
+  | ({ status: "noop" } & AssemblyMovementResult)
+  | { status: "blocked" };
+
 export const getMachinePositionUpdateDelta = (
   machine: PlacedMachine,
   positionMm: { xMm: number; yMm: number }
@@ -33,7 +38,7 @@ export const getCivilPositionUpdateDelta = (
   deltaYMm: positionMm.yMm - item.positionMm.yMm
 });
 
-export const moveAssemblyMembersByDelta = ({
+export const evaluateAssemblyMembersMovementByDelta = ({
   machines,
   civilReferences,
   memberEntityIds,
@@ -45,14 +50,13 @@ export const moveAssemblyMembersByDelta = ({
   memberEntityIds: readonly string[];
   deltaXMm: number;
   deltaYMm: number;
-}): AssemblyMovementResult | null => {
+}): AssemblyMovementEvaluation => {
   if (
     memberEntityIds.length === 0
     || !Number.isFinite(deltaXMm)
     || !Number.isFinite(deltaYMm)
-    || (deltaXMm === 0 && deltaYMm === 0)
   ) {
-    return null;
+    return { status: "blocked" };
   }
 
   const machineIds = new Set<string>();
@@ -64,7 +68,7 @@ export const moveAssemblyMembersByDelta = ({
     } else if (entityId.startsWith("civil:") && entityId.length > "civil:".length) {
       civilIds.add(entityId.slice("civil:".length));
     } else {
-      return null;
+      return { status: "blocked" };
     }
   }
 
@@ -72,10 +76,19 @@ export const moveAssemblyMembersByDelta = ({
     [...machineIds].some((id) => !machines.some((machine) => machine.instanceId === id))
     || [...civilIds].some((id) => !civilReferences.some((item) => item.id === id))
   ) {
-    return null;
+    return { status: "blocked" };
+  }
+
+  if (deltaXMm === 0 && deltaYMm === 0) {
+    return {
+      status: "noop",
+      machines: [...machines],
+      civilReferences: [...civilReferences]
+    };
   }
 
   return {
+    status: "applied",
     machines: machines.map((machine) => {
       if (!machineIds.has(machine.instanceId)) {
         return machine;
@@ -107,4 +120,13 @@ export const moveAssemblyMembersByDelta = ({
         }
       : item)
   };
+};
+
+export const moveAssemblyMembersByDelta = (
+  options: Parameters<typeof evaluateAssemblyMembersMovementByDelta>[0]
+): AssemblyMovementResult | null => {
+  const result = evaluateAssemblyMembersMovementByDelta(options);
+  return result.status === "applied"
+    ? { machines: result.machines, civilReferences: result.civilReferences }
+    : null;
 };

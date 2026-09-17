@@ -4,6 +4,7 @@ import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import { TECHNICAL_CSS_COLORS } from "../designSystem";
 import { getLayerItemCounts } from "../utils/layers";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 type LayersPanelProps = {
   layers: LayoutLayer[];
@@ -41,8 +42,10 @@ export function LayersPanel({
   return (
     <section className="layers-panel" data-testid="layers-panel" aria-label="Layers">
       <div className="layer-actions">
-        <button
-          type="button"
+        <WorkbenchActionButton
+          iconId="create"
+          label="Add Layer"
+          visibleLabel="Add Layer"
           data-testid="add-layer"
           onClick={() => {
             const name = window.prompt("Layer name");
@@ -50,12 +53,8 @@ export function LayersPanel({
               onAddLayer(name);
             }
           }}
-        >
-          Add Layer
-        </button>
-        <button type="button" onClick={onShowAllLayers}>
-          Show All Layers
-        </button>
+        />
+        <WorkbenchActionButton iconId="show" label="Show All Layers" onClick={onShowAllLayers} />
       </div>
       <div className="layer-list" aria-label="Layer list">
         {layers.map((layer) => {
@@ -80,37 +79,39 @@ export function LayersPanel({
               <div className="layer-row-actions">
                 {!layer.systemLayer ? (
                   <>
-                    <button type="button" onClick={() => onToggleVisibility(layer.id)}>
-                      {layer.visible ? "Hide" : "Show"}
-                    </button>
-                    <button type="button" onClick={() => onToggleLocked(layer.id)}>
-                      {layer.locked ? "Unlock" : "Lock"}
-                    </button>
+                    <WorkbenchActionButton
+                      iconId={layer.visible ? "show" : "hide"}
+                      label={`${layer.visible ? "Hide" : "Show"} ${layer.name}`}
+                      aria-pressed={layer.visible}
+                      onClick={() => onToggleVisibility(layer.id)}
+                    />
+                    <WorkbenchActionButton
+                      iconId={layer.locked ? "lock" : "unlock"}
+                      label={`${layer.locked ? "Unlock" : "Lock"} ${layer.name}`}
+                      aria-pressed={layer.locked}
+                      onClick={() => onToggleLocked(layer.id)}
+                    />
                   </>
                 ) : null}
-                <button type="button" onClick={() => onIsolateLayer(layer.id)}>
-                  Isolate
-                </button>
+                <WorkbenchActionButton iconId="isolate" label={`Isolate ${layer.name}`} onClick={() => onIsolateLayer(layer.id)} />
                 {!layer.systemLayer ? (
                   <>
-                    <button
-                      type="button"
+                    <WorkbenchActionButton
+                      iconId="rename"
+                      label={`Rename ${layer.name}`}
                       onClick={() => {
                         const name = window.prompt("Layer name", layer.name);
                         if (name?.trim()) {
                           onRenameLayer(layer.id, name);
                         }
                       }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      className="danger-action"
-                      type="button"
+                    />
+                    <WorkbenchActionButton
+                      iconId="delete"
+                      label={`Delete ${layer.name}`}
+                      tone="danger"
                       onClick={() => onDeleteLayer(layer.id)}
-                    >
-                      Delete
-                    </button>
+                    />
                   </>
                 ) : null}
               </div>

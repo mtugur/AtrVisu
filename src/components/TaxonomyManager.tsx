@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 import type { MachineTaxonomy } from "../types/taxonomy";
 import {
   CUSTOM_TAXONOMY_STORAGE_KEY,
@@ -241,7 +242,7 @@ export function TaxonomyManager({ onClose, onChanged }: TaxonomyManagerProps) {
             <span className="panel-kicker">AtrVisu</span>
             <h2>Taxonomy Manager</h2>
           </div>
-          <button data-testid="close-taxonomy-manager-header" type="button" onClick={onClose}>Close</button>
+          <WorkbenchActionButton iconId="close" label="Close Taxonomy Manager" data-testid="close-taxonomy-manager-header" onClick={onClose} />
         </header>
 
         {message ? <p className="manager-status">{message}</p> : null}

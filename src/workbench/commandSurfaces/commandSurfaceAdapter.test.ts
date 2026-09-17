@@ -233,6 +233,19 @@ describe("command surface adapter", () => {
     expect(adapter.getItem("view.toggleLabels", "command-bar")?.pressed).toBe(true);
   });
 
+  it("notifies subscribed surfaces after committed runtime binding state changes", () => {
+    const { adapter } = createHarness();
+    const listener = vi.fn();
+    const unsubscribe = adapter.subscribe(listener);
+
+    expect(adapter.getRevision()).toBe(0);
+    adapter.notifyRuntimeStateChanged();
+
+    expect(adapter.getRevision()).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
   it("renders import only with canonical acquisition and never executes payload-free runtime import", async () => {
     let pending = false;
     let onResult: ((result: ReturnType<typeof createExecutedRuntimeCommandResult>) => void) | undefined;
