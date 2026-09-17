@@ -29,12 +29,6 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Dependency security audit
-        run: npm audit --audit-level=low
-
       - name: Interaction governance authority check
         run: npm run check:interaction-governance
 
@@ -44,6 +38,12 @@ jobs:
       - name: Pull request governance declaration
         if: ${{ github.event_name == 'pull_request' }}
         run: npm run check:pr-governance
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Dependency security audit
+        run: npm audit --audit-level=low
 
       - name: Design token governance
         run: npm run check:design-tokens
