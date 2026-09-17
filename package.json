@@ -9,6 +9,7 @@
     "check:design-tokens": "node ./scripts/check-design-tokens.mjs",
     "check:interaction-governance": "node ./scripts/check-interaction-governance.mjs",
     "check:pr-governance": "node ./scripts/check-pr-governance.mjs",
+    "test:governance-policies": "node ./scripts/test-governance-policies.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
