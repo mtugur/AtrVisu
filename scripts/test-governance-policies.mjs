@@ -253,7 +253,7 @@ expectStaticFail(
     const file = path.join(staticRoot, "AGENTS.md");
     fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDARD.md", "docs/standards/REMOVED_BENCHMARK_STANDARD.md"));
   },
-  "AGENTS missing invariant"
+  "AGENTS authority order is not"
 );
 
 expectStaticFail(
