@@ -20,6 +20,10 @@ const requiredFiles = [
   "docs/checklists/INTERACTION_CHANGE_GATE.md",
   "docs/protocols/CODEX_SYNC_PROTOCOL.md",
   ".github/pull_request_template.md",
+  ".github/workflows/quality-gate.yml",
+  "scripts/check-pr-governance.mjs",
+  "scripts/test-governance-policies.mjs",
+  "package.json",
   "AGENTS.md"
 ];
 
@@ -40,6 +44,10 @@ const delivery = read("docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md");
 const checklist = read("docs/checklists/INTERACTION_CHANGE_GATE.md");
 const protocol = read("docs/protocols/CODEX_SYNC_PROTOCOL.md");
 const prTemplate = read(".github/pull_request_template.md");
+const workflow = read(".github/workflows/quality-gate.yml");
+const prChecker = read("scripts/check-pr-governance.mjs");
+const stressTests = read("scripts/test-governance-policies.mjs");
+const packageJson = read("package.json");
 const agents = read("AGENTS.md");
 
 const requireText = (label, text, snippets) => {
@@ -154,6 +162,39 @@ requireText("PR template", prTemplate, [
   "Normative contract/benchmark files are not being changed post-hoc"
 ]);
 
+requireText("PR governance checker", prChecker, [
+  "interaction/benchmark contract files changed but Interaction declaration is not Yes",
+  "Benchmark evidence record path must be under docs/benchmarks/",
+  "Benchmark evidence record does not exist",
+  "required runtime checkbox is not checked",
+  "All stop-rule checks must be explicitly checked"
+]);
+
+requireText("governance stress tests", stressTests, [
+  "valid interaction declaration",
+  "both interaction answers checked",
+  "post-hoc benchmark checkbox not accepted",
+  "runtime blocker gate cannot be left unchecked",
+  "removing stop-rule invariant is detected",
+  "removing benchmark evidence baseline is detected",
+  "weakening authority order is detected"
+]);
+
+requireText("package scripts", packageJson, [
+  "\"check:interaction-governance\"",
+  "\"check:pr-governance\"",
+  "\"test:governance-policies\""
+]);
+
+requireText("quality gate", workflow, [
+  "Interaction governance authority check",
+  "npm run check:interaction-governance",
+  "Governance policy stress tests",
+  "npm run test:governance-policies",
+  "Pull request governance declaration",
+  "npm run check:pr-governance"
+]);
+
 requireText("AGENTS", agents, [
   "ATRVISU_PRODUCT_CONSTITUTION.md",
   "MASTER_PLAN_SYNC_PROTOCOL.md",
@@ -198,5 +239,5 @@ for (const pattern of forbiddenWeakeningPatterns) {
 }
 
 if (!process.exitCode) {
-  console.log("interaction-governance: PASS — source sync, benchmark evidence, frozen interaction contract, delivery stop rules and anti-regression invariants are present");
+  console.log("interaction-governance: PASS — source sync, benchmark evidence, frozen interaction contract, fail-closed PR declaration, stress tests, delivery stop rules and anti-regression invariants are present");
 }
