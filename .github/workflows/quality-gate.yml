@@ -35,8 +35,15 @@ jobs:
       - name: Dependency security audit
         run: npm audit --audit-level=low
 
-      - name: Interaction governance
+      - name: Interaction governance authority check
         run: npm run check:interaction-governance
+
+      - name: Governance policy stress tests
+        run: npm run test:governance-policies
+
+      - name: Pull request governance declaration
+        if: ${{ github.event_name == 'pull_request' }}
+        run: npm run check:pr-governance
 
       - name: Design token governance
         run: npm run check:design-tokens
