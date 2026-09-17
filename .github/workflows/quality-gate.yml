@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Verify pull request head provenance
         if: ${{ github.event_name == 'pull_request' }}
@@ -28,6 +29,16 @@ jobs:
         with:
           node-version: 24
           cache: npm
+
+      - name: Interaction governance authority check
+        run: npm run check:interaction-governance
+
+      - name: Governance policy stress tests
+        run: npm run test:governance-policies
+
+      - name: Pull request governance declaration
+        if: ${{ github.event_name == 'pull_request' }}
+        run: npm run check:pr-governance
 
       - name: Install dependencies
         run: npm ci
