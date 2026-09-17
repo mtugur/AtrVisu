@@ -10,9 +10,11 @@ const fail = (message) => {
 
 const requiredFiles = [
   "docs/product/ATRVISU_PRODUCT_CONSTITUTION.md",
+  "docs/protocols/MASTER_PLAN_SYNC_PROTOCOL.md",
   "docs/standards/ATRVISU_INTERACTION_STANDARD.md",
   "docs/checklists/INTERACTION_CHANGE_GATE.md",
   "docs/protocols/CODEX_SYNC_PROTOCOL.md",
+  ".github/pull_request_template.md",
   "AGENTS.md"
 ];
 
@@ -23,9 +25,11 @@ for (const file of requiredFiles) {
 if (process.exitCode) process.exit(process.exitCode);
 
 const constitution = read("docs/product/ATRVISU_PRODUCT_CONSTITUTION.md");
+const masterSync = read("docs/protocols/MASTER_PLAN_SYNC_PROTOCOL.md");
 const interaction = read("docs/standards/ATRVISU_INTERACTION_STANDARD.md");
 const checklist = read("docs/checklists/INTERACTION_CHANGE_GATE.md");
 const protocol = read("docs/protocols/CODEX_SYNC_PROTOCOL.md");
+const prTemplate = read(".github/pull_request_template.md");
 const agents = read("AGENTS.md");
 
 const requireText = (label, text, snippets) => {
@@ -42,6 +46,14 @@ requireText("constitution", constitution, [
   "Contract Verified",
   "Product Accepted",
   "The next action is not another tuning pass"
+]);
+
+requireText("master-plan sync", masterSync, [
+  "Project-level planning sources",
+  "cannot reliably constrain implementation",
+  "repository-level implementation constitution",
+  "repository contract/ADR",
+  "The chat itself is not the durable enforcement mechanism"
 ]);
 
 requireText("interaction standard", interaction, [
@@ -66,6 +78,7 @@ requireText("interaction checklist", checklist, [
 
 requireText("Codex protocol", protocol, [
   "ATRVISU_PRODUCT_CONSTITUTION.md",
+  "MASTER_PLAN_SYNC_PROTOCOL.md",
   "ATRVISU_INTERACTION_STANDARD.md",
   "Contract yoksa KOD YAZILMAZ",
   "Rendering library/framework default davranışı benchmark değildir",
@@ -73,8 +86,19 @@ requireText("Codex protocol", protocol, [
   "User-reported runtime error sentetik testte görülmedi diye kapatılamaz"
 ]);
 
+requireText("PR template", prTemplate, [
+  "Interaction declaration",
+  "Named benchmark precedent",
+  "Interaction Standard section",
+  "Automation Green",
+  "Contract Verified",
+  "Product Accepted",
+  "Stop-rule check"
+]);
+
 requireText("AGENTS", agents, [
   "ATRVISU_PRODUCT_CONSTITUTION.md",
+  "MASTER_PLAN_SYNC_PROTOCOL.md",
   "ATRVISU_INTERACTION_STANDARD.md",
   "normatif sözleşme yoksa implementasyon yapılmaz",
   "Rendering framework/library default davranışı ürün standardı sayılmaz",
@@ -84,23 +108,30 @@ requireText("AGENTS", agents, [
   "Product Accepted"
 ]);
 
-const authorityOrder = agents.indexOf("docs/product/ATRVISU_PRODUCT_CONSTITUTION.md");
+const constitutionOrder = agents.indexOf("docs/product/ATRVISU_PRODUCT_CONSTITUTION.md");
+const masterSyncOrder = agents.indexOf("docs/protocols/MASTER_PLAN_SYNC_PROTOCOL.md");
 const interactionOrder = agents.indexOf("docs/standards/ATRVISU_INTERACTION_STANDARD.md");
 const protocolOrder = agents.indexOf("docs/protocols/CODEX_SYNC_PROTOCOL.md");
-if (!(authorityOrder >= 0 && interactionOrder > authorityOrder && protocolOrder > interactionOrder)) {
-  fail("AGENTS authority order is not constitution -> interaction standard -> protocol");
+if (!(constitutionOrder >= 0 && masterSyncOrder > constitutionOrder && interactionOrder > masterSyncOrder && protocolOrder > interactionOrder)) {
+  fail("AGENTS authority order is not constitution -> master-plan sync -> interaction standard -> Codex protocol");
 }
 
 const forbiddenWeakeningPatterns = [
   /Automation Green[^\n]{0,80}(?:means|=|is)\s+(?:accepted|complete|merge-ready)/i,
-  /framework default[^\n]{0,80}(?:product standard|final UX)/i
+  /framework default[^\n]{0,80}(?:product standard|final UX)/i,
+  /user-reported runtime error[^\n]{0,100}(?:ignore|dismiss|close because tests pass)/i
 ];
 for (const pattern of forbiddenWeakeningPatterns) {
-  for (const [label, text] of [["constitution", constitution], ["protocol", protocol], ["AGENTS", agents]]) {
+  for (const [label, text] of [
+    ["constitution", constitution],
+    ["master-plan sync", masterSync],
+    ["protocol", protocol],
+    ["AGENTS", agents]
+  ]) {
     if (pattern.test(text)) fail(`${label} contains governance-weakening language matching ${pattern}`);
   }
 }
 
 if (!process.exitCode) {
-  console.log("interaction-governance: PASS — authority chain and anti-regression invariants are present");
+  console.log("interaction-governance: PASS — authority chain, source sync, benchmark contract and anti-regression invariants are present");
 }
