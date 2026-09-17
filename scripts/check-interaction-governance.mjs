@@ -110,7 +110,7 @@ requireText("interaction standard", interaction, [
   "## 3. Plan Move",
   "Direct body drag",
   "body pointer interaction is selection/picking only",
-  "Camera angle must not silently change",
+  "A gesture in which the object reverses relative to the chosen handle direction because of camera angle.",
   "## 10. Inspector numeric editing",
   "Maximum update depth exceeded",
   "## 13. Runtime console contract",
