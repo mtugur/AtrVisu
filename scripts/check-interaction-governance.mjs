@@ -16,6 +16,7 @@ const requiredFiles = [
   "docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDARD.md",
   "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md",
   "docs/standards/ATRVISU_INTERACTION_STANDARD.md",
+  "docs/adr/ADR-001-phase-1-direct-plan-body-drag.md",
   "docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md",
   "docs/checklists/INTERACTION_CHANGE_GATE.md",
   "docs/protocols/CODEX_SYNC_PROTOCOL.md",
@@ -40,6 +41,7 @@ const masterFingerprint = read("docs/governance/MASTER_PLAN_SOURCE_FINGERPRINT.m
 const benchmarkStandard = read("docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDARD.md");
 const benchmarkBaseline = read("docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md");
 const interaction = read("docs/standards/ATRVISU_INTERACTION_STANDARD.md");
+const planMoveAdr = read("docs/adr/ADR-001-phase-1-direct-plan-body-drag.md");
 const delivery = read("docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md");
 const checklist = read("docs/checklists/INTERACTION_CHANGE_GATE.md");
 const protocol = read("docs/protocols/CODEX_SYNC_PROTOCOL.md");
@@ -108,13 +110,28 @@ requireText("benchmark baseline", benchmarkBaseline, [
 
 requireText("interaction standard", interaction, [
   "## 3. Plan Move",
-  "Direct body drag",
-  "body pointer interaction is selection/picking only",
-  "A gesture in which the object reverses relative to the chosen handle direction because of camera angle.",
+  "canonical pointer Plan movement is direct Machine/Civil body drag",
+  "one fixed horizontal working plane",
+  "same captured plane",
+  "### Known limitation",
+  "Camera-facing or camera-relative drag planes",
+  "PositionGizmo",
   "## 10. Inspector numeric editing",
   "Maximum update depth exceeded",
   "## 13. Runtime console contract",
   "User-reported console stacks are treated as first-class acceptance evidence"
+]);
+
+requireText("Plan Move ADR", planMoveAdr, [
+  "# ADR-001 — Phase-1 Direct Plan Body Drag",
+  "Accepted",
+  "0f215fd530316badccf5190b0459990b7ae1feb2",
+  "37ec887c1b93514f298c6b9d9a8162a14b78c05c",
+  "one horizontal working plane",
+  "Accepted Known Limitation",
+  "approximately 20 m Elevation",
+  "No alternate solver or remapping is permitted",
+  "P1-BLD1, P1-BLD2 and PF-3B implementation remain outside"
 ]);
 
 requireText("interaction delivery", delivery, [
@@ -177,6 +194,7 @@ requireText("governance stress tests", stressTests, [
   "runtime blocker gate cannot be left unchecked",
   "removing stop-rule invariant is detected",
   "removing benchmark evidence baseline is detected",
+  "removing Plan Move ADR is detected",
   "weakening authority order is detected"
 ]);
 

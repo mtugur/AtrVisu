@@ -41,35 +41,41 @@ Same selection IDs/order/primary are observable across Viewport, Explorer and In
 ## 3. Plan Move
 
 ### Benchmark precedent
-Visual Components / Autodesk Factory / Siemens placement manipulators and CAD triad conventions: explicit world-axis and plane handles for constrained placement; direct/free drag is a separate semantic and is not silently reinterpreted.
+Visual Components / Autodesk Factory / Siemens placement manipulators and SOLIDWORKS component movement distinguish explicit constrained manipulation from direct component dragging. AtrVisu Phase 1 intentionally adopts a bounded direct-drag deviation for rapid industrial layout placement; `docs/adr/ADR-001-phase-1-direct-plan-body-drag.md` records the decision and its accepted limitation.
 
 ### AtrVisu behavior
-- Phase-1 canonical precision Plan movement uses an explicit Move Manipulator.
-- World Plan axes are AtrVisu Plan X and Plan Y. Rendering-engine axis names are adapter details only.
-- X handle changes Plan X only.
-- Y handle changes Plan Y only.
-- Plane handle changes Plan X and Plan Y together.
-- Plan movement preserves Elevation.
-- The manipulator is attached to a presentation/proxy transform; domain mutation still flows through canonical Entity/Selection/History authorities.
+- Phase-1 canonical pointer Plan movement is direct Machine/Civil body drag.
+- Pointer-down captures the actual finite picked-point Elevation and creates one fixed horizontal working plane parallel to the floor at that Elevation.
+- Every pointer frame in the gesture derives one Plan X/Y delta from the pointer ray intersection with that same captured plane.
+- The working plane, picked-point anchor and start positions remain immutable for the gesture.
+- A frame without a finite forward ray/plane intersection produces no movement update. It does not switch movement model or reinterpret pointer intent.
+- Plan movement preserves Elevation exactly.
+- Domain mutation still flows through canonical Entity/Selection/Placement/History authorities; Babylon meshes do not become movement authority.
 - Multi-selection and Group movement apply one rigid Plan delta to all eligible members.
 - Snap is applied by the canonical placement authority in domain units, not by an independent rendering-engine snap authority.
+- A snapped no-op keeps the active gesture alive so movement can continue across later snap cells without release/re-click.
 - One continuous gesture produces one Undo transaction.
-- Manipulator placement uses a predictable working datum: combined Plan footprint center and the minimum selected base Elevation unless a later Level contract explicitly supersedes that datum.
+- Camera controls detach only while the body-drag gesture is active and restore deterministically on completion or rejection.
 
-### Direct body drag
-Body drag is not a second hidden Plan-move implementation. Until an explicit free-drag contract is approved, body pointer interaction is selection/picking only. A future body-drag mode requires its own benchmark precedent and ADR if its semantics differ from established CAD free-drag behavior.
+### Known limitation
+- At approximately 20 m Elevation, when the camera is near or below the captured working plane, horizontal-plane ray geometry can become singular or make forward/back pointer movement feel reversed.
+- This is an accepted Phase-1 limitation, not permission to add a fallback solver.
+- If a valid forward intersection is unavailable, the affected frame does not update movement and the runtime remains finite and error-free.
+- Future Level work may improve usability by changing the user's spatial context or datum. It must not silently change the pointer mathematics defined here.
 
 ### Forbidden behavior
-- Camera-relative remapping of world Plan axes without an explicit mode.
-- Jacobian/conditioning/coherence heuristics that alter pointer intent.
-- Hidden fallback between horizontal-plane drag and screen-space drag.
-- Sign clipping, catch-up, direction preservation hacks, acceleration clamps, hysteresis or smoothing added to make an ill-conditioned body drag appear usable.
-- A gesture in which the object reverses relative to the chosen handle direction because of camera angle.
+- An explicit PositionGizmo or proxy manipulator replacing Phase-1 body drag.
+- Camera-facing or camera-relative drag planes.
+- Screen-space movement mapping or camera-relative sign correction.
+- Jacobian, conditioning or coherence solvers.
+- Hidden fallback from the captured horizontal plane to another plane or mapping.
+- Sign clipping, catch-up, gain/acceleration clamps, hysteresis or smoothing added to conceal ill-conditioned geometry.
+- Changing the captured working plane during a gesture.
 - Moving Elevation during Plan move.
-- Framework-default gizmo appearance being accepted as final visual language without PF-3 visual review.
+- Partial Group/multi-selection movement, per-frame history entries or a snapped no-op ending the gesture.
 
 ### Acceptance
-Run the same handle gesture in clearly-above, moderate, shallow, near-horizontal and below-target camera views. X/Y/plane semantics remain identical, Elevation is unchanged, Group members receive equal deltas, snap is deterministic, and one Undo restores the complete gesture.
+Drag a Machine and Civil item from a real high picked point and verify one fixed floor-parallel working plane is used while Elevation remains unchanged. Drag a Group/multi-selection and verify every member receives the same Plan delta. With snap enabled, cross multiple snap cells without release/re-click and verify one Undo restores the complete gesture. At the accepted approximately 20 m near-plane limitation, verify the runtime remains finite and console-clean without fallback, remapping or a rendered Plan manipulator.
 
 ## 4. Elevation / vertical movement
 
