@@ -128,8 +128,10 @@ export type BabylonSceneDragPlacementContract = {
     machineStartPositionCapture: true;
     renderingMeterFallback: true;
     atomicMovementResultContract: true;
-    bodyPlanMutationRemoved: true;
-    manipulatorOnlyPlanMove: true;
+    pickedElevationCapture: true;
+    fixedHorizontalPlane: true;
+    bodyPlanMovement: true;
+    noOpGestureContinuity: true;
   };
   remainingInteractionFlows: {
     pointerObserverSelectionOrchestration: true;

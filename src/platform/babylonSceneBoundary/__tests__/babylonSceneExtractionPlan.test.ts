@@ -126,8 +126,11 @@ describe("babylon scene extraction plan", () => {
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
         "canonical-plan-position-primitive-contract",
-        "body-pointer-selection-only",
-        "manipulator-only-plan-move",
+        "direct-machine-civil-body-plan-drag",
+        "fixed-picked-elevation-horizontal-plane",
+        "rigid-group-plan-delta",
+        "snapped-noop-keeps-gesture-active",
+        "accepted-near-plane-limit-no-fallback",
         "rotation-gizmo-helper-contract",
         "plan-rotation-degrees-to-radians",
         "manual-rotation-input-commit",
@@ -135,7 +138,7 @@ describe("babylon scene extraction plan", () => {
         "pointer-interaction-handling",
       ])
     );
-    expect(interactionPhase?.prerequisites).toContain("plan-movement-primitives-reconciled");
+    expect(interactionPhase?.prerequisites).toContain("fixed-plane-body-drag-contract-ready");
     expect(interactionPhase?.prerequisites).toContain("rotation-gizmo-helper-extracted");
     expect(interactionPhase?.expectedFilesOrModules).toContain(
       "src/components/babylonScene/dragPlacement.ts"

@@ -142,7 +142,7 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "drag-move-placement-interaction",
-      label: "Canonical Plan position primitives remain extracted while body interaction is selection-only and Plan mutation belongs exclusively to the manipulator",
+      label: "Fixed picked-elevation plane and rigid body-drag Plan deltas remain extracted while pointer orchestration stays in BabylonScene",
       status: "extracted",
       riskLevel: "low",
       ownerModule: "src/components/babylonScene/dragPlacement.ts",
@@ -329,17 +329,23 @@ export const currentBabylonSceneBoundary = {
       "machine-start-position-capture",
       "rendering-meter-fallback",
       "atomic-movement-result-contract",
-      "body-pointer-selection-only",
-      "manipulator-only-plan-move",
-      "remaining-pointer-selection-orchestration",
+      "direct-machine-civil-body-plan-drag",
+      "fixed-picked-elevation-horizontal-plane",
+      "rigid-group-plan-delta",
+      "snapped-noop-keeps-gesture-active",
+      "one-history-entry-per-drag",
+      "accepted-near-plane-limit-no-fallback",
+      "remaining-pointer-drag-orchestration",
       "separate-annotation-drag-orchestration"
     ],
     extractedFlows: {
       machineStartPositionCapture: true,
       renderingMeterFallback: true,
       atomicMovementResultContract: true,
-      bodyPlanMutationRemoved: true,
-      manipulatorOnlyPlanMove: true
+      pickedElevationCapture: true,
+      fixedHorizontalPlane: true,
+      bodyPlanMovement: true,
+      noOpGestureContinuity: true
     },
     remainingInteractionFlows: {
       pointerObserverSelectionOrchestration: true,

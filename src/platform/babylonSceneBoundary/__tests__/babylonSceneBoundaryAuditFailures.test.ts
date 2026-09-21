@@ -379,7 +379,7 @@ describe("babylon scene boundary audit failures", () => {
             ...currentBabylonSceneBoundary.dragPlacementContract,
             extractedFlows: {
               ...currentBabylonSceneBoundary.dragPlacementContract.extractedFlows,
-              bodyPlanMutationRemoved: false
+              fixedHorizontalPlane: false
             }
           } as unknown as BabylonSceneBoundaryInventory["dragPlacementContract"]
         }),

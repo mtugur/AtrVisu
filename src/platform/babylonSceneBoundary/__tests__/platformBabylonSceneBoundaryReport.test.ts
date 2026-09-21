@@ -194,7 +194,7 @@ describe("platform babylon scene boundary report", () => {
     });
   });
 
-  it("exposes manipulator-only Plan movement and selection-only body interaction", () => {
+  it("exposes fixed-plane direct body drag without manipulator fallback", () => {
     const report = createPlatformBabylonSceneBoundaryReport();
 
     expect(report.dragPlacementContract.responsibilityId).toBe(dragPlacementResponsibilityId);
@@ -208,9 +208,12 @@ describe("platform babylon scene boundary report", () => {
       machineStartPositionCapture: true,
       renderingMeterFallback: true,
       atomicMovementResultContract: true,
-      bodyPlanMutationRemoved: true,
-      manipulatorOnlyPlanMove: true
+      pickedElevationCapture: true,
+      fixedHorizontalPlane: true,
+      bodyPlanMovement: true,
+      noOpGestureContinuity: true
     });
+    expect(report.dragPlacementContract.protectedBehaviors).toContain("accepted-near-plane-limit-no-fallback");
     expect(report.dragPlacementContract.remainingInteractionFlows).toEqual({
       pointerObserverSelectionOrchestration: true,
       annotationDragOrchestration: true

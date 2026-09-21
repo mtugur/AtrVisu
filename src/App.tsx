@@ -3,7 +3,6 @@ import type { CSSProperties } from "react";
 import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
-import type { PlanMovePositionUpdates } from "./components/babylonScene/planMoveManipulator";
 import { EditorHost } from "./components/EditorHost";
 import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
 import { HelpModal, type HelpSection } from "./components/HelpModal";
@@ -207,6 +206,8 @@ import {
 } from "./utils/groups";
 import {
   evaluateAssemblyMembersMovementByDelta,
+  getCivilPositionUpdateDelta,
+  getMachinePositionUpdateDelta,
   moveAssemblyMembersByDelta
 } from "./utils/assemblyRuntime";
 import {
@@ -813,6 +814,11 @@ export function App() {
     : undefined;
   const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) : null;
   const activeGroupEdit = activeGroupEditId ? groups.find((group) => group.id === activeGroupEditId) : null;
+  const activeGroupEditMachineIds = useMemo(() => activeGroupEdit
+    ? activeGroupEdit.objectIds.flatMap((entityId) => entityId.startsWith("machine:")
+      ? [entityId.slice("machine:".length)]
+      : [])
+    : [], [activeGroupEdit]);
   const singleSelectedMachine = selectedMachineIds.length === 1 && !selectedGroup ? selectedMachine : undefined;
   const visiblePlacedMachines = useMemo(
     () => placedMachines.filter((machine) => isLayerVisible(machine.layerId, layers)),
@@ -2627,76 +2633,112 @@ export function App() {
     activeGroupEditId: activeGroupEditIdRef.current
   })), []);
 
-  const setSelectionPlanPositions = useCallback((
-    updates: PlanMovePositionUpdates,
+  const setMachinePositions = useCallback((
+    updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
     options: { recordHistory?: boolean } = {}
   ) => {
     const currentSelection = runtimeSelectionRef.current;
     const currentEntities = platformEntitiesRef.current;
-    const projectedSelection = projectRuntimeSelection(currentSelection, currentEntities);
-    const expectedEntityIds = new Set(projectedSelection.selectedAlignableEntityIds);
-    const updateEntityIds = [
-      ...updates.machines.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
-      ...updates.civilReferences.map((update) => createLegacyPlatformEntityId("civil", update.id))
-    ];
-    const uniqueUpdateEntityIds = new Set(updateEntityIds);
-    if (
-      updateEntityIds.length === 0
-      || updateEntityIds.length !== expectedEntityIds.size
-      || uniqueUpdateEntityIds.size !== updateEntityIds.length
-      || updateEntityIds.some((entityId) => !expectedEntityIds.has(entityId))
-      || [...expectedEntityIds].some((entityId) => !uniqueUpdateEntityIds.has(entityId))
-      || updates.machines.some((update) => !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm))
-      || updates.civilReferences.some((update) => !Number.isFinite(update.xMm) || !Number.isFinite(update.yMm))
-    ) {
-      return "blocked" as const;
-    }
-
-    const currentMachines = placedMachinesRef.current;
-    const currentCivilReferences = civilReferencesRef.current;
-    if (
-      updates.machines.some((update) => !currentMachines.some((machine) => machine.instanceId === update.instanceId))
-      || updates.civilReferences.some((update) => !currentCivilReferences.some((item) => item.id === update.id))
-    ) {
-      return "blocked" as const;
-    }
-
-    const nextMachines = applyMachinePositionUpdates(currentMachines, [...updates.machines]);
-    const civilUpdates = new Map(updates.civilReferences.map((update) => [update.id, update]));
-    const nextCivilReferences = currentCivilReferences.map((item) => {
-      const update = civilUpdates.get(item.id);
-      return update
-        ? { ...item, positionMm: { ...item.positionMm, xMm: update.xMm, yMm: update.yMm } }
-        : item;
-    });
-    const changed = nextMachines.some((machine, index) => {
-      const before = getMachinePlanPositionMm(currentMachines[index]);
-      const after = getMachinePlanPositionMm(machine);
-      return before.xMm !== after.xMm || before.yMm !== after.yMm;
-    }) || nextCivilReferences.some((item, index) =>
-      item.positionMm.xMm !== currentCivilReferences[index].positionMm.xMm
-      || item.positionMm.yMm !== currentCivilReferences[index].positionMm.yMm
-    );
-    if (!changed) {
-      return "noop" as const;
-    }
-
     const affectedEntityIds = getAtomicMovementEntityIds(
       currentSelection,
-      updateEntityIds,
+      updates.map((update) => createLegacyPlatformEntityId("machine", update.instanceId)),
       true,
       currentEntities,
       activeGroupEditIdRef.current
     );
+    if (!evaluateAtomicMovement(affectedEntityIds, currentEntities).allowed) {
+      return "blocked" as const;
+    }
+
+    const activeEditGroup = activeGroupEditIdRef.current
+      ? groupsRef.current.find((group) => group.id === activeGroupEditIdRef.current)
+      : undefined;
+    const updatesActiveEditMember = Boolean(activeEditGroup && updates.some((update) =>
+      activeEditGroup.objectIds.includes(createLegacyPlatformEntityId("machine", update.instanceId))
+    ));
+    const hasSelectedAssembly = !updatesActiveEditMember
+      && currentSelection.ids.some((entityId) => entityId.startsWith("group:"));
+    if (hasSelectedAssembly) {
+      const firstUpdate = updates.find((update) =>
+        placedMachinesRef.current.some((machine) => machine.instanceId === update.instanceId)
+      );
+      const firstMachine = firstUpdate
+        ? placedMachinesRef.current.find((machine) => machine.instanceId === firstUpdate.instanceId)
+        : undefined;
+      if (!firstUpdate || !firstMachine) return "blocked" as const;
+      const targetPosition = applyPositionSnap(
+        { xMm: firstUpdate.xMm, yMm: firstUpdate.yMm },
+        placementSettingsRef.current
+      );
+      const delta = getMachinePositionUpdateDelta(firstMachine, targetPosition);
+      const projection = projectRuntimeSelection(currentSelection, currentEntities);
+      const movement = evaluateAssemblyMembersMovementByDelta({
+        machines: placedMachinesRef.current,
+        civilReferences: civilReferencesRef.current,
+        memberEntityIds: projection.selectedAlignableEntityIds,
+        ...delta
+      });
+      if (movement.status !== "applied") return movement.status;
+      const mutation = executeAtomicSelectionMutation({
+        entityIds: affectedEntityIds,
+        entities: currentEntities,
+        beforeMutation: () => markLayoutChanged(options),
+        mutate: () => {
+          placedMachinesRef.current = movement.machines;
+          civilReferencesRef.current = movement.civilReferences;
+          setPlacedMachines(movement.machines);
+          setCivilReferences(movement.civilReferences);
+        }
+      });
+      return mutation.allowed ? "applied" as const : "blocked" as const;
+    }
+
+    const currentMachines = placedMachinesRef.current;
+    if (updates.some((update) => !currentMachines.some((machine) => machine.instanceId === update.instanceId))) {
+      return "blocked" as const;
+    }
+    let nextMachines: PlacedMachine[];
+    if (!placementSettingsRef.current.gridSnapEnabled || updates.length === 1) {
+      const snappedUpdates = updates.map((update) => ({
+        ...update,
+        ...applyPositionSnap({ xMm: update.xMm, yMm: update.yMm }, placementSettingsRef.current)
+      }));
+      nextMachines = applyMachinePositionUpdates(currentMachines, snappedUpdates);
+    } else {
+      const firstUpdate = updates[0];
+      const firstMachine = currentMachines.find((machine) => machine.instanceId === firstUpdate.instanceId);
+      if (!firstMachine) return "blocked" as const;
+      const firstPosition = getMachinePlanPositionMm(firstMachine);
+      const snappedFirstPosition = applyPositionSnap(
+        { xMm: firstUpdate.xMm, yMm: firstUpdate.yMm },
+        placementSettingsRef.current
+      );
+      const snappedDeltaXMm = snappedFirstPosition.xMm - firstPosition.xMm;
+      const snappedDeltaYMm = snappedFirstPosition.yMm - firstPosition.yMm;
+      const updateIds = new Set(updates.map((update) => update.instanceId));
+      nextMachines = currentMachines.map((machine) => {
+        if (!updateIds.has(machine.instanceId)) return machine;
+        const position = getMachinePlanPositionMm(machine);
+        return applyMachinePositionUpdates([machine], [{
+          instanceId: machine.instanceId,
+          xMm: position.xMm + snappedDeltaXMm,
+          yMm: position.yMm + snappedDeltaYMm
+        }])[0];
+      });
+    }
+    const changed = nextMachines.some((machine, index) => {
+      const before = getMachinePlanPositionMm(currentMachines[index]);
+      const after = getMachinePlanPositionMm(machine);
+      return before.xMm !== after.xMm || before.yMm !== after.yMm;
+    });
+    if (!changed) return "noop" as const;
     const mutation = executeAtomicSelectionMutation({
       entityIds: affectedEntityIds,
       entities: currentEntities,
       beforeMutation: () => markLayoutChanged(options),
       mutate: () => {
         placedMachinesRef.current = nextMachines;
-        civilReferencesRef.current = nextCivilReferences;
         setPlacedMachines(nextMachines);
-        setCivilReferences(nextCivilReferences);
       }
     });
     return mutation.allowed ? "applied" as const : "blocked" as const;
@@ -2987,6 +3029,70 @@ export function App() {
     }
     markLayoutChanged(options);
     setCivilReferences((current) => updateCivilReference(current, id, updates));
+  }, [markLayoutChanged]);
+
+  const setCivilReferencePosition = useCallback((
+    id: string,
+    positionMm: { xMm: number; yMm: number },
+    options: { recordHistory?: boolean } = {}
+  ) => {
+    const item = civilReferencesRef.current.find((reference) => reference.id === id);
+    if (!item) return "blocked" as const;
+
+    const entityId = createLegacyPlatformEntityId("civil", id);
+    const currentSelection = runtimeSelectionRef.current;
+    const currentEntities = platformEntitiesRef.current;
+    const affectedEntityIds = getAtomicMovementEntityIds(
+      currentSelection,
+      [entityId],
+      true,
+      currentEntities,
+      activeGroupEditIdRef.current
+    );
+    const activeEditGroup = activeGroupEditIdRef.current
+      ? groupsRef.current.find((group) => group.id === activeGroupEditIdRef.current)
+      : undefined;
+    const updatesActiveEditMember = Boolean(activeEditGroup?.objectIds.includes(entityId));
+    const hasSelectedAssembly = !updatesActiveEditMember
+      && currentSelection.ids.some((selectedId) => selectedId.startsWith("group:"));
+    if (hasSelectedAssembly) {
+      const delta = getCivilPositionUpdateDelta(item, positionMm);
+      const projection = projectRuntimeSelection(currentSelection, currentEntities);
+      const movement = evaluateAssemblyMembersMovementByDelta({
+        machines: placedMachinesRef.current,
+        civilReferences: civilReferencesRef.current,
+        memberEntityIds: projection.selectedAlignableEntityIds,
+        ...delta
+      });
+      if (movement.status !== "applied") return movement.status;
+      const evaluation = executeAtomicSelectionMutation({
+        entityIds: affectedEntityIds,
+        entities: currentEntities,
+        beforeMutation: () => markLayoutChanged(options),
+        mutate: () => {
+          placedMachinesRef.current = movement.machines;
+          civilReferencesRef.current = movement.civilReferences;
+          setPlacedMachines(movement.machines);
+          setCivilReferences(movement.civilReferences);
+        }
+      });
+      return evaluation.allowed ? "applied" as const : "blocked" as const;
+    }
+
+    if (item.positionMm.xMm === positionMm.xMm && item.positionMm.yMm === positionMm.yMm) {
+      return "noop" as const;
+    }
+    const nextCivilReferences = updateCivilReference(civilReferencesRef.current, id, { positionMm });
+    const evaluation = executeAtomicSelectionMutation({
+      entityIds: affectedEntityIds,
+      entities: currentEntities,
+      beforeMutation: () => markLayoutChanged(options),
+      mutate: () => {
+        civilReferencesRef.current = nextCivilReferences;
+        setCivilReferences(nextCivilReferences);
+      }
+    });
+    return evaluation.allowed ? "applied" as const : "blocked" as const;
   }, [markLayoutChanged]);
 
   const changeCivilReferenceLayer = useCallback((id: string, layerId: string) => {
@@ -4569,19 +4675,20 @@ export function App() {
             primarySelectedMachineId={primarySelectedMachineId}
             selectedCivilReferenceId={selectedCivilReferenceId}
             selectedCivilReferenceIds={selectedCivilReferenceIds}
-            selectedPlanEntityIds={selectedAlignableEntityIds}
             selectedAnnotationId={selectedAnnotationId}
             lockedMachineIds={lockedMachineIds}
             lockedCivilReferenceIds={lockedCivilReferenceIds}
             lockedAnnotationIds={lockedAnnotationIds}
+            activeGroupEditMachineIds={activeGroupEditMachineIds}
             selectedAssemblyId={selectedGroupId}
             activeGroupEditId={activeGroupEditId}
             onSelectMachine={selectMachine}
             onSelectCivilReference={selectCivilReferenceForEditing}
             onSelectAnnotation={selectAnnotationForEditing}
             onUpdateMachine={updateMachine}
+            onSetMachinePositions={setMachinePositions}
             onSetAnnotationPosition={setAnnotationPosition}
-            onSetSelectionPlanPositions={setSelectionPlanPositions}
+            onSetCivilReferencePosition={setCivilReferencePosition}
             canBeginObjectDrag={canBeginObjectDrag}
             placementSettings={placementSettings}
             isSimulationRunning={isSimulationRunning}

@@ -207,9 +207,9 @@ export const babylonSceneExtractionPlan = {
         "viewport-camera-extraction",
         "object-rendering-extraction",
         "selection-picking-helper-extracted",
-        "plan-movement-primitives-reconciled",
+        "fixed-plane-body-drag-contract-ready",
         "rotation-gizmo-helper-extracted",
-        "selection-and-manipulator-contract-tests-ready"
+        "selection-and-body-drag-contract-tests-ready"
       ],
       protectedBehaviors: [
         ...baselineProtectedBehaviors,
@@ -217,8 +217,11 @@ export const babylonSceneExtractionPlan = {
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
         "canonical-plan-position-primitive-contract",
-        "body-pointer-selection-only",
-        "manipulator-only-plan-move",
+        "direct-machine-civil-body-plan-drag",
+        "fixed-picked-elevation-horizontal-plane",
+        "rigid-group-plan-delta",
+        "snapped-noop-keeps-gesture-active",
+        "accepted-near-plane-limit-no-fallback",
         "rotation-gizmo-helper-contract",
         "plan-rotation-degrees-to-radians",
         "manual-rotation-input-commit",
