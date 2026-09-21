@@ -142,7 +142,7 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "drag-move-placement-interaction",
-      label: "Drag, move, placement, and floor-delta calculation logic extracted to dragPlacement helper",
+      label: "Fixed picked-elevation plane and rigid body-drag Plan deltas remain extracted while pointer orchestration stays in BabylonScene",
       status: "extracted",
       riskLevel: "low",
       ownerModule: "src/components/babylonScene/dragPlacement.ts",
@@ -326,27 +326,34 @@ export const currentBabylonSceneBoundary = {
       "object-picking-metadata"
     ],
     protectedBehaviors: [
-      "machine-drag-instance-selection",
-      "locked-machine-drag-filtering",
       "machine-start-position-capture",
-      "floor-delta-mm-conversion",
-      "civil-drag-position-calculation",
-      "machine-drag-position-updates",
-      "remaining-pointer-observer-orchestration"
+      "rendering-meter-fallback",
+      "atomic-movement-result-contract",
+      "direct-machine-civil-body-plan-drag",
+      "fixed-picked-elevation-horizontal-plane",
+      "rigid-group-plan-delta",
+      "snapped-noop-keeps-gesture-active",
+      "one-history-entry-per-drag",
+      "accepted-near-plane-limit-no-fallback",
+      "remaining-pointer-drag-orchestration",
+      "separate-annotation-drag-orchestration"
     ],
     extractedFlows: {
-      machineDragInstanceSelection: true,
       machineStartPositionCapture: true,
-      floorDeltaMmConversion: true,
-      civilDragPositionCalculation: true,
-      machineDragPositionUpdates: true
+      renderingMeterFallback: true,
+      atomicMovementResultContract: true,
+      pickedElevationCapture: true,
+      fixedHorizontalPlane: true,
+      bodyPlanMovement: true,
+      noOpGestureContinuity: true
     },
     remainingInteractionFlows: {
-      pointerObserverOrchestration: true
+      pointerObserverSelectionOrchestration: true,
+      annotationDragOrchestration: true
     },
     futureModuleCandidates: [
-      "src/scene/interactions/createDragPlacementController.ts (conceptual)",
-      "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)"
+      "src/scene/interactions/createScenePointerSelectionController.ts (conceptual)",
+      "src/scene/interactions/createAnnotationDragController.ts (conceptual)"
     ]
   },
   rotationGizmoContract: {
@@ -521,7 +528,7 @@ export const currentBabylonSceneBoundary = {
     },
     {
       id: "drag-placement-extracted",
-      label: "Machine and civil drag state, floor-delta millimeter conversion, and drag position update calculations now live in src/components/babylonScene/dragPlacement.ts"
+      label: "Canonical machine Plan-position capture and atomic movement result primitives remain in dragPlacement.ts; Machine/Civil body Plan mutation has been removed"
     },
     {
       id: "rotation-gizmo-extracted",

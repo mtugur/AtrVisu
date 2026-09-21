@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CivilReferenceItem } from "../types/civil";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import {
+  evaluateAssemblyMembersMovementByDelta,
   getCivilPositionUpdateDelta,
   getMachinePositionUpdateDelta,
   moveAssemblyMembersByDelta
@@ -136,6 +137,45 @@ describe("assembly runtime movement", () => {
       deltaYMm: 0
     })).toBeNull();
     expect(machines[0].positionMm).toEqual({ xMm: 0, yMm: 0 });
+  });
+
+  it("classifies a valid zero-delta assembly movement as a no-op", () => {
+    const machines = [machine("m1", 0, 0)];
+    const result = evaluateAssemblyMembersMovementByDelta({
+      machines,
+      civilReferences: [],
+      memberEntityIds: ["machine:m1"],
+      deltaXMm: 0,
+      deltaYMm: 0
+    });
+
+    expect(result.status).toBe("noop");
+    expect(result.status === "noop" ? result.machines[0].positionMm : null).toEqual({ xMm: 0, yMm: 0 });
+    expect(machines[0].positionMm).toEqual({ xMm: 0, yMm: 0 });
+  });
+
+  it("keeps blocked assembly movement distinct from a valid no-op", () => {
+    expect(evaluateAssemblyMembersMovementByDelta({
+      machines: [machine("m1", 0, 0)],
+      civilReferences: [],
+      memberEntityIds: ["machine:m1", "civil:missing"],
+      deltaXMm: 0,
+      deltaYMm: 0
+    })).toEqual({ status: "blocked" });
+  });
+
+  it("applies a canonical member delta once when its identity is repeated", () => {
+    const result = evaluateAssemblyMembersMovementByDelta({
+      machines: [machine("m1", 100, 200)],
+      civilReferences: [],
+      memberEntityIds: ["machine:m1", "machine:m1"],
+      deltaXMm: 300,
+      deltaYMm: -50
+    });
+
+    expect(result.status).toBe("applied");
+    expect(result.status === "applied" ? result.machines[0].positionMm : null)
+      .toEqual({ xMm: 400, yMm: 150 });
   });
 
   it("rejects unresolved or non-alignable members without partial source mutation", () => {

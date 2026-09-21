@@ -52,6 +52,9 @@ describe("PanelSection controlled expansion", () => {
     }));
 
     expect(markup).toContain('class="panel-section-disclosure"');
+    expect(markup.match(/<svg/g)).toHaveLength(1);
+    expect(markup).toContain('aria-hidden="true"');
+    expect(markup).not.toMatch(/>\s*[+-]\s*</);
     expect(markup).toContain("<strong>Machine Properties</strong>");
     expect(markup).toContain("<small>Line 1 Flow Pack Machine</small>");
     expect(markup.indexOf("panel-section-disclosure")).toBeLessThan(markup.indexOf("Machine Properties"));

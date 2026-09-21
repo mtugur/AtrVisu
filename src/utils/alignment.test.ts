@@ -5,6 +5,7 @@ import {
   alignObjectsToAnchor,
   applyEntityPairAlignment,
   applyPairAlignment,
+  createCompositeAlignableEntity,
   distributeEntitiesByCenter,
   distributeObjectsByCenter,
   equalizeGaps,
@@ -264,7 +265,7 @@ describe("alignment helpers", () => {
 
 describe("mixed alignable entity helpers", () => {
   const entity = (
-    kind: "machine" | "civil",
+    kind: "machine" | "civil" | "group",
     id: string,
     xMm: number,
     yMm: number,
@@ -389,5 +390,67 @@ describe("mixed alignable entity helpers", () => {
 
     expect(distributeEntitiesByCenter(entities, ids, "horizontal").map((update) => update.xMm)).toEqual([0, 3000, 6000]);
     expect(equalizeEntityGaps(entities, ids, "gapX").map((update) => update.xMm)).toEqual([0, 3000, 6000]);
+  });
+
+  it("derives one-member and mixed group bounds from member footprints", () => {
+    const rotatedMachine = entity("machine", "rotated", -500, 250, 1200, 2400);
+    const column = entity("civil", "column", 2400, -750, 600, 600);
+
+    const { objectId: _objectId, ...memberBounds } = rotatedMachine.bounds;
+    expect(createCompositeAlignableEntity({
+      id: "single",
+      label: "Single",
+      members: [rotatedMachine]
+    })?.bounds).toEqual(memberBounds);
+
+    const group = createCompositeAlignableEntity({
+      id: "mixed",
+      label: "Mixed",
+      members: [rotatedMachine, column]
+    });
+    expect(group).toMatchObject({
+      kind: "group",
+      positionMm: { xMm: 1250, yMm: 950 },
+      bounds: {
+        minXMm: -500,
+        maxXMm: 3000,
+        minYMm: -750,
+        maxYMm: 2650,
+        widthMm: 3500,
+        depthMm: 3400
+      }
+    });
+  });
+
+  it("uses group entities in the generic align, pair, gap, distribute, and equal-gap engines", () => {
+    const groupA = {
+      ...entity("group", "group-a", 0, 0, 2000, 1000),
+      positionMm: { xMm: 1000, yMm: 500 }
+    };
+    const machineA = entity("machine", "machine-a", 5000, 1500, 1000, 1000);
+    const groupB = {
+      ...entity("group", "group-b", 9000, 3000, 2000, 1000),
+      positionMm: { xMm: 10000, yMm: 3500 }
+    };
+    const entities = [groupA, machineA, groupB];
+    const ids = entities.map((item) => getAlignableEntityKey(item.kind, item.id));
+
+    expect(alignEntitiesToAnchor(
+      entities,
+      [getAlignableEntityKey("group", "group-a"), getAlignableEntityKey("machine", "machine-a")],
+      getAlignableEntityKey("group", "group-a"),
+      "centerX"
+    )).toEqual([{ kind: "machine", id: "machine-a", xMm: 500, yMm: 1500 }]);
+
+    expect(applyEntityPairAlignment(
+      entities,
+      [getAlignableEntityKey("group", "group-a"), getAlignableEntityKey("group", "group-b")],
+      getAlignableEntityKey("group", "group-a"),
+      "gapX",
+      500
+    )).toEqual([{ kind: "group", id: "group-a", xMm: 12500, yMm: 500 }]);
+
+    expect(distributeEntitiesByCenter(entities, ids, "horizontal")).toHaveLength(3);
+    expect(equalizeEntityGaps(entities, ids, "gapX")).toHaveLength(3);
   });
 });

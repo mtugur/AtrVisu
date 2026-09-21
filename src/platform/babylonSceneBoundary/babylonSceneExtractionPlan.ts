@@ -207,28 +207,30 @@ export const babylonSceneExtractionPlan = {
         "viewport-camera-extraction",
         "object-rendering-extraction",
         "selection-picking-helper-extracted",
-        "drag-placement-helper-extracted",
+        "fixed-plane-body-drag-contract-ready",
         "rotation-gizmo-helper-extracted",
-        "selection-and-drag-contract-tests-ready"
+        "selection-and-body-drag-contract-tests-ready"
       ],
       protectedBehaviors: [
         ...baselineProtectedBehaviors,
         "selection-picking-helper-contract",
         "pick-target-metadata-decoding",
         "machine-pick-metadata-assignment",
-        "drag-placement-helper-contract",
-        "machine-drag-position-updates",
-        "civil-drag-position-calculation",
-        "floor-delta-mm-conversion",
+        "canonical-plan-position-primitive-contract",
+        "direct-machine-civil-body-plan-drag",
+        "fixed-picked-elevation-horizontal-plane",
+        "rigid-group-plan-delta",
+        "snapped-noop-keeps-gesture-active",
+        "accepted-near-plane-limit-no-fallback",
         "rotation-gizmo-helper-contract",
         "plan-rotation-degrees-to-radians",
         "manual-rotation-input-commit",
         "rotation-snap-nudge-calculation",
         "pointer-interaction-handling",
         "single-and-multi-selection-order",
-        "object-civil-annotation-drag-math",
+        "annotation-drag-math",
         "placement-and-rotation-controls",
-        "camera-controls-not-triggered-during-drag"
+        "camera-controls-detach-only-during-active-manipulation"
       ],
       forbiddenChanges: sharedForbiddenChanges,
       validationSignals: [
@@ -248,7 +250,7 @@ export const babylonSceneExtractionPlan = {
         "src/components/babylonScene/selectionPicking.test.ts",
         "src/scene/interactions/createScenePointerController.ts (conceptual)",
         "src/platform/babylonSceneBoundary/postInteractionInventory.ts (conceptual)",
-        "src/scene/interactions/createMultiSelectMoveController.ts (conceptual)",
+        "src/scene/interactions/createScenePointerSelectionController.ts (conceptual)",
         "src/scene/interactions/createAlignmentSnapPreparationAdapter.ts (conceptual)"
       ]
     },

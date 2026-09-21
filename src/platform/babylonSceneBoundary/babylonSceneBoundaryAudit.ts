@@ -129,7 +129,7 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
     dragPlacementResponsibility.riskLevel !== "low" ||
     dragPlacementResponsibility.nextRefactorCandidate !== false
   ) {
-    issues.push(createIssue("drag-placement-responsibility-invalid", "Babylon scene primaryResponsibilities must keep drag/move/placement as extracted dragPlacement helper work.", inventory.id, [expectedDragPlacementResponsibility]));
+    issues.push(createIssue("drag-placement-responsibility-invalid", "Babylon scene primaryResponsibilities must keep fixed-plane direct body-drag calculations extracted while pointer orchestration remains in BabylonScene.", inventory.id, [expectedDragPlacementResponsibility]));
   }
   const rotationGizmoResponsibility = findResponsibilityById(
     inventory.primaryResponsibilities,
@@ -208,16 +208,20 @@ export const createBabylonSceneBoundaryAuditReportFromInventory = (
     inventory.dragPlacementContract.remainingPointerOrchestrationModule !== "src/components/BabylonScene.tsx" ||
     inventory.dragPlacementContract.riskLevel !== "low" ||
     inventory.dragPlacementContract.protectedBehaviors.length === 0 ||
-    !inventory.dragPlacementContract.extractedFlows.machineDragInstanceSelection ||
     !inventory.dragPlacementContract.extractedFlows.machineStartPositionCapture ||
-    !inventory.dragPlacementContract.extractedFlows.floorDeltaMmConversion ||
-    !inventory.dragPlacementContract.extractedFlows.civilDragPositionCalculation ||
-    !inventory.dragPlacementContract.extractedFlows.machineDragPositionUpdates ||
-    !inventory.dragPlacementContract.remainingInteractionFlows.pointerObserverOrchestration ||
+    !inventory.dragPlacementContract.extractedFlows.renderingMeterFallback ||
+    !inventory.dragPlacementContract.extractedFlows.atomicMovementResultContract ||
+    !inventory.dragPlacementContract.extractedFlows.pickedElevationCapture ||
+    !inventory.dragPlacementContract.extractedFlows.fixedHorizontalPlane ||
+    !inventory.dragPlacementContract.extractedFlows.bodyPlanMovement ||
+    !inventory.dragPlacementContract.extractedFlows.noOpGestureContinuity ||
+    !inventory.dragPlacementContract.protectedBehaviors.includes("accepted-near-plane-limit-no-fallback") ||
+    !inventory.dragPlacementContract.remainingInteractionFlows.pointerObserverSelectionOrchestration ||
+    !inventory.dragPlacementContract.remainingInteractionFlows.annotationDragOrchestration ||
     !inventory.dragPlacementContract.separatedFromResponsibilityIds.includes("pointer-interaction-handling") ||
     !inventory.dragPlacementContract.separatedFromResponsibilityIds.includes("rotation-transform-interaction")
   ) {
-    issues.push(createIssue("drag-placement-contract-invalid", "Babylon scene dragPlacementContract must protect extracted drag/move/placement helper behavior while keeping pointer orchestration and rotation responsibilities separate.", inventory.id));
+    issues.push(createIssue("drag-placement-contract-invalid", "Babylon scene dragPlacementContract must protect fixed-plane body drag, rigid Plan movement, no-op gesture continuity, the accepted near-plane limitation, and separate annotation orchestration.", inventory.id));
   }
   if (
     inventory.rotationGizmoContract.responsibilityId !== "rotation-transform-interaction" ||

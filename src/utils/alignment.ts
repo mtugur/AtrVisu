@@ -15,7 +15,7 @@ import { getObjectPlanBounds, getSelectionPlanBounds } from "./selectionBounds";
 
 const selectedSet = (ids: string[]) => new Set(ids);
 
-export type AlignableEntityKind = "machine" | "civil";
+export type AlignableEntityKind = "machine" | "civil" | "group";
 
 export type AlignableEntity = {
   id: string;
@@ -92,7 +92,7 @@ const getSelectedAlignableEntities = (entities: AlignableEntity[], selectedEntit
   });
 };
 
-const getEntitiesPlanBounds = (entities: AlignableEntity[]): PlanBounds | null => {
+export const getEntitiesPlanBounds = (entities: readonly AlignableEntity[]): PlanBounds | null => {
   if (entities.length === 0) {
     return null;
   }
@@ -111,6 +111,38 @@ const getEntitiesPlanBounds = (entities: AlignableEntity[]): PlanBounds | null =
     maxYMm,
     widthMm: maxXMm - minXMm,
     depthMm: maxYMm - minYMm
+  };
+};
+
+export const createCompositeAlignableEntity = ({
+  id,
+  label,
+  members,
+  locked = false,
+  hidden = false
+}: {
+  id: string;
+  label: string;
+  members: readonly AlignableEntity[];
+  locked?: boolean;
+  hidden?: boolean;
+}): AlignableEntity | null => {
+  const bounds = getEntitiesPlanBounds(members);
+  if (!bounds) {
+    return null;
+  }
+
+  return {
+    id,
+    kind: "group",
+    label,
+    bounds,
+    positionMm: {
+      xMm: bounds.centerXMm,
+      yMm: bounds.centerYMm
+    },
+    locked: locked || members.some((member) => member.locked),
+    hidden: hidden || members.some((member) => member.hidden)
   };
 };
 

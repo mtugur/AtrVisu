@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArcRotateCamera, Engine, HemisphericLight, MeshBuilder, Scene, StandardMaterial, Vector3, type Mesh } from "@babylonjs/core";
 import { createPortal } from "react-dom";
-import { Upload, X } from "lucide-react";
 import { useModalFocus } from "./common/useModalFocus";
 import { customAssets, type NativeAssetDraft } from "../nativeAssets/customAssets";
 import { DEFAULT_IMPORT_CALIBRATION, projectModelCalibration, validateGlb, type ModelBounds, type ModelCalibration } from "../nativeAssets/modelContract";
@@ -9,6 +8,8 @@ import { calibrateImportedRoot, loadImportedModelRoot } from "../nativeAssets/mo
 import { openAtrVisuDatabase } from "../utils/storage/indexedDb";
 import { MACHINE_CATEGORIES } from "../utils/libraryValidation";
 import { createTechnicalColor3, createTechnicalColor4 } from "../designSystem/technicalPaletteBabylon";
+import { WorkbenchIcon } from "../workbench/icons";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 const STEPS = ["File & Preview", "Units & Orientation", "Asset Metadata", "Validate & Save"];
 const errorText = (error: unknown) => error instanceof Error ? error.message : "The model could not be imported.";
@@ -142,10 +143,10 @@ export function NativeAssetImport({ onClose }: { onClose: () => void }) {
   };
   return createPortal(<div className="manager-backdrop">
     <section ref={dialogRef} className="manager-dialog native-asset-dialog" role="dialog" aria-modal="true" aria-label="Import 3D Asset" data-testid="native-asset-import">
-      <header className="manager-header"><h2>Import 3D Asset</h2><button type="button" title="Close import" aria-label="Close import" disabled={busy} onClick={close}><X size={18} /></button></header>
+      <header className="manager-header"><h2>Import 3D Asset</h2><WorkbenchActionButton iconId="close" label="Close import" disabled={busy} onClick={close} /></header>
       <ol className="native-asset-steps">{STEPS.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined}>{index + 1}. {label}</li>)}</ol>
       <div className="native-asset-body">
-        {bytes ? <ModelPreview bytes={bytes} unit={unit} calibration={calibration} onBounds={setBounds} onError={setError} /> : <div className="native-asset-empty"><Upload size={32} /><span>GLB model preview</span></div>}
+        {bytes ? <ModelPreview bytes={bytes} unit={unit} calibration={calibration} onBounds={setBounds} onError={setError} /> : <div className="native-asset-empty"><WorkbenchIcon iconId="import" /><span>GLB model preview</span></div>}
         <div className="native-asset-fields">
           {step === 0 && <>
             <input ref={fileInputRef} type="file" accept=".glb" aria-label="GLB file" hidden onChange={(event) => {
@@ -154,7 +155,7 @@ export function NativeAssetImport({ onClose }: { onClose: () => void }) {
               // Only the application status is visible; resetting permits same-file reselection.
               event.target.value = "";
             }} />
-            <button type="button" aria-describedby="native-asset-selected-file" onClick={() => fileInputRef.current?.click()}><Upload size={16} /> Choose GLB file</button>
+            <WorkbenchActionButton iconId="import" label="Choose GLB file" visibleLabel="Choose GLB file" aria-describedby="native-asset-selected-file" onClick={() => fileInputRef.current?.click()} />
             <p id="native-asset-selected-file" role="status" data-testid="native-asset-selected-file">{selectedFile ? `${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)` : "No GLB selected"}</p>
           </>}
           {step === 1 && <><label>Model units<select aria-label="Model units" value={unit} onChange={(event) => setUnit(event.target.value as "mm" | "m")}><option value="m">m</option><option value="mm">mm</option></select></label>

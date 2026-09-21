@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import type { CSSProperties } from "react";
 import type { PanelId } from "../../platform/contracts";
+import { WorkbenchIcon, type WorkbenchIconId } from "../../workbench/icons";
 import { WorkbenchDockResizeHandle } from "./WorkbenchDockResizeHandle";
 import { WorkbenchDockCollapseButton } from "./WorkbenchDockCollapseButton";
 
 export type WorkbenchPrimaryDockItem = Readonly<{
   panelId: PanelId;
   label: string;
+  iconId: WorkbenchIconId;
   content: ReactNode;
   badge?: string;
 }>;
@@ -39,6 +41,18 @@ export function WorkbenchPrimaryDock({
   onResize
 }: WorkbenchPrimaryDockProps) {
   const activeItem = items.find((item) => item.panelId === activePanelId) ?? items[0];
+  const accessibleLabel = (item: WorkbenchPrimaryDockItem) => {
+    if (!item.badge) return item.label;
+    const count = Number(item.badge);
+    const unit = item.label === "Explorer"
+      ? `entit${count === 1 ? "y" : "ies"}`
+      : item.label === "Groups"
+        ? `group${count === 1 ? "" : "s"}`
+        : item.label === "Viewpoints"
+          ? `saved viewpoint${count === 1 ? "" : "s"}`
+          : `item${count === 1 ? "" : "s"}`;
+    return `${item.label}, ${item.badge} ${unit}`;
+  };
 
   return (
     <aside
@@ -58,15 +72,15 @@ export function WorkbenchPrimaryDock({
             <button
               key={item.panelId}
               type="button"
+              aria-label={accessibleLabel(item)}
+              title={accessibleLabel(item)}
               className={item.panelId === activeItem?.panelId ? "is-active" : undefined}
               data-testid={`primary-dock-tab-${item.panelId}`}
-              aria-label={item.label}
               aria-pressed={!collapsed && item.panelId === activeItem?.panelId}
-              title={item.label}
               onClick={() => onActivate(item.panelId)}
             >
-              <span>{item.label}</span>
-              {item.badge ? <small>{item.badge}</small> : null}
+              <WorkbenchIcon iconId={item.iconId} />
+              {item.badge ? <small aria-hidden="true">{item.badge}</small> : null}
             </button>
           ))}
         </nav>

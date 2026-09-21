@@ -26,6 +26,7 @@ import "@babylonjs/loaders/glTF";
 import type { CollisionCheckResult } from "../types/collision";
 import type { CivilReferenceItem } from "../types/civil";
 import type { PlacedMachine } from "../types/machine";
+import type { PlacementSettings } from "../types/placement";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
 import type { ScenePerformanceMetrics } from "../types/performance";
 import type { AnnotationObject } from "../types/annotations";
@@ -38,10 +39,18 @@ import type {
   RuntimeViewportState
 } from "../platform/runtimeViewport";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
-import { getCivilReferenceRenderCenterMm, getMachineRenderCenterMm } from "../utils/coordinateReference";
-import { getMachineDimensionsMeters } from "../utils/machineDimensions";
+import {
+  getCivilReferenceFootprintBoundsMm,
+  getCivilReferenceRenderCenterMm,
+  getMachineFootprintBoundsMm,
+  getMachineRenderCenterMm
+} from "../utils/coordinateReference";
+import { getMachineDimensionsMeters, getMachineDimensionsMm } from "../utils/machineDimensions";
 import { getPlacedMachineDisplayName } from "../utils/entityNames";
-import { collectScenePerformanceMetrics } from "../utils/performanceBenchmark";
+import {
+  collectScenePerformanceMetrics,
+  shouldPublishScenePerformanceMetrics
+} from "../utils/performanceBenchmark";
 import { metersToMm, mmToMeters } from "../utils/units";
 import { DEFAULT_OVERLAY_SETTINGS } from "../utils/overlaySettings";
 import { createBaseVisualDiagnostics } from "../utils/visualDiagnostics";
@@ -65,9 +74,14 @@ import {
   calculateMachineDragPositionUpdates,
   createCivilDragState,
   createMachineDragState,
+  didSceneDragApplyMutation,
   getMachineStartPositionMm,
+  intersectRayWithHorizontalDragPlane,
+  resolveDragPlaneElevationMeters,
+  shouldKeepSceneDragActive,
   type CivilDragState,
-  type MachineDragState
+  type MachineDragState,
+  type SceneDragMutationResult
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts, getMachineVerticalRenderPositions } from "./babylonScene/objectRendering";
 import { drawMachineLabelText } from "./babylonScene/machineLabelLifecycle";
@@ -154,7 +168,7 @@ type BabylonSceneProps = {
   onSetMachinePositions: (
     updates: Array<{ instanceId: string; xMm: number; yMm: number }>,
     options?: { recordHistory?: boolean }
-  ) => boolean;
+  ) => SceneDragMutationResult;
   onSetAnnotationPosition: (
     annotationId: string,
     positionMm: { xMm: number; yMm: number },
@@ -164,8 +178,9 @@ type BabylonSceneProps = {
     id: string,
     positionMm: { xMm: number; yMm: number },
     options?: { recordHistory?: boolean }
-  ) => boolean;
+  ) => SceneDragMutationResult;
   canBeginObjectDrag: (entityId: string, includeCurrentSelection: boolean) => boolean;
+  placementSettings: PlacementSettings;
   isSimulationRunning: boolean;
   simulationSpeed: number;
   overlaySettings: OverlaySettings;
@@ -1030,6 +1045,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   onSetAnnotationPosition,
   onSetCivilReferencePosition,
   canBeginObjectDrag,
+  placementSettings,
   isSimulationRunning,
   simulationSpeed,
   overlaySettings,
@@ -1063,7 +1079,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const simulationSpeedRef = useRef(simulationSpeed);
   const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
   const collisionResultRef = useRef<CollisionCheckResult>(collisionResult);
+  const placementSettingsRef = useRef(placementSettings);
   const onPerformanceMetricsChangeRef = useRef(onPerformanceMetricsChange);
+  const lastPerformanceMetricsPublishedAtRef = useRef<number | null>(null);
+  const performanceMetricsPublishCountRef = useRef(0);
   const enableE2EDiagnosticsRef = useRef(enableE2EDiagnostics);
   const productPhaseRef = useRef<Map<string, number>>(new Map());
   const dragStateRef = useRef<MachineDragState | null>(null);
@@ -1094,11 +1113,19 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       if (canvas) {
         delete canvas.dataset.machineScreenPoints;
         delete canvas.dataset.machineScreenBounds;
+        delete canvas.dataset.civilScreenPoints;
+        delete canvas.dataset.civilScreenBounds;
         delete canvas.dataset.machinePlanPositions;
         delete canvas.dataset.civilPlanPositions;
+        delete canvas.dataset.machineElevationsMm;
+        delete canvas.dataset.civilElevationsMm;
         delete canvas.dataset.machineSceneLabels;
         delete canvas.dataset.machineLoadedModelCounts;
         delete canvas.dataset.machineRenderTransforms;
+        delete canvas.dataset.lastSceneDragResult;
+        delete canvas.dataset.lastDragPlaneElevationMeters;
+        delete canvas.dataset.lastDragResolveStatus;
+        delete canvas.dataset.lastDragPointerPlaneErrorPx;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -1189,6 +1216,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     lockedAnnotationIdsRef.current = lockedAnnotationIds;
   }, [lockedAnnotationIds]);
+
+  useEffect(() => {
+    placementSettingsRef.current = placementSettings;
+  }, [placementSettings]);
 
   useEffect(() => {
     overlaySettingsRef.current = overlaySettings;
@@ -1332,6 +1363,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
   useEffect(() => {
     onPerformanceMetricsChangeRef.current = onPerformanceMetricsChange;
+    lastPerformanceMetricsPublishedAtRef.current = null;
   }, [onPerformanceMetricsChange]);
 
   useImperativeHandle(ref, () => ({
@@ -1595,7 +1627,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const { floor } = createSceneVisualContext(scene);
     floorRef.current = floor;
 
-    const createPointerRay = () => {
+    const createPointerRay = (event?: PointerEvent) => {
       const activeScene = sceneRef.current;
       const activeCamera = cameraRef.current;
       if (!activeScene || !activeCamera) {
@@ -1603,8 +1635,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       }
 
       return activeScene.createPickingRay(
-        activeScene.pointerX,
-        activeScene.pointerY,
+        event?.offsetX ?? activeScene.pointerX,
+        event?.offsetY ?? activeScene.pointerY,
         Matrix.Identity(),
         activeCamera
       );
@@ -1613,22 +1645,37 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const pickPlanePoint = (planeElevationMeters: number) => {
       const ray = createPointerRay();
       if (!ray) {
+        if (enableE2EDiagnosticsRef.current) canvas.dataset.lastDragResolveStatus = "missing-ray";
         return null;
       }
-
-      if (Math.abs(ray.direction.y) < 0.0001) {
-        return null;
+      const point = intersectRayWithHorizontalDragPlane(
+        ray.origin,
+        ray.direction,
+        planeElevationMeters
+      );
+      if (enableE2EDiagnosticsRef.current) {
+        canvas.dataset.lastDragResolveStatus = point ? "resolved" : "unavailable-horizontal-plane";
       }
-
-      const distance = (planeElevationMeters - ray.origin.y) / ray.direction.y;
-      if (!Number.isFinite(distance) || distance < 0) {
-        return null;
-      }
-
-      return ray.origin.add(ray.direction.scale(distance));
+      return point ? new Vector3(point.x, point.y, point.z) : null;
     };
 
     const pickFloorPoint = () => pickPlanePoint(0);
+
+    const recordDragPointerPlaneError = (point: Vector3) => {
+      if (!enableE2EDiagnosticsRef.current) return;
+      const activeCamera = cameraRef.current;
+      if (!activeCamera) return;
+      const renderWidth = engine.getRenderWidth();
+      const renderHeight = engine.getRenderHeight();
+      const viewport = activeCamera.viewport.toGlobal(renderWidth, renderHeight);
+      const projected = Vector3.Project(point, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+      const projectedX = projected.x * canvas.clientWidth / renderWidth;
+      const projectedY = projected.y * canvas.clientHeight / renderHeight;
+      canvas.dataset.lastDragPointerPlaneErrorPx = String(Math.hypot(
+        projectedX - scene.pointerX,
+        projectedY - scene.pointerY
+      ));
+    };
 
     const pickPlanPointMm = (planeElevationMeters: number) => {
       const ray = createPointerRay();
@@ -1784,7 +1831,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (civilReferenceId) {
           const civilReference = civilReferencesRef.current.find((item) => item.id === civilReferenceId);
-          const floorPoint = pickFloorPoint();
+          const fallbackElevationMeters = civilReference
+            ? ((civilReference.positionMm.zMm ?? 0) + (civilReference.sizeMm.heightMm ?? 20) / 2) / 1000
+            : 0;
+          const planeElevationMeters = resolveDragPlaneElevationMeters(
+            pick?.pickedPoint?.y,
+            fallbackElevationMeters
+          );
+          const dragPlanePoint = pickPlanePoint(planeElevationMeters);
           sourceEvent?.preventDefault();
           dragStateRef.current = null;
           civilDragStateRef.current = null;
@@ -1794,14 +1848,17 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           const civilEntityId = createLegacyPlatformEntityId("civil", civilReferenceId);
           if (
             civilReference
-            && floorPoint
+            && dragPlanePoint
             && !lockedCivilReferenceIdsRef.current.includes(civilReferenceId)
             && canBeginObjectDrag(civilEntityId, !isToggleSelection)
           ) {
-            civilDragStateRef.current = createCivilDragState(civilReferenceId, floorPoint, {
-              xMm: civilReference.positionMm.xMm,
-              yMm: civilReference.positionMm.yMm
-            });
+            civilDragStateRef.current = createCivilDragState(
+              civilReferenceId,
+              dragPlanePoint,
+              { xMm: civilReference.positionMm.xMm, yMm: civilReference.positionMm.yMm },
+              planeElevationMeters
+            );
+            canvas.dataset.lastDragPlaneElevationMeters = String(planeElevationMeters);
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);
@@ -1814,7 +1871,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
         if (instanceId) {
           const machine = placedMachinesRef.current.find((item) => item.instanceId === instanceId);
-          const floorPoint = pickFloorPoint();
+          const fallbackElevationMeters = machine
+            ? getMachineVerticalRenderPositions(machine).centerY
+            : 0;
+          const planeElevationMeters = resolveDragPlaneElevationMeters(
+            pick?.pickedPoint?.y,
+            fallbackElevationMeters
+          );
+          const dragPlanePoint = pickPlanePoint(planeElevationMeters);
           dragStateRef.current = null;
           civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
@@ -1823,19 +1887,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           const machineEntityId = createLegacyPlatformEntityId("machine", instanceId);
           const dragPreflightAllowed = Boolean(
             machine
-            && floorPoint
+            && dragPlanePoint
             && !lockedMachineIdsRef.current.includes(instanceId)
             && canBeginObjectDrag(machineEntityId, !isToggleSelection)
           );
           canvas.dataset.lastMachineDragPreflight = String(dragPreflightAllowed);
-          if (
-            dragPreflightAllowed
-            && machine
-            && floorPoint
-          ) {
+          if (dragPreflightAllowed && machine && dragPlanePoint) {
             const nextDragState = createMachineDragState({
               targetInstanceId: instanceId,
-              floorPoint,
+              floorPoint: dragPlanePoint,
+              planeElevationMeters,
               selectedInstanceIds: activeGroupEditMachineIdsRef.current.includes(instanceId)
                 ? [instanceId]
                 : selectedMachineIdsRef.current,
@@ -1850,6 +1911,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
               return;
             }
             dragStateRef.current = nextDragState;
+            canvas.dataset.lastDragPlaneElevationMeters = String(planeElevationMeters);
             cameraRef.current?.detachControl();
           }
           onSelectAnnotation(null);
@@ -1891,7 +1953,6 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
-        const floorPoint = pickFloorPoint();
         if (annotationDragState) {
           const pointerPlanPoint = pickPlanPointMm(annotationDragState.planeElevationMeters);
           if (!pointerPlanPoint) {
@@ -1917,18 +1978,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
-        if (!floorPoint) {
-          return;
-        }
-
         if (civilDragState) {
-          const applied = onSetCivilReferencePosition(
+          const planePoint = pickPlanePoint(civilDragState.planeElevationMeters);
+          if (!planePoint) return;
+          const result = onSetCivilReferencePosition(
             civilDragState.id,
-            calculateCivilDragPosition(civilDragState, floorPoint),
+            calculateCivilDragPosition(civilDragState, planePoint),
             { recordHistory: !dragHistoryRecordedRef.current }
           );
-          dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
-          if (!applied) {
+          recordDragPointerPlaneError(planePoint);
+          canvas.dataset.lastSceneDragResult = result;
+          dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || didSceneDragApplyMutation(result);
+          if (!shouldKeepSceneDragActive(result)) {
             civilDragStateRef.current = null;
             dragHistoryRecordedRef.current = false;
             cameraRef.current?.attachControl(canvasRef.current, true);
@@ -1936,18 +1997,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           return;
         }
 
-        if (!dragState) {
-          return;
-        }
-
-        const machinePositionUpdates = calculateMachineDragPositionUpdates(dragState, floorPoint);
-        const applied = onSetMachinePositions(
-          machinePositionUpdates,
+        if (!dragState) return;
+        const planePoint = pickPlanePoint(dragState.planeElevationMeters);
+        if (!planePoint) return;
+        const result = onSetMachinePositions(
+          calculateMachineDragPositionUpdates(dragState, planePoint),
           { recordHistory: !dragHistoryRecordedRef.current }
         );
-        canvas.dataset.lastMachineDragApplied = String(applied);
-        dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || applied;
-        if (!applied) {
+        recordDragPointerPlaneError(planePoint);
+        canvas.dataset.lastSceneDragResult = result;
+        canvas.dataset.lastMachineDragApplied = String(didSceneDragApplyMutation(result));
+        dragHistoryRecordedRef.current = dragHistoryRecordedRef.current || didSceneDragApplyMutation(result);
+        if (!shouldKeepSceneDragActive(result)) {
           dragStateRef.current = null;
           dragHistoryRecordedRef.current = false;
           cameraRef.current?.attachControl(canvasRef.current, true);
@@ -2050,9 +2111,45 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           }));
           canvas.dataset.machineScreenPoints = JSON.stringify(screenPoints);
           canvas.dataset.machineScreenBounds = JSON.stringify(screenBounds);
+          const civilScreenPoints = Object.fromEntries([...civilReferenceNodesRef.current.entries()].slice(0, 16).map(([id, node]) => {
+            const point = Vector3.Project(
+              node.mesh.getAbsolutePosition(),
+              Matrix.Identity(),
+              scene.getTransformMatrix(),
+              viewport
+            );
+            return [id, {
+              x: point.x * canvas.clientWidth / renderWidth,
+              y: point.y * canvas.clientHeight / renderHeight
+            }];
+          }));
+          const civilScreenBounds = Object.fromEntries([...civilReferenceNodesRef.current.entries()].slice(0, 16).map(([id, node]) => {
+            const projectedCorners = node.mesh.getBoundingInfo().boundingBox.vectorsWorld.map((corner) => {
+              const point = Vector3.Project(
+                corner,
+                Matrix.Identity(),
+                scene.getTransformMatrix(),
+                viewport
+              );
+              return {
+                x: point.x * canvas.clientWidth / renderWidth,
+                y: point.y * canvas.clientHeight / renderHeight
+              };
+            });
+            const xValues = projectedCorners.map((point) => point.x);
+            const yValues = projectedCorners.map((point) => point.y);
+            const left = Math.min(...xValues);
+            const right = Math.max(...xValues);
+            const top = Math.min(...yValues);
+            const bottom = Math.max(...yValues);
+            return [id, { left, top, width: right - left, height: bottom - top }];
+          }));
+          canvas.dataset.civilScreenPoints = JSON.stringify(civilScreenPoints);
+          canvas.dataset.civilScreenBounds = JSON.stringify(civilScreenBounds);
         }
       }
       if (enableE2EDiagnosticsRef.current) {
+        canvas.dataset.performanceMetricsPublishCount = String(performanceMetricsPublishCountRef.current);
         canvas.dataset.machinePlanPositions = JSON.stringify(Object.fromEntries(
           placedMachinesRef.current.slice(0, 16).map((machine) => [machine.instanceId, getMachineStartPositionMm(machine)])
         ));
@@ -2064,6 +2161,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         ));
         canvas.dataset.machineLoadedModelCounts = JSON.stringify(Object.fromEntries(
           [...machineNodesRef.current].map(([id, node]) => [id, node.loadedVisualMeshes.filter((mesh) => !mesh.isDisposed() && mesh.getTotalVertices() > 0).length])
+        ));
+        canvas.dataset.machineElevationsMm = JSON.stringify(Object.fromEntries(
+          placedMachinesRef.current.slice(0, 16).map((machine) => [machine.instanceId, machine.elevationMm ?? 0])
+        ));
+        canvas.dataset.civilElevationsMm = JSON.stringify(Object.fromEntries(
+          civilReferencesRef.current.slice(0, 16).map((item) => [item.id, item.positionMm.zMm ?? 0])
         ));
         canvas.dataset.machineRenderTransforms = JSON.stringify(Object.fromEntries(
           [...machineNodesRef.current].slice(0, 16).map(([id, node]) => {
@@ -2088,8 +2191,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           }));
       }
       scene.render();
-      if (onPerformanceMetricsChangeRef.current) {
-        onPerformanceMetricsChangeRef.current(collectScenePerformanceMetrics(scene, engine));
+      const publishPerformanceMetrics = onPerformanceMetricsChangeRef.current;
+      const currentTimeMs = performance.now();
+      if (publishPerformanceMetrics && shouldPublishScenePerformanceMetrics(
+        lastPerformanceMetricsPublishedAtRef.current,
+        currentTimeMs
+      )) {
+        lastPerformanceMetricsPublishedAtRef.current = currentTimeMs;
+        performanceMetricsPublishCountRef.current += 1;
+        publishPerformanceMetrics(collectScenePerformanceMetrics(scene, engine));
       }
     });
 

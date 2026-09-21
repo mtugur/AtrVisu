@@ -4,7 +4,6 @@ import {
   useState,
   useSyncExternalStore
 } from "react";
-import { Upload } from "lucide-react";
 import {
   EMPTY_ASSET_BROWSER_FILTERS,
   createAssetBrowserPreferencesRuntime,
@@ -31,6 +30,7 @@ import { AssetBrowserCard } from "./assetBrowser/AssetBrowserCard";
 import { AssetBrowserHierarchy } from "./assetBrowser/AssetBrowserHierarchy";
 import { LibraryManager, type LibraryManagerRuntimeController } from "./LibraryManager";
 import { TaxonomyManager } from "./TaxonomyManager";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 type LibrarySelection = {
   libraryId: string;
@@ -231,7 +231,15 @@ export function MachineLibrary({
       data-testid="machine-library-panel"
       data-asset-preferences-status={preferenceSnapshot.status}
     >
-      {onImportAsset && <button type="button" className="native-asset-import-trigger" onClick={onImportAsset}><Upload size={16} /><span>Import 3D Asset</span></button>}
+      {onImportAsset ? (
+        <WorkbenchActionButton
+          className="native-asset-import-trigger"
+          iconId="import"
+          label="Import 3D Asset"
+          visibleLabel="Import 3D Asset"
+          onClick={onImportAsset}
+        />
+      ) : null}
       {assetMessage && <p role="status">{assetMessage}</p>}
       <label className="panel-search asset-browser-search">
         <WorkbenchIcon iconId="search" />
@@ -273,28 +281,41 @@ export function MachineLibrary({
           <div id="asset-browser-filters" className="asset-browser-filters">
             <label>
               <span>Source</span>
-              <select aria-label="Asset source" value={filters.libraryId} onChange={(event) => setFilters((current) => ({ ...current, libraryId: event.currentTarget.value }))}>
+              <select aria-label="Asset source" value={filters.libraryId} onChange={(event) => {
+                const libraryId = event.currentTarget.value;
+                setFilters((current) => ({ ...current, libraryId }));
+              }}>
                 <option value="">All sources</option>
                 {filterOptions.sources.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label>
               <span>Category</span>
-              <select aria-label="Asset category" value={filters.category} onChange={(event) => setFilters((current) => ({ ...current, category: event.currentTarget.value }))}>
+              <select aria-label="Asset category" value={filters.category} onChange={(event) => {
+                const category = event.currentTarget.value;
+                setFilters((current) => ({ ...current, category }));
+              }}>
                 <option value="">All categories</option>
                 {filterOptions.categories.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
             <label>
               <span>Family</span>
-              <select aria-label="Asset family" value={filters.family} onChange={(event) => setFilters((current) => ({ ...current, family: event.currentTarget.value }))}>
+              <select aria-label="Asset family" value={filters.family} onChange={(event) => {
+                const family = event.currentTarget.value;
+                setFilters((current) => ({ ...current, family }));
+              }}>
                 <option value="">All families</option>
                 {filterOptions.families.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            <button className="asset-browser-clear" type="button" disabled={activeFilterCount === 0} onClick={() => setFilters(EMPTY_ASSET_BROWSER_FILTERS)}>
-              Clear filters
-            </button>
+            <WorkbenchActionButton
+              className="asset-browser-clear"
+              iconId="clear"
+              label="Clear filters"
+              disabled={activeFilterCount === 0}
+              onClick={() => setFilters(EMPTY_ASSET_BROWSER_FILTERS)}
+            />
           </div>
         ) : null}
       </div>
@@ -310,7 +331,9 @@ export function MachineLibrary({
 
       <div className="asset-browser-results-header" aria-live="polite">
         <span>{isLoading ? "Loading assets…" : `${visibleRecords.length} asset${visibleRecords.length === 1 ? "" : "s"}`}</span>
-        {hasSearchOrFilters ? <button type="button" onClick={clearSearchAndFilters}>Clear search and filters</button> : null}
+        {hasSearchOrFilters ? (
+          <WorkbenchActionButton iconId="clear" label="Clear search and filters" onClick={clearSearchAndFilters} />
+        ) : null}
       </div>
 
       <section className="machine-list" aria-label="Available assets">

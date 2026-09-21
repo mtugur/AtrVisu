@@ -4,9 +4,13 @@ import {
   calculateMachineDragPositionUpdates,
   createCivilDragState,
   createMachineDragState,
+  didSceneDragApplyMutation,
   getMachineDragInstanceIds,
   getMachineStartPositionMm,
   getPlanDragDeltaMm,
+  intersectRayWithHorizontalDragPlane,
+  resolveDragPlaneElevationMeters,
+  shouldKeepSceneDragActive,
   type DraggableMachine,
   type MachineDragState
 } from "./dragPlacement";
@@ -16,22 +20,12 @@ const machine = (
   x: number,
   z: number,
   positionMm?: { xMm: number; yMm: number }
-): DraggableMachine => ({
-  instanceId,
-  position: { x, z },
-  ...(positionMm ? { positionMm } : {})
-});
+): DraggableMachine => ({ instanceId, position: { x, z }, ...(positionMm ? { positionMm } : {}) });
 
-describe("drag placement helpers", () => {
-  it("drags all selected machines when the picked machine is already selected", () => {
+describe("fixed-plane body drag helpers", () => {
+  it("drags the selected rigid set only when the picked machine is already selected", () => {
     expect(getMachineDragInstanceIds("m1", ["m1", "m2"], [], false)).toEqual(["m1", "m2"]);
-  });
-
-  it("drags only the picked machine when replacing a selection from an unselected machine", () => {
     expect(getMachineDragInstanceIds("m3", ["m1", "m2"], [], false)).toEqual(["m3"]);
-  });
-
-  it("drags only the picked machine during toggle selection", () => {
     expect(getMachineDragInstanceIds("m1", ["m1", "m2"], [], true)).toEqual(["m1"]);
   });
 
@@ -40,21 +34,18 @@ describe("drag placement helpers", () => {
     expect(getMachineDragInstanceIds("m1", ["m1"], ["m1"], false)).toEqual([]);
   });
 
-  it("uses millimeter position when present and falls back to scene meters", () => {
-    expect(getMachineStartPositionMm(machine("m1", 2.5, -1.25, { xMm: 2510, yMm: -1260 }))).toEqual({
-      xMm: 2510,
-      yMm: -1260
-    });
-    expect(getMachineStartPositionMm(machine("m2", 2.5, -1.25))).toEqual({
-      xMm: 2500,
-      yMm: -1250
-    });
+  it("uses canonical millimeter positions and falls back to rendering meters", () => {
+    expect(getMachineStartPositionMm(machine("m1", 2.5, -1.25, { xMm: 2510, yMm: -1260 })))
+      .toEqual({ xMm: 2510, yMm: -1260 });
+    expect(getMachineStartPositionMm(machine("m2", 2.5, -1.25)))
+      .toEqual({ xMm: 2500, yMm: -1250 });
   });
 
-  it("creates machine drag state with selected unlocked start positions", () => {
-    const dragState = createMachineDragState({
+  it("captures immutable selected-machine starts on the picked elevation plane", () => {
+    expect(createMachineDragState({
       targetInstanceId: "m1",
       floorPoint: { x: 1, z: -2 },
+      planeElevationMeters: 2.4,
       selectedInstanceIds: ["m1", "m2"],
       lockedInstanceIds: [],
       machines: [
@@ -62,10 +53,9 @@ describe("drag placement helpers", () => {
         machine("m2", 0, 0, { xMm: 500, yMm: 600 })
       ],
       isToggleSelection: false
-    });
-
-    expect(dragState).toEqual({
+    })).toEqual({
       instanceIds: ["m1", "m2"],
+      planeElevationMeters: 2.4,
       startFloorX: 1,
       startFloorZ: -2,
       startPositions: {
@@ -75,51 +65,33 @@ describe("drag placement helpers", () => {
     });
   });
 
-  it("returns null when every candidate machine is locked", () => {
-    expect(
-      createMachineDragState({
-        targetInstanceId: "m1",
-        floorPoint: { x: 0, z: 0 },
-        selectedInstanceIds: ["m1"],
-        lockedInstanceIds: ["m1"],
-        machines: [machine("m1", 0, 0)],
-        isToggleSelection: false
-      })
-    ).toBeNull();
+  it("refuses locked or partially unresolved machine sets", () => {
+    const base = {
+      targetInstanceId: "m1",
+      floorPoint: { x: 0, z: 0 },
+      planeElevationMeters: 0.5,
+      machines: [machine("m1", 0, 0)],
+      isToggleSelection: false
+    };
+    expect(createMachineDragState({ ...base, selectedInstanceIds: ["m1"], lockedInstanceIds: ["m1"] }))
+      .toBeNull();
+    expect(createMachineDragState({ ...base, selectedInstanceIds: ["m1", "missing"], lockedInstanceIds: [] }))
+      .toBeNull();
   });
 
-  it("returns null without a partial drag state when any selected machine is unresolved", () => {
-    expect(
-      createMachineDragState({
-        targetInstanceId: "m1",
-        floorPoint: { x: 0, z: 0 },
-        selectedInstanceIds: ["m1", "missing"],
-        lockedInstanceIds: [],
-        machines: [machine("m1", 0, 0)],
-        isToggleSelection: false
-      })
-    ).toBeNull();
-  });
-
-  it("calculates plan drag delta in millimeters including negative coordinates", () => {
+  it("calculates negative Plan deltas and civil positions from immutable starts", () => {
     const delta = getPlanDragDeltaMm({ startFloorX: 1.2, startFloorZ: -2.4 }, { x: -0.3, z: -3.1 });
-
     expect(delta.deltaXMm).toBeCloseTo(-1500);
     expect(delta.deltaYMm).toBeCloseTo(-700);
+    const state = createCivilDragState("column-1", { x: 2, z: 1 }, { xMm: -200, yMm: 300 }, 2.75);
+    expect(calculateCivilDragPosition(state, { x: 1.5, z: 2.25 }))
+      .toEqual({ xMm: -700, yMm: 1550 });
   });
 
-  it("calculates civil drag position from original position plus floor delta", () => {
-    const dragState = createCivilDragState("column-1", { x: 2, z: 1 }, { xMm: -200, yMm: 300 });
-
-    expect(calculateCivilDragPosition(dragState, { x: 1.5, z: 2.25 })).toEqual({
-      xMm: -700,
-      yMm: 1550
-    });
-  });
-
-  it("calculates machine drag updates from original positions plus floor delta", () => {
-    const dragState: MachineDragState = {
+  it("moves a multi-selection with one rigid Plan delta", () => {
+    const state: MachineDragState = {
       instanceIds: ["m1", "m2", "missing"],
+      planeElevationMeters: 1.5,
       startFloorX: 0,
       startFloorZ: 0,
       startPositions: {
@@ -127,36 +99,56 @@ describe("drag placement helpers", () => {
         m2: { xMm: -500, yMm: -800 }
       }
     };
-
-    expect(calculateMachineDragPositionUpdates(dragState, { x: 1.25, z: -0.5 })).toEqual([
+    const updates = calculateMachineDragPositionUpdates(state, { x: 1.25, z: -0.5 });
+    expect(updates).toEqual([
       { instanceId: "m1", xMm: 1350, yMm: -300 },
       { instanceId: "m2", xMm: 750, yMm: -1300 }
     ]);
+    expect(updates[0].xMm - updates[1].xMm).toBe(600);
+    expect(updates[0].yMm - updates[1].yMm).toBe(1000);
   });
 
-  it("preserves relative offsets when multiple selected machines move together", () => {
-    const dragState = createMachineDragState({
-      targetInstanceId: "m2",
-      floorPoint: { x: 4, z: -1 },
-      selectedInstanceIds: ["m1", "m2", "m3"],
-      lockedInstanceIds: [],
-      machines: [
-        machine("m1", 0, 0, { xMm: -1000, yMm: 500 }),
-        machine("m2", 0, 0, { xMm: 250, yMm: -750 }),
-        machine("m3", 0, 0, { xMm: 1750, yMm: 1250 })
-      ],
-      isToggleSelection: false
-    });
+  it("keeps snapped no-op frames active and records only applied movement", () => {
+    expect(shouldKeepSceneDragActive("applied")).toBe(true);
+    expect(shouldKeepSceneDragActive("noop")).toBe(true);
+    expect(shouldKeepSceneDragActive("blocked")).toBe(false);
+    expect(didSceneDragApplyMutation("noop")).toBe(false);
+    expect(didSceneDragApplyMutation("blocked")).toBe(false);
+    expect(didSceneDragApplyMutation("applied")).toBe(true);
+  });
 
-    expect(dragState).not.toBeNull();
+  it("captures the real finite picked height and uses fallback only for invalid picks", () => {
+    expect(resolveDragPlaneElevationMeters(4.25, 1.5)).toBe(4.25);
+    expect(resolveDragPlaneElevationMeters(Number.NaN, 1.5)).toBe(1.5);
+    expect(resolveDragPlaneElevationMeters(undefined, 2.75)).toBe(2.75);
+  });
 
-    const updates = calculateMachineDragPositionUpdates(dragState as MachineDragState, { x: 4.5, z: -2.25 });
-    const byId = new Map(updates.map((update) => [update.instanceId, update]));
+  it("uses one fixed horizontal plane for every frame in the gesture", () => {
+    const origin = { x: 0, y: 10, z: 10 };
+    const start = intersectRayWithHorizontalDragPlane(origin, { x: 0.1, y: -1, z: -1 }, 4);
+    const current = intersectRayWithHorizontalDragPlane(origin, { x: 0.2, y: -1, z: -1 }, 4);
+    const wrongPlane = intersectRayWithHorizontalDragPlane(origin, { x: 0.2, y: -1, z: -1 }, 0);
+    expect(start).not.toBeNull();
+    expect(current).not.toBeNull();
+    const delta = getPlanDragDeltaMm(
+      { startFloorX: start?.x ?? 0, startFloorZ: start?.z ?? 0 },
+      { x: current?.x ?? 0, z: current?.z ?? 0 }
+    );
+    expect(delta.deltaXMm).toBeCloseTo(600);
+    expect(delta.deltaYMm).toBeCloseTo(0);
+    expect(wrongPlane).not.toEqual(current);
+  });
 
-    expect(byId.get("m1")).toMatchObject({ xMm: -500, yMm: -750 });
-    expect(byId.get("m2")).toMatchObject({ xMm: 750, yMm: -2000 });
-    expect(byId.get("m3")).toMatchObject({ xMm: 2250, yMm: 0 });
-    expect((byId.get("m2")?.xMm ?? 0) - (byId.get("m1")?.xMm ?? 0)).toBe(1250);
-    expect((byId.get("m3")?.yMm ?? 0) - (byId.get("m2")?.yMm ?? 0)).toBe(2000);
+  it("reports the accepted near-plane limitation without hidden remapping", () => {
+    expect(intersectRayWithHorizontalDragPlane(
+      { x: 0, y: 20, z: 0 },
+      { x: 1, y: 0, z: 0 },
+      20
+    )).toBeNull();
+    expect(intersectRayWithHorizontalDragPlane(
+      { x: 0, y: 20, z: 0 },
+      { x: 1, y: 0.0002, z: 0 },
+      19
+    )).toBeNull();
   });
 });

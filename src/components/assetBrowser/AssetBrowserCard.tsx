@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { CopyPlus } from "lucide-react";
 import type { AssetBrowserRecord } from "../../assetBrowser";
 import { WorkbenchIcon } from "../../workbench/icons";
+import { WorkbenchActionButton } from "../workbench/WorkbenchActionButton";
 
 type AssetBrowserCardProps = {
   onCreateVariant?: (record: AssetBrowserRecord) => Promise<void>;
@@ -77,28 +77,27 @@ export function AssetBrowserCard({
         <small className="asset-card-source" title={record.libraryName}>{record.sourceLabel}</small>
       </div>
       <div className="asset-card-actions">
-        {onCreateVariant && <button type="button" title="Create Custom Variant" aria-label={`Create Custom Variant of ${record.item.name}`} onClick={() => void onCreateVariant(record)}><CopyPlus size={16} /></button>}
-        <button
+        {onCreateVariant ? (
+          <WorkbenchActionButton
+            iconId="custom-variant"
+            label={`Create Custom Variant of ${record.item.name}`}
+            onClick={() => void onCreateVariant(record)}
+          />
+        ) : null}
+        <WorkbenchActionButton
           className="asset-favorite-button"
-          type="button"
-          aria-label={`${favorite ? "Remove" : "Add"} ${record.item.name} ${favorite ? "from" : "to"} favorites`}
+          iconId="favorite"
+          label={`${favorite ? "Remove" : "Add"} ${record.item.name} ${favorite ? "from" : "to"} favorites`}
           aria-pressed={favorite}
-          title={favorite ? "Remove from favorites" : "Add to favorites"}
           onClick={() => onToggleFavorite(record.assetKey)}
-        >
-          <WorkbenchIcon iconId="favorite" />
-        </button>
-        <button
+        />
+        <WorkbenchActionButton
           className="machine-card asset-card-add"
-          type="button"
-          title={`Add ${record.item.name}`}
-          aria-label={`Add ${record.item.name} to layout`}
+          iconId="add"
+          label={`Add ${record.item.name} to layout`}
           disabled={isAdding}
           onClick={() => void addAsset()}
-        >
-          <WorkbenchIcon iconId="add" />
-          <span>{isAdding ? "Adding…" : "Add"}</span>
-        </button>
+        />
       </div>
     </article>
   );

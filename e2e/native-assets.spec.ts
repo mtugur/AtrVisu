@@ -34,7 +34,7 @@ test("PF-2B malformed GLB cannot save or leave an orphan model", async ({ page }
   const errors = await start(page);
   const before = await page.evaluate(() => localStorage.getItem("atrvisu.projectCustomLibrary.v1"));
   const dialog = await openImport(page);
-  await dialog.getByLabel("GLB file").setInputFiles({ name: "invalid.glb", mimeType: "model/gltf-binary", buffer: Buffer.from("not a model") });
+  await dialog.getByLabel("GLB file", { exact: true }).setInputFiles({ name: "invalid.glb", mimeType: "model/gltf-binary", buffer: Buffer.from("not a model") });
   await expect(dialog.getByRole("alert")).toContainText("valid");
   await expect(dialog.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   await expect(dialog.getByRole("button", { name: "Validate & Save", exact: true })).toHaveCount(0);
@@ -45,7 +45,7 @@ test("PF-2B malformed GLB cannot save or leave an orphan model", async ({ page }
     request.onsuccess = () => { const db = request.result; const count = db.transaction("importedModels").objectStore("importedModels").count(); count.onsuccess = () => { resolve(count.result); db.close(); }; };
   }))).toBe(0);
   await capture(page, "08-invalid-import.png");
-  await dialog.getByLabel("GLB file").setInputFiles({ name: "empty.glb", mimeType: "model/gltf-binary", buffer: Buffer.from(createNativeGlbFixture({ noGeometry: true })) });
+  await dialog.getByLabel("GLB file", { exact: true }).setInputFiles({ name: "empty.glb", mimeType: "model/gltf-binary", buffer: Buffer.from(createNativeGlbFixture({ noGeometry: true })) });
   await expect(dialog.getByRole("alert")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   expect(errors).toEqual([]);

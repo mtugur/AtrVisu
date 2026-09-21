@@ -3,6 +3,7 @@ import type { PlacedMachine } from "../types/machine";
 import type { CivilReferenceItem } from "../types/civil";
 import { getCivilTypeLabel } from "../utils/civil";
 import { getPlacedMachineDisplayName } from "../utils/entityNames";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 type AssemblyTreePanelProps = {
   groups: ObjectGroup[];
@@ -47,9 +48,11 @@ export function AssemblyTreePanel({
 
   return (
     <section className="assembly-panel" data-testid="assembly-tree-panel" aria-label="Assembly Tree">
-      <button
+      <WorkbenchActionButton
         className="primary-action"
-        type="button"
+        iconId="create"
+        label="Create Group from Selection"
+        visibleLabel="Create Group"
         data-testid="create-group-from-selection"
         disabled={selectedCount === 0}
         onClick={() => {
@@ -58,9 +61,7 @@ export function AssemblyTreePanel({
             onCreateGroupFromSelection(name);
           }
         }}
-      >
-        Create Group from Selection
-      </button>
+      />
       <p className="collision-note">
         Groups are rigid assemblies. Use Edit Group to adjust an individual member.
       </p>
@@ -83,14 +84,13 @@ export function AssemblyTreePanel({
               data-testid={`assembly-group-row-${group.id}`}
             >
               <div className="assembly-group-header">
-                <button
-                  type="button"
+                <WorkbenchActionButton
                   className="assembly-collapse-button"
-                  aria-label={group.collapsed ? `Expand ${group.name}` : `Collapse ${group.name}`}
+                  iconId={group.collapsed ? "expand" : "collapse"}
+                  label={group.collapsed ? `Expand ${group.name}` : `Collapse ${group.name}`}
+                  aria-expanded={!group.collapsed}
                   onClick={() => onToggleGroupCollapsed(group.id)}
-                >
-                  {group.collapsed ? "+" : "-"}
-                </button>
+                />
                 <button
                   type="button"
                   className="assembly-group-button"
@@ -110,45 +110,36 @@ export function AssemblyTreePanel({
                 </div>
               ) : null}
               <div className="assembly-actions">
-                <button
-                  type="button"
+                <WorkbenchActionButton
+                  iconId="add-members"
+                  label={`Add Selected to ${group.name}`}
                   data-testid={`add-selection-to-group-${group.id}`}
                   disabled={selectedCount === 0}
                   onClick={() => onAddSelectionToGroup(group.id)}
-                >
-                  Add Selected
-                </button>
-                <button
-                  type="button"
+                />
+                <WorkbenchActionButton
+                  iconId="remove-members"
+                  label={`Remove Selected from ${group.name}`}
                   data-testid={`remove-selection-from-group-${group.id}`}
                   disabled={!isEditing || removableSelectedEntityCount === 0}
                   onClick={() => onRemoveSelectionFromGroup(group.id)}
-                >
-                  Remove Selected
-                </button>
+                />
                 {isEditing ? (
-                  <button type="button" aria-label={`Exit Group Edit ${group.name}`} onClick={() => onExitGroupEdit(group.id)}>
-                    Exit Group Edit
-                  </button>
+                  <WorkbenchActionButton iconId="finish-edit" label={`Exit Group Edit ${group.name}`} visibleLabel="Done" aria-pressed="true" onClick={() => onExitGroupEdit(group.id)} />
                 ) : (
-                  <button type="button" aria-label={`Edit Group ${group.name}`} onClick={() => onEnterGroupEdit(group.id)}>
-                    Edit Group
-                  </button>
+                  <WorkbenchActionButton iconId="edit-assembly" label={`Edit Group ${group.name}`} visibleLabel="Edit" aria-pressed="false" onClick={() => onEnterGroupEdit(group.id)} />
                 )}
-                <button
-                  type="button"
+                <WorkbenchActionButton
+                  iconId="rename-text"
+                  label={`Rename ${group.name}`}
                   onClick={() => {
                     const name = window.prompt("Group name", group.name);
                     if (name?.trim()) {
                       onRenameGroup(group.id, name);
                     }
                   }}
-                >
-                  Rename
-                </button>
-                <button className="danger-action" type="button" aria-label={`Ungroup ${group.name}`} onClick={() => onUngroup(group.id)}>
-                  Ungroup
-                </button>
+                />
+                <WorkbenchActionButton iconId="ungroup" label={`Ungroup ${group.name}`} tone="danger" onClick={() => onUngroup(group.id)} />
               </div>
             </article>
           );

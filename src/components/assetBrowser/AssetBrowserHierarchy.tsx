@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createAssetKey, type AssetBrowserRecord } from "../../assetBrowser";
 import type { LibraryGroup, LoadedMachineLibrary } from "../../types/machine";
+import { WorkbenchIcon } from "../../workbench/icons";
 import { AssetBrowserCard } from "./AssetBrowserCard";
 
 type SharedProps = {
@@ -15,31 +16,38 @@ function GroupNode({
   group,
   libraryId,
   depth,
+  indentDepth = depth,
+  hideLabel = false,
   ...shared
 }: SharedProps & {
   group: LibraryGroup;
   libraryId: string;
   depth: number;
+  indentDepth?: number;
+  hideLabel?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(depth < 2);
   const hasChildren = group.children.length > 0 || group.items.length > 0;
+  const expanded = hideLabel || isOpen;
 
   return (
     <div className="library-tree-node">
-      <button
+      {hideLabel ? null : <button
         className="library-tree-toggle"
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        style={{ paddingLeft: 10 + depth * 14 }}
+        style={{ paddingLeft: 10 + indentDepth * 14 }}
         disabled={!hasChildren}
         aria-expanded={hasChildren ? isOpen : undefined}
       >
-        <span aria-hidden="true">{hasChildren ? (isOpen ? "−" : "+") : ""}</span>
+        <span className="library-tree-disclosure" aria-hidden="true">
+          {hasChildren ? <WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} /> : null}
+        </span>
         <strong>{group.name}</strong>
-      </button>
+      </button>}
 
-      {isOpen ? (
-        <div className="library-tree-children">
+      {expanded ? (
+        <div className={`library-tree-children${hideLabel ? " is-root-content" : ""}`}>
           {group.children.map((child) => (
             <GroupNode
               {...shared}
@@ -47,12 +55,13 @@ function GroupNode({
               key={child.id}
               libraryId={libraryId}
               depth={depth + 1}
+              indentDepth={indentDepth + 1}
             />
           ))}
           {group.items.map((item) => {
             const record = shared.recordsByKey.get(createAssetKey(libraryId, item.id));
             return record ? (
-              <div key={item.id} style={{ marginLeft: 10 + (depth + 1) * 14 }}>
+              <div key={item.id} style={{ marginLeft: 10 + (indentDepth + 1) * 14 }}>
                 <AssetBrowserCard
                   record={record}
                   favorite={shared.favoriteAssetKeys.has(record.assetKey)}
@@ -68,6 +77,10 @@ function GroupNode({
     </div>
   );
 }
+
+export const isRedundantLibraryRoot = (library: LoadedMachineLibrary) =>
+  library.root.name.trim().toLocaleLowerCase() === library.libraryName.trim().toLocaleLowerCase();
+
 export function AssetBrowserHierarchy({
   libraries,
   openLibraryIds,
@@ -94,7 +107,9 @@ export function AssetBrowserHierarchy({
               onClick={() => onToggleLibrary(library.libraryId)}
               aria-expanded={isOpen}
             >
-              <span aria-hidden="true">{isOpen ? "−" : "+"}</span>
+              <span className="library-tree-disclosure" aria-hidden="true">
+                <WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} />
+              </span>
               <strong title={library.libraryName}>{library.libraryName}</strong>
               <small>{library.loadError ?? (library.readonly ? "Read-only" : "Project")}</small>
             </button>
@@ -104,6 +119,8 @@ export function AssetBrowserHierarchy({
                 group={library.root}
                 libraryId={library.libraryId}
                 depth={0}
+                indentDepth={isRedundantLibraryRoot(library) ? -1 : 0}
+                hideLabel={isRedundantLibraryRoot(library)}
               />
             ) : null}
           </article>

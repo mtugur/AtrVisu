@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ATRVISU_APPLICATION_VERSION } from "../applicationVersion";
 import { WorkbenchIcon } from "../workbench/icons";
 import { useModalFocus } from "./common/useModalFocus";
+import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 export type HelpSection =
   | "quick-start"
@@ -57,7 +58,7 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
       <section ref={dialogRef} className="manager-dialog help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-dialog-title" tabIndex={-1} data-testid="help-modal">
         <header className="manager-header">
           <div><span className="panel-kicker">AtrVisu</span><h2 id="help-dialog-title">Help</h2></div>
-          <button type="button" onClick={onClose} aria-label="Close Help">Close</button>
+          <WorkbenchActionButton iconId="close" label="Close Help" onClick={onClose} />
         </header>
         <div className="help-dialog-layout">
           <nav className="help-dialog-nav" aria-label="Help sections">
@@ -72,7 +73,7 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
             {section === "quick-start" ? (
               <article><h3>Quick Start</h3><div className="help-task-grid">
                 <HelpTaskCard title="1. Start or open a layout">Create a new layout, open an existing project, or resume unsaved work.</HelpTaskCard>
-                <HelpTaskCard title="2. Add equipment">Search or browse Library, narrow the results with filters, then use Add to place equipment in the viewport.</HelpTaskCard>
+                <HelpTaskCard title="2. Add equipment">Search or browse Library, narrow the results with filters, then use the Add action on an asset card to place equipment in the viewport.</HelpTaskCard>
                 <HelpTaskCard title="3. Arrange and inspect">Select, move, align, rename, and review equipment properties.</HelpTaskCard>
                 <HelpTaskCard title="4. Present and export">Capture viewpoints and create customer-ready workbook, plan, and image outputs.</HelpTaskCard>
               </div></article>
@@ -85,7 +86,7 @@ export function HelpModal({ initialSection, onClose }: HelpModalProps) {
                 <div><dt>Create Custom Variant</dt><dd>Use the copy action on a Library asset to create an editable Project Custom variant. The source remains unchanged. Edit the copy in Library Manager; copies of imported assets share the stored model.</dd></div>
                 <div><dt>Viewport</dt><dd>Navigate and edit the 3D layout.</dd></div>
                 <div><dt>Inspector</dt><dd>Edit properties for the current object or selection.</dd></div>
-                <div><dt>Primary Dock</dt><dd>Switch between Library, Explorer, Layers, Groups, and Viewpoints without covering the layout.</dd></div>
+                <div><dt>Primary Dock</dt><dd>Use the accessible icon tabs to switch between Library, Explorer, Layers, Groups, and Viewpoints without covering the layout.</dd></div>
                 <div><dt>Bottom Dock</dt><dd>Reserved for future timeline and results utilities; it stays absent when no utility contributes content.</dd></div>
                 <div><dt>Command Palette</dt><dd>Press Ctrl+K or Cmd+K to search available commands from anywhere in the workbench.</dd></div>
               </dl></article>

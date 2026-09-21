@@ -1,26 +1,19 @@
 import { metersToMm } from "../../utils/units";
 
-export type PlanPositionMm = {
-  xMm: number;
-  yMm: number;
-};
-
-export type FloorPointMeters = {
-  x: number;
-  z: number;
-};
+export type PlanPositionMm = { xMm: number; yMm: number };
+export type FloorPointMeters = { x: number; z: number };
+export type RayPointMeters = FloorPointMeters & { y: number };
+export type SceneDragMutationResult = "applied" | "noop" | "blocked";
 
 export type DraggableMachine = {
   instanceId: string;
-  position: {
-    x: number;
-    z: number;
-  };
+  position: { x: number; z: number };
   positionMm?: PlanPositionMm;
 };
 
 export type MachineDragState = {
   instanceIds: string[];
+  planeElevationMeters: number;
   startFloorX: number;
   startFloorZ: number;
   startPositions: Record<string, PlanPositionMm>;
@@ -28,16 +21,13 @@ export type MachineDragState = {
 
 export type CivilDragState = {
   id: string;
+  planeElevationMeters: number;
   startFloorX: number;
   startFloorZ: number;
   startPosition: PlanPositionMm;
 };
 
-export type MachineDragPositionUpdate = {
-  instanceId: string;
-  xMm: number;
-  yMm: number;
-};
+export type MachineDragPositionUpdate = { instanceId: string; xMm: number; yMm: number };
 
 export const getMachineDragInstanceIds = (
   targetInstanceId: string,
@@ -49,7 +39,6 @@ export const getMachineDragInstanceIds = (
     ? selectedInstanceIds
     : [targetInstanceId];
   const lockedIds = new Set(lockedInstanceIds);
-
   return candidateIds.some((id) => lockedIds.has(id)) ? [] : [...candidateIds];
 };
 
@@ -61,6 +50,7 @@ export const getMachineStartPositionMm = (machine: DraggableMachine): PlanPositi
 export const createMachineDragState = ({
   targetInstanceId,
   floorPoint,
+  planeElevationMeters,
   selectedInstanceIds,
   lockedInstanceIds,
   machines,
@@ -68,6 +58,7 @@ export const createMachineDragState = ({
 }: {
   targetInstanceId: string;
   floorPoint: FloorPointMeters;
+  planeElevationMeters: number;
   selectedInstanceIds: readonly string[];
   lockedInstanceIds: readonly string[];
   machines: readonly DraggableMachine[];
@@ -79,23 +70,18 @@ export const createMachineDragState = ({
     lockedInstanceIds,
     isToggleSelection
   );
-  if (instanceIds.length === 0) {
-    return null;
-  }
+  if (instanceIds.length === 0) return null;
 
   const startPositions = instanceIds.reduce<Record<string, PlanPositionMm>>((positions, instanceId) => {
     const machine = machines.find((item) => item.instanceId === instanceId);
-    if (machine) {
-      positions[instanceId] = getMachineStartPositionMm(machine);
-    }
+    if (machine) positions[instanceId] = getMachineStartPositionMm(machine);
     return positions;
   }, {});
-  if (Object.keys(startPositions).length !== instanceIds.length) {
-    return null;
-  }
+  if (Object.keys(startPositions).length !== instanceIds.length) return null;
 
   return {
     instanceIds,
+    planeElevationMeters,
     startFloorX: floorPoint.x,
     startFloorZ: floorPoint.z,
     startPositions
@@ -105,13 +91,40 @@ export const createMachineDragState = ({
 export const createCivilDragState = (
   id: string,
   floorPoint: FloorPointMeters,
-  startPosition: PlanPositionMm
+  startPosition: PlanPositionMm,
+  planeElevationMeters: number
 ): CivilDragState => ({
   id,
+  planeElevationMeters,
   startFloorX: floorPoint.x,
   startFloorZ: floorPoint.z,
   startPosition
 });
+
+export const resolveDragPlaneElevationMeters = (
+  pickedPointY: unknown,
+  fallbackElevationMeters: number
+) => typeof pickedPointY === "number" && Number.isFinite(pickedPointY)
+  ? pickedPointY
+  : fallbackElevationMeters;
+
+export const intersectRayWithHorizontalDragPlane = (
+  origin: RayPointMeters,
+  direction: RayPointMeters,
+  planeElevationMeters: number
+): RayPointMeters | null => {
+  if (Math.abs(direction.y) < 0.0001) return null;
+  const distance = (planeElevationMeters - origin.y) / direction.y;
+  if (!Number.isFinite(distance) || distance < 0) return null;
+  return {
+    x: origin.x + direction.x * distance,
+    y: planeElevationMeters,
+    z: origin.z + direction.z * distance
+  };
+};
+
+export const shouldKeepSceneDragActive = (result: SceneDragMutationResult) => result !== "blocked";
+export const didSceneDragApplyMutation = (result: SceneDragMutationResult) => result === "applied";
 
 export const getPlanDragDeltaMm = (
   dragStart: Pick<MachineDragState | CivilDragState, "startFloorX" | "startFloorZ">,
@@ -126,7 +139,6 @@ export const calculateCivilDragPosition = (
   floorPoint: FloorPointMeters
 ): PlanPositionMm => {
   const { deltaXMm, deltaYMm } = getPlanDragDeltaMm(dragState, floorPoint);
-
   return {
     xMm: dragState.startPosition.xMm + deltaXMm,
     yMm: dragState.startPosition.yMm + deltaYMm
@@ -138,7 +150,6 @@ export const calculateMachineDragPositionUpdates = (
   floorPoint: FloorPointMeters
 ): MachineDragPositionUpdate[] => {
   const { deltaXMm, deltaYMm } = getPlanDragDeltaMm(dragState, floorPoint);
-
   return dragState.instanceIds.flatMap((instanceId) => {
     const startPosition = dragState.startPositions[instanceId];
     return startPosition

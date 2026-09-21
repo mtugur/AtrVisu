@@ -123,8 +123,8 @@ If **Yes**, complete all:
 - Benchmark evidence record path: docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md
 - Named benchmark precedent(s): Visual Components Layout Move; Autodesk Factory Reposition; Siemens Placement Manipulator
 - Authoritative source(s): docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md; https://help.visualcomponents.com/4.10/Premium/en/English/Getting%20Started/UI%20Overview/Tabs/Layout_View.htm
-- Desired user-observable behavior: Explicit Plan axis/plane manipulation with stable semantics across camera views
-- Forbidden behavior / regressions: Hidden body-drag fallback, camera-relative remapping, repeated tuning loops
+- Desired user-observable behavior: Direct Machine/Civil body drag uses one fixed horizontal plane captured at the picked-point elevation
+- Forbidden behavior / regressions: Adaptive drag planes, camera-relative remapping, Jacobian fallback, PositionGizmo replacement, repeated tuning loops
 - [x] Benchmark evidence satisfies \`docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDARD.md\`.
 - [x] Benchmark evidence existed before implementation or this PR is explicitly a governance/contract package.
 - [x] The standard already defines this behavior, OR the contract delta was frozen before implementation.
@@ -185,6 +185,7 @@ const staticFiles = [
   "docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDARD.md",
   "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md",
   "docs/standards/ATRVISU_INTERACTION_STANDARD.md",
+  "docs/adr/ADR-001-phase-1-direct-plan-body-drag.md",
   "docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md",
   "docs/checklists/INTERACTION_CHANGE_GATE.md",
   "docs/protocols/CODEX_SYNC_PROTOCOL.md",
@@ -244,6 +245,12 @@ expectStaticFail(
 expectStaticFail(
   "removing benchmark evidence baseline is detected",
   () => fs.rmSync(path.join(staticRoot, "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md")),
+  "missing required authority file"
+);
+
+expectStaticFail(
+  "removing Plan Move ADR is detected",
+  () => fs.rmSync(path.join(staticRoot, "docs/adr/ADR-001-phase-1-direct-plan-body-drag.md")),
   "missing required authority file"
 );
 

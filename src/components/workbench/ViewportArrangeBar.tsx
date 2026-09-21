@@ -35,7 +35,7 @@ export function ViewportArrangeBar(props: ViewportArrangeBarProps) {
   return (
     <div className="viewport-arrange-bar" role="toolbar" aria-label="Arrange selected objects" data-testid="viewport-arrange-bar">
       <span>{props.selectionCount} selected</span>
-      {props.selectionCount >= 2 && !props.canUngroup ? (
+      {props.selectionCount >= 2 ? (
         <ActionMenu label="Align" disabled={!props.movementAllowed} onAction={props.onAlign} actions={[
           { label: "Left edges", value: "left" }, { label: "Center X", value: "centerX" }, { label: "Right edges", value: "right" },
           { label: "Front edges", value: "front" }, { label: "Center Y", value: "centerY" }, { label: "Back edges", value: "back" }
