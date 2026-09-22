@@ -465,7 +465,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     sourceFiles: ["src/components/MachineLibrary.tsx", "src/components/assetBrowser/AssetBrowserHierarchy.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/App.tsx"],
     commandIds: ["civil.addPrimitive"],
     panelIds: ["panel.machineLibrary"],
-    featureIds: ["civil.floor", "civil.wall", "civil.column", "civil.beam", "civil.walkway", "civil.restrictedZone", "civil.referenceZone"],
+    featureIds: ["civil.floor", "civil.wall", "civil.column", "civil.beam", "civil.doorOpening", "civil.walkway", "civil.restrictedZone", "civil.referenceZone"],
     notes: "All Build primitive cards dispatch the registered civil.addPrimitive command, which creates canonical CivilReferenceItem instances."
   },
   {

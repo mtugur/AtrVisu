@@ -291,6 +291,11 @@ export const platformFeatureAccessMatrix = [
     panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"]
   }),
+  feature("civil.doorOpening", "Civil door / opening", ["panel"], {
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    runtimeRequirements: ["entity"]
+  }),
   feature("civil.legacyCommands", "Legacy Civil command compatibility", ["api"], {
     commandIds: ["civil.addFloor", "civil.addWall", "civil.addColumn", "civil.addWalkway", "civil.addRestrictedZone", "civil.addReferenceZone"],
     notes: "Bound compatibility commands without duplicate visible Insert actions."

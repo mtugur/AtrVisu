@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { BUILD_PRIMITIVE_GROUPS } from "../../../assetBrowser";
+import type { CivilReferenceType } from "../../../types/civil";
 import { COMMAND_BAR_COMMAND_IDS } from "../../../workbench/commandSurfaces";
+import { platformFeatureAccessMatrix } from "../../featureAccess";
 import { currentPlatformSurfaceInventory } from "../currentSurfaceInventory";
 
 const criticalSurfaceIds = [
@@ -56,6 +59,37 @@ describe("current surface inventory", () => {
 
     criticalSurfaceIds.forEach((surfaceId) => {
       expect(surfaceIds.has(surfaceId)).toBe(true);
+    });
+  });
+
+  it("links all eight frozen Build primitives to the canonical Library feature and surface contract", () => {
+    const featureIdsByType = {
+      column: "civil.column",
+      beam: "civil.beam",
+      wall: "civil.wall",
+      "door-opening": "civil.doorOpening",
+      "floor-area": "civil.floor",
+      walkway: "civil.walkway",
+      "restricted-area": "civil.restrictedZone",
+      "reference-zone": "civil.referenceZone"
+    } as const satisfies Record<CivilReferenceType, string>;
+    const buildTypes = BUILD_PRIMITIVE_GROUPS.flatMap((group) => group.types);
+    const buildSurface = currentPlatformSurfaceInventory.find((item) => item.surfaceId === "surface.buildLibrary");
+
+    expect(buildTypes).toHaveLength(8);
+    expect([...buildTypes].sort()).toEqual(Object.keys(featureIdsByType).sort());
+    expect(buildSurface?.commandIds).toEqual(["civil.addPrimitive"]);
+    expect(buildSurface?.panelIds).toEqual(["panel.machineLibrary"]);
+    expect([...(buildSurface?.featureIds ?? [])].sort()).toEqual(Object.values(featureIdsByType).sort());
+
+    Object.values(featureIdsByType).forEach((featureId) => {
+      expect(platformFeatureAccessMatrix.find((entry) => entry.featureId === featureId)).toMatchObject({
+        classification: "required-runtime",
+        requiredForRegression: true,
+        commandIds: ["civil.addPrimitive"],
+        panelIds: ["panel.machineLibrary"],
+        surfaces: ["panel"]
+      });
     });
   });
 

@@ -21,9 +21,10 @@ This package changes visible creation and Civil property interaction. Product Co
 - Catalog, machine Library, Civil defaults/normalization, collision, layout history/serialization and Inspector tests cover the typed split and style round trip.
 - Chromium uses visible Build cards and Inspector controls to verify registered command execution, Beam selection, Plan body drag with unchanged Elevation, rendered style, Undo/Redo, lock state, scene lifecycle stability and no red console.
 - Existing runtime Feature Access complete-gate and PF-3A body-drag tests remain part of the full E2E gate.
+- Review `5275545907` identified a Door / Opening metadata omission. `civil.doorOpening` now uses the existing `civil.addPrimitive` and `panel.machineLibrary` authorities; `surface.buildLibrary` lists the same feature. A platform-boundary test compares all eight frozen Build catalog types to their required-runtime Feature Access and Build Library surface links. No placement route or visible creation surface changed.
 
 ## Release state
 
-Local gate passed on 2026-09-22: `npm audit --audit-level=low` found 0 vulnerabilities; `npm ls --all` exited 0; design-token governance checked 268 files; interaction governance and governance-policy tests passed; build passed; unit tests passed (161 files, 1351 tests); E2E passed (99 parallel plus 1 isolated, 100 total); `git diff --check` is part of delivery verification.
+Local gate passed on 2026-09-22 after review correction `5275545907`: `npm audit --audit-level=low` found 0 vulnerabilities; `npm ls --all` exited 0; design-token governance checked 268 files; interaction governance and governance-policy tests passed; build passed; unit tests passed (161 files, 1352 tests); E2E passed (99 parallel plus 1 isolated, 100 total); `git diff --check` is part of delivery verification.
 
 Automation Green: local PASS, exact-head CI pending. Contract Verified: pending independent review. Product Accepted: pending final manual acceptance. P1-BLD2 Levels and PF-3B remain separate.
