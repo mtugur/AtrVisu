@@ -10,6 +10,7 @@ const CIVIL_TYPE_LABELS: Record<CivilReferenceType, string> = {
   "floor-area": "Floor Area",
   wall: "Wall",
   column: "Column",
+  beam: "Beam",
   "door-opening": "Door / Opening",
   "restricted-area": "Restricted Area",
   walkway: "Walkway",
@@ -20,12 +21,14 @@ const CIVIL_DEFAULTS: Record<CivilReferenceType, {
   widthMm: number;
   depthMm: number;
   heightMm?: number;
+  elevationMm?: number;
   colorToken: string;
   opacity: number;
 }> = {
   "floor-area": { widthMm: 12000, depthMm: 8000, heightMm: 20, colorToken: CIVIL_TECHNICAL_COLORS["floor-area"], opacity: 0.22 },
   wall: { widthMm: 6000, depthMm: 200, heightMm: 3000, colorToken: CIVIL_TECHNICAL_COLORS.wall, opacity: 0.68 },
   column: { widthMm: 600, depthMm: 600, heightMm: 3500, colorToken: CIVIL_TECHNICAL_COLORS.column, opacity: 0.78 },
+  beam: { widthMm: 6000, depthMm: 300, heightMm: 500, elevationMm: 3000, colorToken: CIVIL_TECHNICAL_COLORS.beam, opacity: 0.78 },
   "door-opening": { widthMm: 1800, depthMm: 160, heightMm: 2200, colorToken: CIVIL_TECHNICAL_COLORS["door-opening"], opacity: 0.54 },
   "restricted-area": { widthMm: 4000, depthMm: 3000, heightMm: 25, colorToken: CIVIL_TECHNICAL_COLORS["restricted-area"], opacity: 0.3 },
   walkway: { widthMm: 6000, depthMm: 1400, heightMm: 20, colorToken: CIVIL_TECHNICAL_COLORS.walkway, opacity: 0.28 },
@@ -52,6 +55,14 @@ const readPositive = (value: unknown, fallback: number) => {
   const numeric = readFinite(value, fallback);
   return numeric > 0 ? numeric : fallback;
 };
+
+export const normalizeCivilColorToken = (value: unknown, fallback: string) =>
+  typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+    ? value.toLowerCase()
+    : fallback;
+
+export const normalizeCivilOpacity = (value: unknown, fallback: number) =>
+  Math.min(1, Math.max(0.05, readFinite(value, fallback)));
 
 const normalizeCivilReference = (
   value: unknown,
@@ -97,10 +108,8 @@ const normalizeCivilReference = (
     locked: value.locked === true,
     visible: value.visible !== false,
     style: {
-      opacity: Math.min(1, Math.max(0.05, readFinite(isRecord(value.style) ? value.style.opacity : undefined, defaults.opacity))),
-      colorToken: typeof (isRecord(value.style) ? value.style.colorToken : undefined) === "string"
-        ? String((value.style as Record<string, unknown>).colorToken)
-        : defaults.colorToken
+      opacity: normalizeCivilOpacity(isRecord(value.style) ? value.style.opacity : undefined, defaults.opacity),
+      colorToken: normalizeCivilColorToken(isRecord(value.style) ? value.style.colorToken : undefined, defaults.colorToken)
     },
     createdAt: typeof value.createdAt === "string" ? value.createdAt : timestamp,
     updatedAt: timestamp
@@ -137,7 +146,7 @@ export const createCivilReference = (
     type,
     name: getCivilTypeLabel(type),
     description: "",
-    positionMm: { ...positionMm, zMm: 0 },
+    positionMm: { ...positionMm, zMm: defaults.elevationMm ?? 0 },
     referencePoint: LAYOUT_REFERENCE_POINT,
     coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
     sizeMm: {
@@ -176,7 +185,10 @@ export const updateCivilReference = (
       coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
       positionMm: updates.positionMm ? { ...item.positionMm, ...updates.positionMm } : item.positionMm,
       sizeMm: updates.sizeMm ? { ...item.sizeMm, ...updates.sizeMm } : item.sizeMm,
-      style: updates.style ? { ...item.style, ...updates.style } : item.style,
+      style: updates.style ? {
+        opacity: normalizeCivilOpacity(updates.style.opacity, item.style?.opacity ?? getCivilTypeDefaults(item.type).opacity),
+        colorToken: normalizeCivilColorToken(updates.style.colorToken, item.style?.colorToken ?? getCivilTypeDefaults(item.type).colorToken)
+      } : item.style,
       updatedAt: timestamp
     };
   });

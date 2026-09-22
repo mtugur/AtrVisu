@@ -459,6 +459,17 @@ const addCanonicalAtaraMachine = async (
   await machineCard.click();
 };
 
+const addBuildPrimitive = async (page: Page, name: string, group: "Structure" | "Planning") => {
+  await openPrimaryDockPanel(page, "panel.machineLibrary");
+  const card = page.getByTestId(`asset-card-build::${name.toLowerCase().replace(/[^a-z]+/g, "-").replace(/-$/, "")}`);
+  if (!await card.isVisible().catch(() => false)) {
+    const groupButton = page.getByTestId(`build-group-${group.toLowerCase()}`).getByRole("button", { name: group });
+    if ((await groupButton.getAttribute("aria-expanded")) !== "true") await groupButton.click();
+  }
+  await expect(card).toBeVisible();
+  await card.getByRole("button", { name: `Add ${name} to layout` }).click();
+};
+
 type RuntimePanelOperation = "open" | "close" | "toggle";
 
 const invokeRuntimePanel = async (
@@ -998,6 +1009,7 @@ test("runtime feature access baseline requires observed surface execution eviden
     .toEqual(diagnostics.requiredCommandIds);
   expect(report.plannedFeatures.map((feature) => feature.featureId)).toEqual([
     "view.fitView",
+    "panel.civilReferences",
     "panel.diagnostics"
   ]);
   expect(report.plannedFeatures.every((feature) => feature.status === "planned-unbound")).toBe(true);
@@ -1172,16 +1184,13 @@ test("runtime feature access complete gate is bound to observed visible command 
   );
   await expect(group).toHaveCount(0);
 
-  let insertMenu = await openWorkbenchMenu(page, "Insert");
+  const insertMenu = await openWorkbenchMenu(page, "Insert");
   await observe("annotations.create", () =>
     insertMenu.locator('[data-command-id="annotations.create"]').click()
   );
   await expect(page.getByTestId("annotation-properties")).toBeVisible();
 
-  insertMenu = await openWorkbenchMenu(page, "Insert");
-  await observe("civil.addColumn", () =>
-    insertMenu.locator('[data-command-id="civil.addColumn"]').click()
-  );
+  await observe("civil.addPrimitive", () => addBuildPrimitive(page, "Column", "Structure"));
   await expect(page.getByTestId("civil-reference-properties")).toBeVisible();
 
   await openPrimaryDockPanel(page, "panel.machineLibrary");
@@ -1236,7 +1245,7 @@ test("runtime feature access complete gate is bound to observed visible command 
     .toEqual(diagnostics.requiredCommandIds);
 
   const completeGate = await getRuntimeFeatureAccessGate(page, errors.length === 0);
-  expect(completeGate.passed).toBe(true);
+  expect(completeGate.passed, JSON.stringify({ blocked: completeGate.blockedFeatureIds, reasons: completeGate.reasons, missing: completeGate.report.missingSurfaceExecutionCommandIds }, null, 2)).toBe(true);
   expect(completeGate.blockedFeatureIds).toEqual([]);
   expect(completeGate.report.surfaceExecutionValidation.passed).toBe(true);
   expect(errors).toEqual([]);
@@ -3816,8 +3825,7 @@ test("Connection Point Snap uses the authoritative exact-two-machine context", a
   await waitForMachineDiagnostics(page, 3);
   const machineIds = await getMachineIds(page);
 
-  const insertMenu = await openWorkbenchMenu(page, "Insert");
-  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
+  await addBuildPrimitive(page, "Column", "Structure");
 
   await page.keyboard.down("Control");
   await clickSceneMachine(page, machineIds[0]);
@@ -4473,8 +4481,7 @@ test("high-grab drag preserves machine civil and rigid-group elevations", async 
   const group = page.locator(".assembly-group-row").filter({ hasText: "High Grab Group" });
   await expect(group).toContainText("1 item");
 
-  const insertMenu = await openWorkbenchMenu(page, "Insert");
-  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
+  await addBuildPrimitive(page, "Column", "Structure");
   await expect.poll(async () => Object.keys(
     await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")
   ).length).toBe(1);
@@ -5013,9 +5020,8 @@ test("building civil references can be added and edited without red console erro
   const errors = collectPageErrors(page);
   await openCleanApp(page);
 
-  const insertMenu = await openWorkbenchMenu(page, "Insert");
-  await expectOneRuntimeCommandExecution(page, "civil.addColumn", () =>
-    insertMenu.locator('[data-command-id="civil.addColumn"]').click()
+  await expectOneRuntimeCommandExecution(page, "civil.addPrimitive", () =>
+    addBuildPrimitive(page, "Column", "Structure")
   );
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("civil");
 
@@ -5034,6 +5040,64 @@ test("building civil references can be added and edited without red console erro
   );
   await expect(page.getByTestId("civil-reference-properties")).toHaveCount(0);
 
+  expect(errors).toEqual([]);
+});
+
+test("Build Library Beam uses canonical civil selection, style rendering, history, and lock authority", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const lifecycle = await canvas.getAttribute("data-scene-lifecycle-generation");
+  await addBuildPrimitive(page, "Beam", "Structure");
+  await expect.poll(async () => Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")).length).toBe(1);
+  const beamId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
+  const beforeDrag = (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[beamId];
+  const elevationBeforeDrag = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
+  await expect.poll(async () => Boolean((await readCanvasRecord<ScreenPoint>(page, "data-civil-screen-points"))[beamId])).toBe(true);
+  const dragPoint = (await readCanvasRecord<ScreenPoint>(page, "data-civil-screen-points"))[beamId];
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  await page.mouse.move(canvasBox!.x + dragPoint.x, canvasBox!.y + dragPoint.y);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox!.x + dragPoint.x + 30, canvasBox!.y + dragPoint.y + 12, { steps: 8 });
+  await page.mouse.up();
+  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
+  expect((await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[beamId]).not.toEqual(beforeDrag);
+  expect(await readCanvasRecord<number>(page, "data-civil-elevations-mm")).toEqual(elevationBeforeDrag);
+  const properties = page.getByTestId("civil-reference-properties");
+  await expect(properties).toBeVisible();
+  await expect(properties.getByRole("combobox", { name: "Type" })).toHaveValue("beam");
+  await expect(properties.getByLabel("Civil Elevation")).toHaveValue("3000");
+  const color = properties.getByLabel("Civil Color");
+  const opacity = properties.getByLabel("Civil Opacity");
+  const initialColor = await color.inputValue();
+  await color.fill("#12ab34");
+  await expect.poll(async () => (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[beamId]?.color).toBe("#12ab34");
+  await opacity.focus();
+  await opacity.press("End");
+  await expect.poll(async () => (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[beamId]?.opacity).toBe(1);
+  await opacity.blur();
+  await page.keyboard.press("Control+z");
+  await expect.poll(async () => (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[beamId]?.opacity).not.toBe(1);
+  await page.keyboard.press("Control+y");
+  await expect.poll(async () => (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[beamId]?.opacity).toBe(1);
+  expect(await color.inputValue()).toBe("#12ab34");
+  expect(initialColor).not.toBe("#12ab34");
+  await properties.getByRole("checkbox", { name: "Item locked" }).check();
+  await expect(color).toBeDisabled();
+  await expect(opacity).toBeDisabled();
+  await expect(properties.getByLabel("Civil Width")).toBeDisabled();
+  await properties.getByRole("checkbox", { name: "Item locked" }).uncheck();
+  await openPrimaryDockPanel(page, "panel.layers");
+  page.once("dialog", (dialog) => dialog.accept("Beam Layer"));
+  await page.getByTestId("add-layer").click();
+  await properties.getByLabel("Layer").selectOption({ label: "Beam Layer" });
+  const beamLayer = page.locator(".layer-row").filter({ hasText: "Beam Layer" });
+  await beamLayer.getByRole("button", { name: "Lock Beam Layer" }).click();
+  await expect(color).toBeDisabled();
+  await expect(opacity).toBeDisabled();
+  await expect(properties.getByLabel("Civil Width")).toBeDisabled();
+  await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycle ?? "");
   expect(errors).toEqual([]);
 });
 
@@ -5087,8 +5151,7 @@ test("Inspector section headers keep disclosure, title, and badge composed at 14
   await page.keyboard.up("Control");
   await expectComposedHeader(/Multi-Selection/i);
 
-  const insertMenu = await openWorkbenchMenu(page, "Insert");
-  await insertMenu.locator('[data-command-id="civil.addColumn"]').click();
+  await addBuildPrimitive(page, "Column", "Structure");
   await expect.poll(async () => (await getRuntimePanel(page, "panel.inspector"))?.context).toBe("civil");
   await expectComposedHeader(/Civil Reference Properties/i);
 

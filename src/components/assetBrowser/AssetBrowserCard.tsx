@@ -1,20 +1,18 @@
 import { useState } from "react";
-import type { AssetBrowserRecord } from "../../assetBrowser";
+import type { AnyAssetBrowserRecord, AssetBrowserRecord } from "../../assetBrowser";
 import { WorkbenchIcon } from "../../workbench/icons";
 import { WorkbenchActionButton } from "../workbench/WorkbenchActionButton";
 
 type AssetBrowserCardProps = {
   onCreateVariant?: (record: AssetBrowserRecord) => Promise<void>;
-  record: AssetBrowserRecord;
+  record: AnyAssetBrowserRecord;
   favorite: boolean;
   onToggleFavorite: (assetKey: string) => void;
-  onAdd: (record: AssetBrowserRecord) => Promise<boolean>;
+  onAdd: (record: AnyAssetBrowserRecord) => Promise<boolean>;
 };
 
-const formatDimensions = (record: AssetBrowserRecord) => {
-  const widthMm = record.item.widthMm ?? record.item.width * 1000;
-  const depthMm = record.item.depthMm ?? record.item.depth * 1000;
-  const heightMm = record.item.heightMm ?? record.item.height * 1000;
+const formatDimensions = (record: AnyAssetBrowserRecord) => {
+  const { widthMm, depthMm, heightMm } = record.dimensionsMm;
   return `W ${widthMm.toLocaleString("en-US")} × D ${depthMm.toLocaleString("en-US")} × H ${heightMm.toLocaleString("en-US")} mm`;
 };
 
@@ -33,7 +31,7 @@ export function AssetBrowserCard({
 }: AssetBrowserCardProps) {
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const thumbnailPath = record.item.thumbnailPath && !thumbnailFailed
+  const thumbnailPath = record.kind === "machine" && record.item.thumbnailPath && !thumbnailFailed
     ? record.item.thumbnailPath
     : null;
 
@@ -54,6 +52,7 @@ export function AssetBrowserCard({
       className="asset-card"
       data-testid={`asset-card-${record.assetKey}`}
       data-asset-key={record.assetKey}
+      data-asset-kind={record.kind}
     >
       <div className="asset-card-visual" aria-hidden="true">
         {thumbnailPath ? (
@@ -63,38 +62,38 @@ export function AssetBrowserCard({
             onError={() => setThumbnailFailed(true)}
           />
         ) : (
-          <span title={formatPlaceholderLabel(record)}>
+          <span title={record.kind === "machine" ? formatPlaceholderLabel(record) : "Build reference"}>
             <WorkbenchIcon iconId="asset" />
           </span>
         )}
       </div>
       <div className="asset-card-content">
-        <strong title={record.item.name}>{record.item.name}</strong>
-        <span title={`${record.item.category} / ${record.familyLabel}`}>
-          {record.item.category} · {record.familyLabel}
+        <strong title={record.name}>{record.name}</strong>
+        <span title={`${record.category} / ${record.familyLabel}`}>
+          {record.category} · {record.familyLabel}
         </span>
         <small>{formatDimensions(record)}</small>
         <small className="asset-card-source" title={record.libraryName}>{record.sourceLabel}</small>
       </div>
       <div className="asset-card-actions">
-        {onCreateVariant ? (
+        {onCreateVariant && record.kind === "machine" ? (
           <WorkbenchActionButton
             iconId="custom-variant"
-            label={`Create Custom Variant of ${record.item.name}`}
+            label={`Create Custom Variant of ${record.name}`}
             onClick={() => void onCreateVariant(record)}
           />
         ) : null}
         <WorkbenchActionButton
           className="asset-favorite-button"
           iconId="favorite"
-          label={`${favorite ? "Remove" : "Add"} ${record.item.name} ${favorite ? "from" : "to"} favorites`}
+          label={`${favorite ? "Remove" : "Add"} ${record.name} ${favorite ? "from" : "to"} favorites`}
           aria-pressed={favorite}
           onClick={() => onToggleFavorite(record.assetKey)}
         />
         <WorkbenchActionButton
-          className="machine-card asset-card-add"
+          className={`${record.kind === "machine" ? "machine-card" : "build-card"} asset-card-add`}
           iconId="add"
-          label={`Add ${record.item.name} to layout`}
+          label={`Add ${record.name} to layout`}
           disabled={isAdding}
           onClick={() => void addAsset()}
         />

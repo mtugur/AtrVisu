@@ -28,7 +28,7 @@ New civil references are created on the `Default` layer. There is no hidden curr
 A common workflow is:
 
 1. Create a user layer named `Civil` or `Building`.
-2. Add columns, walls, floor areas, and walkways.
+2. Add columns, beams, walls, floor areas, and walkways from Library > Build.
 3. Assign those civil references to the Civil layer.
 4. Lock the Civil layer when references should stay fixed.
 

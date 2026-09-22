@@ -86,6 +86,7 @@ describe("MachineLibrary definition conversion", () => {
     await act(async () => {
       root.render(createElement(MachineLibrary, {
         onAddMachine: vi.fn(async () => true),
+        onAddCivilReference: vi.fn(async () => true),
         isLibraryManagerOpen: false,
         isTaxonomyManagerOpen: false,
         onCloseLibraryManager: vi.fn(),
@@ -94,7 +95,7 @@ describe("MachineLibrary definition conversion", () => {
       }));
     });
 
-    const title = container.querySelector<HTMLButtonElement>(".library-title")!;
+    const title = container.querySelector<HTMLButtonElement>('.library-card:not([data-testid="build-library-root"]) .library-title')!;
     const name = title.querySelector("strong")!;
     const status = title.querySelector("small")!;
     expect(name.textContent).toBe("Atara Standard Library With A Long Engineering Name");
@@ -134,6 +135,7 @@ describe("MachineLibrary definition conversion", () => {
 
     await act(async () => root.render(createElement(MachineLibrary, {
       onAddMachine: vi.fn(async () => true),
+      onAddCivilReference: vi.fn(async () => true),
       isLibraryManagerOpen: false,
       isTaxonomyManagerOpen: false,
       onCloseLibraryManager: vi.fn(),
@@ -141,10 +143,10 @@ describe("MachineLibrary definition conversion", () => {
       preferencesRuntime
     })));
 
-    expect(container.querySelectorAll(".library-title strong")).toHaveLength(1);
-    expect(container.querySelectorAll(".library-tree-toggle strong")).toHaveLength(1);
-    expect(container.querySelector(".library-title strong")?.textContent).toBe("Atara Standard Library");
-    expect(container.querySelector(".library-tree-toggle strong")?.textContent).toBe("Packaging Lines");
+    expect(container.querySelectorAll('.library-card:not([data-testid="build-library-root"]) .library-title strong')).toHaveLength(1);
+    expect(container.querySelectorAll('.library-card:not([data-testid="build-library-root"]) .library-tree-toggle strong')).toHaveLength(1);
+    expect(container.querySelector('.library-card:not([data-testid="build-library-root"]) .library-title strong')?.textContent).toBe("Atara Standard Library");
+    expect(container.querySelector('.library-card:not([data-testid="build-library-root"]) .library-tree-toggle strong')?.textContent).toBe("Packaging Lines");
     expect(container.querySelector(".library-tree-children.is-root-content")).not.toBeNull();
 
     await act(async () => root.unmount());
@@ -171,6 +173,7 @@ describe("MachineLibrary definition conversion", () => {
     });
     await act(async () => root.render(createElement(MachineLibrary, {
       onAddMachine: vi.fn(async () => true),
+      onAddCivilReference: vi.fn(async () => true),
       isLibraryManagerOpen: false,
       isTaxonomyManagerOpen: false,
       onCloseLibraryManager: vi.fn(),
@@ -227,6 +230,7 @@ describe("MachineLibrary definition conversion", () => {
     });
     await act(async () => root.render(createElement(MachineLibrary, {
       onAddMachine: vi.fn(async () => true),
+      onAddCivilReference: vi.fn(async () => true),
       isLibraryManagerOpen: false,
       isTaxonomyManagerOpen: false,
       onCloseLibraryManager: vi.fn(),
@@ -277,6 +281,7 @@ describe("MachineLibrary definition conversion", () => {
     await act(async () => {
       root.render(createElement(MachineLibrary, {
         onAddMachine,
+        onAddCivilReference: vi.fn(async () => true),
         isLibraryManagerOpen: false,
         isTaxonomyManagerOpen: false,
         onCloseLibraryManager: vi.fn(),
@@ -328,6 +333,7 @@ describe("MachineLibrary definition conversion", () => {
     const root = createRoot(container);
     await act(async () => root.render(createElement(MachineLibrary, {
       onAddMachine: vi.fn(async () => false),
+      onAddCivilReference: vi.fn(async () => true),
       isLibraryManagerOpen: false,
       isTaxonomyManagerOpen: false,
       onCloseLibraryManager: vi.fn(),
@@ -341,6 +347,56 @@ describe("MachineLibrary definition conversion", () => {
     await act(async () => recent.click());
     expect(container.textContent).toContain("No recent assets yet.");
 
+    await act(async () => root.unmount());
+  });
+
+  it("discovers Build and machine assets in one browser and dispatches each to its own placement authority", async () => {
+    vi.mocked(loadMachineLibraries).mockResolvedValue({
+      libraries: [{
+        libraryId: "atara-standard",
+        libraryName: "Atara Standard Library",
+        readonly: true,
+        enabled: true,
+        path: "/library.json",
+        root: { id: "root", name: "Root", children: [], items: [item] }
+      }],
+      warnings: [],
+      loadError: ""
+    });
+    const onAddMachine = vi.fn(async () => true);
+    const onAddCivilReference = vi.fn(async () => true);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(MachineLibrary, {
+      onAddMachine,
+      onAddCivilReference,
+      isLibraryManagerOpen: false,
+      isTaxonomyManagerOpen: false,
+      onCloseLibraryManager: vi.fn(),
+      onCloseTaxonomyManager: vi.fn()
+    })));
+
+    expect(container.querySelector('[data-testid="build-library-root"]')).not.toBeNull();
+    expect(container.querySelector('[data-asset-kind="machine"]')).not.toBeNull();
+    const structure = container.querySelector<HTMLButtonElement>('[data-testid="build-group-structure"] button')!;
+    await act(async () => structure.click());
+    const beam = container.querySelector<HTMLElement>('[data-testid="asset-card-build::beam"]')!;
+    expect(beam.dataset.assetKind).toBe("civil");
+    expect(beam.querySelector('[title="Create Custom Variant of Beam"]')).toBeNull();
+    await act(async () => beam.querySelector<HTMLButtonElement>('[title="Add Beam to layout"]')!.click());
+    expect(onAddCivilReference).toHaveBeenCalledExactlyOnceWith("beam");
+    expect(onAddMachine).not.toHaveBeenCalled();
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[title="Add Custom ATARA Machine to layout"]')!.click());
+    expect(onAddMachine).toHaveBeenCalledTimes(1);
+    expect(onAddMachine).toHaveBeenCalledWith(expect.objectContaining({
+      definition: expect.objectContaining({ name: "Custom ATARA Machine" })
+    }));
+
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    await act(async () => setNativeInputValue(search, "wall"));
+    expect(container.querySelector('[data-testid="asset-card-build::wall"]')).not.toBeNull();
+    expect(container.querySelector('[data-asset-kind="machine"]')).toBeNull();
     await act(async () => root.unmount());
   });
 });

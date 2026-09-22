@@ -57,13 +57,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     fallbackLabel: "Insert",
     commandIds: [
       RUNTIME_FEATURE_COMMAND_IDS.importAsset,
-      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation,
-      RUNTIME_FEATURE_COMMAND_IDS.addFloor,
-      RUNTIME_FEATURE_COMMAND_IDS.addWall,
-      RUNTIME_FEATURE_COMMAND_IDS.addColumn,
-      RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
-      RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
-      RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
+      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation
     ]
   },
   {

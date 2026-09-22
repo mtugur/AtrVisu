@@ -3,6 +3,7 @@ import type {
   LibraryMachineItem,
   LoadedMachineLibrary
 } from "../types/machine";
+import type { CivilReferenceType } from "../types/civil";
 
 export type AssetBrowserScope = "all" | "recent" | "favorites";
 
@@ -13,11 +14,15 @@ export type AssetBrowserFilters = Readonly<{
 }>;
 
 export type AssetBrowserRecord = Readonly<{
+  kind: "machine";
   assetKey: string;
   libraryId: string;
   libraryName: string;
   sourceLabel: string;
   item: LibraryMachineItem;
+  name: string;
+  category: string;
+  dimensionsMm: Readonly<{ widthMm: number; depthMm: number; heightMm: number }>;
   canonicalOrder: number;
   groupPath: readonly string[];
   familyLabel: string;
@@ -26,6 +31,27 @@ export type AssetBrowserRecord = Readonly<{
   normalizedSemanticFields: readonly string[];
   normalizedGroupFields: readonly string[];
 }>;
+
+export type CivilAssetBrowserRecord = Readonly<{
+  kind: "civil";
+  civilType: CivilReferenceType;
+  assetKey: string;
+  libraryId: string;
+  libraryName: string;
+  sourceLabel: string;
+  name: string;
+  category: string;
+  dimensionsMm: Readonly<{ widthMm: number; depthMm: number; heightMm: number }>;
+  canonicalOrder: number;
+  groupPath: readonly string[];
+  familyLabel: string;
+  normalizedName: string;
+  normalizedSearchFields: readonly string[];
+  normalizedSemanticFields: readonly string[];
+  normalizedGroupFields: readonly string[];
+}>;
+
+export type AnyAssetBrowserRecord = AssetBrowserRecord | CivilAssetBrowserRecord;
 
 export type AssetBrowserFilterOption = Readonly<{
   value: string;
@@ -103,11 +129,19 @@ const appendGroupRecords = (
     ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
     const groupFields = [...groupPath, library.libraryName];
     records.push(Object.freeze({
+      kind: "machine",
       assetKey: createAssetKey(library.libraryId, item.id),
       libraryId: library.libraryId,
       libraryName: library.libraryName,
       sourceLabel: getSourceLabel(library),
       item,
+      name: item.name,
+      category: item.category,
+      dimensionsMm: Object.freeze({
+        widthMm: item.widthMm ?? item.width * 1000,
+        depthMm: item.depthMm ?? item.depth * 1000,
+        heightMm: item.heightMm ?? item.height * 1000
+      }),
       canonicalOrder: order.value,
       groupPath: Object.freeze([...groupPath]),
       familyLabel,
@@ -153,7 +187,7 @@ const nameHasWordPrefix = (name: string, token: string) =>
   name.split(" ").some((word) => word.startsWith(token));
 
 const getSearchRank = (
-  record: AssetBrowserRecord,
+  record: AnyAssetBrowserRecord,
   normalizedQuery: string,
   tokens: readonly string[]
 ) => {
@@ -176,7 +210,7 @@ const getSearchRank = (
 };
 
 export const getAssetBrowserFilterOptions = (
-  records: readonly AssetBrowserRecord[]
+  records: readonly AnyAssetBrowserRecord[]
 ): AssetBrowserFilterOptions => {
   const unique = (
     values: readonly AssetBrowserFilterOption[]
@@ -188,8 +222,8 @@ export const getAssetBrowserFilterOptions = (
       label: record.sourceLabel
     })))),
     categories: Object.freeze(unique(records.map((record) => ({
-      value: record.item.category,
-      label: record.item.category
+      value: record.category,
+      label: record.category
     })))),
     families: Object.freeze(unique(records.map((record) => ({
       value: record.familyLabel,
@@ -201,10 +235,10 @@ export const getAssetBrowserFilterOptions = (
 export const getActiveAssetBrowserFilterCount = (filters: AssetBrowserFilters) =>
   [filters.libraryId, filters.category, filters.family].filter(Boolean).length;
 
-export const selectAssetBrowserRecords = (
-  records: readonly AssetBrowserRecord[],
+export const selectAssetBrowserRecords = <T extends AnyAssetBrowserRecord>(
+  records: readonly T[],
   options: SelectAssetBrowserRecordsOptions
-): readonly AssetBrowserRecord[] => {
+): readonly T[] => {
   const favoriteKeys = new Set(options.favoriteAssetKeys);
   const recordsByKey = new Map(records.map((record) => [record.assetKey, record]));
   const scopedRecords = options.scope === "recent"
@@ -215,7 +249,7 @@ export const selectAssetBrowserRecords = (
     : records.filter((record) => options.scope !== "favorites" || favoriteKeys.has(record.assetKey));
   const filtered = scopedRecords.filter((record) => (
     (!options.filters.libraryId || record.libraryId === options.filters.libraryId)
-    && (!options.filters.category || record.item.category === options.filters.category)
+    && (!options.filters.category || record.category === options.filters.category)
     && (!options.filters.family || record.familyLabel === options.filters.family)
   ));
   const { normalized, tokens } = tokenizeQuery(options.query);

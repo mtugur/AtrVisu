@@ -2,6 +2,7 @@ export type CivilReferenceType =
   | "floor-area"
   | "wall"
   | "column"
+  | "beam"
   | "door-opening"
   | "restricted-area"
   | "walkway"

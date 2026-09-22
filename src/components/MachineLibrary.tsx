@@ -6,16 +6,20 @@ import {
 } from "react";
 import {
   EMPTY_ASSET_BROWSER_FILTERS,
+  BUILD_LIBRARY_ID,
   createAssetBrowserPreferencesRuntime,
   createAssetBrowserRecords,
+  createBuildAssetBrowserRecords,
   getActiveAssetBrowserFilterCount,
   getAssetBrowserFilterOptions,
   selectAssetBrowserRecords,
   type AssetBrowserFilters,
   type AssetBrowserPreferencesRuntime,
   type AssetBrowserRecord,
+  type AnyAssetBrowserRecord,
   type AssetBrowserScope
 } from "../assetBrowser";
+import type { CivilReferenceType } from "../types/civil";
 import type {
   LibraryMachineItem,
   LibraryValidationWarning,
@@ -42,6 +46,7 @@ type MachineLibraryProps = {
   onImportAsset?: () => void;
   onCreateVariant?: (selection: LibrarySelection) => Promise<void>;
   onAddMachine: (selection: LibrarySelection) => Promise<boolean>;
+  onAddCivilReference: (type: CivilReferenceType) => Promise<boolean>;
   isLibraryManagerOpen: boolean;
   isTaxonomyManagerOpen: boolean;
   onCloseLibraryManager: () => void;
@@ -87,7 +92,7 @@ const EmptyState = ({ scope, filtered }: { scope: AssetBrowserScope; filtered: b
     return (
       <div className="asset-browser-empty" role="status">
         <strong>No assets match the current search and filters.</strong>
-        <span>Clear the search or filters to browse all available equipment.</span>
+        <span>Clear the search or filters to browse all available assets.</span>
       </div>
     );
   }
@@ -103,7 +108,7 @@ const EmptyState = ({ scope, filtered }: { scope: AssetBrowserScope; filtered: b
     return (
       <div className="asset-browser-empty" role="status">
         <strong>No recent assets yet.</strong>
-        <span>Equipment appears here after it is added to the layout.</span>
+        <span>Assets appear here after they are added to the layout.</span>
       </div>
     );
   }
@@ -118,6 +123,7 @@ export function MachineLibrary({
   onImportAsset,
   onCreateVariant,
   onAddMachine,
+  onAddCivilReference,
   isLibraryManagerOpen,
   isTaxonomyManagerOpen,
   onCloseLibraryManager,
@@ -169,7 +175,7 @@ export function MachineLibrary({
         setLibraries(result.libraries);
         setWarnings(result.warnings);
         setLoadError(result.loadError);
-        setOpenLibraries(new Set(result.libraries.map((library) => library.libraryId)));
+        setOpenLibraries(new Set([BUILD_LIBRARY_ID, ...result.libraries.map((library) => library.libraryId)]));
         setIsLoading(false);
       }
     };
@@ -179,7 +185,9 @@ export function MachineLibrary({
     };
   }, [reloadToken]);
 
-  const records = useMemo(() => createAssetBrowserRecords(libraries), [libraries]);
+  const machineRecords = useMemo(() => createAssetBrowserRecords(libraries), [libraries]);
+  const buildRecords = useMemo(() => createBuildAssetBrowserRecords(machineRecords.length), [machineRecords.length]);
+  const records = useMemo<readonly AnyAssetBrowserRecord[]>(() => [...machineRecords, ...buildRecords], [machineRecords, buildRecords]);
   const recordsByKey = useMemo(
     () => new Map(records.map((record) => [record.assetKey, record])),
     [records]
@@ -212,12 +220,14 @@ export function MachineLibrary({
     setFilters(EMPTY_ASSET_BROWSER_FILTERS);
   };
 
-  const addAsset = async (record: AssetBrowserRecord) => {
-    const added = await onAddMachine({
-      libraryId: record.libraryId,
-      item: record.item,
-      definition: toMachineDefinition(record.item)
-    });
+  const addAsset = async (record: AnyAssetBrowserRecord) => {
+    const added = record.kind === "civil"
+      ? await onAddCivilReference(record.civilType)
+      : await onAddMachine({
+          libraryId: record.libraryId,
+          item: record.item,
+          definition: toMachineDefinition(record.item)
+        });
     if (added) {
       void runtime.recordRecent(record.assetKey);
     }
@@ -227,7 +237,7 @@ export function MachineLibrary({
   return (
     <section
       className="library-section"
-      aria-label="Machine library"
+      aria-label="Asset library"
       data-testid="machine-library-panel"
       data-asset-preferences-status={preferenceSnapshot.status}
     >
@@ -323,7 +333,7 @@ export function MachineLibrary({
       {preferenceSnapshot.warning ? <p className="asset-browser-storage-warning" role="status">{preferenceSnapshot.warning}</p> : null}
       {loadError ? (
         <div className="library-error" role="alert">
-          <span>Assets could not be loaded.</span>
+          <span>Machine assets could not be loaded. Build assets remain available.</span>
           <button type="button" onClick={() => setReloadToken((current) => current + 1)}>Retry</button>
         </div>
       ) : null}
@@ -338,10 +348,11 @@ export function MachineLibrary({
 
       <section className="machine-list" aria-label="Available assets">
         {isLoading ? <p className="asset-browser-loading" role="status">Loading assets…</p> : null}
-        {!isLoading && !loadError && visibleRecords.length === 0 ? <EmptyState scope={scope} filtered={hasSearchOrFilters} /> : null}
-        {!isLoading && !loadError && visibleRecords.length > 0 && showHierarchy ? (
+        {!isLoading && visibleRecords.length === 0 ? <EmptyState scope={scope} filtered={hasSearchOrFilters} /> : null}
+        {!isLoading && visibleRecords.length > 0 && showHierarchy ? (
           <AssetBrowserHierarchy
             libraries={libraries}
+            buildRecords={buildRecords}
             openLibraryIds={openLibraries}
             onToggleLibrary={(libraryId) => setOpenLibraries((current) => {
               const next = new Set(current);
@@ -356,7 +367,7 @@ export function MachineLibrary({
             onCreateVariant={createVariant}
           />
         ) : null}
-        {!isLoading && !loadError && visibleRecords.length > 0 && !showHierarchy ? (
+        {!isLoading && visibleRecords.length > 0 && !showHierarchy ? (
           <div className="asset-browser-flat-results" data-testid="asset-browser-flat-results">
             {visibleRecords.map((record) => (
               <AssetBrowserCard

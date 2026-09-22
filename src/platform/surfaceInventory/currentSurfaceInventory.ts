@@ -458,64 +458,85 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     featureIds: ["library.taxonomyManager", "panel.taxonomyManager"]
   },
   {
+    surfaceId: "surface.buildLibrary",
+    surfaceType: "panel",
+    label: "Build Library",
+    owner: "existing-ui",
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/components/assetBrowser/AssetBrowserHierarchy.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/App.tsx"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.floor", "civil.wall", "civil.column", "civil.beam", "civil.walkway", "civil.restrictedZone", "civil.referenceZone"],
+    notes: "All Build primitive cards dispatch the registered civil.addPrimitive command, which creates canonical CivilReferenceItem instances."
+  },
+  {
+    surfaceId: "surface.legacyCivilCommands",
+    surfaceType: "api",
+    label: "Legacy Civil Command Compatibility",
+    owner: "legacy-compatible",
+    sourceFiles: ["src/App.tsx", "src/platform/runtimeCommands/runtimeFeatureCommands.ts"],
+    commandIds: ["civil.addFloor", "civil.addWall", "civil.addColumn", "civil.addWalkway", "civil.addRestrictedZone", "civil.addReferenceZone"],
+    featureIds: ["civil.legacyCommands"],
+    notes: "Bound programmatic compatibility commands; no longer projected as duplicate Insert menu actions."
+  },
+  {
     surfaceId: "surface.civilFloor",
     surfaceType: "panel",
     label: "Civil Floor",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
-    commandIds: ["civil.addFloor"],
-    panelIds: ["panel.civilReferences"],
-    featureIds: ["civil.floor", "panel.civilReferences"]
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/utils/civil.ts"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.floor"]
   },
   {
     surfaceId: "surface.civilWall",
     surfaceType: "panel",
     label: "Civil Wall",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
-    commandIds: ["civil.addWall"],
-    panelIds: ["panel.civilReferences"],
-    featureIds: ["civil.wall", "panel.civilReferences"]
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/utils/civil.ts"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.wall"]
   },
   {
     surfaceId: "surface.civilColumn",
     surfaceType: "panel",
     label: "Civil Column",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
-    commandIds: ["civil.addColumn"],
-    panelIds: ["panel.civilReferences"],
-    featureIds: ["civil.column", "panel.civilReferences"]
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/utils/civil.ts"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.column"]
   },
   {
     surfaceId: "surface.civilWalkway",
     surfaceType: "panel",
     label: "Civil Walkway",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
-    commandIds: ["civil.addWalkway"],
-    panelIds: ["panel.civilReferences"],
-    featureIds: ["civil.walkway", "panel.civilReferences"]
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/utils/civil.ts"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.walkway"]
   },
   {
     surfaceId: "surface.civilRestrictedZone",
     surfaceType: "panel",
     label: "Civil Restricted Zone",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
-    commandIds: ["civil.addRestrictedZone"],
-    panelIds: ["panel.civilReferences"],
-    featureIds: ["civil.restrictedZone", "panel.civilReferences"]
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/utils/civil.ts"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.restrictedZone"]
   },
   {
     surfaceId: "surface.civilReferenceZone",
     surfaceType: "panel",
     label: "Civil Reference Zone",
     owner: "existing-ui",
-    sourceFiles: ["src/App.tsx", "src/components/CivilReferencePanel.tsx", "src/utils/civil.ts"],
-    commandIds: ["civil.addReferenceZone"],
-    panelIds: ["panel.civilReferences"],
-    featureIds: ["civil.referenceZone", "panel.civilReferences"]
+    sourceFiles: ["src/components/MachineLibrary.tsx", "src/assetBrowser/buildPrimitiveCatalog.ts", "src/utils/civil.ts"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    featureIds: ["civil.referenceZone"]
   },
   {
     surfaceId: "surface.rotationSnap",

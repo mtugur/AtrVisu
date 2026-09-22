@@ -76,6 +76,7 @@ export const CIVIL_TECHNICAL_COLORS = Object.freeze({
   "floor-area": "#3f6f91",
   wall: "#8d98a5",
   column: "#b6bdc8",
+  beam: "#9eaab5",
   "door-opening": "#7ec8de",
   "restricted-area": "#d77957",
   walkway: "#d5c25d",

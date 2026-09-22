@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { CivilReferenceItem } from "../types/civil";
 import { createCivilReference, deleteCivilReference, normalizeCivilReferences, updateCivilReference } from "./civil";
 import { createDefaultLayer } from "./layers";
+import { adaptCivilReferenceToPlatformEntity } from "../platform/adapters";
+import { getCivilReferenceFootprintBoundsMm } from "./coordinateReference";
 
 describe("civil references", () => {
   it("creates a civil reference on the Default layer", () => {
@@ -11,6 +13,43 @@ describe("civil references", () => {
     expect(item.layerId).toBe("default");
     expect(item.positionMm).toMatchObject({ xMm: -200, yMm: 350 });
     expect(item.sizeMm.widthMm).toBeGreaterThan(0);
+  });
+
+  it("creates an overhead Beam with canonical civil identity, millimetres and style", () => {
+    const beam = createCivilReference("beam", { xMm: -1200, yMm: 2400 }, "2026-09-21T00:00:00.000Z");
+
+    expect(beam).toMatchObject({
+      type: "beam",
+      positionMm: { xMm: -1200, yMm: 2400, zMm: 3000 },
+      sizeMm: { widthMm: 6000, depthMm: 300, heightMm: 500 },
+      referencePoint: "front-left-bottom",
+      layerId: "default",
+      style: { colorToken: "#9eaab5", opacity: 0.78 }
+    });
+    expect(getCivilReferenceFootprintBoundsMm(beam)).toMatchObject({
+      minXMm: -1200,
+      maxXMm: 4800,
+      minYMm: 2400,
+      maxYMm: 2700
+    });
+    expect(adaptCivilReferenceToPlatformEntity(beam, [createDefaultLayer()])).toMatchObject({
+      id: `civil:${beam.id}`,
+      type: "civil",
+      selectable: true,
+      locked: false,
+      transform: { planX: -1200, planY: 2400, elevation: 3000 }
+    });
+  });
+
+  it("inherits hidden and locked layer state as a Beam entity", () => {
+    const beam = createCivilReference("beam");
+    beam.layerId = "structure";
+    const layer = { ...createDefaultLayer(), id: "structure", visible: false, locked: true };
+    expect(adaptCivilReferenceToPlatformEntity(beam, [createDefaultLayer(), layer])).toMatchObject({
+      selectable: false,
+      visible: false,
+      locked: true
+    });
   });
 
   it("loads safely when civil references are missing", () => {
@@ -56,6 +95,32 @@ describe("civil references", () => {
     expect(item.sizeMm.widthMm).toBeGreaterThan(0);
     expect(item.sizeMm.depthMm).toBeGreaterThan(0);
     expect(item.sizeMm.heightMm).toBeGreaterThan(0);
+  });
+
+  it("keeps legacy civil defaults and normalizes imported Beam and style values", () => {
+    const column = createCivilReference("column", { xMm: 0, yMm: 0 });
+    const beam = createCivilReference("beam", { xMm: 0, yMm: 0 });
+    const [oldItem, restoredBeam] = normalizeCivilReferences([
+      { ...column, style: undefined },
+      { ...beam, style: { colorToken: "#Ac12EF", opacity: 0.45 } }
+    ], [createDefaultLayer()]);
+
+    expect(oldItem.style).toEqual(column.style);
+    expect(restoredBeam.type).toBe("beam");
+    expect(restoredBeam.style).toEqual({ colorToken: "#ac12ef", opacity: 0.45 });
+    expect(restoredBeam.positionMm.zMm).toBe(3000);
+  });
+
+  it("rejects unsafe imported color and clamps opacity without changing other style fields", () => {
+    const item = createCivilReference("wall");
+    const [restored] = normalizeCivilReferences([{
+      ...item,
+      style: { colorToken: "url(javascript:bad)", opacity: 9 }
+    }], [createDefaultLayer()]);
+    expect(restored.style).toEqual({ colorToken: item.style?.colorToken, opacity: 1 });
+
+    const [updated] = updateCivilReference([item], item.id, { style: { colorToken: "#123ABC" } });
+    expect(updated.style).toEqual({ colorToken: "#123abc", opacity: item.style?.opacity });
   });
 
   it("updates and deletes civil references", () => {
