@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CommandContext, CommandDefinition } from "../../platform/contracts";
-import { getPlatformCommandSeedById } from "../../platform/registrySeeds";
+import { getPlatformCommandSeedById, platformCommandSeedDefinitions } from "../../platform/registrySeeds";
 import {
   createExecutedRuntimeCommandResult,
   createUnavailableRuntimeCommandResult
@@ -109,6 +109,41 @@ describe("command surface adapter", () => {
       label: "Precision Placement Helpers",
       tooltip: expect.stringContaining("precision placement")
     });
+  });
+
+  it("keeps legacy Civil commands bound for compatibility but out of the Command Palette", async () => {
+    const legacyCivilIds = [
+      "civil.addFloor",
+      "civil.addWall",
+      "civil.addColumn",
+      "civil.addWalkway",
+      "civil.addRestrictedZone",
+      "civil.addReferenceZone"
+    ];
+    const { adapter, runtimeExecute } = createHarness({
+      metadataRegistry: {
+        ...metadataRegistry,
+        list: () => platformCommandSeedDefinitions
+      }
+    });
+    const paletteIds = adapter.getCommandPaletteItems().map((item) => item.commandId);
+
+    for (const commandId of legacyCivilIds) {
+      expect(getPlatformCommandSeedById(commandId)).toBeDefined();
+      expect(adapter.getItem(commandId, "command-palette")).toBeUndefined();
+      expect(paletteIds).not.toContain(commandId);
+      await expect(adapter.execute(commandId)).resolves.toMatchObject({ handled: true });
+    }
+
+    expect(runtimeExecute.mock.calls.map(([commandId]) => commandId)).toEqual(legacyCivilIds);
+    expect(paletteIds).toEqual(expect.arrayContaining([
+      "civil.addPrimitive",
+      "library.manager",
+      "view.toggleLabels",
+      "edit.undo"
+    ]));
+    const insertIds = adapter.getMenus().find((menu) => menu.id === "insert")?.items.map((item) => item.commandId) ?? [];
+    expect(insertIds.filter((commandId) => legacyCivilIds.includes(commandId))).toEqual([]);
   });
 
   it("routes promoted Arrange actions to runtime or assembly authority without direct mutation", async () => {

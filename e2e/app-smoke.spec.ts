@@ -5043,6 +5043,42 @@ test("building civil references can be added and edited without red console erro
   expect(errors).toEqual([]);
 });
 
+test("legacy Civil commands stay bound but absent from Search Commands while Library Build Add remains live", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const legacyCivilIds = [
+    "civil.addFloor",
+    "civil.addWall",
+    "civil.addColumn",
+    "civil.addWalkway",
+    "civil.addRestrictedZone",
+    "civil.addReferenceZone"
+  ];
+  const legacyAccess = (await getRuntimeFeatureAccessReport(page)).requiredRuntimeFeatures
+    .find((feature) => feature.featureId === "civil.legacyCommands");
+  expect(legacyAccess?.commandEvidence.map((command) => command.commandId).sort()).toEqual([...legacyCivilIds].sort());
+  expect(legacyAccess?.commandEvidence.every((command) => command.registered && command.bound && command.reachable)).toBe(true);
+
+  await page.getByTestId("workbench-application-bar").getByRole("button", { name: "Search commands" }).click();
+  const palette = page.getByTestId("command-palette");
+  const search = palette.locator("input");
+  for (const commandId of legacyCivilIds) {
+    await search.fill(commandId);
+    await expect(palette.getByRole("option")).toHaveCount(0);
+  }
+  for (const commandName of ["Library Manager", "Labels"]) {
+    await search.fill(commandName);
+    await expect(palette.getByRole("option", { name: new RegExp(commandName) })).toBeVisible();
+  }
+  await page.keyboard.press("Escape");
+
+  await expectOneRuntimeCommandExecution(page, "civil.addPrimitive", () =>
+    addBuildPrimitive(page, "Column", "Structure")
+  );
+  await expect(page.getByTestId("civil-reference-properties").getByRole("combobox", { name: "Type" })).toHaveValue("column");
+  expect(errors).toEqual([]);
+});
+
 test("Build Library Beam uses canonical civil selection, style rendering, history, and lock authority", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
