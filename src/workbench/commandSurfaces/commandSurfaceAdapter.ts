@@ -11,6 +11,7 @@ import {
 } from "../../platform/runtimeCommands/runtimeCommandOperation";
 import {
   COMMAND_BAR_COMMAND_IDS,
+  COMMAND_PALETTE_EXCLUDED_COMMAND_IDS,
   COMMAND_SURFACE_MENU_DEFINITIONS,
   getCommandSurfaceRuntimeRoute
 } from "./commandSurfaceConfig";
@@ -122,6 +123,9 @@ export const createCommandSurfaceAdapter = (
     placement: CommandSurfacePlacement
   ): CommandSurfaceItem | undefined => {
     if (!(COMMAND_SURFACE_PLACEMENTS as readonly string[]).includes(placement)) {
+      return undefined;
+    }
+    if (placement === "command-palette" && COMMAND_PALETTE_EXCLUDED_COMMAND_IDS.includes(commandId)) {
       return undefined;
     }
     const metadata = options.metadataRegistry.get(commandId);

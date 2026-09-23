@@ -33,7 +33,6 @@ import {
 import { AssemblyTreePanel } from "./components/AssemblyTreePanel";
 import { CollisionCheckPanel } from "./components/CollisionCheckPanel";
 import { ConnectionPointSnapPanel } from "./components/ConnectionPointSnapPanel";
-import { CivilReferencePanel } from "./components/CivilReferencePanel";
 import { CivilReferenceProperties } from "./components/CivilReferenceProperties";
 import { CommercialOutputsModal } from "./components/CommercialOutputsModal";
 import { AnnotationsPanel } from "./components/AnnotationsPanel";
@@ -42,6 +41,7 @@ import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
 import { LayersPanel } from "./components/LayersPanel";
 import { MachineLibrary } from "./components/MachineLibrary";
+import { isBuildPrimitiveType } from "./assetBrowser";
 import type { LibraryManagerRuntimeController } from "./components/LibraryManager";
 import { MachineProperties } from "./components/MachineProperties";
 import { MultiSelectionProperties } from "./components/MultiSelectionProperties";
@@ -376,10 +376,6 @@ const isMachineLibrarySelection = (
 const isAnnotationType = (value: unknown): value is AnnotationType =>
   typeof value === "string"
   && ["note", "info", "warning", "callout", "dimension-note", "area-note"].includes(value);
-
-const isCivilReferenceType = (value: unknown): value is CivilReferenceType =>
-  typeof value === "string"
-  && ["floor-area", "wall", "column", "walkway", "restricted-area"].includes(value);
 
 const isPlacementSettings = (value: unknown): value is PlacementSettings =>
   isRecord(value)
@@ -3634,6 +3630,14 @@ export function App() {
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
+    [RUNTIME_FEATURE_COMMAND_IDS.addCivilPrimitive]: {
+      getEnableState: (context) => ({ enabled: isBuildPrimitiveType(context.payload), reason: "Choose a Build asset from Library." }),
+      execute: (context) => {
+        if (!isBuildPrimitiveType(context.payload)) return { handled: false, status: "disabled", reason: "Choose a Build asset from Library." };
+        addCivilReference(context.payload);
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.addFloor]: {
       getEnableState: () => ({ enabled: true }),
       execute: () => {
@@ -4894,6 +4898,8 @@ export function App() {
                       RUNTIME_FEATURE_COMMAND_IDS.addMachine,
                       selection
                     )).status === "executed"}
+                  onAddCivilReference={async (type) =>
+                    (await executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addCivilPrimitive, type)).status === "executed"}
                   isLibraryManagerOpen={isLibraryManagerOpen}
                   isTaxonomyManagerOpen={isTaxonomyManagerOpen}
                   onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
@@ -5102,6 +5108,8 @@ export function App() {
                   RUNTIME_FEATURE_COMMAND_IDS.addMachine,
                   selection
                 )).status === "executed"}
+              onAddCivilReference={async (type) =>
+                (await executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addCivilPrimitive, type)).status === "executed"}
               isLibraryManagerOpen={isLibraryManagerOpen}
               isTaxonomyManagerOpen={isTaxonomyManagerOpen}
               onCloseLibraryManager={() => setIsLibraryManagerOpen(false)}
@@ -5154,31 +5162,6 @@ export function App() {
               onToggleLocked={toggleLayerLocked}
               onIsolateLayer={isolateSelectedLayer}
               onShowAllLayers={showAllLayoutLayers}
-            />
-          </PanelSection>
-          <PanelSection
-            title="Building / Civil"
-            defaultExpanded={false}
-            badge={civilReferences.length > 0 ? `${civilReferences.length}` : undefined}
-            {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.civilReferences)}
-          >
-            <CivilReferencePanel
-              onAddCivilReference={(type) => {
-                const commandId = {
-                  "floor-area": RUNTIME_FEATURE_COMMAND_IDS.addFloor,
-                  wall: RUNTIME_FEATURE_COMMAND_IDS.addWall,
-                  column: RUNTIME_FEATURE_COMMAND_IDS.addColumn,
-                  walkway: RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
-                  "restricted-area": RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
-                  "reference-zone": RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
-                } as const;
-                const runtimeCommandId = commandId[type as keyof typeof commandId];
-                if (runtimeCommandId) {
-                  executeRuntimeFeatureCommand(runtimeCommandId);
-                } else if (isCivilReferenceType(type)) {
-                  addCivilReference(type);
-                }
-              }}
             />
           </PanelSection>
           <PanelSection

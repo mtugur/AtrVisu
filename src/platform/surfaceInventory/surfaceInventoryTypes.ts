@@ -1,4 +1,5 @@
 export type PlatformSurfaceType =
+  | "api"
   | "panel"
   | "modal"
   | "toolbar-action"

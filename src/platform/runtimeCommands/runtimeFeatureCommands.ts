@@ -38,6 +38,7 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   libraryManager: "library.manager",
   taxonomyManager: "library.taxonomyManager",
   createAnnotation: "annotations.create",
+  addCivilPrimitive: "civil.addPrimitive",
   addFloor: "civil.addFloor",
   addWall: "civil.addWall",
   addColumn: "civil.addColumn",

@@ -3,6 +3,7 @@ import type { AtrVisuLayout, PlacedMachine } from "../types/machine";
 import { createLegacyEntitySnapshot } from "../platform/adapters";
 import { evaluateAtomicMovement } from "../platform/runtimeSelection";
 import { getMachineRenderCenterMm } from "./coordinateReference";
+import { createCivilReference } from "./civil";
 import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
 
 const createMachine = (): PlacedMachine => ({
@@ -69,6 +70,20 @@ const createMachine = (): PlacedMachine => ({
 });
 
 describe("layout serialization", () => {
+  it("round-trips a styled Beam through canonical layout export and import", () => {
+    const beam = createCivilReference("beam", { xMm: -250, yMm: 1300 }, "2026-09-21T00:00:00.000Z");
+    beam.style = { colorToken: "#12ab34", opacity: 0.37 };
+    const layout = createLayoutSnapshotFromMachines([], "2026-09-21T00:00:00.000Z", [], [], [], [], [beam]);
+    const restored = civilReferencesFromLayout(JSON.parse(JSON.stringify(layout)) as AtrVisuLayout, layersFromLayout(layout));
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).toMatchObject({
+      id: beam.id,
+      type: "beam",
+      positionMm: { xMm: -250, yMm: 1300, zMm: 3000 },
+      sizeMm: { widthMm: 6000, depthMm: 300, heightMm: 500 },
+      style: { colorToken: "#12ab34", opacity: 0.37 }
+    });
+  });
   it("exports unit metadata and preserves millimeter dimensions", () => {
     const layout = createLayoutSnapshotFromMachines(
       [createMachine()],

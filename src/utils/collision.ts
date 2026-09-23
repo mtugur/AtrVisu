@@ -170,7 +170,7 @@ export const buildCollisionEnvelopeFromObject = (machine: PlacedMachine): Collis
 };
 
 export const isCivilReferenceHardCollidable = (item: CivilReferenceItem) =>
-  item.type === "wall" || item.type === "column";
+  item.type === "wall" || item.type === "column" || item.type === "beam";
 
 export const buildCollisionEnvelopeFromCivilReference = (item: CivilReferenceItem): CollisionFootprint | null => {
   if (!isCivilReferenceHardCollidable(item)) {

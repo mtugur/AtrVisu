@@ -9,6 +9,7 @@ This is not architectural CAD, BIM, or DXF/DWG import. v0.1 is intentionally sim
 AtrVisu supports these civil reference types:
 
 - `column`: rectangular column obstacle
+- `beam`: rectangular overhead structural reference and solid obstacle
 - `wall`: rectangular wall segment
 - `floor-area`: flat floor boundary or area
 - `walkway`: flat service or walking corridor
@@ -27,7 +28,7 @@ New civil references are created on the `Default` layer. There is no hidden curr
 A common workflow is:
 
 1. Create a user layer named `Civil` or `Building`.
-2. Add columns, walls, floor areas, and walkways.
+2. Add columns, beams, walls, floor areas, and walkways from Library > Build.
 3. Assign those civil references to the Civil layer.
 4. Lock the Civil layer when references should stay fixed.
 
@@ -37,7 +38,7 @@ Hidden layers hide civil references and prevent scene picking. Locked layers pre
 
 Civil references are selectable in the scene. Selecting one opens Civil Reference Properties in the right panel.
 
-Civil references are first-class layout entities internally while remaining in the separate Building / Civil UI section. Mixed selection with machines preserves the actual click order across entity types. The first selected visible entity is the primary entity for Align to Primary, regardless of whether it is a machine, wall, column, or other civil reference. No selection or alignment tool should prioritize machines over civil references unless that behavior is explicitly documented.
+Civil references are first-class layout entities. The normal creation route is the existing Library Asset Browser's Build hierarchy; placed items remain `CivilReferenceItem` rather than machine instances. The Build catalog is an immutable set of creation templates and is not stored in projects. Mixed selection with machines preserves the actual click order across entity types. The first selected visible entity is the primary entity for Align to Primary, regardless of whether it is a machine, wall, column, beam, or other civil reference. No selection or alignment tool should prioritize machines over civil references unless that behavior is explicitly documented.
 
 Editable fields include:
 
@@ -52,6 +53,7 @@ Editable fields include:
 - height
 - rotation angle
 - item locked
+- color and opacity, stored on the placed item's canonical `style`
 
 Plan X and Plan Y support negative coordinates. Physical dimensions reject invalid negative values through the shared numeric field rules.
 
@@ -63,7 +65,7 @@ Item lock and layer lock both prevent accidental movement. Dragging creates one 
 
 ## Alignment
 
-Civil references are first-class alignable layout entities. Columns, walls, restricted areas, walkways, floor areas, and reference zones can be aligned with other civil references and with machines.
+Civil references are first-class alignable layout entities. Columns, beams, walls, restricted areas, walkways, floor areas, and reference zones can be aligned with other civil references and with machines.
 
 Alignment uses the same footprint-bound logic as machines:
 
@@ -83,6 +85,7 @@ Solid / blocking in v0.1:
 
 - wall
 - column
+- beam
 
 Non-solid reference geometry by default:
 

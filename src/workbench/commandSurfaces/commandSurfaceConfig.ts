@@ -57,13 +57,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     fallbackLabel: "Insert",
     commandIds: [
       RUNTIME_FEATURE_COMMAND_IDS.importAsset,
-      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation,
-      RUNTIME_FEATURE_COMMAND_IDS.addFloor,
-      RUNTIME_FEATURE_COMMAND_IDS.addWall,
-      RUNTIME_FEATURE_COMMAND_IDS.addColumn,
-      RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
-      RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
-      RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
+      RUNTIME_FEATURE_COMMAND_IDS.createAnnotation
     ]
   },
   {
@@ -121,6 +115,15 @@ export const COMMAND_BAR_COMMAND_IDS = [
   RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
   RUNTIME_FEATURE_COMMAND_IDS.viewpoints
 ] as const;
+
+export const COMMAND_PALETTE_EXCLUDED_COMMAND_IDS: readonly string[] = Object.freeze([
+  RUNTIME_FEATURE_COMMAND_IDS.addFloor,
+  RUNTIME_FEATURE_COMMAND_IDS.addWall,
+  RUNTIME_FEATURE_COMMAND_IDS.addColumn,
+  RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
+  RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
+  RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
+]);
 
 export const COMMAND_BAR_SHORT_LABELS: Readonly<Record<string, string>> = Object.freeze({
   [CORE_EDITOR_COMMAND_IDS.undo]: "Undo",

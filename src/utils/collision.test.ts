@@ -191,6 +191,14 @@ describe("collision helpers", () => {
     expect(result.collidingObjectIds).toEqual(["machine", "civil:column-1"]);
   });
 
+  it("treats Beam as a hard civil collision reference", () => {
+    const beam = createCivil("beam-1", "beam", { xMm: 100, yMm: 100 }, { widthMm: 6000, depthMm: 300, heightMm: 500 });
+    expect(buildCollisionEnvelopeFromCivilReference(beam)).toMatchObject({
+      objectId: "civil:beam-1",
+      entityRef: { entityType: "civil" }
+    });
+  });
+
   it("ignores non-solid civil references for hard collision", () => {
     const machine = createMachine("machine", { xMm: 0, yMm: 0 });
 

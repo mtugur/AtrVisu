@@ -58,6 +58,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("library.createCustomVariant", "insert", "Create Custom Variant", "Create an editable Project Custom copy of a Library asset.", true),
   createCommandSeed("annotations.create", "insert", "Create Annotation", "Create a layout annotation.", true),
   createCommandSeed("civil.addFloor", "insert", "Add Floor Area", "Add a civil floor or reference zone.", true),
+  createCommandSeed("civil.addPrimitive", "insert", "Add Build Primitive", "Add a selected Build primitive from the Library.", true),
   createCommandSeed("civil.addWall", "insert", "Add Wall", "Add a civil wall reference.", true),
   createCommandSeed("civil.addColumn", "insert", "Add Column", "Add a civil column reference.", true),
   createCommandSeed("civil.addWalkway", "insert", "Add Walkway", "Add a civil walkway reference.", true),

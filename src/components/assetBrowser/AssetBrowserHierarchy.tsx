@@ -1,15 +1,22 @@
 import { useState } from "react";
-import { createAssetKey, type AssetBrowserRecord } from "../../assetBrowser";
+import {
+  BUILD_LIBRARY_ID,
+  BUILD_PRIMITIVE_GROUPS,
+  createAssetKey,
+  type AnyAssetBrowserRecord,
+  type AssetBrowserRecord,
+  type CivilAssetBrowserRecord
+} from "../../assetBrowser";
 import type { LibraryGroup, LoadedMachineLibrary } from "../../types/machine";
 import { WorkbenchIcon } from "../../workbench/icons";
 import { AssetBrowserCard } from "./AssetBrowserCard";
 
 type SharedProps = {
   onCreateVariant?: (record: AssetBrowserRecord) => Promise<void>;
-  recordsByKey: ReadonlyMap<string, AssetBrowserRecord>;
+  recordsByKey: ReadonlyMap<string, AnyAssetBrowserRecord>;
   favoriteAssetKeys: ReadonlySet<string>;
   onToggleFavorite: (assetKey: string) => void;
-  onAdd: (record: AssetBrowserRecord) => Promise<boolean>;
+  onAdd: (record: AnyAssetBrowserRecord) => Promise<boolean>;
 };
 
 function GroupNode({
@@ -81,13 +88,44 @@ function GroupNode({
 export const isRedundantLibraryRoot = (library: LoadedMachineLibrary) =>
   library.root.name.trim().toLocaleLowerCase() === library.libraryName.trim().toLocaleLowerCase();
 
+function BuildGroupNode({
+  name,
+  records,
+  ...shared
+}: Omit<SharedProps, "recordsByKey"> & {
+  name: string;
+  records: readonly CivilAssetBrowserRecord[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="library-tree-node" data-testid={`build-group-${name.toLowerCase()}`}>
+      <button className="library-tree-toggle" type="button" aria-expanded={isOpen} onClick={() => setIsOpen((current) => !current)}>
+        <span className="library-tree-disclosure" aria-hidden="true"><WorkbenchIcon iconId={isOpen ? "collapse" : "expand"} /></span>
+        <strong>{name}</strong>
+      </button>
+      {isOpen ? <div className="library-tree-children">{records.map((record) => (
+        <div key={record.assetKey} style={{ marginLeft: 24 }}>
+          <AssetBrowserCard
+            record={record}
+            favorite={shared.favoriteAssetKeys.has(record.assetKey)}
+            onToggleFavorite={shared.onToggleFavorite}
+            onAdd={shared.onAdd}
+          />
+        </div>
+      ))}</div> : null}
+    </div>
+  );
+}
+
 export function AssetBrowserHierarchy({
   libraries,
+  buildRecords,
   openLibraryIds,
   onToggleLibrary,
   ...shared
 }: SharedProps & {
   libraries: readonly LoadedMachineLibrary[];
+  buildRecords: readonly CivilAssetBrowserRecord[];
   openLibraryIds: ReadonlySet<string>;
   onToggleLibrary: (libraryId: string) => void;
 }) {
@@ -126,6 +164,28 @@ export function AssetBrowserHierarchy({
           </article>
         );
       })}
+      <article className="library-card" data-testid="build-library-root">
+        <button
+          className="library-title"
+          type="button"
+          aria-expanded={openLibraryIds.has(BUILD_LIBRARY_ID)}
+          onClick={() => onToggleLibrary(BUILD_LIBRARY_ID)}
+        >
+          <span className="library-tree-disclosure" aria-hidden="true"><WorkbenchIcon iconId={openLibraryIds.has(BUILD_LIBRARY_ID) ? "collapse" : "expand"} /></span>
+          <strong>Build</strong>
+          <small>Built-in</small>
+        </button>
+        {openLibraryIds.has(BUILD_LIBRARY_ID) ? BUILD_PRIMITIVE_GROUPS.map((group) => (
+          <BuildGroupNode
+            key={group.name}
+            name={group.name}
+            records={buildRecords.filter((record) => record.category === group.name)}
+            favoriteAssetKeys={shared.favoriteAssetKeys}
+            onToggleFavorite={shared.onToggleFavorite}
+            onAdd={shared.onAdd}
+          />
+        )) : null}
+      </article>
     </div>
   );
 }

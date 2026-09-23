@@ -17,6 +17,8 @@ import {
   snapPrimaryAnchorToSecondaryAnchor
 } from "./alignment";
 import { getObjectPlanBounds, getSelectionPlanBounds } from "./selectionBounds";
+import { createCivilReference } from "./civil";
+import { getCivilReferenceFootprintBoundsMm } from "./coordinateReference";
 
 const definition = (id: string, widthMm: number, depthMm: number): MachineDefinition => ({
   id,
@@ -306,6 +308,20 @@ describe("mixed alignable entity helpers", () => {
     );
 
     expect(updates).toEqual([{ kind: "civil", id: "column-b", xMm: 0, yMm: 1000 }]);
+  });
+
+  it("aligns a canonical Beam footprint with another civil reference", () => {
+    const beam = createCivilReference("beam", { xMm: 2500, yMm: 900 }, "2026-09-21T00:00:00.000Z");
+    const reference = entity("civil", "column", 0, 0, 600, 600);
+    const entities = [reference, {
+      ...entity("civil", beam.id, beam.positionMm.xMm, beam.positionMm.yMm),
+      bounds: getCivilReferenceFootprintBoundsMm(beam)
+    }];
+    const keys = entities.map((item) => getAlignableEntityKey(item.kind, item.id));
+    expect(alignEntitiesToAnchor(entities, keys, keys[0], "left")).toEqual([
+      { kind: "civil", id: beam.id, xMm: 0, yMm: 900 }
+    ]);
+    expect(alignEntitiesToAnchor([{ ...reference, locked: true }, entities[1]], keys, keys[0], "left")).toEqual([]);
   });
 
   it("aligns a wall and a machine by center line", () => {

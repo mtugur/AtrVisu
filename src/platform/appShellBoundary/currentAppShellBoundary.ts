@@ -57,7 +57,7 @@ export const currentAppShellBoundaryZones = [
     sourceFiles: [
       "src/App.tsx",
       "src/components/MachineLibrary.tsx",
-      "src/components/CivilReferencePanel.tsx",
+      "src/assetBrowser/buildPrimitiveCatalog.ts",
       "src/components/AssemblyTreePanel.tsx",
       "src/components/LayersPanel.tsx",
       "src/components/AnnotationsPanel.tsx",
@@ -70,7 +70,8 @@ export const currentAppShellBoundaryZones = [
       "surface.groups",
       "surface.annotations",
       "surface.viewpoints",
-      "surface.civilColumn"
+      "surface.civilColumn",
+      "surface.buildLibrary"
     ],
     relatedPanelIds: [
       "panel.machineLibrary",
@@ -83,15 +84,11 @@ export const currentAppShellBoundaryZones = [
       "library.addMachine",
       "annotations.create",
       "view.viewpoints",
-      "civil.addFloor",
-      "civil.addWall",
-      "civil.addColumn",
-      "civil.addWalkway",
-      "civil.addRestrictedZone"
+      "civil.addPrimitive"
     ],
     responsibilities: [
-      "Exposes resource, explorer, layer, group, annotation, viewpoint, and civil insertion surfaces currently hosted in the shell panel.",
-      "Provides the existing entry points for adding library machines and civil reference geometry."
+      "Exposes Library, explorer, layer, group, annotation, and viewpoint surfaces in the Primary Dock.",
+      "Provides one Library entry point for machine assets and Build primitive creation."
     ],
     refactorNotes: [
       "Future shell should separate resource/explorer zones from the contextual inspector without hiding existing features.",

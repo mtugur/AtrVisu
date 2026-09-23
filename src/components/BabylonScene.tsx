@@ -684,7 +684,7 @@ const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): Civil
   mesh.material = material;
   mesh.metadata = { civilReferenceId: item.id };
   mesh.isPickable = true;
-  mesh.renderingGroupId = item.type === "wall" || item.type === "column" ? 0 : 1;
+  mesh.renderingGroupId = item.type === "wall" || item.type === "column" || item.type === "beam" ? 0 : 1;
 
   const selectionFrame = createWireBoxFrame(
     scene,
@@ -1119,6 +1119,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.civilPlanPositions;
         delete canvas.dataset.machineElevationsMm;
         delete canvas.dataset.civilElevationsMm;
+        delete canvas.dataset.civilRenderedStyles;
         delete canvas.dataset.machineSceneLabels;
         delete canvas.dataset.machineLoadedModelCounts;
         delete canvas.dataset.machineRenderTransforms;
@@ -2167,6 +2168,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         ));
         canvas.dataset.civilElevationsMm = JSON.stringify(Object.fromEntries(
           civilReferencesRef.current.slice(0, 16).map((item) => [item.id, item.positionMm.zMm ?? 0])
+        ));
+        canvas.dataset.civilRenderedStyles = JSON.stringify(Object.fromEntries(
+          [...civilReferenceNodesRef.current].slice(0, 16).map(([id, node]) => [id, {
+            color: node.material.diffuseColor.toHexString().toLowerCase(),
+            opacity: node.material.alpha
+          }])
         ));
         canvas.dataset.machineRenderTransforms = JSON.stringify(Object.fromEntries(
           [...machineNodesRef.current].slice(0, 16).map(([id, node]) => {

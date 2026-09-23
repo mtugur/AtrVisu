@@ -256,35 +256,49 @@ export const platformFeatureAccessMatrix = [
   }),
 
   feature("civil.floor", "Civil floor area", ["panel"], {
-    commandIds: ["civil.addFloor"],
-    panelIds: ["panel.civilReferences"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"]
   }),
   feature("civil.wall", "Civil wall", ["panel"], {
-    commandIds: ["civil.addWall"],
-    panelIds: ["panel.civilReferences"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"]
   }),
   feature("civil.column", "Civil column", ["panel"], {
-    commandIds: ["civil.addColumn"],
-    panelIds: ["panel.civilReferences"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"],
     requiresSurfaceExecutionEvidence: true
   }),
   feature("civil.walkway", "Civil walkway", ["panel"], {
-    commandIds: ["civil.addWalkway"],
-    panelIds: ["panel.civilReferences"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"]
   }),
   feature("civil.restrictedZone", "Civil restricted zone", ["panel"], {
-    commandIds: ["civil.addRestrictedZone"],
-    panelIds: ["panel.civilReferences"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"]
   }),
   feature("civil.referenceZone", "Civil reference zone", ["panel"], {
-    commandIds: ["civil.addReferenceZone"],
-    panelIds: ["panel.civilReferences"],
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
     runtimeRequirements: ["entity"]
+  }),
+  feature("civil.beam", "Civil beam", ["panel"], {
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    runtimeRequirements: ["entity"]
+  }),
+  feature("civil.doorOpening", "Civil door / opening", ["panel"], {
+    commandIds: ["civil.addPrimitive"],
+    panelIds: ["panel.machineLibrary"],
+    runtimeRequirements: ["entity"]
+  }),
+  feature("civil.legacyCommands", "Legacy Civil command compatibility", ["api"], {
+    commandIds: ["civil.addFloor", "civil.addWall", "civil.addColumn", "civil.addWalkway", "civil.addRestrictedZone", "civil.addReferenceZone"],
+    notes: "Bound compatibility commands without duplicate visible Insert actions."
   }),
 
   feature("assembly.createGroup", "Create Group", ["panel"], {
@@ -347,7 +361,11 @@ export const platformFeatureAccessMatrix = [
   }),
   panelFeature("panel.viewpoints", "Viewpoints panel"),
   panelFeature("panel.layers", "Layers panel"),
-  panelFeature("panel.civilReferences", "Building / Civil panel"),
+  feature("panel.civilReferences", "Legacy Building / Civil panel", ["panel"], {
+    panelIds: ["panel.civilReferences"],
+    classification: "declared-planned",
+    notes: "Build creation moved to the Library; the legacy panel is not a live user surface."
+  }),
   panelFeature("panel.groups", "Groups panel"),
   panelFeature("panel.projectStatus", "Project status panel"),
   panelFeature("panel.performanceBenchmarkLauncher", "Performance benchmark launcher"),

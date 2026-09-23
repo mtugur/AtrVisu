@@ -4,6 +4,7 @@ import type { CivilReferenceItem } from "../types/civil";
 import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import type { LayoutViewpoint } from "../types/viewpoints";
 import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./layoutHistory";
+import { createCivilReference, updateCivilReference } from "./civil";
 
 const definition: MachineDefinition = {
   id: "machine",
@@ -74,6 +75,17 @@ const viewpoint = (id: string, name: string): LayoutViewpoint => ({
 });
 
 describe("layout history", () => {
+  it("undoes and redoes canonical Beam color and opacity edits", () => {
+    const initial = [createCivilReference("beam", { xMm: 0, yMm: 0 }, "2026-09-21T00:00:00.000Z")];
+    const history = pushHistorySnapshot(createLayoutHistory(), [], [], initial);
+    const styled = updateCivilReference(initial, initial[0].id, {
+      style: { colorToken: "#09aabb", opacity: 0.42 }
+    }, "2026-09-21T01:00:00.000Z");
+    const undone = undoHistory(history, [], [], styled);
+    expect(undone?.civilReferences[0].style).toEqual(initial[0].style);
+    const redone = undone && redoHistory(undone.history, [], [], undone.civilReferences);
+    expect(redone?.civilReferences[0].style).toEqual({ colorToken: "#09aabb", opacity: 0.42 });
+  });
   it("pushes, undoes, and redoes layout snapshots", () => {
     const initial = [machine("a", 0)];
     const moved = [machine("a", 1000)];

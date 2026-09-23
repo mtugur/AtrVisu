@@ -1,6 +1,6 @@
 import type { CivilReferenceItem, CivilReferenceType } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
-import { getCivilTypeLabel } from "../utils/civil";
+import { getCivilTypeDefaults, getCivilTypeLabel } from "../utils/civil";
 import { createNumericFieldRule } from "../utils/numericFieldRules";
 import { NumericInput } from "./common/NumericInput";
 
@@ -17,6 +17,7 @@ const civilTypes: Array<{ value: CivilReferenceType; label: string }> = [
   "floor-area",
   "wall",
   "column",
+  "beam",
   "door-opening",
   "restricted-area",
   "walkway",
@@ -272,6 +273,34 @@ export function CivilReferenceProperties({
                 }
               }}
             />
+          </label>
+          <label className="property-field">
+            <span>Color</span>
+            <input
+              type="color"
+              aria-label="Civil Color"
+              disabled={isLocked}
+              value={selectedCivilReference.style?.colorToken ?? getCivilTypeDefaults(selectedCivilReference.type).colorToken}
+              onChange={(event) => onUpdateCivilReference(selectedCivilReference.id, {
+                style: { ...selectedCivilReference.style, colorToken: event.currentTarget.value }
+              })}
+            />
+          </label>
+          <label className="property-field">
+            <span>Opacity</span>
+            <input
+              type="range"
+              aria-label="Civil Opacity"
+              min="0.05"
+              max="1"
+              step="0.01"
+              disabled={isLocked}
+              value={selectedCivilReference.style?.opacity ?? getCivilTypeDefaults(selectedCivilReference.type).opacity}
+              onChange={(event) => onUpdateCivilReference(selectedCivilReference.id, {
+                style: { ...selectedCivilReference.style, opacity: Number(event.currentTarget.value) }
+              })}
+            />
+            <output>{Math.round(100 * (selectedCivilReference.style?.opacity ?? getCivilTypeDefaults(selectedCivilReference.type).opacity))}%</output>
           </label>
           <label className="collision-toggle">
             <input
