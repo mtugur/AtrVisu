@@ -35,6 +35,12 @@ describe("CivilReferenceProperties style authority", () => {
     const color = container.querySelector<HTMLInputElement>('[aria-label="Civil Color"]')!;
     const opacity = container.querySelector<HTMLInputElement>('[aria-label="Civil Opacity"]')!;
     expect(container.querySelector('option[value="beam"]')).not.toBeNull();
+    expect(container.textContent).toContain("Depth / Thickness (mm)");
+    expect(container.textContent).toContain("Height (mm)");
+    expect(container.querySelector('[aria-label="Civil Depth"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Civil Height"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Civil Plan Depth"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Civil Floor Thickness"]')).toBeNull();
     expect(color.value).toBe(item.style?.colorToken);
     await act(async () => change(color, "#09aabb"));
     await act(async () => change(opacity, "0.42"));
@@ -67,8 +73,14 @@ describe("CivilReferenceProperties style authority", () => {
 
     expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Top Elevation above Level"]')?.value).toBe("0");
     expect(container.querySelector('[data-testid="civil-world-elevation"]')?.textContent).toContain("Top Surface World Elevation0 mm");
-    const height = container.querySelector<HTMLInputElement>('[aria-label="Civil Height"]')!;
-    await act(async () => change(height, "350"));
+    expect(container.textContent).toContain("Plan Depth (mm)");
+    expect(container.textContent).toContain("Floor Thickness (mm)");
+    expect(container.textContent).not.toContain("Depth / Thickness (mm)");
+    expect(container.querySelector('[aria-label="Civil Plan Depth"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Civil Depth"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Civil Height"]')).toBeNull();
+    const floorThickness = container.querySelector<HTMLInputElement>('[aria-label="Civil Floor Thickness"]')!;
+    await act(async () => change(floorThickness, "350"));
     expect(onUpdateCivilReference).toHaveBeenCalledWith(item.id, expect.objectContaining({
       positionMm: expect.objectContaining({ zMm: -350 }),
       sizeMm: expect.objectContaining({ heightMm: 350 })

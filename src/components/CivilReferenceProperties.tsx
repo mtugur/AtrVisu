@@ -273,9 +273,9 @@ export function CivilReferenceProperties({
             />
           </label>
           <label className="property-field">
-            <span>Depth / Thickness (mm)</span>
+            <span>{isFloorArea ? "Plan Depth (mm)" : "Depth / Thickness (mm)"}</span>
             <NumericInput
-              ariaLabel="Civil Depth"
+              ariaLabel={isFloorArea ? "Civil Plan Depth" : "Civil Depth"}
               disabled={isLocked}
               rule={civilDepthRule}
               step="10"
@@ -285,9 +285,9 @@ export function CivilReferenceProperties({
             />
           </label>
           <label className="property-field">
-            <span>Height (mm)</span>
+            <span>{isFloorArea ? "Floor Thickness (mm)" : "Height (mm)"}</span>
             <NumericInput
-              ariaLabel="Civil Height"
+              ariaLabel={isFloorArea ? "Civil Floor Thickness" : "Civil Height"}
               disabled={isLocked}
               rule={civilHeightRule}
               step="10"

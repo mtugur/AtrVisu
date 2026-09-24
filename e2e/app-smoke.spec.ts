@@ -5206,8 +5206,11 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
   const floorId = Object.keys(await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[0];
   await expect(properties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
-  await properties.getByLabel("Civil Height").fill("350");
-  await properties.getByLabel("Civil Height").press("Enter");
+  await expect(properties.getByLabel("Civil Plan Depth")).toBeVisible();
+  await expect(properties.getByLabel("Civil Depth")).toHaveCount(0);
+  await expect(properties.getByLabel("Civil Height")).toHaveCount(0);
+  await properties.getByLabel("Civil Floor Thickness").fill("350");
+  await properties.getByLabel("Civil Floor Thickness").press("Enter");
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(-350);
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
   await properties.getByLabel("Civil Opacity").fill("1");
