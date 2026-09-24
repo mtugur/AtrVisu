@@ -31,7 +31,7 @@ const normalizeLevel = (value: unknown): LayoutLevel | null => {
     id,
     name,
     elevationMm: Math.max(0, finiteNumber(candidate.elevationMm)),
-    systemLevel: Boolean(candidate.systemLevel),
+    systemLevel: id === GROUND_LEVEL_ID,
     createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : updatedAt,
     updatedAt
   };

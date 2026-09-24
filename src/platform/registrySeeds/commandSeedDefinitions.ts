@@ -69,7 +69,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("level.rename", "edit", "Rename Level", "Rename a project elevation datum.", true),
   createCommandSeed("level.setDatum", "edit", "Set Level Datum", "Change a Level datum while preserving assigned relative elevations.", true),
   createCommandSeed("level.delete", "edit", "Delete Level", "Delete an unused Level.", true),
-  createCommandSeed("level.setActive", "view", "Set Active Level", "Use a Level as the context for newly placed objects."),
+  createCommandSeed("level.setActive", "edit", "Set Active Level", "Use a Level as the context for newly placed objects.", true),
 
   createCommandSeed("alignment.alignSelection", "arrange", "Align Selection", "Align the selected layout entities.", true),
   createCommandSeed("arrange.alignLeft", "arrange", "Align Left", "Align selected layout entities by their left footprint edges.", true),

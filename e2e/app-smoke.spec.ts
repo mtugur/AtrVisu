@@ -5051,10 +5051,37 @@ test("Level datum drives active placement and relative elevation without red con
   const promptAnswers = ["Level 2", "6000"];
   const answerLevelPrompts = async (dialog: Dialog) => dialog.accept(promptAnswers.shift() ?? "");
   page.on("dialog", answerLevelPrompts);
-  await page.getByTestId("add-level").click();
+  await expectRuntimeCommandExecutionOnce(page, "level.add", () =>
+    page.getByTestId("add-level").click()
+  );
   page.off("dialog", answerLevelPrompts);
   const level2 = page.getByTestId(/level-row-level-/).filter({ hasText: "Level 2" });
   await expect(level2).toContainText("6000 mm datum | active");
+  await expectRuntimeCommandExecutionOnce(page, "level.setActive", () =>
+    page.getByTestId("level-row-ground").locator(".layer-main-button").click()
+  );
+  await expectRuntimeCommandExecutionOnce(page, "level.setActive", () =>
+    level2.locator(".layer-main-button").click()
+  );
+  page.once("dialog", (dialog) => dialog.accept("Level 2"));
+  await expectRuntimeCommandExecutionOnce(page, "level.rename", () =>
+    level2.getByRole("button", { name: "Rename Level 2" }).click()
+  );
+  const unusedPromptAnswers = ["Unused Level", "7000"];
+  const answerUnusedLevelPrompts = async (dialog: Dialog) => dialog.accept(unusedPromptAnswers.shift() ?? "");
+  page.on("dialog", answerUnusedLevelPrompts);
+  await expectRuntimeCommandExecutionOnce(page, "level.add", () =>
+    page.getByTestId("add-level").click()
+  );
+  page.off("dialog", answerUnusedLevelPrompts);
+  const unusedLevel = page.getByTestId(/level-row-level-/).filter({ hasText: "Unused Level" });
+  await expectRuntimeCommandExecutionOnce(page, "level.setActive", () =>
+    level2.locator(".layer-main-button").click()
+  );
+  await expectRuntimeCommandExecutionOnce(page, "level.delete", () =>
+    unusedLevel.getByRole("button", { name: "Delete Unused Level" }).click()
+  );
+  await expect(unusedLevel).toHaveCount(0);
 
   await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
   const machineProperties = page.getByLabel("Selected machine properties");
@@ -5076,7 +5103,9 @@ test("Level datum drives active placement and relative elevation without red con
 
   await openPrimaryDockPanel(page, "panel.levels");
   page.once("dialog", (dialog) => dialog.accept("6500"));
-  await level2.getByRole("button", { name: "Set Level 2 datum" }).click();
+  await expectRuntimeCommandExecutionOnce(page, "level.setDatum", () =>
+    level2.getByRole("button", { name: "Set Level 2 datum" }).click()
+  );
   await expect(civilProperties.getByTestId("civil-world-elevation")).toContainText("9500 mm");
   await page.keyboard.press("Control+z");
   await expect(civilProperties.getByTestId("civil-world-elevation")).toContainText("9000 mm");
@@ -5084,7 +5113,9 @@ test("Level datum drives active placement and relative elevation without red con
   await expect(civilProperties.getByTestId("civil-world-elevation")).toContainText("9500 mm");
   await openPrimaryDockPanel(page, "panel.levels");
   page.once("dialog", (dialog) => dialog.accept("25000"));
-  await level2.getByRole("button", { name: "Set Level 2 datum" }).click();
+  await expectRuntimeCommandExecutionOnce(page, "level.setDatum", () =>
+    level2.getByRole("button", { name: "Set Level 2 datum" }).click()
+  );
   await expect(level2).toContainText("25000 mm datum");
   await expect.poll(async () => Object.values(await readCanvasRecord<number>(page, "data-civil-elevations-mm")))
     .toContain(28000);

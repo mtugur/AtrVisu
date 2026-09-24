@@ -27,6 +27,40 @@ describe("Level datum authority", () => {
     expect(normalizeLevels(undefined)).toEqual([expect.objectContaining({ id: "ground", name: "Ground", elevationMm: 0, systemLevel: true })]);
   });
 
+  it("does not grant system authority to imported non-Ground Levels", () => {
+    const levels = normalizeLevels([
+      {
+        id: "imported-level",
+        name: "Imported Level",
+        elevationMm: 4200,
+        systemLevel: true,
+        createdAt: "2026-09-23T00:00:00.000Z",
+        updatedAt: "2026-09-23T00:00:00.000Z"
+      },
+      {
+        id: GROUND_LEVEL_ID,
+        name: "Tampered Ground",
+        elevationMm: 9000,
+        systemLevel: false,
+        createdAt: "2026-09-23T00:00:00.000Z",
+        updatedAt: "2026-09-23T00:00:00.000Z"
+      }
+    ]);
+    const imported = levels.find((level) => level.id === "imported-level");
+    const ground = levels.find((level) => level.id === GROUND_LEVEL_ID);
+
+    expect(imported).toMatchObject({ systemLevel: false, name: "Imported Level", elevationMm: 4200 });
+    expect(ground).toMatchObject({ systemLevel: true, name: "Ground", elevationMm: 0 });
+    expect(changeLevelDatum("imported-level", 5000, levels, [], [], layers)).toMatchObject({
+      ok: true,
+      levels: expect.arrayContaining([expect.objectContaining({
+        id: "imported-level",
+        elevationMm: 5000,
+        systemLevel: false
+      })])
+    });
+  });
+
   it("reassigns machines and civil items while preserving relative elevation", () => {
     const levels = normalizeLevels([level2]);
     const movedMachine = reassignEntityLevel("machine:m1", level2.id, levels, [machine()], [civil()], layers);
