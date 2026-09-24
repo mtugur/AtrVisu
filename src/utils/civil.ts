@@ -56,6 +56,30 @@ const readPositive = (value: unknown, fallback: number) => {
   return numeric > 0 ? numeric : fallback;
 };
 
+export const getCivilLevelAnchorWorldElevationMm = (item: CivilReferenceItem) =>
+  (item.positionMm.zMm ?? 0)
+  + (item.type === "floor-area" ? item.sizeMm.heightMm ?? 20 : 0);
+
+export const getCivilBottomWorldElevationFromAnchorMm = (
+  item: CivilReferenceItem,
+  anchorWorldElevationMm: number,
+  heightMm = item.sizeMm.heightMm ?? 20
+) => anchorWorldElevationMm - (item.type === "floor-area" ? heightMm : 0);
+
+export const resizeCivilHeightPreservingLevelAnchor = (
+  item: CivilReferenceItem,
+  heightMm: number
+): Pick<CivilReferenceItem, "positionMm" | "sizeMm"> => {
+  const anchorWorldElevationMm = getCivilLevelAnchorWorldElevationMm(item);
+  return {
+    positionMm: {
+      ...item.positionMm,
+      zMm: getCivilBottomWorldElevationFromAnchorMm(item, anchorWorldElevationMm, heightMm)
+    },
+    sizeMm: { ...item.sizeMm, heightMm }
+  };
+};
+
 export const normalizeCivilColorToken = (value: unknown, fallback: string) =>
   typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
     ? value.toLowerCase()
@@ -93,7 +117,9 @@ const normalizeCivilReference = (
     positionMm: {
       xMm: readFinite(position.xMm, 0),
       yMm: readFinite(position.yMm, 0),
-      zMm: Math.max(0, readFinite(position.zMm, 0))
+      zMm: type === "floor-area"
+        ? readFinite(position.zMm, 0)
+        : Math.max(0, readFinite(position.zMm, 0))
     },
     referencePoint: value.referencePoint === LAYOUT_REFERENCE_POINT ? LAYOUT_REFERENCE_POINT : undefined,
     coordinateReferenceVersion:

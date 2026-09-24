@@ -1,7 +1,12 @@
 import type { CivilReferenceItem, CivilReferenceType } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
 import type { LayoutLevel } from "../types/levels";
-import { getCivilTypeDefaults, getCivilTypeLabel } from "../utils/civil";
+import {
+  getCivilLevelAnchorWorldElevationMm,
+  getCivilTypeDefaults,
+  getCivilTypeLabel,
+  resizeCivilHeightPreservingLevelAnchor
+} from "../utils/civil";
 import { createNumericFieldRule } from "../utils/numericFieldRules";
 import { NumericInput } from "./common/NumericInput";
 
@@ -118,7 +123,10 @@ export function CivilReferenceProperties({
   onDeleteCivilReference
 }: CivilReferencePropertiesProps) {
   const assignedLevel = levels.find((level) => level.id === selectedCivilReference?.levelId) ?? levels[0];
-  const worldElevationMm = selectedCivilReference?.positionMm.zMm ?? 0;
+  const isFloorArea = selectedCivilReference?.type === "floor-area";
+  const worldElevationMm = selectedCivilReference
+    ? getCivilLevelAnchorWorldElevationMm(selectedCivilReference)
+    : 0;
   const relativeElevationMm = worldElevationMm - (assignedLevel?.elevationMm ?? 0);
   const updatePosition = (axis: "xMm" | "yMm" | "zMm", value: number | undefined) => {
     if (!selectedCivilReference || value === undefined || isLocked) {
@@ -134,6 +142,13 @@ export function CivilReferenceProperties({
 
   const updateSize = (axis: "widthMm" | "depthMm" | "heightMm", value: number | undefined) => {
     if (!selectedCivilReference || value === undefined || value <= 0 || isLocked) {
+      return;
+    }
+    if (axis === "heightMm" && selectedCivilReference.type === "floor-area") {
+      onUpdateCivilReference(
+        selectedCivilReference.id,
+        resizeCivilHeightPreservingLevelAnchor(selectedCivilReference, value)
+      );
       return;
     }
     onUpdateCivilReference(selectedCivilReference.id, {
@@ -230,9 +245,9 @@ export function CivilReferenceProperties({
             />
           </label>
           <label className="property-field">
-            <span>Elevation above Level (mm)</span>
+            <span>{isFloorArea ? "Top Elevation above Level (mm)" : "Elevation above Level (mm)"}</span>
             <NumericInput
-              ariaLabel="Civil Elevation above Level"
+              ariaLabel={isFloorArea ? "Civil Top Elevation above Level" : "Civil Elevation above Level"}
               disabled={isLocked}
               rule={civilElevationRule}
               step="10"
@@ -242,7 +257,7 @@ export function CivilReferenceProperties({
             />
           </label>
           <div className="property-readout" data-testid="civil-world-elevation">
-            <span>World Elevation</span>
+            <span>{isFloorArea ? "Top Surface World Elevation" : "World Elevation"}</span>
             <strong>{worldElevationMm} mm</strong>
           </div>
           <label className="property-field">

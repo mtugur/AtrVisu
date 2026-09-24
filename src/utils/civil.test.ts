@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CivilReferenceItem } from "../types/civil";
-import { createCivilReference, deleteCivilReference, normalizeCivilReferences, updateCivilReference } from "./civil";
+import {
+  createCivilReference,
+  deleteCivilReference,
+  getCivilLevelAnchorWorldElevationMm,
+  normalizeCivilReferences,
+  resizeCivilHeightPreservingLevelAnchor,
+  updateCivilReference
+} from "./civil";
 import { createDefaultLayer } from "./layers";
 import { adaptCivilReferenceToPlatformEntity } from "../platform/adapters";
 import { getCivilReferenceFootprintBoundsMm } from "./coordinateReference";
@@ -95,6 +102,22 @@ describe("civil references", () => {
     expect(item.sizeMm.widthMm).toBeGreaterThan(0);
     expect(item.sizeMm.depthMm).toBeGreaterThan(0);
     expect(item.sizeMm.heightMm).toBeGreaterThan(0);
+  });
+
+  it("preserves a signed Floor Area bottom and keeps its top fixed when thickness changes", () => {
+    const floor = {
+      ...createCivilReference("floor-area", { xMm: 0, yMm: 0 }),
+      positionMm: { xMm: 0, yMm: 0, zMm: -20 }
+    };
+    const [normalized] = normalizeCivilReferences([floor], [createDefaultLayer()]);
+
+    expect(normalized.positionMm.zMm).toBe(-20);
+    expect(getCivilLevelAnchorWorldElevationMm(normalized)).toBe(0);
+
+    const resized = resizeCivilHeightPreservingLevelAnchor(normalized, 350);
+    expect(resized.positionMm.zMm).toBe(-350);
+    expect(resized.sizeMm.heightMm).toBe(350);
+    expect(getCivilLevelAnchorWorldElevationMm({ ...normalized, ...resized })).toBe(0);
   });
 
   it("keeps legacy civil defaults and normalizes imported Beam and style values", () => {

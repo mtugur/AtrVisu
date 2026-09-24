@@ -20,6 +20,12 @@ const machine = (levelId = GROUND_LEVEL_ID, elevationMm = 3000): PlacedMachine =
 const civil = (levelId = GROUND_LEVEL_ID, elevationMm = 1000): CivilReferenceItem => ({
   id: "c1", type: "column", name: "Column", levelId, positionMm: { xMm: 0, yMm: 0, zMm: elevationMm }, sizeMm: { widthMm: 400, depthMm: 400, heightMm: 3000 }, rotationDeg: 0, createdAt: "now", updatedAt: "now"
 });
+const floor = (levelId = GROUND_LEVEL_ID, bottomWorldMm = -350, heightMm = 350): CivilReferenceItem => ({
+  id: "floor-1", type: "floor-area", name: "Floor Area", levelId,
+  positionMm: { xMm: 0, yMm: 0, zMm: bottomWorldMm },
+  sizeMm: { widthMm: 12000, depthMm: 8000, heightMm }, rotationDeg: 0,
+  createdAt: "now", updatedAt: "now"
+});
 const layers: LayoutLayer[] = [{ id: "default", name: "Default", visible: true, locked: false, createdAt: "now", updatedAt: "now" }];
 
 describe("Level datum authority", () => {
@@ -70,6 +76,19 @@ describe("Level datum authority", () => {
     expect(movedCivil.civilReferences[0]).toMatchObject({ levelId: "level-2", positionMm: { zMm: 7000 } });
   });
 
+  it("uses the Floor Area top surface as its Level-relative anchor", () => {
+    const levels = normalizeLevels([level2]);
+    const movedGroundFloor = reassignEntityLevel("civil:floor-1", level2.id, levels, [], [floor()], layers);
+    const movedFloor = movedGroundFloor.civilReferences[0];
+
+    expect(movedFloor.positionMm.zMm).toBe(5650);
+    expect((movedFloor.positionMm.zMm ?? 0) + (movedFloor.sizeMm.heightMm ?? 0)).toBe(6000);
+    expect(getRelativeElevationMm(
+      (movedFloor.positionMm.zMm ?? 0) + (movedFloor.sizeMm.heightMm ?? 0),
+      level2
+    )).toBe(0);
+  });
+
   it("changes a datum atomically and preserves every assigned relative elevation", () => {
     const levels = normalizeLevels([level2]);
     const result = changeLevelDatum("level-2", 7500, levels, [machine("level-2", 9000)], [civil("level-2", 7000)], layers);
@@ -79,6 +98,17 @@ describe("Level datum authority", () => {
     expect(result.levels.find((item) => item.id === "level-2")?.elevationMm).toBe(7500);
   });
 
+  it("moves a Floor Area rigidly with datum delta while preserving top-relative elevation and thickness", () => {
+    const levels = normalizeLevels([level2]);
+    const result = changeLevelDatum("level-2", 6500, levels, [], [floor("level-2", 5650)], layers);
+    const movedFloor = result.civilReferences[0];
+
+    expect(result.ok).toBe(true);
+    expect(movedFloor.positionMm.zMm).toBe(6150);
+    expect(movedFloor.sizeMm.heightMm).toBe(350);
+    expect((movedFloor.positionMm.zMm ?? 0) + (movedFloor.sizeMm.heightMm ?? 0)).toBe(6500);
+  });
+
   it("blocks the whole datum change when any assigned entity is locked", () => {
     const levels = normalizeLevels([level2]);
     const result = changeLevelDatum("level-2", 7500, levels, [machine("level-2", 9000)], [{ ...civil("level-2", 7000), locked: true }], layers);
@@ -86,5 +116,21 @@ describe("Level datum authority", () => {
     expect(result.machines[0].elevationMm).toBe(9000);
     expect(result.levels.find((item) => item.id === "level-2")?.elevationMm).toBe(6000);
     expect(result.reason).toContain("locked");
+  });
+
+  it("blocks the whole datum change when an assigned machine belongs to a locked Layer", () => {
+    const levels = normalizeLevels([level2]);
+    const lockedLayers = [
+      ...layers,
+      { id: "locked", name: "Locked", visible: true, locked: true, createdAt: "now", updatedAt: "now" }
+    ];
+    const assignedMachine = { ...machine("level-2", 6000), layerId: "locked" };
+    const assignedFloor = floor("level-2", 5650);
+    const result = changeLevelDatum("level-2", 7500, levels, [assignedMachine], [assignedFloor], lockedLayers);
+
+    expect(result).toMatchObject({ ok: false, reason: expect.stringContaining("locked") });
+    expect(result.levels.find((item) => item.id === "level-2")?.elevationMm).toBe(6000);
+    expect(result.machines[0].elevationMm).toBe(6000);
+    expect(result.civilReferences[0].positionMm.zMm).toBe(5650);
   });
 });

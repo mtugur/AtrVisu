@@ -176,6 +176,37 @@ describe("layout history", () => {
     ]);
   });
 
+  it("restores Floor Area thickness and top-anchor geometry through undo and redo", () => {
+    const initialFloor = {
+      id: "floor-1",
+      type: "floor-area" as const,
+      name: "Floor Area",
+      levelId: "ground",
+      positionMm: { xMm: 0, yMm: 0, zMm: -20 },
+      sizeMm: { widthMm: 12000, depthMm: 8000, heightMm: 20 },
+      rotationDeg: 0,
+      createdAt: "now",
+      updatedAt: "now"
+    };
+    const resizedFloor = {
+      ...initialFloor,
+      positionMm: { ...initialFloor.positionMm, zMm: -350 },
+      sizeMm: { ...initialFloor.sizeMm, heightMm: 350 }
+    };
+    const history = pushHistorySnapshot(createLayoutHistory(), [], [], [initialFloor]);
+
+    const undone = undoHistory(history, [], [], [resizedFloor]);
+    expect(undone?.civilReferences[0]).toMatchObject({
+      positionMm: { zMm: -20 },
+      sizeMm: { heightMm: 20 }
+    });
+    const redone = undone ? redoHistory(undone.history, [], [], undone.civilReferences) : null;
+    expect(redone?.civilReferences[0]).toMatchObject({
+      positionMm: { zMm: -350 },
+      sizeMm: { heightMm: 350 }
+    });
+  });
+
   it("records one machine instance rename transaction and restores it through undo and redo", () => {
     const initial = [machine("a", 0)];
     const renamed = [{ ...initial[0], displayName: "Machine - Line 2" }];

@@ -45,4 +45,35 @@ describe("CivilReferenceProperties style authority", () => {
     expect(opacity.disabled).toBe(true);
     await act(async () => root.unmount());
   });
+
+  it("projects Floor Area elevation from its top surface and preserves that top through thickness edits", async () => {
+    const item = createCivilReference("floor-area", { xMm: 0, yMm: 0 }, "2026-09-24T00:00:00.000Z");
+    item.levelId = "ground";
+    item.positionMm.zMm = -20;
+    const onUpdateCivilReference = vi.fn();
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(CivilReferenceProperties, {
+      selectedCivilReference: item,
+      layers: [],
+      levels: [{ id: "ground", name: "Ground", elevationMm: 0, systemLevel: true, createdAt: "now", updatedAt: "now" }],
+      isLocked: false,
+      onUpdateCivilReference,
+      onChangeLayer: vi.fn(),
+      onChangeLevel: vi.fn(),
+      onUpdateRelativeElevation: vi.fn(),
+      onDeleteCivilReference: vi.fn()
+    })));
+
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Top Elevation above Level"]')?.value).toBe("0");
+    expect(container.querySelector('[data-testid="civil-world-elevation"]')?.textContent).toContain("Top Surface World Elevation0 mm");
+    const height = container.querySelector<HTMLInputElement>('[aria-label="Civil Height"]')!;
+    await act(async () => change(height, "350"));
+    expect(onUpdateCivilReference).toHaveBeenCalledWith(item.id, expect.objectContaining({
+      positionMm: expect.objectContaining({ zMm: -350 }),
+      sizeMm: expect.objectContaining({ heightMm: 350 })
+    }));
+    expect(container.querySelector('[aria-label="Civil Elevation above Level"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
 });

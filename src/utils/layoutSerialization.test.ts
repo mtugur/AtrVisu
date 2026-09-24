@@ -105,6 +105,19 @@ describe("layout serialization", () => {
       style: { colorToken: "#12ab34", opacity: 0.37 }
     });
   });
+  it("round-trips a Ground Floor Area with a negative canonical bottom", () => {
+    const floor = createCivilReference("floor-area", { xMm: 0, yMm: 0 }, "2026-09-24T00:00:00.000Z");
+    floor.levelId = "ground";
+    floor.sizeMm.heightMm = 350;
+    floor.positionMm.zMm = -350;
+    const layout = createLayoutSnapshotFromMachines([], "2026-09-24T00:00:00.000Z", [], [], [], [], [floor]);
+    const serialized = JSON.stringify(layout);
+    const restored = civilReferencesFromLayout(JSON.parse(serialized) as AtrVisuLayout, layersFromLayout(layout))[0];
+
+    expect(layout.civilReferences?.[0].positionMm.zMm).toBe(-350);
+    expect(restored.positionMm.zMm).toBe(-350);
+    expect((restored.positionMm.zMm ?? 0) + (restored.sizeMm.heightMm ?? 0)).toBe(0);
+  });
   it("exports unit metadata and preserves millimeter dimensions", () => {
     const layout = createLayoutSnapshotFromMachines(
       [createMachine()],

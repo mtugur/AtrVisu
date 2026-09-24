@@ -18,6 +18,8 @@ const capturePf2aEvidence = process.env.ATRVISU_CAPTURE_PF2A_EVIDENCE === "1";
 const pf2aEvidenceDirectory = join(process.cwd(), "test-results", "pf2a-asset-browser-discovery");
 const capturePf3aEvidence = process.env.ATRVISU_CAPTURE_PF3A_EVIDENCE === "1";
 const pf3aEvidenceDirectory = join(process.cwd(), "test-results", "pf3a-global-iconography-density");
+const captureP1Bld2Evidence = process.env.ATRVISU_CAPTURE_P1_BLD2_EVIDENCE === "1";
+const p1Bld2EvidenceDirectory = join(process.cwd(), "test-results", "p1-bld2-level-datum");
 
 const capturePf2aScreenshot = async (page: Page, fileName: string) => {
   if (!capturePf2aEvidence) {
@@ -42,6 +44,12 @@ const capturePf3aScreenshot = async (page: Page, fileName: string) => {
   if (!capturePf3aEvidence) return;
   await mkdir(pf3aEvidenceDirectory, { recursive: true });
   await page.screenshot({ path: join(pf3aEvidenceDirectory, fileName), fullPage: false });
+};
+
+const captureP1Bld2Screenshot = async (page: Page, fileName: string) => {
+  if (!captureP1Bld2Evidence) return;
+  await mkdir(p1Bld2EvidenceDirectory, { recursive: true });
+  await page.screenshot({ path: join(p1Bld2EvidenceDirectory, fileName), fullPage: false });
 };
 
 const expectExactHeadServer = async (page: Page) => {
@@ -5122,6 +5130,147 @@ test("Level datum drives active placement and relative elevation without red con
   page.once("dialog", (dialog) => dialog.accept());
   await level2.getByRole("button", { name: "Delete Level 2" }).click();
   await expect(level2).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("locked Machine Layer rejects Level datum atomically through the real panel workflow", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+
+  await openPrimaryDockPanel(page, "panel.levels");
+  const levelPrompts = ["Level 2", "6000"];
+  const answerLevelPrompts = async (dialog: Dialog) => dialog.accept(levelPrompts.shift() ?? "");
+  page.on("dialog", answerLevelPrompts);
+  await page.getByTestId("add-level").click();
+  page.off("dialog", answerLevelPrompts);
+  const level2 = page.getByTestId(/level-row-level-/).filter({ hasText: "Level 2" });
+  await level2.locator(".layer-main-button").click();
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  const machineProperties = page.getByLabel("Selected machine properties");
+  await expect(machineProperties.getByTestId("machine-world-elevation")).toContainText("6000 mm");
+
+  await addBuildPrimitive(page, "Floor Area", "Planning");
+  const floorProperties = page.getByTestId("civil-reference-properties");
+  await expect(floorProperties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
+  await expect(floorProperties.getByTestId("civil-world-elevation")).toContainText("6000 mm");
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.getByRole("button", { name: /Flow Pack Machine/ }).click();
+  await openPrimaryDockPanel(page, "panel.layers");
+  page.once("dialog", (dialog) => dialog.accept("Locked Machine Layer"));
+  await page.getByTestId("add-layer").click();
+  await machineProperties.getByLabel("Layer").selectOption({ label: "Locked Machine Layer" });
+  const lockedLayer = page.locator(".layer-row").filter({ hasText: "Locked Machine Layer" });
+  await lockedLayer.getByRole("button", { name: "Lock Locked Machine Layer", exact: true }).click();
+  await expect(machineProperties.getByLabel("Layer")).toBeDisabled();
+
+  const before = await getRuntimeViewportSnapshot(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const machineElevationsBefore = await readCanvasRecord<number>(page, "data-machine-elevations-mm");
+  const civilElevationsBefore = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
+  let rejectionMessage = "";
+  const answerDatumAndRejection = async (dialog: Dialog) => {
+    if (dialog.type() === "prompt") {
+      await dialog.accept("6500");
+      return;
+    }
+    rejectionMessage = dialog.message();
+    await dialog.accept();
+  };
+  page.on("dialog", answerDatumAndRejection);
+  await openPrimaryDockPanel(page, "panel.levels");
+  await level2.getByRole("button", { name: "Set Level 2 datum" }).click();
+  await expect.poll(() => rejectionMessage).toContain("assigned entity is locked");
+  page.off("dialog", answerDatumAndRejection);
+
+  await expect(level2).toContainText("6000 mm datum");
+  await expect(canvas).toHaveAttribute("data-machine-elevations-mm", JSON.stringify(machineElevationsBefore));
+  await expect(canvas).toHaveAttribute("data-civil-elevations-mm", JSON.stringify(civilElevationsBefore));
+  const after = await getRuntimeViewportSnapshot(page);
+  expect(after.invariants.undoDepth).toBe(before.invariants.undoDepth);
+  expect(after.invariants.undoStack).toEqual(before.invariants.undoStack);
+  expect(errors).toEqual([]);
+});
+
+test("Floor Area uses the Level FFL top anchor and preserves physical world depth", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+
+  await addBuildPrimitive(page, "Floor Area", "Planning");
+  const properties = page.getByTestId("civil-reference-properties");
+  await expect.poll(async () => Object.keys(
+    await readCanvasRecord<number>(page, "data-civil-elevations-mm")
+  ).length).toBe(1);
+  const floorId = Object.keys(await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[0];
+  await expect(properties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
+  await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await properties.getByLabel("Civil Height").fill("350");
+  await properties.getByLabel("Civil Height").press("Enter");
+  await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(-350);
+  await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await properties.getByLabel("Civil Opacity").fill("1");
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  const machineId = Object.keys(await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[0];
+  await expect.poll(async () => (await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[machineId]).toBe(0);
+  await addBuildPrimitive(page, "Beam", "Structure");
+  const civilElevations = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
+  expect(civilElevations[floorId]).toBe(-350);
+  expect(Object.values(civilElevations)).toContain(3000);
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective", alpha: Math.PI / 4, beta: 0.35, radius: 34,
+    targetX: -2, targetY: 0, targetZ: -2
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  await captureP1Bld2Screenshot(page, "01-opaque-floor-top-oblique.png");
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective", alpha: Math.PI / 4, beta: 2.7, radius: 34,
+    targetX: -2, targetY: 0, targetZ: -2
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  await captureP1Bld2Screenshot(page, "02-opaque-floor-below.png");
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.locator(`[data-entity-id="civil:${floorId}"]`).click();
+  await properties.getByLabel("Civil Opacity").fill("0.35");
+  await expect.poll(async () =>
+    (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[floorId]?.opacity
+  ).toBeCloseTo(0.35);
+
+  await openPrimaryDockPanel(page, "panel.levels");
+  const levelPrompts = ["Level 2", "6000"];
+  const answerLevelPrompts = async (dialog: Dialog) => dialog.accept(levelPrompts.shift() ?? "");
+  page.on("dialog", answerLevelPrompts);
+  await page.getByTestId("add-level").click();
+  page.off("dialog", answerLevelPrompts);
+  const level2 = page.getByTestId(/level-row-level-/).filter({ hasText: "Level 2" });
+  await level2.locator(".layer-main-button").click();
+
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.locator(`[data-entity-id="civil:${floorId}"]`).click();
+  await properties.getByLabel("Civil Level").selectOption({ label: "Level 2 (6000 mm)" });
+  await expect(properties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
+  await expect(properties.getByTestId("civil-world-elevation")).toContainText("6000 mm");
+  await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(5650);
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective", alpha: Math.PI / 4, beta: Math.PI / 3, radius: 34,
+    targetX: -2, targetY: 0, targetZ: -2
+  })).toBe(true);
+  await expect.poll(async () => Boolean((await readCanvasRecord<ScreenPoint>(page, "data-civil-screen-points"))[floorId])).toBe(true);
+  const dragPoint = (await readCanvasRecord<ScreenPoint>(page, "data-civil-screen-points"))[floorId];
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  const elevationBeforeDrag = (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId];
+  await page.mouse.move(canvasBox!.x + dragPoint.x, canvasBox!.y + dragPoint.y);
+  await page.mouse.down();
+  await page.mouse.move(canvasBox!.x + dragPoint.x + 24, canvasBox!.y + dragPoint.y + 12, { steps: 6 });
+  await page.mouse.up();
+  await expect(canvas).toHaveAttribute("data-last-scene-drag-result", "applied");
+  expect((await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(elevationBeforeDrag);
   expect(errors).toEqual([]);
 });
 

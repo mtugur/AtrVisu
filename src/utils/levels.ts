@@ -2,6 +2,10 @@ import type { CivilReferenceItem } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
 import type { LayoutLevel } from "../types/levels";
 import type { PlacedMachine } from "../types/machine";
+import {
+  getCivilBottomWorldElevationFromAnchorMm,
+  getCivilLevelAnchorWorldElevationMm
+} from "./civil";
 import { isLayerLocked } from "./layers";
 
 export const GROUND_LEVEL_ID = "ground";
@@ -125,12 +129,20 @@ export const reassignEntityLevel = (
     if (!civil) return { ok: false, machines, civilReferences, reason: "The selected civil item no longer exists." };
     if (civilLocked(civil, layers)) return { ok: false, machines, civilReferences, reason: "The selected civil item is locked." };
     const sourceLevel = getLevel(civil.levelId, levels);
-    const relative = getRelativeElevationMm(civil.positionMm.zMm ?? 0, sourceLevel);
+    const relative = getRelativeElevationMm(getCivilLevelAnchorWorldElevationMm(civil), sourceLevel);
+    const targetAnchorWorldElevationMm = getWorldElevationMm(relative, targetLevel);
     return {
       ok: true,
       machines,
       civilReferences: civilReferences.map((item) => item.id === id
-        ? { ...item, levelId: targetLevel.id, positionMm: { ...item.positionMm, zMm: getWorldElevationMm(relative, targetLevel) } }
+        ? {
+            ...item,
+            levelId: targetLevel.id,
+            positionMm: {
+              ...item.positionMm,
+              zMm: getCivilBottomWorldElevationFromAnchorMm(item, targetAnchorWorldElevationMm)
+            }
+          }
         : item)
     };
   }

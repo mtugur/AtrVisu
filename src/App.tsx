@@ -128,6 +128,7 @@ import {
 import {
   createCivilReference,
   deleteCivilReference,
+  getCivilBottomWorldElevationFromAnchorMm,
   getVisibleCivilReferences,
   normalizeCivilReferences,
   updateCivilReference
@@ -2409,11 +2410,11 @@ export function App() {
       return;
     }
     markLayoutChanged();
-    setLayers((current) =>
-      current.map((layer) =>
-        layer.id === layerId ? { ...layer, locked: !layer.locked, updatedAt: new Date().toISOString() } : layer
-      )
+    const nextLayers = layersRef.current.map((layer) =>
+      layer.id === layerId ? { ...layer, locked: !layer.locked, updatedAt: new Date().toISOString() } : layer
     );
+    layersRef.current = nextLayers;
+    setLayers(nextLayers);
   }, [markLayoutChanged]);
 
   const removeLayer = useCallback((layerId: string) => {
@@ -2452,9 +2453,11 @@ export function App() {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) =>
-      current.map((item) => item.instanceId === instanceId ? { ...item, layerId: getLayerId(layerId, layersRef.current) } : item)
+    const nextMachines = placedMachinesRef.current.map((item) =>
+      item.instanceId === instanceId ? { ...item, layerId: getLayerId(layerId, layersRef.current) } : item
     );
+    placedMachinesRef.current = nextMachines;
+    setPlacedMachines(nextMachines);
   }, [markLayoutChanged]);
 
   const changeAnnotationLayer = useCallback((annotationId: string, layerId: string) => {
@@ -3156,7 +3159,10 @@ export function App() {
       levelId: activeLevel.id,
       positionMm: {
         ...baseItem.positionMm,
-        zMm: activeLevel.elevationMm + (baseItem.positionMm.zMm ?? 0)
+        zMm: getCivilBottomWorldElevationFromAnchorMm(
+          baseItem,
+          activeLevel.elevationMm + (baseItem.positionMm.zMm ?? 0)
+        )
       }
     };
     markLayoutChanged();
@@ -3197,7 +3203,13 @@ export function App() {
     if (!item || item.locked || isLayerLocked(item.layerId, layersRef.current)) return;
     const level = getLevel(item.levelId, levelsRef.current);
     updateSelectedCivilReference(id, {
-      positionMm: { ...item.positionMm, zMm: getWorldElevationMm(relativeElevationMm, level) }
+      positionMm: {
+        ...item.positionMm,
+        zMm: getCivilBottomWorldElevationFromAnchorMm(
+          item,
+          getWorldElevationMm(relativeElevationMm, level)
+        )
+      }
     });
   }, [updateMachine, updateSelectedCivilReference]);
 
