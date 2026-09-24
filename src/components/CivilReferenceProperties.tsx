@@ -1,5 +1,6 @@
 import type { CivilReferenceItem, CivilReferenceType } from "../types/civil";
 import type { LayoutLayer } from "../types/layers";
+import type { LayoutLevel } from "../types/levels";
 import { getCivilTypeDefaults, getCivilTypeLabel } from "../utils/civil";
 import { createNumericFieldRule } from "../utils/numericFieldRules";
 import { NumericInput } from "./common/NumericInput";
@@ -7,9 +8,12 @@ import { NumericInput } from "./common/NumericInput";
 type CivilReferencePropertiesProps = {
   selectedCivilReference?: CivilReferenceItem;
   layers: LayoutLayer[];
+  levels: readonly LayoutLevel[];
   isLocked: boolean;
   onUpdateCivilReference: (id: string, updates: Partial<CivilReferenceItem>, options?: { recordHistory?: boolean }) => void;
   onChangeLayer: (id: string, layerId: string) => void;
+  onChangeLevel: (id: string, levelId: string) => void;
+  onUpdateRelativeElevation: (id: string, relativeElevationMm: number) => void;
   onDeleteCivilReference: (id: string) => void;
 };
 
@@ -105,11 +109,17 @@ const civilRotationRule = createNumericFieldRule({
 export function CivilReferenceProperties({
   selectedCivilReference,
   layers,
+  levels,
   isLocked,
   onUpdateCivilReference,
   onChangeLayer,
+  onChangeLevel,
+  onUpdateRelativeElevation,
   onDeleteCivilReference
 }: CivilReferencePropertiesProps) {
+  const assignedLevel = levels.find((level) => level.id === selectedCivilReference?.levelId) ?? levels[0];
+  const worldElevationMm = selectedCivilReference?.positionMm.zMm ?? 0;
+  const relativeElevationMm = worldElevationMm - (assignedLevel?.elevationMm ?? 0);
   const updatePosition = (axis: "xMm" | "yMm" | "zMm", value: number | undefined) => {
     if (!selectedCivilReference || value === undefined || isLocked) {
       return;
@@ -183,6 +193,17 @@ export function CivilReferenceProperties({
             <p className="layer-lock-note">This civil reference is locked. Movement, editing, and delete are disabled.</p>
           ) : null}
           <label className="property-field">
+            <span>Level</span>
+            <select
+              aria-label="Civil Level"
+              value={assignedLevel?.id ?? "ground"}
+              disabled={isLocked}
+              onChange={(event) => onChangeLevel(selectedCivilReference.id, event.target.value)}
+            >
+              {levels.map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+            </select>
+          </label>
+          <label className="property-field">
             <span>Plan X (mm)</span>
             <NumericInput
               ariaLabel="Civil Plan X"
@@ -209,17 +230,21 @@ export function CivilReferenceProperties({
             />
           </label>
           <label className="property-field">
-            <span>Elevation (mm)</span>
+            <span>Elevation above Level (mm)</span>
             <NumericInput
-              ariaLabel="Civil Elevation"
+              ariaLabel="Civil Elevation above Level"
               disabled={isLocked}
               rule={civilElevationRule}
               step="10"
-              value={selectedCivilReference.positionMm.zMm ?? 0}
-              onChange={(value) => updatePosition("zMm", value)}
-              onCommit={(value) => updatePosition("zMm", value)}
+              value={relativeElevationMm}
+              onChange={(value) => onUpdateRelativeElevation(selectedCivilReference.id, value)}
+              onCommit={(value) => value !== undefined && onUpdateRelativeElevation(selectedCivilReference.id, value)}
             />
           </label>
+          <div className="property-readout" data-testid="civil-world-elevation">
+            <span>World Elevation</span>
+            <strong>{worldElevationMm} mm</strong>
+          </div>
           <label className="property-field">
             <span>Width / Length (mm)</span>
             <NumericInput

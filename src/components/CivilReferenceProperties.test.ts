@@ -23,9 +23,12 @@ describe("CivilReferenceProperties style authority", () => {
     const render = async (isLocked: boolean) => act(async () => root.render(createElement(CivilReferenceProperties, {
       selectedCivilReference: item,
       layers: [],
+      levels: [{ id: "ground", name: "Ground", elevationMm: 0, systemLevel: true, createdAt: "now", updatedAt: "now" }],
       isLocked,
       onUpdateCivilReference,
       onChangeLayer: vi.fn(),
+      onChangeLevel: vi.fn(),
+      onUpdateRelativeElevation: vi.fn(),
       onDeleteCivilReference: vi.fn()
     })));
     await render(false);

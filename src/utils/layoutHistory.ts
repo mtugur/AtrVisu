@@ -5,6 +5,8 @@ import type { ObjectGroup } from "../types/groups";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
 import type { LayoutViewpoint } from "../types/viewpoints";
+import type { LayoutLevel } from "../types/levels";
+import { GROUND_LEVEL_ID, normalizeLevels } from "./levels";
 
 export const DEFAULT_HISTORY_LIMIT = 50;
 
@@ -56,13 +58,20 @@ export const cloneGroups = (groups: ObjectGroup[]): ObjectGroup[] => {
   return JSON.parse(JSON.stringify(groups)) as ObjectGroup[];
 };
 
+export const cloneLevels = (levels: LayoutLevel[]): LayoutLevel[] => {
+  if (typeof structuredClone === "function") return structuredClone(levels) as LayoutLevel[];
+  return JSON.parse(JSON.stringify(levels)) as LayoutLevel[];
+};
+
 const toHistorySnapshot = (
   snapshot: PlacedMachine[] | LayoutHistorySnapshot,
   annotations: AnnotationObject[] = [],
   civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
-  groups: ObjectGroup[] = []
+  groups: ObjectGroup[] = [],
+  levels: LayoutLevel[] = [],
+  activeLevelId = GROUND_LEVEL_ID
 ): LayoutHistorySnapshot =>
   Array.isArray(snapshot)
     ? {
@@ -71,7 +80,9 @@ const toHistorySnapshot = (
         civilReferences: cloneCivilReferences(civilReferences),
         layers: cloneLayers(layers),
         groups: cloneGroups(groups),
-        viewpoints: cloneViewpoints(viewpoints)
+        viewpoints: cloneViewpoints(viewpoints),
+        levels: cloneLevels(normalizeLevels(levels)),
+        activeLevelId
       }
     : {
         machines: clonePlacedMachines(snapshot.machines),
@@ -79,7 +90,9 @@ const toHistorySnapshot = (
         civilReferences: cloneCivilReferences(snapshot.civilReferences ?? []),
         layers: cloneLayers(snapshot.layers ?? []),
         groups: cloneGroups(snapshot.groups ?? []),
-        viewpoints: cloneViewpoints(snapshot.viewpoints ?? [])
+        viewpoints: cloneViewpoints(snapshot.viewpoints ?? []),
+        levels: cloneLevels(normalizeLevels(snapshot.levels)),
+        activeLevelId: snapshot.activeLevelId ?? GROUND_LEVEL_ID
       };
 
 export const createLayoutHistory = (limit = DEFAULT_HISTORY_LIMIT): LayoutHistoryState => ({
@@ -95,10 +108,12 @@ export const pushHistorySnapshot = (
   civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
-  groups: ObjectGroup[] = []
+  groups: ObjectGroup[] = [],
+  levels: LayoutLevel[] = [],
+  activeLevelId = GROUND_LEVEL_ID
 ): LayoutHistoryState => ({
   ...history,
-  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, civilReferences, viewpoints, layers, groups)].slice(-history.limit),
+  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId)].slice(-history.limit),
   redoStack: []
 });
 
@@ -109,7 +124,9 @@ export const undoHistory = (
   civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
-  groups: ObjectGroup[] = []
+  groups: ObjectGroup[] = [],
+  levels: LayoutLevel[] = [],
+  activeLevelId = GROUND_LEVEL_ID
 ): {
   history: LayoutHistoryState;
   machines: PlacedMachine[];
@@ -118,6 +135,8 @@ export const undoHistory = (
   layers: LayoutLayer[];
   groups: ObjectGroup[];
   viewpoints: LayoutViewpoint[];
+  levels: LayoutLevel[];
+  activeLevelId: string;
 } | null => {
   const previous = history.undoStack[history.undoStack.length - 1];
   if (!previous) {
@@ -128,14 +147,16 @@ export const undoHistory = (
     history: {
       ...history,
       undoStack: history.undoStack.slice(0, -1),
-      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups)].slice(-history.limit)
+      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId)].slice(-history.limit)
     },
     machines: clonePlacedMachines(previous.machines),
     annotations: cloneAnnotations(previous.annotations),
     civilReferences: cloneCivilReferences(previous.civilReferences ?? []),
     layers: cloneLayers(previous.layers ?? []),
     groups: cloneGroups(previous.groups ?? []),
-    viewpoints: cloneViewpoints(previous.viewpoints ?? [])
+    viewpoints: cloneViewpoints(previous.viewpoints ?? []),
+    levels: cloneLevels(normalizeLevels(previous.levels)),
+    activeLevelId: previous.activeLevelId ?? GROUND_LEVEL_ID
   };
 };
 
@@ -146,7 +167,9 @@ export const redoHistory = (
   civilReferences: CivilReferenceItem[] = [],
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
-  groups: ObjectGroup[] = []
+  groups: ObjectGroup[] = [],
+  levels: LayoutLevel[] = [],
+  activeLevelId = GROUND_LEVEL_ID
 ): {
   history: LayoutHistoryState;
   machines: PlacedMachine[];
@@ -155,6 +178,8 @@ export const redoHistory = (
   layers: LayoutLayer[];
   groups: ObjectGroup[];
   viewpoints: LayoutViewpoint[];
+  levels: LayoutLevel[];
+  activeLevelId: string;
 } | null => {
   const next = history.redoStack[history.redoStack.length - 1];
   if (!next) {
@@ -164,7 +189,7 @@ export const redoHistory = (
   return {
     history: {
       ...history,
-      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups)].slice(-history.limit),
+      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId)].slice(-history.limit),
       redoStack: history.redoStack.slice(0, -1)
     },
     machines: clonePlacedMachines(next.machines),
@@ -172,6 +197,8 @@ export const redoHistory = (
     civilReferences: cloneCivilReferences(next.civilReferences ?? []),
     layers: cloneLayers(next.layers ?? []),
     groups: cloneGroups(next.groups ?? []),
-    viewpoints: cloneViewpoints(next.viewpoints ?? [])
+    viewpoints: cloneViewpoints(next.viewpoints ?? []),
+    levels: cloneLevels(normalizeLevels(next.levels)),
+    activeLevelId: next.activeLevelId ?? GROUND_LEVEL_ID
   };
 };

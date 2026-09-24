@@ -4,7 +4,8 @@ import { createLegacyEntitySnapshot } from "../platform/adapters";
 import { evaluateAtomicMovement } from "../platform/runtimeSelection";
 import { getMachineRenderCenterMm } from "./coordinateReference";
 import { createCivilReference } from "./civil";
-import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
+import { activeLevelIdFromLayout, annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, levelsFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./layoutSerialization";
+import { createLayoutLevel, normalizeLevels } from "./levels";
 
 const createMachine = (): PlacedMachine => ({
   instanceId: "machine-1",
@@ -70,6 +71,26 @@ const createMachine = (): PlacedMachine => ({
 });
 
 describe("layout serialization", () => {
+  it("loads legacy layouts on Ground without changing canonical world elevation", () => {
+    const legacy = createLayoutSnapshotFromMachines([{ ...createMachine(), elevationMm: 2500 }]);
+    delete legacy.levels;
+    delete legacy.activeLevelId;
+    legacy.objects[0].levelId = undefined;
+    const restored = placedMachinesFromLayout(legacy);
+    expect(restored[0]).toMatchObject({ levelId: "ground", elevationMm: 2500 });
+    expect(levelsFromLayout(legacy)[0]).toMatchObject({ id: "ground", elevationMm: 0 });
+    expect(activeLevelIdFromLayout(legacy)).toBe("ground");
+  });
+
+  it("round-trips Levels, assignments, and canonical world elevation", () => {
+    const levels = normalizeLevels([createLayoutLevel("level-2", "Level 2", 6000, "2026-09-23T00:00:00.000Z")]);
+    const source = { ...createMachine(), levelId: "level-2", elevationMm: 6500 };
+    const layout = createLayoutSnapshotFromMachines([source], "2026-09-23T00:00:00.000Z", [], [], [], [], [], levels, "level-2");
+    const restored = placedMachinesFromLayout(layout)[0];
+    expect(restored).toMatchObject({ levelId: "level-2", elevationMm: 6500 });
+    expect(levelsFromLayout(layout).find((level) => level.id === "level-2")?.elevationMm).toBe(6000);
+    expect(activeLevelIdFromLayout(layout)).toBe("level-2");
+  });
   it("round-trips a styled Beam through canonical layout export and import", () => {
     const beam = createCivilReference("beam", { xMm: -250, yMm: 1300 }, "2026-09-21T00:00:00.000Z");
     beam.style = { colorToken: "#12ab34", opacity: 0.37 };

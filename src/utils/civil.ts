@@ -105,6 +105,7 @@ const normalizeCivilReference = (
     },
     rotationDeg: readFinite(value.rotationDeg, 0),
     layerId: getLayerId(typeof value.layerId === "string" ? value.layerId : undefined, layers),
+    levelId: typeof value.levelId === "string" && value.levelId.trim() ? value.levelId.trim() : undefined,
     locked: value.locked === true,
     visible: value.visible !== false,
     style: {

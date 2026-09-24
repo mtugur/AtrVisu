@@ -4,6 +4,7 @@ import type { CivilReferenceItem } from "../types/civil";
 import type { ObjectGroup } from "../types/groups";
 import type { LayoutLayer } from "../types/layers";
 import type { LayoutViewpoint } from "../types/viewpoints";
+import type { LayoutLevel } from "../types/levels";
 import {
   ATRVISU_UNIT_SYSTEM,
   getMachineDimensionsMm,
@@ -23,6 +24,7 @@ import { normalizeCivilReferences } from "./civil";
 import { normalizeGroups } from "./groups";
 import { getLayerId, normalizeLayers } from "./layers";
 import { normalizeViewpoints } from "./viewpoints";
+import { getLevelId, normalizeLevels, GROUND_LEVEL_ID } from "./levels";
 
 const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
 
@@ -33,11 +35,15 @@ export const createLayoutSnapshotFromMachines = (
   viewpoints: LayoutViewpoint[] = [],
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = [],
-  civilReferences: CivilReferenceItem[] = []
+  civilReferences: CivilReferenceItem[] = [],
+  levels: LayoutLevel[] = [],
+  activeLevelId = GROUND_LEVEL_ID
 ): AtrVisuLayout => {
   const normalizedLayers = normalizeLayers(layers);
+  const normalizedLevels = normalizeLevels(levels);
   const normalizedCivilReferences = normalizeCivilReferences(civilReferences, normalizedLayers).map((item) => ({
     ...item,
+    levelId: getLevelId(item.levelId, normalizedLevels),
     referencePoint: LAYOUT_REFERENCE_POINT,
     coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION
   }));
@@ -53,6 +59,8 @@ export const createLayoutSnapshotFromMachines = (
     layers: normalizedLayers,
     groups: normalizedGroups,
     civilReferences: normalizedCivilReferences,
+    levels: normalizedLevels,
+    activeLevelId: getLevelId(activeLevelId, normalizedLevels),
     objects: placedMachines.map((machine) => {
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definition));
     const snapshot = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definitionSnapshot));
@@ -70,6 +78,7 @@ export const createLayoutSnapshotFromMachines = (
       machineDefinitionId: machine.machineDefinitionId,
       definitionSnapshot: snapshot,
       layerId: getLayerId(machine.layerId, normalizedLayers),
+      levelId: getLevelId(machine.levelId, normalizedLevels),
       name: definition.name,
       category: definition.category,
       ...dimensionsMm,
@@ -108,12 +117,14 @@ export const layersFromLayout = (layout: AtrVisuLayout): LayoutLayer[] =>
 
 export const civilReferencesFromLayout = (layout: AtrVisuLayout, layers: LayoutLayer[]): CivilReferenceItem[] =>
   normalizeCivilReferences(layout.civilReferences, layers).map((item) => {
+    const levelId = getLevelId(item.levelId, normalizeLevels(layout.levels));
     if (
       layout.coordinateReferenceVersion === COORDINATE_REFERENCE_VERSION ||
       item.coordinateReferenceVersion === COORDINATE_REFERENCE_VERSION
     ) {
       return {
         ...item,
+        levelId,
         referencePoint: LAYOUT_REFERENCE_POINT,
         coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION
       };
@@ -121,6 +132,7 @@ export const civilReferencesFromLayout = (layout: AtrVisuLayout, layers: LayoutL
 
     return {
       ...item,
+      levelId,
       positionMm: {
         ...item.positionMm,
         ...getReferenceFromCenterMm(item.positionMm, item.sizeMm, item.rotationDeg)
@@ -136,8 +148,15 @@ export const groupsFromLayout = (layout: AtrVisuLayout, machines: PlacedMachine[
 export const viewpointsFromLayout = (layout: AtrVisuLayout): LayoutViewpoint[] =>
   normalizeViewpoints(layout.viewpoints);
 
+export const levelsFromLayout = (layout: AtrVisuLayout): LayoutLevel[] =>
+  normalizeLevels(layout.levels);
+
+export const activeLevelIdFromLayout = (layout: AtrVisuLayout): string =>
+  getLevelId(layout.activeLevelId, levelsFromLayout(layout));
+
 export const placedMachinesFromLayout = (layout: AtrVisuLayout): PlacedMachine[] => {
   const layers = normalizeLayers(layout.layers);
+  const levels = normalizeLevels(layout.levels);
   return layout.objects.map((object) => {
     const rawDefinition = normalizeMachineDefinitionDimensions({
       ...(object.definitionSnapshot ?? {
@@ -180,6 +199,7 @@ export const placedMachinesFromLayout = (layout: AtrVisuLayout): PlacedMachine[]
       definitionSnapshot: definition,
       definition,
       layerId: getLayerId(object.layerId, layers),
+      levelId: getLevelId(object.levelId, levels),
       position: {
         x: mmToMeters(referencePositionMm.xMm),
         z: mmToMeters(referencePositionMm.yMm)

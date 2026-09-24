@@ -5,6 +5,7 @@ import type { CivilReferenceItem } from "./civil";
 import type { ObjectGroup } from "./groups";
 import type { LayoutLayer } from "./layers";
 import type { LayoutViewpoint } from "./viewpoints";
+import type { LayoutLevel } from "./levels";
 
 export type MachineCategory = string;
 
@@ -97,6 +98,7 @@ export type PlacedMachine = {
   definitionSnapshot: MachineDefinition;
   definition: MachineDefinition;
   layerId?: string;
+  levelId?: string;
   position: {
     x: number;
     z: number;
@@ -120,6 +122,7 @@ export type LayoutObject = {
   machineDefinitionId: string;
   definitionSnapshot?: MachineDefinition;
   layerId?: string;
+  levelId?: string;
   name: string;
   category: MachineCategory;
   widthMm?: number;
@@ -161,6 +164,8 @@ export type AtrVisuLayout = {
   civilReferences?: CivilReferenceItem[];
   annotations?: AnnotationObject[];
   viewpoints?: LayoutViewpoint[];
+  levels?: LayoutLevel[];
+  activeLevelId?: string;
 };
 
 export type LibraryIndexEntry = {

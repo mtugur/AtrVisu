@@ -4,6 +4,7 @@ import type { CivilReferenceItem } from "./civil";
 import type { ObjectGroup } from "./groups";
 import type { LayoutLayer } from "./layers";
 import type { LayoutViewpoint } from "./viewpoints";
+import type { LayoutLevel } from "./levels";
 
 export type LayoutHistorySnapshot = {
   machines: PlacedMachine[];
@@ -12,6 +13,8 @@ export type LayoutHistorySnapshot = {
   layers: LayoutLayer[];
   groups: ObjectGroup[];
   viewpoints: LayoutViewpoint[];
+  levels: LayoutLevel[];
+  activeLevelId: string;
 };
 
 export type LayoutHistoryState = {

@@ -4,18 +4,18 @@
 | --- | --- | --- |
 | Exact base | PASS | Branch starts from main `e6c8170407a2d7c602970b02ca180c7a2baa373c`. |
 | Benchmark-first contract | PASS | Official Revit/Archicad evidence and ADR-003 committed before runtime implementation. |
-| Canonical Level domain | PENDING | One normalized layout Level collection; Ground is stable at 0 mm. |
-| Canonical elevation | PENDING | Existing Machine/Civil absolute elevation remains the only rendering/collision/export transform authority. |
-| Active Level placement | PENDING | New Machine/Build placement adds existing local/default elevation to Active Level datum. |
-| Inspector semantics | PENDING | Level, elevation above Level and read-only world elevation for Machine and Civil. |
-| Atomic datum edit | PENDING | Level plus all assigned Machine/Civil elevations update in one Undo/Redo transaction. |
-| Lock/deletion policy | PENDING | Any locked assigned entity blocks datum edit; Ground and assigned Levels cannot be deleted. |
-| Persistence compatibility | PENDING | Legacy layouts normalize to Ground unchanged; round-trip preserves Levels and assignments. |
-| Registered discoverability | PENDING | Level commands, `panel.levels`, Feature Access and Surface Inventory agree. |
-| PF-3A freeze | PENDING | ADR-001 body-drag behavior and accepted limitation remain unchanged. |
-| Console/runtime | PENDING | 25,000 mm Level and normal workflows remain finite with no blocker console output. |
-| Complete local gate | PENDING | Audit, dependency tree, governance, tokens, build, unit, Chromium and diff check. |
-| Exact-head CI | PENDING | Draft PR Quality Gate after normal push. |
+| Canonical Level domain | PASS | `LayoutLevel` plus `normalizeLevels()` provide one serialized collection; Ground is stable at 0 mm. |
+| Canonical elevation | PASS | Machine/Civil absolute elevation remains rendering/collision/export authority; relative elevation is derived only. |
+| Active Level placement | PASS | Chromium proves Machine local 0 -> world 6000 and Beam local 3000 -> world 9000 on active Level 2. |
+| Inspector semantics | PASS | Machine and Civil show Level, elevation above Level and read-only world elevation. |
+| Atomic datum edit | PASS | Domain/history and Chromium Undo/Redo cover Level plus assigned Machine/Civil movement in one snapshot. |
+| Lock/deletion policy | PASS | Pure lock tests reject datum mutation atomically; Chromium rejects deletion while assigned. |
+| Persistence compatibility | PASS | Legacy layouts normalize to Ground unchanged; serialization round-trip preserves Levels, assignments and world elevation. |
+| Registered discoverability | PASS | Five Level commands, `panel.levels`, Feature Access and Surface Inventory share the same runtime authority. |
+| PF-3A freeze | PASS | No BabylonScene, drag, snap or movement-solver source was changed; existing PF-3A regressions remain in the gate. |
+| Console/runtime | PASS | Focused Chromium proves 25,000 mm Level finite and console-clean; existing movement, native-asset and commercial-output regressions also pass when run in their focused phases. |
+| Complete local gate | PARTIAL | Audit 0, dependency tree, governance, 270-file token check, build, 162-file/1361-test unit suite and Level-focused Chromium pass. The aggregate local Chromium run remained bounded by pre-existing commercial-output/runtime-access timing under local GPU load; exact-head CI is the delivery authority. |
+| Exact-head CI | DELIVERY | The Draft PR exact-head Quality Gate records the final aggregate result without a post-CI source mutation. |
 | Contract Verified | PENDING | Independent review against ADR-003 and runtime evidence. |
 | Product Accepted | PENDING | Not requested before independent contract/runtime review. |
 

@@ -27,6 +27,7 @@ export type CivilReferenceItem = {
   };
   rotationDeg: number;
   layerId?: string;
+  levelId?: string;
   locked?: boolean;
   visible?: boolean;
   style?: {
