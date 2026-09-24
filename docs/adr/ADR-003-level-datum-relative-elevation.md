@@ -18,6 +18,12 @@ Machines currently store canonical world elevation in `PlacedMachine.elevationMm
 - Missing/invalid `levelId` resolves to Ground without changing canonical world elevation. No schema version bump or destructive migration is required.
 - Canonical world elevation remains `PlacedMachine.elevationMm` and `CivilReferenceItem.positionMm.zMm`. Rendering, collision, connection transforms, platform Entity transforms and exports continue to read those values.
 - Relative elevation is derived: `world elevation - assigned Level datum`. Editing relative elevation writes `Level datum + relative elevation` to the canonical world value.
+- A Level datum represents the finished floor/walking surface elevation (FFL), not the structural slab bottom.
+- `floor-area` remains Civil geometry and preserves `CivilReferenceItem.positionMm.zMm` as its canonical bottom-world elevation. Its Level-relative editing anchor is the top surface: `topWorldMm = positionMm.zMm + sizeMm.heightMm` and `topRelativeMm = topWorldMm - level.elevationMm`.
+- Editing a Floor Area top-relative elevation writes `positionMm.zMm = level.elevationMm + topRelativeMm - sizeMm.heightMm`. Changing Floor Area thickness preserves that top-world elevation and moves only the canonical bottom by the thickness delta.
+- New Floor Area placement uses top-relative `0 mm`, so its top surface equals the Active Level datum. A Machine at local elevation `0 mm` independently places its base at the same datum; no support-height, overlap or contact inference connects them.
+- Reassigning a Floor Area to another Level preserves its top-relative elevation. Changing its Level datum moves the entire Floor Area rigidly by the datum delta, preserving thickness and top-relative elevation.
+- A Ground-attached Floor Area may therefore have a negative finite canonical bottom-world elevation. This bounded signed world coordinate does not permit negative/basement Level datums, which remain out of scope.
 - Explicit entity reassignment preserves relative elevation and therefore moves world elevation by the difference between Level datums.
 - Changing a Level datum preserves each assigned entity's relative elevation and atomically changes the Level plus all assigned Machine/Civil world elevations in one history transaction.
 - Active Level is UI context persisted in the layout as `activeLevelId`. New Machine and Build instances receive that Level and add their asset/default local elevation to the active datum. Asset definitions remain unchanged.
@@ -25,7 +31,7 @@ Machines currently store canonical world elevation in `PlacedMachine.elevationMm
 - A datum edit or entity Level/elevation edit respects item and layer lock authority. If any assigned entity would be blocked, the complete datum change is rejected with a clear reason and no history/dirty mutation.
 - Ground cannot be deleted. A user Level with assigned Machine/Civil content cannot be deleted. Unused user Levels may be deleted; active deletion returns Active Level to Ground.
 - Levels are managed in one registered Primary Dock panel. Persistent mutations use registered Level commands and the existing App/history authority; there is no competing local persistent store.
-- A Floor Area remains Civil geometry only. It does not create, define or infer a Level.
+- A Floor Area remains Civil geometry only. It does not create, define or infer a Level, and it does not infer Machine support elevation.
 
 ## Command and Surface Contract
 
@@ -35,16 +41,18 @@ Entity Level and relative-elevation property edits use the canonical entity upda
 
 ## Interaction Contract
 
-- Inspector labels are unambiguous: `Level`, `Elevation above Level (mm)`, and read-only `World Elevation (mm)`.
+- Machine and non-Floor Civil Inspector labels remain `Level`, `Elevation above Level (mm)`, and read-only `World Elevation (mm)`.
+- Floor Area Inspector labels are `Level`, `Top Elevation above Level (mm)`, and read-only `Top Surface World Elevation (mm)`. The canonical bottom remains the serialized/rendered geometry authority, not a second editable elevation.
 - Changing the entity Level preserves its displayed elevation above Level.
+- Changing a Floor Area Level preserves its displayed top elevation above Level. Changing Floor Area thickness preserves its top surface world elevation.
 - Changing the Level datum preserves every assigned entity's elevation above Level.
-- Level datum and relative elevation are non-negative finite millimetre values in P1-BLD2. Basement/negative Levels are out of scope.
+- Level datum and user-entered relative elevation are non-negative finite millimetre values in P1-BLD2. A Floor Area canonical bottom may be signed only as the derived consequence of its top-surface anchor. Basement/negative Levels are out of scope.
 - Plan/body drag remains exactly ADR-001: one fixed picked-elevation horizontal plane, unchanged Elevation, rigid Group delta, continuous snap and one Undo transaction. No Level operation changes pointer mathematics.
 
 ## Forbidden Alternatives
 
-No Level-as-Library-asset, Level-as-Civil-item, Floor-Area inference, Z-position inference, Layer reuse, second relative-elevation store, visual-only offset, partial movement of locked content, silent reassignment on deletion, schema fork, BIM hosting, story visibility, clipping, basement Levels, movement fallback or PF-3B redesign.
+No Level-as-Library-asset, Level-as-Civil-item, Floor-Area-to-Level inference, Machine support-height inference, overlap/contact solver, automatic Floor Area Level creation, Z-position inference, Layer reuse, second relative-elevation store, visual-only offset, partial movement of locked content, silent reassignment on deletion, schema fork, BIM hosting, story visibility, clipping, basement Levels, movement fallback or PF-3B redesign.
 
 ## Acceptance
 
-Legacy layouts retain exact world elevations and normalize to Ground. New Machine/Build placement uses Active Level plus existing local/default elevation. Machine and Civil Inspectors derive and edit relative elevation. Reassignment and datum change preserve relative elevation. Datum change is one atomic Undo/Redo transaction and rejects any locked assigned content. Assigned Level deletion is blocked. Save/reload/export/import preserve Levels, assignments and canonical world elevation. A 25,000 mm Level remains finite and console-clean without changing ADR-001's accepted limitation.
+Legacy layouts retain exact world elevations and normalize to Ground. New Machine/Build placement uses Active Level plus existing local/default elevation, except Floor Area whose top surface defaults to the Active Level datum. Ground `0 mm` with a `350 mm` Floor Area yields bottom `-350 mm`, top `0 mm`, and Machine base `0 mm`; Level 2 `6000 mm` yields Floor bottom `5650 mm`, top `6000 mm`, and Machine base `6000 mm`. Machine/non-Floor Civil relative elevation and Floor Area top-relative elevation remain derived from canonical world geometry. Reassignment and datum change preserve the applicable relative anchor. Floor Area thickness edits preserve its top surface. Datum change is one atomic Undo/Redo transaction and rejects any locked assigned content. Assigned Level deletion is blocked. Save/reload/export/import preserve Levels, assignments, signed Floor Area bottoms and canonical world geometry. A 25,000 mm Level remains finite and console-clean without changing ADR-001's accepted limitation.
