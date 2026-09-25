@@ -1,20 +1,11 @@
-export type LevelDefinition = {
-  levelId: string;
+export type LayoutLevel = {
+  id: string;
   name: string;
   elevationMm: number;
-  floorHeightMm: number;
-  visible: boolean;
-  locked: boolean;
+  systemLevel?: boolean;
+  createdAt: string;
+  updatedAt: string;
 };
 
-export const DEFAULT_GROUND_LEVEL: LevelDefinition = {
-  levelId: "ground",
-  name: "Ground Floor",
-  elevationMm: 0,
-  floorHeightMm: 0,
-  visible: true,
-  locked: false
-};
-
-export const createDefaultGroundLevel = (): LevelDefinition => ({ ...DEFAULT_GROUND_LEVEL });
-
+/** @deprecated Use LayoutLevel and the normalized Ground datum authority. */
+export type LevelDefinition = LayoutLevel;

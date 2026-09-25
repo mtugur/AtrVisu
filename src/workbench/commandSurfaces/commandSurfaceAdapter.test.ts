@@ -146,6 +146,38 @@ describe("command surface adapter", () => {
     expect(insertIds.filter((commandId) => legacyCivilIds.includes(commandId))).toEqual([]);
   });
 
+  it("keeps payload-dependent Level commands registered and routed but out of the Command Palette", async () => {
+    const levelCommandIds = [
+      "level.add",
+      "level.rename",
+      "level.setDatum",
+      "level.delete",
+      "level.setActive"
+    ];
+    const { adapter, runtimeExecute } = createHarness({
+      metadataRegistry: {
+        ...metadataRegistry,
+        list: () => platformCommandSeedDefinitions
+      }
+    });
+    const paletteIds = adapter.getCommandPaletteItems().map((item) => item.commandId);
+
+    for (const commandId of levelCommandIds) {
+      expect(getPlatformCommandSeedById(commandId)).toBeDefined();
+      expect(adapter.getItem(commandId, "command-palette")).toBeUndefined();
+      expect(paletteIds).not.toContain(commandId);
+      await expect(adapter.execute(commandId)).resolves.toMatchObject({ handled: true });
+    }
+
+    expect(runtimeExecute.mock.calls.map(([commandId]) => commandId)).toEqual(levelCommandIds);
+    expect(paletteIds).toEqual(expect.arrayContaining([
+      "civil.addPrimitive",
+      "library.manager",
+      "view.toggleLabels",
+      "edit.undo"
+    ]));
+  });
+
   it("routes promoted Arrange actions to runtime or assembly authority without direct mutation", async () => {
     const { adapter, runtimeExecute, assemblyExecute } = createHarness();
     const runtimeArrangeIds = [

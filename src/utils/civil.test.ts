@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { CivilReferenceItem } from "../types/civil";
-import { createCivilReference, deleteCivilReference, normalizeCivilReferences, updateCivilReference } from "./civil";
+import {
+  createCivilReference,
+  deleteCivilReference,
+  getCivilLevelAnchorWorldElevationMm,
+  getCivilTypeTransitionUpdate,
+  normalizeCivilReferences,
+  resizeCivilHeightPreservingLevelAnchor,
+  updateCivilReference
+} from "./civil";
 import { createDefaultLayer } from "./layers";
 import { adaptCivilReferenceToPlatformEntity } from "../platform/adapters";
 import { getCivilReferenceFootprintBoundsMm } from "./coordinateReference";
@@ -95,6 +103,63 @@ describe("civil references", () => {
     expect(item.sizeMm.widthMm).toBeGreaterThan(0);
     expect(item.sizeMm.depthMm).toBeGreaterThan(0);
     expect(item.sizeMm.heightMm).toBeGreaterThan(0);
+  });
+
+  it("preserves a signed Floor Area bottom and keeps its top fixed when thickness changes", () => {
+    const floor = {
+      ...createCivilReference("floor-area", { xMm: 0, yMm: 0 }),
+      positionMm: { xMm: 0, yMm: 0, zMm: -20 }
+    };
+    const [normalized] = normalizeCivilReferences([floor], [createDefaultLayer()]);
+
+    expect(normalized.positionMm.zMm).toBe(-20);
+    expect(getCivilLevelAnchorWorldElevationMm(normalized)).toBe(0);
+
+    const resized = resizeCivilHeightPreservingLevelAnchor(normalized, 350);
+    expect(resized.positionMm.zMm).toBe(-350);
+    expect(resized.sizeMm.heightMm).toBe(350);
+    expect(getCivilLevelAnchorWorldElevationMm({ ...normalized, ...resized })).toBe(0);
+  });
+
+  it("preserves the visible Level anchor across Floor Area type transitions", () => {
+    const floor = {
+      ...createCivilReference("floor-area", { xMm: 120, yMm: -240 }),
+      positionMm: { xMm: 120, yMm: -240, zMm: -350 },
+      sizeMm: { widthMm: 4000, depthMm: 3000, heightMm: 350 },
+      style: { colorToken: "#123456", opacity: 0.4 }
+    };
+
+    const wallUpdate = getCivilTypeTransitionUpdate(floor, "wall");
+    const wall = { ...floor, ...wallUpdate };
+    expect(wallUpdate).toEqual({
+      type: "wall",
+      positionMm: { xMm: 120, yMm: -240, zMm: 0 }
+    });
+    expect(getCivilLevelAnchorWorldElevationMm(wall)).toBe(0);
+    expect(Number.isFinite(wall.positionMm.zMm)).toBe(true);
+    expect(wall.sizeMm).toEqual(floor.sizeMm);
+    expect(wall.style).toEqual(floor.style);
+
+    const floorUpdate = getCivilTypeTransitionUpdate(wall, "floor-area");
+    const restoredFloor = { ...wall, ...floorUpdate };
+    expect(floorUpdate).toEqual({
+      type: "floor-area",
+      positionMm: { xMm: 120, yMm: -240, zMm: -350 }
+    });
+    expect(getCivilLevelAnchorWorldElevationMm(restoredFloor)).toBe(0);
+    expect(Number.isFinite(restoredFloor.positionMm.zMm)).toBe(true);
+  });
+
+  it("leaves the canonical bottom unchanged for non-Floor Civil type transitions", () => {
+    const wall = {
+      ...createCivilReference("wall", { xMm: 0, yMm: 0 }),
+      positionMm: { xMm: 0, yMm: 0, zMm: 125 }
+    };
+
+    expect(getCivilTypeTransitionUpdate(wall, "column")).toEqual({
+      type: "column",
+      positionMm: wall.positionMm
+    });
   });
 
   it("keeps legacy civil defaults and normalizes imported Beam and style values", () => {

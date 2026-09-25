@@ -5,6 +5,7 @@ import type { MachineDefinition, PlacedMachine } from "../types/machine";
 import type { LayoutViewpoint } from "../types/viewpoints";
 import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./layoutHistory";
 import { createCivilReference, updateCivilReference } from "./civil";
+import { createLayoutLevel, normalizeLevels } from "./levels";
 
 const definition: MachineDefinition = {
   id: "machine",
@@ -75,6 +76,21 @@ const viewpoint = (id: string, name: string): LayoutViewpoint => ({
 });
 
 describe("layout history", () => {
+  it("restores one atomic Level datum transaction with all assigned elevations", () => {
+    const levels = normalizeLevels([createLayoutLevel("level-2", "Level 2", 6000, "2026-09-23T00:00:00.000Z")]);
+    const beforeMachine = { ...machine("a", 0), levelId: "level-2", elevationMm: 6500 };
+    const beforeCivil = { ...civil("c1", 0, 0), levelId: "level-2", positionMm: { xMm: 0, yMm: 0, zMm: 7000 } };
+    const history = pushHistorySnapshot(createLayoutHistory(), [beforeMachine], [], [beforeCivil], [], [], [], levels, "level-2");
+    const afterLevels = levels.map((level) => level.id === "level-2" ? { ...level, elevationMm: 6500 } : level);
+    const undone = undoHistory(history, [{ ...beforeMachine, elevationMm: 7000 }], [], [{ ...beforeCivil, positionMm: { ...beforeCivil.positionMm, zMm: 7500 } }], [], [], [], afterLevels, "level-2");
+    expect(undone?.levels.find((level) => level.id === "level-2")?.elevationMm).toBe(6000);
+    expect(undone?.machines[0].elevationMm).toBe(6500);
+    expect(undone?.civilReferences[0].positionMm.zMm).toBe(7000);
+    const redone = undone && redoHistory(undone.history, undone.machines, [], undone.civilReferences, [], [], [], undone.levels, undone.activeLevelId);
+    expect(redone?.levels.find((level) => level.id === "level-2")?.elevationMm).toBe(6500);
+    expect(redone?.machines[0].elevationMm).toBe(7000);
+    expect(redone?.civilReferences[0].positionMm.zMm).toBe(7500);
+  });
   it("undoes and redoes canonical Beam color and opacity edits", () => {
     const initial = [createCivilReference("beam", { xMm: 0, yMm: 0 }, "2026-09-21T00:00:00.000Z")];
     const history = pushHistorySnapshot(createLayoutHistory(), [], [], initial);
@@ -158,6 +174,37 @@ describe("layout history", () => {
       ["secondary", 0],
       ["third", 0]
     ]);
+  });
+
+  it("restores Floor Area thickness and top-anchor geometry through undo and redo", () => {
+    const initialFloor = {
+      id: "floor-1",
+      type: "floor-area" as const,
+      name: "Floor Area",
+      levelId: "ground",
+      positionMm: { xMm: 0, yMm: 0, zMm: -20 },
+      sizeMm: { widthMm: 12000, depthMm: 8000, heightMm: 20 },
+      rotationDeg: 0,
+      createdAt: "now",
+      updatedAt: "now"
+    };
+    const resizedFloor = {
+      ...initialFloor,
+      positionMm: { ...initialFloor.positionMm, zMm: -350 },
+      sizeMm: { ...initialFloor.sizeMm, heightMm: 350 }
+    };
+    const history = pushHistorySnapshot(createLayoutHistory(), [], [], [initialFloor]);
+
+    const undone = undoHistory(history, [], [], [resizedFloor]);
+    expect(undone?.civilReferences[0]).toMatchObject({
+      positionMm: { zMm: -20 },
+      sizeMm: { heightMm: 20 }
+    });
+    const redone = undone ? redoHistory(undone.history, [], [], undone.civilReferences) : null;
+    expect(redone?.civilReferences[0]).toMatchObject({
+      positionMm: { zMm: -350 },
+      sizeMm: { heightMm: 350 }
+    });
   });
 
   it("records one machine instance rename transaction and restores it through undo and redo", () => {

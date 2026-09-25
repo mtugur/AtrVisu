@@ -46,6 +46,7 @@ export const workspacePresetDefinitions = Object.freeze([
       RUNTIME_PANEL_IDS.layoutExplorer,
       RUNTIME_PANEL_IDS.viewpoints,
       RUNTIME_PANEL_IDS.layers,
+      RUNTIME_PANEL_IDS.levels,
       RUNTIME_PANEL_IDS.groups,
       RUNTIME_PANEL_IDS.annotations,
       RUNTIME_PANEL_IDS.precisionPlacement,

@@ -380,6 +380,17 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     featureIds: ["panel.layers"]
   },
   {
+    surfaceId: "surface.levels",
+    surfaceType: "panel",
+    label: "Levels",
+    owner: "existing-ui",
+    sourceFiles: ["src/App.tsx", "src/components/LevelsPanel.tsx", "src/utils/levels.ts"],
+    commandIds: ["level.add", "level.rename", "level.setDatum", "level.delete", "level.setActive"],
+    panelIds: ["panel.levels"],
+    featureIds: ["level.management", "panel.levels"],
+    notes: "Primary Dock Level datum authority; entity relative elevation projects to canonical world elevation."
+  },
+  {
     surfaceId: "surface.groups",
     surfaceType: "panel",
     label: "Groups",

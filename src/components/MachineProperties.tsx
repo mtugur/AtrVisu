@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { CollisionPair } from "../types/collision";
 import type { LayoutLayer } from "../types/layers";
 import type { PlacedMachine } from "../types/machine";
+import type { LayoutLevel } from "../types/levels";
 import type { VisualModelDiagnostics } from "../types/overlays";
 import type { PlacementSettings } from "../types/placement";
 import { getCollisionEnvelopeForMachine } from "../utils/collision";
@@ -27,6 +28,7 @@ import { SchemaPropertyInspector } from "./SchemaPropertyInspector";
 type MachinePropertiesProps = {
   selectedMachine?: PlacedMachine;
   layers: LayoutLayer[];
+  levels: readonly LayoutLevel[];
   isLocked: boolean;
   placementSettings: PlacementSettings;
   visualDiagnostics?: VisualModelDiagnostics;
@@ -37,6 +39,8 @@ type MachinePropertiesProps = {
     options?: { snapPosition?: boolean; snapRotation?: boolean }
   ) => void;
   onChangeLayer: (instanceId: string, layerId: string) => void;
+  onChangeLevel: (instanceId: string, levelId: string) => void;
+  onUpdateRelativeElevation: (instanceId: string, relativeElevationMm: number) => void;
   onDuplicateSelected: () => void;
   onDeleteSelected: () => void;
 };
@@ -138,12 +142,15 @@ export const getSelectedAtaraMachineDataState = (selectedMachine?: PlacedMachine
 export function MachineProperties({
   selectedMachine,
   layers,
+  levels,
   isLocked,
   placementSettings,
   visualDiagnostics,
   collisionPairs,
   onUpdateMachine,
   onChangeLayer,
+  onChangeLevel,
+  onUpdateRelativeElevation,
   onDuplicateSelected,
   onDeleteSelected
 }: MachinePropertiesProps) {
@@ -182,21 +189,6 @@ export function MachineProperties({
     });
   };
 
-  const updateElevation = (value: string) => {
-    if (!selectedMachine || isLocked) {
-      return;
-    }
-
-    const numericValue = Number(value);
-    if (!Number.isFinite(numericValue)) {
-      return;
-    }
-
-    onUpdateMachine(selectedMachine.instanceId, {
-      elevationMm: numericValue
-    });
-  };
-
   const getPositionMm = () => {
     if (!selectedMachine || isLocked) {
       return { xMm: 0, yMm: 0 };
@@ -226,6 +218,9 @@ export function MachineProperties({
   };
 
   const positionMm = getPositionMm();
+  const assignedLevel = levels.find((level) => level.id === selectedMachine?.levelId) ?? levels[0];
+  const worldElevationMm = selectedMachine?.elevationMm ?? 0;
+  const relativeElevationMm = worldElevationMm - (assignedLevel?.elevationMm ?? 0);
   const dimensionsMm = selectedMachine ? getMachineDimensionsMm(selectedMachine.definition) : null;
   const formatOptionalMm = (value?: number) => (typeof value === "number" ? formatMm(value) : "Not available");
   const formatOffset = (offset?: { xMm: number; yMm: number; zMm: number }) =>
@@ -286,6 +281,18 @@ export function MachineProperties({
           ) : null}
 
           <label className="property-field">
+            <span>Level</span>
+            <select
+              aria-label="Machine Level"
+              value={assignedLevel?.id ?? "ground"}
+              disabled={isLocked}
+              onChange={(event) => onChangeLevel(selectedMachine.instanceId, event.target.value)}
+            >
+              {levels.map((level) => <option key={level.id} value={level.id}>{level.name} ({level.elevationMm} mm)</option>)}
+            </select>
+          </label>
+
+          <label className="property-field">
             <span>Plan X (mm)</span>
             <NumericInput
               ariaLabel="Plan X"
@@ -318,21 +325,25 @@ export function MachineProperties({
             />
           </label>
           <label className="property-field">
-            <span>Elevation (mm)</span>
+            <span>Elevation above Level (mm)</span>
             <NumericInput
-              ariaLabel="Elevation"
+              ariaLabel="Elevation above Level"
               disabled={isLocked}
               rule={selectedMachineElevationRule}
               step="10"
-              value={selectedMachine.elevationMm ?? 0}
-              onChange={(value) => updateElevation(String(value))}
+              value={relativeElevationMm}
+              onChange={(value) => onUpdateRelativeElevation(selectedMachine.instanceId, value)}
               onCommit={(value) => {
                 if (value !== undefined) {
-                  updateElevation(String(value));
+                  onUpdateRelativeElevation(selectedMachine.instanceId, value);
                 }
               }}
             />
           </label>
+          <div className="property-readout" data-testid="machine-world-elevation">
+            <span>World Elevation</span>
+            <strong>{worldElevationMm} mm</strong>
+          </div>
           <label className="property-field">
             <span>Rotation Angle (&deg;)</span>
             <input

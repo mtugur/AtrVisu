@@ -26,6 +26,7 @@ export const platformPanelSeedDefinitions = [
 
   createPanelSeed("panel.annotations", "Annotations", "left", "tool"),
   createPanelSeed("panel.layers", "Layers", "left", "explorer"),
+  createPanelSeed("panel.levels", "Levels", "left", "explorer"),
   createPanelSeed("panel.groups", "Groups", "left", "explorer"),
   createPanelSeed("panel.collisionCheck", "Collision Check", "modal", "tool"),
   createPanelSeed("panel.performanceBenchmark", "Performance Benchmark", "modal", "diagnostics"),

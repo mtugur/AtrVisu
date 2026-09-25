@@ -19,6 +19,7 @@ export const COMPATIBILITY_PANEL_DEFAULTS = [
   { panelId: RUNTIME_PANEL_IDS.layoutControls, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.viewpoints, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.layers, collapsed: true },
+  { panelId: RUNTIME_PANEL_IDS.levels, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.civilReferences, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.groups, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.projectStatus, collapsed: false },
@@ -54,6 +55,7 @@ export const createDefaultWorkbenchUiPreferences = (): WorkbenchUiPreferences =>
       || entry.panelId === RUNTIME_PANEL_IDS.machineLibrary
       || entry.panelId === RUNTIME_PANEL_IDS.layoutExplorer
       || entry.panelId === RUNTIME_PANEL_IDS.layers
+      || entry.panelId === RUNTIME_PANEL_IDS.levels
       || entry.panelId === RUNTIME_PANEL_IDS.groups
       || entry.panelId === RUNTIME_PANEL_IDS.viewpoints
       ? "primary-dock"

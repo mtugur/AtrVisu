@@ -300,6 +300,11 @@ export const platformFeatureAccessMatrix = [
     commandIds: ["civil.addFloor", "civil.addWall", "civil.addColumn", "civil.addWalkway", "civil.addRestrictedZone", "civil.addReferenceZone"],
     notes: "Bound compatibility commands without duplicate visible Insert actions."
   }),
+  feature("level.management", "Level datum and relative elevation", ["panel"], {
+    commandIds: ["level.add", "level.rename", "level.setDatum", "level.delete", "level.setActive"],
+    panelIds: ["panel.levels"],
+    runtimeRequirements: ["entity"]
+  }),
 
   feature("assembly.createGroup", "Create Group", ["panel"], {
     commandIds: ["assembly.createGroup"],
@@ -361,6 +366,7 @@ export const platformFeatureAccessMatrix = [
   }),
   panelFeature("panel.viewpoints", "Viewpoints panel"),
   panelFeature("panel.layers", "Layers panel"),
+  panelFeature("panel.levels", "Levels panel"),
   feature("panel.civilReferences", "Legacy Building / Civil panel", ["panel"], {
     panelIds: ["panel.civilReferences"],
     classification: "declared-planned",

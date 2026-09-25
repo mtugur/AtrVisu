@@ -40,6 +40,7 @@ import { DisplayOverlayControls } from "./components/DisplayOverlayControls";
 import { AlignmentToolsPanel } from "./components/AlignmentToolsPanel";
 import { LayoutControls } from "./components/LayoutControls";
 import { LayersPanel } from "./components/LayersPanel";
+import { LevelsPanel } from "./components/LevelsPanel";
 import { MachineLibrary } from "./components/MachineLibrary";
 import { isBuildPrimitiveType } from "./assetBrowser";
 import type { LibraryManagerRuntimeController } from "./components/LibraryManager";
@@ -63,6 +64,7 @@ import type { AnnotationObject, AnnotationType } from "./types/annotations";
 import type { CivilReferenceItem, CivilReferenceType } from "./types/civil";
 import type { ObjectGroup } from "./types/groups";
 import type { LayoutLayer } from "./types/layers";
+import type { LayoutLevel } from "./types/levels";
 import type { LayoutViewpoint, ViewpointDisplayState } from "./types/viewpoints";
 import { createCommercialOutputSnapshot } from "./commercialOutputs/commercialOutputSnapshot";
 import type { CommercialOutputKind } from "./commercialOutputs/types";
@@ -74,7 +76,7 @@ import { checkAllObjectCollisions } from "./utils/collision";
 import { loadCollisionSettings, saveCollisionSettings } from "./utils/collisionSettings";
 import { COORDINATE_REFERENCE_VERSION, LAYOUT_REFERENCE_POINT, getCivilReferenceFootprintBoundsMm } from "./utils/coordinateReference";
 import { normalizeMachineDefinitionDimensions } from "./utils/machineDimensions";
-import { annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
+import { activeLevelIdFromLayout, annotationsFromLayout, civilReferencesFromLayout, createLayoutSnapshotFromMachines, groupsFromLayout, layersFromLayout, levelsFromLayout, placedMachinesFromLayout, viewpointsFromLayout } from "./utils/layoutSerialization";
 import { loadOverlaySettings, saveOverlaySettings } from "./utils/overlaySettings";
 import {
   applyPositionSnap,
@@ -101,6 +103,7 @@ import {
 } from "./utils/alignment";
 import { projectArrangeSelection } from "./utils/arrangeSelection";
 import { createLayoutHistory, pushHistorySnapshot, redoHistory, undoHistory } from "./utils/layoutHistory";
+import { GROUND_LEVEL_ID, changeLevelDatum, createLayoutLevel, getLevel, getLevelId, getWorldElevationMm, normalizeLevels, reassignEntityLevel } from "./utils/levels";
 import { loadPlacementSettings, savePlacementSettings } from "./utils/placementSettings";
 import { listProjects } from "./utils/projectStorage";
 import { initializeProjectStorage } from "./utils/storage/storageMigration";
@@ -125,6 +128,7 @@ import {
 import {
   createCivilReference,
   deleteCivilReference,
+  getCivilBottomWorldElevationFromAnchorMm,
   getVisibleCivilReferences,
   normalizeCivilReferences,
   updateCivilReference
@@ -308,6 +312,7 @@ const PRIMARY_DOCK_PANEL_IDS = [
   RUNTIME_PANEL_IDS.machineLibrary,
   RUNTIME_PANEL_IDS.layoutExplorer,
   RUNTIME_PANEL_IDS.layers,
+  RUNTIME_PANEL_IDS.levels,
   RUNTIME_PANEL_IDS.groups,
   RUNTIME_PANEL_IDS.viewpoints
 ] as const;
@@ -572,6 +577,8 @@ export function App() {
   const [civilReferences, setCivilReferences] = useState<CivilReferenceItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
   const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
+  const [levels, setLevels] = useState<LayoutLevel[]>(() => normalizeLevels([]));
+  const [activeLevelId, setActiveLevelId] = useState(GROUND_LEVEL_ID);
   const [groups, setGroups] = useState<ObjectGroup[]>([]);
   const [activeGroupEditId, setActiveGroupEditId] = useState<string | null>(null);
   const [selectedLayerId, setSelectedLayerId] = useState("default");
@@ -650,6 +657,8 @@ export function App() {
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
   const layersRef = useRef<LayoutLayer[]>(layers);
+  const levelsRef = useRef<LayoutLevel[]>(levels);
+  const activeLevelIdRef = useRef(activeLevelId);
   const groupsRef = useRef<ObjectGroup[]>(groups);
   const activeGroupEditIdRef = useRef<string | null>(activeGroupEditId);
   const viewpointsRef = useRef<LayoutViewpoint[]>(viewpoints);
@@ -1075,6 +1084,11 @@ export function App() {
   }, [layers]);
 
   useLayoutEffect(() => {
+    levelsRef.current = levels;
+    activeLevelIdRef.current = activeLevelId;
+  }, [activeLevelId, levels]);
+
+  useLayoutEffect(() => {
     groupsRef.current = groups;
   }, [groups]);
 
@@ -1197,6 +1211,19 @@ export function App() {
     }
   }, [layers, selectedLayerId]);
 
+  useEffect(() => {
+    const normalized = normalizeLevels(levels);
+    if (
+      normalized.length !== levels.length
+      || normalized.some((level, index) => level.id !== levels[index]?.id || level.name !== levels[index]?.name || level.elevationMm !== levels[index]?.elevationMm)
+    ) {
+      setLevels(normalized);
+    }
+    if (!normalized.some((level) => level.id === activeLevelId)) {
+      setActiveLevelId(GROUND_LEVEL_ID);
+    }
+  }, [activeLevelId, levels]);
+
   useLayoutEffect(() => {
     viewpointsRef.current = viewpoints;
   }, [viewpoints]);
@@ -1225,7 +1252,9 @@ export function App() {
         civilItems,
         viewpointItems,
         layerItems,
-        groupItems
+        groupItems,
+        levelsRef.current,
+        activeLevelIdRef.current
       )
     );
   }, []);
@@ -1253,7 +1282,9 @@ export function App() {
         civilReferencesRef.current,
         viewpointsRef.current,
         layersRef.current,
-        groupsRef.current
+        groupsRef.current,
+        levelsRef.current,
+        activeLevelIdRef.current
       );
       if (!result) {
         return current;
@@ -1264,6 +1295,8 @@ export function App() {
       setLayers(normalizeLayers(result.layers));
       setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
       setViewpoints(result.viewpoints);
+      setLevels(normalizeLevels(result.levels));
+      setActiveLevelId(getLevelId(result.activeLevelId, result.levels));
       setRuntimeSelection((selection) => selection.ids.some((id) => id.startsWith("annotation:"))
         ? createEmptyRuntimeSelection("command")
         : selection);
@@ -1281,7 +1314,9 @@ export function App() {
         civilReferencesRef.current,
         viewpointsRef.current,
         layersRef.current,
-        groupsRef.current
+        groupsRef.current,
+        levelsRef.current,
+        activeLevelIdRef.current
       );
       if (!result) {
         return current;
@@ -1292,6 +1327,8 @@ export function App() {
       setLayers(normalizeLayers(result.layers));
       setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
       setViewpoints(result.viewpoints);
+      setLevels(normalizeLevels(result.levels));
+      setActiveLevelId(getLevelId(result.activeLevelId, result.levels));
       setRuntimeSelection((selection) => selection.ids.some((id) => id.startsWith("annotation:"))
         ? createEmptyRuntimeSelection("command")
         : selection);
@@ -1536,6 +1573,7 @@ export function App() {
       [RUNTIME_PANEL_IDS.layoutExplorer]: primaryPanelBinding(RUNTIME_PANEL_IDS.layoutExplorer),
       [RUNTIME_PANEL_IDS.viewpoints]: primaryPanelBinding(RUNTIME_PANEL_IDS.viewpoints),
       [RUNTIME_PANEL_IDS.layers]: primaryPanelBinding(RUNTIME_PANEL_IDS.layers),
+      [RUNTIME_PANEL_IDS.levels]: primaryPanelBinding(RUNTIME_PANEL_IDS.levels),
       [RUNTIME_PANEL_IDS.civilReferences]: sectionBinding(RUNTIME_PANEL_IDS.civilReferences),
       [RUNTIME_PANEL_IDS.groups]: primaryPanelBinding(RUNTIME_PANEL_IDS.groups),
       [RUNTIME_PANEL_IDS.projectStatus]: sectionBinding(RUNTIME_PANEL_IDS.projectStatus),
@@ -1958,8 +1996,8 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences),
-    [annotations, civilReferences, groups, layers, placedMachines, viewpoints]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences, levels, activeLevelId),
+    [activeLevelId, annotations, civilReferences, groups, layers, levels, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
@@ -2074,6 +2112,7 @@ export function App() {
           definitionSnapshot: definition,
           definition,
           layerId: "default",
+          levelId: activeLevelIdRef.current,
           position,
           positionMm: {
             xMm: metersToMm(position.x),
@@ -2081,7 +2120,7 @@ export function App() {
           },
           referencePoint: LAYOUT_REFERENCE_POINT,
           coordinateReferenceVersion: COORDINATE_REFERENCE_VERSION,
-          elevationMm: 0,
+          elevationMm: getLevel(activeLevelIdRef.current, levelsRef.current).elevationMm,
           rotationDeg: 0,
           rotationY: 0,
           flowDirection: "forward"
@@ -2207,6 +2246,7 @@ export function App() {
     const importedCivilReferences = civilReferencesFromLayout(layout, importedLayers);
     const importedGroups = groupsFromLayout(layout, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(layout);
+    const importedLevels = levelsFromLayout(layout);
 
     markLayoutChanged();
     setLayers(importedLayers);
@@ -2217,6 +2257,8 @@ export function App() {
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
     setViewpoints(importedViewpoints);
+    setLevels(importedLevels);
+    setActiveLevelId(activeLevelIdFromLayout(layout));
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
   }, [clearSelection, markLayoutChanged]);
@@ -2368,11 +2410,11 @@ export function App() {
       return;
     }
     markLayoutChanged();
-    setLayers((current) =>
-      current.map((layer) =>
-        layer.id === layerId ? { ...layer, locked: !layer.locked, updatedAt: new Date().toISOString() } : layer
-      )
+    const nextLayers = layersRef.current.map((layer) =>
+      layer.id === layerId ? { ...layer, locked: !layer.locked, updatedAt: new Date().toISOString() } : layer
     );
+    layersRef.current = nextLayers;
+    setLayers(nextLayers);
   }, [markLayoutChanged]);
 
   const removeLayer = useCallback((layerId: string) => {
@@ -2411,9 +2453,11 @@ export function App() {
       return;
     }
     markLayoutChanged();
-    setPlacedMachines((current) =>
-      current.map((item) => item.instanceId === instanceId ? { ...item, layerId: getLayerId(layerId, layersRef.current) } : item)
+    const nextMachines = placedMachinesRef.current.map((item) =>
+      item.instanceId === instanceId ? { ...item, layerId: getLayerId(layerId, layersRef.current) } : item
     );
+    placedMachinesRef.current = nextMachines;
+    setPlacedMachines(nextMachines);
   }, [markLayoutChanged]);
 
   const changeAnnotationLayer = useCallback((annotationId: string, layerId: string) => {
@@ -2546,6 +2590,8 @@ export function App() {
     setCivilReferences([]);
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
+    setLevels(normalizeLevels([]));
+    setActiveLevelId(GROUND_LEVEL_ID);
     setGroups([]);
     setActiveGroupEditId(null);
     setSelectedLayerId("default");
@@ -2562,6 +2608,7 @@ export function App() {
     const importedCivilReferences = civilReferencesFromLayout(snapshot, importedLayers);
     const importedGroups = groupsFromLayout(snapshot, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(snapshot);
+    const importedLevels = levelsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
@@ -2570,6 +2617,8 @@ export function App() {
     setActiveGroupEditId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
+    setLevels(importedLevels);
+    setActiveLevelId(activeLevelIdFromLayout(snapshot));
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
     setIsBenchmarkMode(false);
@@ -2582,6 +2631,8 @@ export function App() {
     setCivilReferences([]);
     setAnnotations([]);
     setLayers([createDefaultLayer()]);
+    setLevels(normalizeLevels([]));
+    setActiveLevelId(GROUND_LEVEL_ID);
     setGroups([]);
     setActiveGroupEditId(null);
     setSelectedLayerId("default");
@@ -2604,6 +2655,7 @@ export function App() {
     const importedCivilReferences = civilReferencesFromLayout(snapshot, importedLayers);
     const importedGroups = groupsFromLayout(snapshot, importedMachines, importedLayers);
     const importedViewpoints = viewpointsFromLayout(snapshot);
+    const importedLevels = levelsFromLayout(snapshot);
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
@@ -2612,6 +2664,8 @@ export function App() {
     setActiveGroupEditId(null);
     setSelectedLayerId(importedLayers[0]?.id ?? "default");
     setViewpoints(importedViewpoints);
+    setLevels(importedLevels);
+    setActiveLevelId(activeLevelIdFromLayout(snapshot));
     setSelectedViewpointId(importedViewpoints[0]?.id ?? null);
     clearSelection();
     setCurrentProjectId(projectId);
@@ -2995,6 +3049,101 @@ export function App() {
     });
   }, [markLayoutChanged]);
 
+  const addLevel = useCallback((name: string, elevationMm: number) => {
+    try {
+      const level = createLayoutLevel(`level-${Date.now()}`, name, elevationMm);
+      if (levelsRef.current.some((item) => item.name.toLocaleLowerCase() === level.name.toLocaleLowerCase())) {
+        window.alert("Level names must be unique.");
+        return false;
+      }
+      markLayoutChanged();
+      setLevels((current) => [...current, level]);
+      setActiveLevelId(level.id);
+      return true;
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Level could not be created.");
+      return false;
+    }
+  }, [markLayoutChanged]);
+
+  const renameLevel = useCallback((levelId: string, name: string) => {
+    const trimmed = name.trim();
+    const level = levelsRef.current.find((item) => item.id === levelId);
+    if (!level || level.systemLevel || !trimmed) return false;
+    if (levelsRef.current.some((item) => item.id !== levelId && item.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase())) {
+      window.alert("Level names must be unique.");
+      return false;
+    }
+    markLayoutChanged();
+    setLevels((current) => current.map((item) => item.id === levelId
+      ? { ...item, name: trimmed, updatedAt: new Date().toISOString() }
+      : item));
+    return true;
+  }, [markLayoutChanged]);
+
+  const setLevelDatum = useCallback((levelId: string, elevationMm: number) => {
+    const result = changeLevelDatum(
+      levelId,
+      elevationMm,
+      levelsRef.current,
+      placedMachinesRef.current,
+      civilReferencesRef.current,
+      layersRef.current
+    );
+    if (!result.ok) {
+      window.alert(result.reason ?? "Level datum could not be changed.");
+      return false;
+    }
+    markLayoutChanged();
+    setLevels(result.levels);
+    setPlacedMachines(result.machines);
+    setCivilReferences(result.civilReferences);
+    return true;
+  }, [markLayoutChanged]);
+
+  const deleteLevel = useCallback((levelId: string) => {
+    const level = levelsRef.current.find((item) => item.id === levelId);
+    if (!level || level.systemLevel || level.id === GROUND_LEVEL_ID) {
+      window.alert("Ground cannot be deleted.");
+      return false;
+    }
+    const assigned = placedMachinesRef.current.some((item) => getLevelId(item.levelId, levelsRef.current) === levelId)
+      || civilReferencesRef.current.some((item) => getLevelId(item.levelId, levelsRef.current) === levelId);
+    if (assigned) {
+      window.alert("Reassign all machines and civil items before deleting this Level.");
+      return false;
+    }
+    markLayoutChanged();
+    setLevels((current) => current.filter((item) => item.id !== levelId));
+    if (activeLevelIdRef.current === levelId) setActiveLevelId(GROUND_LEVEL_ID);
+    return true;
+  }, [markLayoutChanged]);
+
+  const activateLevel = useCallback((levelId: string) => {
+    if (!levelsRef.current.some((item) => item.id === levelId)) return false;
+    markLayoutChanged();
+    setActiveLevelId(levelId);
+    return true;
+  }, [markLayoutChanged]);
+
+  const changeEntityLevel = useCallback((entityKey: string, levelId: string) => {
+    const result = reassignEntityLevel(
+      entityKey,
+      levelId,
+      levelsRef.current,
+      placedMachinesRef.current,
+      civilReferencesRef.current,
+      layersRef.current
+    );
+    if (!result.ok) {
+      window.alert(result.reason ?? "Level assignment could not be changed.");
+      return;
+    }
+    markLayoutChanged();
+    setPlacedMachines(result.machines);
+    setCivilReferences(result.civilReferences);
+  }, [markLayoutChanged]);
+
   const addCivilReference = useCallback((type: CivilReferenceType) => {
     const index = civilReferencesRef.current.length;
     const column = index % PLACEMENT_COLUMNS;
@@ -3003,7 +3152,19 @@ export function App() {
       xMm: metersToMm(PLACEMENT_ORIGIN.x + column * PLACEMENT_SPACING),
       yMm: metersToMm(PLACEMENT_ORIGIN.z + row * PLACEMENT_SPACING)
     };
-    const item = createCivilReference(type, positionMm);
+    const baseItem = createCivilReference(type, positionMm);
+    const activeLevel = getLevel(activeLevelIdRef.current, levelsRef.current);
+    const item: CivilReferenceItem = {
+      ...baseItem,
+      levelId: activeLevel.id,
+      positionMm: {
+        ...baseItem.positionMm,
+        zMm: getCivilBottomWorldElevationFromAnchorMm(
+          baseItem,
+          activeLevel.elevationMm + (baseItem.positionMm.zMm ?? 0)
+        )
+      }
+    };
     markLayoutChanged();
     setCivilReferences((current) => [...current, item]);
     setRuntimeSelection(replaceRuntimeSelection([
@@ -3026,6 +3187,31 @@ export function App() {
     markLayoutChanged(options);
     setCivilReferences((current) => updateCivilReference(current, id, updates));
   }, [markLayoutChanged]);
+
+  const updateEntityRelativeElevation = useCallback((entityKey: string, relativeElevationMm: number) => {
+    if (!Number.isFinite(relativeElevationMm) || relativeElevationMm < 0) return;
+    if (entityKey.startsWith("machine:")) {
+      const id = entityKey.slice("machine:".length);
+      const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
+      if (!machine || isLayerLocked(machine.layerId, layersRef.current)) return;
+      const level = getLevel(machine.levelId, levelsRef.current);
+      updateMachine(id, { elevationMm: getWorldElevationMm(relativeElevationMm, level) });
+      return;
+    }
+    const id = entityKey.slice("civil:".length);
+    const item = civilReferencesRef.current.find((reference) => reference.id === id);
+    if (!item || item.locked || isLayerLocked(item.layerId, layersRef.current)) return;
+    const level = getLevel(item.levelId, levelsRef.current);
+    updateSelectedCivilReference(id, {
+      positionMm: {
+        ...item.positionMm,
+        zMm: getCivilBottomWorldElevationFromAnchorMm(
+          item,
+          getWorldElevationMm(relativeElevationMm, level)
+        )
+      }
+    });
+  }, [updateMachine, updateSelectedCivilReference]);
 
   const setCivilReferencePosition = useCallback((
     id: string,
@@ -3630,6 +3816,51 @@ export function App() {
         return createExecutedRuntimeFeatureCommandResult();
       }
     },
+    [RUNTIME_FEATURE_COMMAND_IDS.addLevel]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        const payload = isRecord(context.payload) ? context.payload : {};
+        return typeof payload.name === "string" && typeof payload.elevationMm === "number" && addLevel(payload.name, payload.elevationMm)
+          ? createExecutedRuntimeFeatureCommandResult()
+          : { handled: false, status: "disabled", reason: "A valid Level name and non-negative datum are required." };
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.renameLevel]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        const payload = isRecord(context.payload) ? context.payload : {};
+        return typeof payload.levelId === "string" && typeof payload.name === "string" && renameLevel(payload.levelId, payload.name)
+          ? createExecutedRuntimeFeatureCommandResult()
+          : { handled: false, status: "disabled", reason: "A user Level and valid name are required." };
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.setLevelDatum]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        const payload = isRecord(context.payload) ? context.payload : {};
+        return typeof payload.levelId === "string" && typeof payload.elevationMm === "number" && setLevelDatum(payload.levelId, payload.elevationMm)
+          ? createExecutedRuntimeFeatureCommandResult()
+          : { handled: false, status: "disabled", reason: "Level datum change was not applied." };
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.deleteLevel]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        const payload = isRecord(context.payload) ? context.payload : {};
+        return typeof payload.levelId === "string" && deleteLevel(payload.levelId)
+          ? createExecutedRuntimeFeatureCommandResult()
+          : { handled: false, status: "disabled", reason: "Level deletion was not applied." };
+      }
+    },
+    [RUNTIME_FEATURE_COMMAND_IDS.setActiveLevel]: {
+      getEnableState: () => ({ enabled: true }),
+      execute: (context) => {
+        const payload = isRecord(context.payload) ? context.payload : {};
+        return typeof payload.levelId === "string" && activateLevel(payload.levelId)
+          ? createExecutedRuntimeFeatureCommandResult()
+          : { handled: false, status: "disabled", reason: "Choose an existing Level." };
+      }
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.addCivilPrimitive]: {
       getEnableState: (context) => ({ enabled: isBuildPrimitiveType(context.payload), reason: "Choose a Build asset from Library." }),
       execute: (context) => {
@@ -3774,6 +4005,7 @@ export function App() {
   }), [
     addAnnotation,
     addCivilReference,
+    addLevel,
     addMachine,
     applyAlignmentAction,
     applyConnectionSnap,
@@ -3782,6 +4014,7 @@ export function App() {
     applyPairAlignmentAction,
     applyPairAnchorSnap,
     commitEntityRename,
+    activateLevel,
     closeMachineLibraryManagers,
     connectionPointSnapContext.available,
     connectionPointSnapReason,
@@ -3789,14 +4022,17 @@ export function App() {
     exportCommercialBom,
     exportCommercialPlan,
     exportCommercialSnapshot,
+    deleteLevel,
     projectRuntimeCommandBindings,
     openHelpSection,
+    renameLevel,
     renameEnableState,
     measurementHelpersAvailable,
     measurementHelpersReason,
     requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,
+    setLevelDatum,
     runtimePanelBridge,
     runtimeSelectionMovementEvaluation.allowed,
     arrangeSelectedEntityIds.length
@@ -4954,6 +5190,23 @@ export function App() {
               )
             },
             {
+              panelId: RUNTIME_PANEL_IDS.levels,
+              label: "Levels",
+              iconId: "layers" as const,
+              badge: levels.length > 1 ? `${levels.length}` : undefined,
+              content: (
+                <LevelsPanel
+                  levels={levels}
+                  activeLevelId={activeLevelId}
+                  onAddLevel={(name, elevationMm) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.addLevel, { name, elevationMm }); }}
+                  onRenameLevel={(levelId, name) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.renameLevel, { levelId, name }); }}
+                  onSetDatum={(levelId, elevationMm) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.setLevelDatum, { levelId, elevationMm }); }}
+                  onDeleteLevel={(levelId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.deleteLevel, { levelId }); }}
+                  onSetActiveLevel={(levelId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.setActiveLevel, { levelId }); }}
+                />
+              )
+            },
+            {
               panelId: RUNTIME_PANEL_IDS.groups,
               label: "Groups",
               iconId: "groups" as const,
@@ -5465,9 +5718,12 @@ export function App() {
               <CivilReferenceProperties
                 selectedCivilReference={selectedCivilReference}
                 layers={layers}
+                levels={levels}
                 isLocked={selectedCivilReferenceLocked}
                 onUpdateCivilReference={updateSelectedCivilReference}
                 onChangeLayer={changeCivilReferenceLayer}
+                onChangeLevel={(id, levelId) => changeEntityLevel(`civil:${id}`, levelId)}
+                onUpdateRelativeElevation={(id, value) => updateEntityRelativeElevation(`civil:${id}`, value)}
                 onDeleteCivilReference={executeDeleteSelectedCommand}
               />
             ) : selectedMachineIds.length > 1 && selectedCivilReferenceIds.length === 0 ? (
@@ -5489,12 +5745,15 @@ export function App() {
                 <MachineProperties
                   selectedMachine={singleSelectedMachine}
                   layers={layers}
+                  levels={levels}
                   isLocked={selectedMachineLocked}
                   placementSettings={placementSettings}
                   visualDiagnostics={selectedVisualDiagnostics}
                   collisionPairs={selectedCollisionPairs}
                   onUpdateMachine={updateMachine}
                   onChangeLayer={changeMachineLayer}
+                  onChangeLevel={(id, levelId) => changeEntityLevel(`machine:${id}`, levelId)}
+                  onUpdateRelativeElevation={(id, value) => updateEntityRelativeElevation(`machine:${id}`, value)}
                   onDuplicateSelected={executeDuplicateSelectedCommand}
                   onDeleteSelected={executeDeleteSelectedCommand}
                 />
@@ -5563,9 +5822,12 @@ export function App() {
                 <CivilReferenceProperties
                   selectedCivilReference={selectedCivilReference}
                   layers={layers}
+                  levels={levels}
                   isLocked={selectedCivilReferenceLocked}
                   onUpdateCivilReference={updateSelectedCivilReference}
                   onChangeLayer={changeCivilReferenceLayer}
+                  onChangeLevel={(id, levelId) => changeEntityLevel(`civil:${id}`, levelId)}
+                  onUpdateRelativeElevation={(id, value) => updateEntityRelativeElevation(`civil:${id}`, value)}
                   onDeleteCivilReference={executeDeleteSelectedCommand}
                 />
               ) : selectedMachineIds.length > 1 && selectedCivilReferenceIds.length === 0 ? (
@@ -5590,12 +5852,15 @@ export function App() {
                 <MachineProperties
                   selectedMachine={singleSelectedMachine}
                   layers={layers}
+                  levels={levels}
                   isLocked={selectedMachineLocked}
                   placementSettings={placementSettings}
                   visualDiagnostics={selectedVisualDiagnostics}
                   collisionPairs={selectedCollisionPairs}
                   onUpdateMachine={updateMachine}
                   onChangeLayer={changeMachineLayer}
+                  onChangeLevel={(id, levelId) => changeEntityLevel(`machine:${id}`, levelId)}
+                  onUpdateRelativeElevation={(id, value) => updateEntityRelativeElevation(`machine:${id}`, value)}
                   onDuplicateSelected={executeDuplicateSelectedCommand}
                   onDeleteSelected={executeDeleteSelectedCommand}
                 />

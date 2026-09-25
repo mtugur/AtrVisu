@@ -51,6 +51,14 @@ describe("platform command seed definitions", () => {
     expect(commandSeeds.filter((command) => command.mutatesData).every((command) => command.requiresUndoTransaction)).toBe(true);
   });
 
+  it("classifies active Level changes as persistent edit transactions", () => {
+    expect(commandSeeds.find((command) => command.id === "level.setActive")).toMatchObject({
+      group: "edit",
+      mutatesData: true,
+      requiresUndoTransaction: true
+    });
+  });
+
   it("contains critical command ids", () => {
     const commandIds = new Set(commandSeeds.map((command) => command.id));
 

@@ -122,7 +122,12 @@ export const COMMAND_PALETTE_EXCLUDED_COMMAND_IDS: readonly string[] = Object.fr
   RUNTIME_FEATURE_COMMAND_IDS.addColumn,
   RUNTIME_FEATURE_COMMAND_IDS.addWalkway,
   RUNTIME_FEATURE_COMMAND_IDS.addRestrictedZone,
-  RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone
+  RUNTIME_FEATURE_COMMAND_IDS.addReferenceZone,
+  RUNTIME_FEATURE_COMMAND_IDS.addLevel,
+  RUNTIME_FEATURE_COMMAND_IDS.renameLevel,
+  RUNTIME_FEATURE_COMMAND_IDS.setLevelDatum,
+  RUNTIME_FEATURE_COMMAND_IDS.deleteLevel,
+  RUNTIME_FEATURE_COMMAND_IDS.setActiveLevel
 ]);
 
 export const COMMAND_BAR_SHORT_LABELS: Readonly<Record<string, string>> = Object.freeze({

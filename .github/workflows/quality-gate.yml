@@ -65,6 +65,7 @@ jobs:
           ATRVISU_CAPTURE_PF2A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-asset-browser-discovery-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_PF2B_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-native-asset-import-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_PF3A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-global-iconography-density-v01' && '1' || '0' }}
+          ATRVISU_CAPTURE_P1_BLD2_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-level-datum-v01' && '1' || '0' }}
 
       - name: Upload PF-1 review evidence
         if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.number == 110 }}
@@ -99,5 +100,14 @@ jobs:
         with:
           name: pf3a-global-iconography-density
           path: test-results/pf3a-global-iconography-density
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload P1-BLD2 Level datum evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-level-datum-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-bld2-level-datum
+          path: test-results/p1-bld2-level-datum
           if-no-files-found: error
           retention-days: 30

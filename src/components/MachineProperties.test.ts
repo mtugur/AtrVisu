@@ -46,6 +46,7 @@ const renderSelectedMachineProperties = (machine: PlacedMachine, isLocked = fals
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z"
       }],
+      levels: [{ id: "ground", name: "Ground", elevationMm: 0, systemLevel: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" }],
       isLocked,
       placementSettings: {
         ...DEFAULT_PLACEMENT_SETTINGS,
@@ -55,6 +56,8 @@ const renderSelectedMachineProperties = (machine: PlacedMachine, isLocked = fals
       collisionPairs: [],
       onUpdateMachine: () => undefined,
       onChangeLayer: () => undefined,
+      onChangeLevel: () => undefined,
+      onUpdateRelativeElevation: () => undefined,
       onDuplicateSelected: () => undefined,
       onDeleteSelected: () => undefined
     })
@@ -83,6 +86,30 @@ const getButtonMarkup = (markup: string, label: string) => {
 };
 
 describe("MachineProperties ATARA diagnostics", () => {
+  it("projects Level-relative and read-only world elevation without changing canonical data", () => {
+    const markup = renderToStaticMarkup(createElement(MachineProperties, {
+      selectedMachine: { ...createPlacedMachine(baseDefinition), levelId: "level-2", elevationMm: 6500 },
+      layers: [],
+      levels: [
+        { id: "ground", name: "Ground", elevationMm: 0, systemLevel: true, createdAt: "now", updatedAt: "now" },
+        { id: "level-2", name: "Level 2", elevationMm: 6000, createdAt: "now", updatedAt: "now" }
+      ],
+      isLocked: false,
+      placementSettings: DEFAULT_PLACEMENT_SETTINGS,
+      collisionPairs: [],
+      onUpdateMachine: () => undefined,
+      onChangeLayer: () => undefined,
+      onChangeLevel: () => undefined,
+      onUpdateRelativeElevation: () => undefined,
+      onDuplicateSelected: () => undefined,
+      onDeleteSelected: () => undefined
+    }));
+    expect(markup).toContain("Level 2 (6000 mm)");
+    expect(markup).toContain('aria-label="Elevation above Level"');
+    expect(markup).toContain('value="500"');
+    expect(markup).toContain("World Elevation");
+    expect(markup).toContain("6500 mm");
+  });
   it("uses the placed-instance display name while retaining the canonical definition", () => {
     const machine = {
       ...createPlacedMachine(baseDefinition),
