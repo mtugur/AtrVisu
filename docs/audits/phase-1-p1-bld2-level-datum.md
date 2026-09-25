@@ -37,6 +37,6 @@ P1-BLD2 follows the Product Constitution, Interaction Standard sections 3, 4 and
 
 ## Release state
 
-Correction review `5305587312`: focused Level/Civil/serialization/history/Inspector/depth-policy tests and the two exact browser workflows pass. The final complete local and exact-head gates are recorded at delivery without a post-CI source mutation.
+Correction review `5315526016`: focused rendering-depth/Inspector tests and the exact Floor Area browser workflow pass with three true Beam-over-Floor evidence frames. Local audit, dependency-tree, governance, token, build and 163-file/1376-test unit gates pass. The aggregate local E2E run passed 102/103 parallel scenarios before the commercial PNG timing boundary and then timed out in the isolated runtime-access route; both the commercial output and P1-BLD2 Floor workflows pass focused. The exact-head GitHub gate records the final aggregate result without a post-CI source mutation.
 
-Automation Green: PENDING exact-head CI. Contract Verified: PENDING independent review. Product Accepted: PENDING and intentionally not requested before review.
+Automation Green: PENDING exact-head CI. Contract Verified: PENDING independent review. Product Accepted: FAIL; focused manual re-acceptance remains pending.

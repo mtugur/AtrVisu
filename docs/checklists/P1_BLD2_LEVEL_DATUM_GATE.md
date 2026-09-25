@@ -17,10 +17,10 @@
 | Registered discoverability | PASS | Five Level commands, `panel.levels`, Feature Access and Surface Inventory share the same runtime authority. |
 | PF-3A freeze | PASS | BabylonScene changed only to install the rendering-depth policy. Plan drag, snap and movement-solver semantics were not changed; ADR-001 movement behavior remains frozen. |
 | Console/runtime | PASS | Focused Chromium proves 25,000 mm Level finite and console-clean; existing movement, native-asset and commercial-output regressions also pass when run in their focused phases. |
-| Complete local gate | PENDING | Final complete gate runs once after the bounded correction is stable. |
+| Complete local gate | PARTIAL | Audit/dependency/governance/token/build and 163 files / 1376 unit tests pass. Aggregate E2E passed 102/103 parallel scenarios before a commercial PNG timing boundary, then the isolated runtime-access route timed out; focused commercial-output and P1-BLD2 Floor workflows pass. |
 | Exact-head CI | DELIVERY | The Draft PR exact-head Quality Gate records the final aggregate result without a post-CI source mutation. |
 | Contract Verified | PENDING | Independent review against ADR-003 and runtime evidence. |
-| Product Accepted | PENDING | Not requested before independent contract/runtime review. |
+| Product Accepted | FAIL | Focused manual re-acceptance remains pending after independent contract/runtime review. |
 
 Scope exclusions: basement/negative Levels, automatic floor detection, Floor Area inference, plan views, clipping, stairs/elevators, BIM/analysis, PF-3B and any movement-solver change.
 
