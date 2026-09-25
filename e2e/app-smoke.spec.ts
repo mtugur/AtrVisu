@@ -5213,11 +5213,13 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
   await properties.getByLabel("Civil Floor Thickness").press("Enter");
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(-350);
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await expect(properties.getByTestId("civil-bottom-world-elevation")).toContainText("-350 mm");
 
   await properties.getByLabel("Type").selectOption("wall");
   await expect(properties.getByLabel("Civil Elevation above Level")).toHaveValue("0");
   await expect(properties.getByLabel("Civil Height")).toHaveValue("350");
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await expect(properties.getByTestId("civil-bottom-world-elevation")).toHaveCount(0);
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(0);
   expect(Number.isFinite((await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId])).toBe(true);
 
@@ -5225,23 +5227,48 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
   await expect(properties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
   await expect(properties.getByLabel("Civil Floor Thickness")).toHaveValue("350");
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await expect(properties.getByTestId("civil-bottom-world-elevation")).toContainText("-350 mm");
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(-350);
   expect(Number.isFinite((await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId])).toBe(true);
   await properties.getByLabel("Civil Opacity").fill("1");
+  await expect.poll(async () =>
+    (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[floorId]?.opacity
+  ).toBe(1);
 
   await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
   const machineId = Object.keys(await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[0];
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-machine-elevations-mm"))[machineId]).toBe(0);
   await addBuildPrimitive(page, "Beam", "Structure");
+  const beamId = Object.keys(await readCanvasRecord<number>(page, "data-civil-elevations-mm"))
+    .find((id) => id !== floorId);
+  expect(beamId).toBeTruthy();
+  await properties.getByLabel("Civil Plan X").fill("-5000");
+  await properties.getByLabel("Civil Plan X").press("Enter");
+  await properties.getByLabel("Civil Plan Y").fill("-3000");
+  await properties.getByLabel("Civil Plan Y").press("Enter");
+  await expect.poll(async () => (await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[beamId!])
+    .toEqual({ xMm: -5000, yMm: -3000 });
   const civilElevations = await readCanvasRecord<number>(page, "data-civil-elevations-mm");
   expect(civilElevations[floorId]).toBe(-350);
-  expect(Object.values(civilElevations)).toContain(3000);
+  expect(civilElevations[beamId!]).toBe(3000);
+  const civilPositions = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  expect(civilPositions[beamId!].xMm).toBeGreaterThanOrEqual(civilPositions[floorId].xMm);
+  expect(civilPositions[beamId!].xMm + 6000).toBeLessThanOrEqual(civilPositions[floorId].xMm + 12000);
+  expect(civilPositions[beamId!].yMm).toBeGreaterThanOrEqual(civilPositions[floorId].yMm);
+  expect(civilPositions[beamId!].yMm + 300).toBeLessThanOrEqual(civilPositions[floorId].yMm + 8000);
+  const machinePosition = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineId];
+  expect(machinePosition.xMm).toBeGreaterThanOrEqual(civilPositions[floorId].xMm);
+  expect(machinePosition.xMm).toBeLessThanOrEqual(civilPositions[floorId].xMm + 12000);
+  expect(machinePosition.yMm).toBeGreaterThanOrEqual(civilPositions[floorId].yMm);
+  expect(machinePosition.yMm).toBeLessThanOrEqual(civilPositions[floorId].yMm + 8000);
 
   expect(await applyRuntimeViewportCameraState(page, {
     mode: "perspective", alpha: Math.PI / 4, beta: 0.35, radius: 34,
     targetX: -2, targetY: 0, targetZ: -2
   })).toBe(true);
   await waitForSceneRenderFrames(page);
+  await getMachineScreenBounds(page, machineId);
+  await getCivilScreenBounds(page, beamId!);
   await captureP1Bld2Screenshot(page, "01-opaque-floor-top-oblique.png");
 
   expect(await applyRuntimeViewportCameraState(page, {
@@ -5249,6 +5276,8 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
     targetX: -2, targetY: 0, targetZ: -2
   })).toBe(true);
   await waitForSceneRenderFrames(page);
+  await getMachineScreenBounds(page, machineId);
+  await getCivilScreenBounds(page, beamId!);
   await captureP1Bld2Screenshot(page, "02-opaque-floor-below.png");
 
   await openPrimaryDockPanel(page, "panel.layoutExplorer");
@@ -5257,6 +5286,14 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
   await expect.poll(async () =>
     (await readCanvasRecord<{ color: string; opacity: number }>(page, "data-civil-rendered-styles"))[floorId]?.opacity
   ).toBeCloseTo(0.35);
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective", alpha: Math.PI / 4, beta: 0.35, radius: 34,
+    targetX: -2, targetY: 0, targetZ: -2
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  await getMachineScreenBounds(page, machineId);
+  await getCivilScreenBounds(page, beamId!);
+  await captureP1Bld2Screenshot(page, "03-transparent-floor-beam-overlap.png");
 
   await openPrimaryDockPanel(page, "panel.levels");
   const levelPrompts = ["Level 2", "6000"];
@@ -5272,6 +5309,7 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
   await properties.getByLabel("Civil Level").selectOption({ label: "Level 2 (6000 mm)" });
   await expect(properties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("6000 mm");
+  await expect(properties.getByTestId("civil-bottom-world-elevation")).toContainText("5650 mm");
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(5650);
   expect(await applyRuntimeViewportCameraState(page, {
     mode: "perspective", alpha: Math.PI / 4, beta: Math.PI / 3, radius: 34,

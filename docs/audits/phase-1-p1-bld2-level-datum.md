@@ -21,7 +21,7 @@ P1-BLD2 follows the Product Constitution, Interaction Standard sections 3, 4 and
 
 ## Runtime surfaces
 
-`panel.levels` is a registered Primary Dock surface. `level.add`, `level.rename`, `level.setDatum`, `level.delete`, and `level.setActive` are registered runtime commands and are linked by Feature Access and Surface Inventory. Machine and non-floor Civil Inspectors expose Level, Elevation above Level, and read-only World Elevation. Floor Area exposes Level, Top Elevation above Level, and read-only Top Surface World Elevation. No second store, direct Babylon authority, or Library Level asset was added.
+`panel.levels` is a registered Primary Dock surface. `level.add`, `level.rename`, `level.setDatum`, `level.delete`, and `level.setActive` are registered runtime commands and are linked by Feature Access and Surface Inventory. Machine and non-floor Civil Inspectors expose Level, Elevation above Level, and read-only World Elevation. Floor Area exposes Level, Top Elevation above Level, read-only Top Surface World Elevation, and read-only Bottom Surface World Elevation projected directly from canonical `positionMm.zMm`. No second store, direct Babylon authority, or Library Level asset was added.
 
 ## Evidence
 
@@ -32,7 +32,7 @@ P1-BLD2 follows the Product Constitution, Interaction Standard sections 3, 4 and
 - Pure Civil, Inspector and Chromium regressions cover Floor Area -> Wall -> Floor transitions, finite canonical geometry and preservation of the Level-relative anchor.
 - The exact UI Machine -> non-default Layer -> locked Layer -> Level datum route rejects atomically, preserves all assigned world elevations and creates no Undo transaction.
 - Chromium proves Ground `0` plus Floor Area `350` gives bottom `-350`, top `0`, and Machine base `0`; reassignment to Level 2 `6000` gives bottom `5650` and top `6000`; horizontal Floor Area drag preserves its vertical anchor.
-- Babylon rendering group 1 explicitly preserves group-0 depth. Opaque top/oblique and below-view evidence demonstrates physical Machine/Beam/Floor Area occlusion; transparent Floor Area retains alpha while depth testing remains active.
+- Floor Area, Machine, Wall, Column and Beam share physical-world rendering group 0. Planning/reference Civil geometry remains in group 1, which explicitly preserves group-0 depth. Top/oblique, below-view and transparent evidence positions Beam fully inside the Floor footprint and demonstrates physical occlusion plus retained blending.
 - BabylonScene changed only to install the rendering-depth policy. Plan drag, snap and movement-solver semantics were not changed; ADR-001 movement behavior remains frozen. Existing Build, PF-3A body drag, dock density, command, panel and runtime-access regressions remain in the complete gates.
 
 ## Release state

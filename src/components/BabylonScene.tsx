@@ -105,7 +105,10 @@ import {
   setMachinePickMetadata
 } from "./babylonScene/selectionPicking";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
-import { preserveWorldGeometryDepthAcrossRenderingGroups } from "./babylonScene/renderingDepth";
+import {
+  getCivilRenderingGroupId,
+  preserveWorldGeometryDepthAcrossRenderingGroups
+} from "./babylonScene/renderingDepth";
 import { createSceneVisualContext } from "./babylonScene/visualContext";
 import {
   createViewportResizeController,
@@ -685,7 +688,7 @@ const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): Civil
   mesh.material = material;
   mesh.metadata = { civilReferenceId: item.id };
   mesh.isPickable = true;
-  mesh.renderingGroupId = item.type === "wall" || item.type === "column" || item.type === "beam" ? 0 : 1;
+  mesh.renderingGroupId = getCivilRenderingGroupId(item.type);
 
   const selectionFrame = createWireBoxFrame(
     scene,

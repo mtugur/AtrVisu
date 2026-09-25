@@ -47,6 +47,7 @@ describe("CivilReferenceProperties style authority", () => {
     expect(container.querySelector('[aria-label="Civil Height"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Civil Plan Depth"]')).toBeNull();
     expect(container.querySelector('[aria-label="Civil Floor Thickness"]')).toBeNull();
+    expect(container.querySelector('[data-testid="civil-bottom-world-elevation"]')).toBeNull();
     expect(color.value).toBe(item.style?.colorToken);
     await act(async () => change(color, "#09aabb"));
     await act(async () => change(opacity, "0.42"));
@@ -79,6 +80,8 @@ describe("CivilReferenceProperties style authority", () => {
 
     expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Top Elevation above Level"]')?.value).toBe("0");
     expect(container.querySelector('[data-testid="civil-world-elevation"]')?.textContent).toContain("Top Surface World Elevation0 mm");
+    expect(container.querySelector('[data-testid="civil-bottom-world-elevation"]')?.textContent)
+      .toContain("Bottom Surface World Elevation-20 mm");
     expect(container.textContent).toContain("Plan Depth (mm)");
     expect(container.textContent).toContain("Floor Thickness (mm)");
     expect(container.textContent).not.toContain("Depth / Thickness (mm)");
@@ -119,6 +122,8 @@ describe("CivilReferenceProperties style authority", () => {
     )));
 
     await render(floor);
+    expect(container.querySelector('[data-testid="civil-bottom-world-elevation"]')?.textContent)
+      .toContain("Bottom Surface World Elevation-350 mm");
     const typeSelect = Array.from(container.querySelectorAll("label"))
       .find((label) => label.querySelector("span")?.textContent === "Type")
       ?.querySelector<HTMLSelectElement>("select");
@@ -134,6 +139,7 @@ describe("CivilReferenceProperties style authority", () => {
     expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Elevation above Level"]')?.value).toBe("0");
     expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Height"]')?.value).toBe("350");
     expect(container.querySelector('[data-testid="civil-world-elevation"]')?.textContent).toContain("World Elevation0 mm");
+    expect(container.querySelector('[data-testid="civil-bottom-world-elevation"]')).toBeNull();
     const wallTypeSelect = Array.from(container.querySelectorAll("label"))
       .find((label) => label.querySelector("span")?.textContent === "Type")
       ?.querySelector<HTMLSelectElement>("select");
@@ -143,6 +149,10 @@ describe("CivilReferenceProperties style authority", () => {
       type: "floor-area",
       positionMm: { xMm: 0, yMm: 0, zMm: -350 }
     });
+
+    await render({ ...wall, type: "floor-area", positionMm: { ...wall.positionMm, zMm: -350 } });
+    expect(container.querySelector('[data-testid="civil-bottom-world-elevation"]')?.textContent)
+      .toContain("Bottom Surface World Elevation-350 mm");
 
     await act(async () => root.unmount());
   });

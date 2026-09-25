@@ -264,6 +264,12 @@ export function CivilReferenceProperties({
             <span>{isFloorArea ? "Top Surface World Elevation" : "World Elevation"}</span>
             <strong>{worldElevationMm} mm</strong>
           </div>
+          {isFloorArea ? (
+            <div className="property-readout" data-testid="civil-bottom-world-elevation">
+              <span>Bottom Surface World Elevation</span>
+              <strong>{selectedCivilReference.positionMm.zMm ?? 0} mm</strong>
+            </div>
+          ) : null}
           <label className="property-field">
             <span>Width / Length (mm)</span>
             <NumericInput
