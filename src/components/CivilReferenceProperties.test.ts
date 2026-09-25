@@ -3,6 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
+import type { CivilReferenceItem } from "../types/civil";
 import { createCivilReference } from "../utils/civil";
 import { CivilReferenceProperties } from "./CivilReferenceProperties";
 
@@ -12,6 +13,11 @@ const change = (input: HTMLInputElement, value: string) => {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
+};
+
+const changeSelect = (select: HTMLSelectElement, value: string) => {
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
 };
 
 describe("CivilReferenceProperties style authority", () => {
@@ -86,6 +92,58 @@ describe("CivilReferenceProperties style authority", () => {
       sizeMm: expect.objectContaining({ heightMm: 350 })
     }));
     expect(container.querySelector('[aria-label="Civil Elevation above Level"]')).toBeNull();
+    await act(async () => root.unmount());
+  });
+
+  it("preserves the visible Level-relative anchor when Type crosses the Floor Area boundary", async () => {
+    const floor = createCivilReference("floor-area", { xMm: 0, yMm: 0 }, "2026-09-24T00:00:00.000Z");
+    floor.levelId = "ground";
+    floor.sizeMm.heightMm = 350;
+    floor.positionMm.zMm = -350;
+    const onUpdateCivilReference = vi.fn();
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const commonProps = {
+      layers: [],
+      levels: [{ id: "ground", name: "Ground", elevationMm: 0, systemLevel: true, createdAt: "now", updatedAt: "now" }],
+      isLocked: false,
+      onUpdateCivilReference,
+      onChangeLayer: vi.fn(),
+      onChangeLevel: vi.fn(),
+      onUpdateRelativeElevation: vi.fn(),
+      onDeleteCivilReference: vi.fn()
+    };
+    const render = async (selectedCivilReference: CivilReferenceItem) => act(async () => root.render(createElement(
+      CivilReferenceProperties,
+      { ...commonProps, selectedCivilReference }
+    )));
+
+    await render(floor);
+    const typeSelect = Array.from(container.querySelectorAll("label"))
+      .find((label) => label.querySelector("span")?.textContent === "Type")
+      ?.querySelector<HTMLSelectElement>("select");
+    expect(typeSelect).toBeTruthy();
+    await act(async () => changeSelect(typeSelect!, "wall"));
+    expect(onUpdateCivilReference).toHaveBeenLastCalledWith(floor.id, {
+      type: "wall",
+      positionMm: { xMm: 0, yMm: 0, zMm: 0 }
+    });
+
+    const wall = { ...floor, type: "wall" as const, positionMm: { ...floor.positionMm, zMm: 0 } };
+    await render(wall);
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Elevation above Level"]')?.value).toBe("0");
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Civil Height"]')?.value).toBe("350");
+    expect(container.querySelector('[data-testid="civil-world-elevation"]')?.textContent).toContain("World Elevation0 mm");
+    const wallTypeSelect = Array.from(container.querySelectorAll("label"))
+      .find((label) => label.querySelector("span")?.textContent === "Type")
+      ?.querySelector<HTMLSelectElement>("select");
+    expect(wallTypeSelect).toBeTruthy();
+    await act(async () => changeSelect(wallTypeSelect!, "floor-area"));
+    expect(onUpdateCivilReference).toHaveBeenLastCalledWith(floor.id, {
+      type: "floor-area",
+      positionMm: { xMm: 0, yMm: 0, zMm: -350 }
+    });
+
     await act(async () => root.unmount());
   });
 });

@@ -66,6 +66,21 @@ export const getCivilBottomWorldElevationFromAnchorMm = (
   heightMm = item.sizeMm.heightMm ?? 20
 ) => anchorWorldElevationMm - (item.type === "floor-area" ? heightMm : 0);
 
+export const getCivilTypeTransitionUpdate = (
+  item: CivilReferenceItem,
+  targetType: CivilReferenceType
+): Pick<CivilReferenceItem, "type" | "positionMm"> => {
+  const anchorWorldElevationMm = getCivilLevelAnchorWorldElevationMm(item);
+  const targetItem = { ...item, type: targetType };
+  return {
+    type: targetType,
+    positionMm: {
+      ...item.positionMm,
+      zMm: getCivilBottomWorldElevationFromAnchorMm(targetItem, anchorWorldElevationMm)
+    }
+  };
+};
+
 export const resizeCivilHeightPreservingLevelAnchor = (
   item: CivilReferenceItem,
   heightMm: number

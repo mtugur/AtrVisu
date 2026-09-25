@@ -3,6 +3,7 @@ import type { LayoutLayer } from "../types/layers";
 import type { LayoutLevel } from "../types/levels";
 import {
   getCivilLevelAnchorWorldElevationMm,
+  getCivilTypeTransitionUpdate,
   getCivilTypeDefaults,
   getCivilTypeLabel,
   resizeCivilHeightPreservingLevelAnchor
@@ -182,7 +183,10 @@ export function CivilReferenceProperties({
               value={selectedCivilReference.type}
               disabled={isLocked}
               onChange={(event) =>
-                onUpdateCivilReference(selectedCivilReference.id, { type: event.target.value as CivilReferenceType })
+                onUpdateCivilReference(
+                  selectedCivilReference.id,
+                  getCivilTypeTransitionUpdate(selectedCivilReference, event.target.value as CivilReferenceType)
+                )
               }
             >
               {civilTypes.map((type) => (

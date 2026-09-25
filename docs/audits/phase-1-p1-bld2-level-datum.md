@@ -16,6 +16,7 @@ P1-BLD2 follows the Product Constitution, Interaction Standard sections 3, 4 and
 - Missing Level collections, active IDs and entity assignments normalize to Ground without changing physical coordinates. Floor Area never infers or creates a Level, and Machines never infer support height from Floor Area overlap.
 - Active Level is serialized layout context. New Machines use active datum plus local zero; new Floor Areas place their top at active datum; other Build primitives retain their existing base-relative defaults, including Beam at `+3000 mm`.
 - Explicit reassignment preserves each entity's defined relative anchor. Datum changes rigidly move all assigned Machine/Civil geometry by one delta. Floor Area thickness edits preserve top world elevation. Each accepted operation remains within the existing complete history snapshot authority.
+- Civil Type transitions preserve the user-visible anchor across the Floor Area boundary: Floor Area top becomes the target non-Floor base, and a non-Floor base becomes the target Floor Area top. Existing dimensions and style remain unchanged; non-Floor-to-non-Floor canonical bottoms remain unchanged.
 - Any assigned item lock or locked layer rejects the complete datum change. Ground deletion and assigned user-Level deletion are rejected without history or dirty mutation.
 
 ## Runtime surfaces
@@ -28,10 +29,11 @@ P1-BLD2 follows the Product Constitution, Interaction Standard sections 3, 4 and
 - Serialization tests cover legacy physical invariance, Level/assignment/world-elevation round trip, and Ground Floor Area bottom `-350 mm` surviving JSON export/import with top at `0 mm`.
 - History tests cover Level datum movement and Floor Area thickness/anchor restoration through Undo/Redo.
 - Inspector tests cover Floor Area top-relative wording/projection, top-preserving thickness, and canonical top-world readout while retaining non-floor semantics.
+- Pure Civil, Inspector and Chromium regressions cover Floor Area -> Wall -> Floor transitions, finite canonical geometry and preservation of the Level-relative anchor.
 - The exact UI Machine -> non-default Layer -> locked Layer -> Level datum route rejects atomically, preserves all assigned world elevations and creates no Undo transaction.
 - Chromium proves Ground `0` plus Floor Area `350` gives bottom `-350`, top `0`, and Machine base `0`; reassignment to Level 2 `6000` gives bottom `5650` and top `6000`; horizontal Floor Area drag preserves its vertical anchor.
 - Babylon rendering group 1 explicitly preserves group-0 depth. Opaque top/oblique and below-view evidence demonstrates physical Machine/Beam/Floor Area occlusion; transparent Floor Area retains alpha while depth testing remains active.
-- Existing Build, PF-3A body drag, dock density, command, panel and runtime-access regressions remain in the complete gates.
+- BabylonScene changed only to install the rendering-depth policy. Plan drag, snap and movement-solver semantics were not changed; ADR-001 movement behavior remains frozen. Existing Build, PF-3A body drag, dock density, command, panel and runtime-access regressions remain in the complete gates.
 
 ## Release state
 

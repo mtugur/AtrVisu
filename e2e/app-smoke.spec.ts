@@ -5213,6 +5213,20 @@ test("Floor Area uses the Level FFL top anchor and preserves physical world dept
   await properties.getByLabel("Civil Floor Thickness").press("Enter");
   await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(-350);
   await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+
+  await properties.getByLabel("Type").selectOption("wall");
+  await expect(properties.getByLabel("Civil Elevation above Level")).toHaveValue("0");
+  await expect(properties.getByLabel("Civil Height")).toHaveValue("350");
+  await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(0);
+  expect(Number.isFinite((await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId])).toBe(true);
+
+  await properties.getByLabel("Type").selectOption("floor-area");
+  await expect(properties.getByLabel("Civil Top Elevation above Level")).toHaveValue("0");
+  await expect(properties.getByLabel("Civil Floor Thickness")).toHaveValue("350");
+  await expect(properties.getByTestId("civil-world-elevation")).toContainText("0 mm");
+  await expect.poll(async () => (await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId]).toBe(-350);
+  expect(Number.isFinite((await readCanvasRecord<number>(page, "data-civil-elevations-mm"))[floorId])).toBe(true);
   await properties.getByLabel("Civil Opacity").fill("1");
 
   await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
