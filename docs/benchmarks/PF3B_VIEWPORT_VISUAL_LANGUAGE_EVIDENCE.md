@@ -8,6 +8,8 @@ Review date: 2026-09-28
 
 This record uses official vendor documentation only. Each entry separates a documented benchmark fact from an AtrVisu product decision. Product colors, dimensions, ratios and acceptance captures are not attributed to a benchmark unless the source states them.
 
+AtrVisu adoption is recorded explicitly by each `ATRVISU PRODUCT DECISION` entry; those decisions simplify or reject benchmark capabilities according to the bounded Phase-1 engineering-canvas objective.
+
 ## Visual Components Premium 5.0 - Building a Layout
 
 - Vendor: Visual Components Oy.
