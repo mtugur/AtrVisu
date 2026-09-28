@@ -14,7 +14,7 @@ Purpose: make the Project-level Master Plan decisions visible and durable inside
 | AtrVisu is a layered industrial engineering platform; random UI/state/panel/data-model decisions are forbidden. | `docs/product/ATRVISU_PRODUCT_CONSTITUTION.md`; `AGENTS.md` |
 | Visual Components-like usable industrial platform core; selective Siemens Tecnomatix capability; Phase-1 must stay fast/simple for non-CAD sales users. | Product Constitution; normative Phase-1 product specs |
 | Office/CAD/engineering user habits are the UI basis. | Product Constitution benchmark-first rule; `docs/standards/ATRVISU_INTERACTION_STANDARD.md` |
-| UI should behave as a predictable engineering cockpit, not a website. | `docs/standards/ATRVISU_UX_STANDARD.md`; Interaction Standard |
+| UI should behave as a predictable engineering cockpit, not a website. | `docs/standards/ATRVISU_UX_STANDARD.md`; Interaction Standard; `docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md` for the engineering canvas |
 | Viewport/camera/pointer behavior must remain separate from engineering data. | Existing Viewport Contract + Interaction Standard camera/manipulation sections |
 | No-red-console: normal use must have no red console; `Maximum update depth` is a blocker. | Product Constitution; Interaction Standard runtime-console contract; Interaction Change Gate; CI governance |
 | Every new task must name contract, desired behavior, prohibitions, tests and closure criteria. | `docs/protocols/CODEX_SYNC_PROTOCOL.md`; PR template |
