@@ -20,11 +20,11 @@ AtrVisu adopts the exact dark/light viewport palettes in `ATRVISU_VIEWPORT_VISUA
 
 ### Theme-aware and theme-stable split
 
-Background, visual workplane, minor grid and major grid are theme-aware presentation resources owned below the ADR-005 theme boundary. Warning, collision, clearance, primary/secondary selection, labels and annotation semantics remain theme-stable technical meanings. Theme switching cannot mutate project, camera, fit, history, entities, transforms or selection and cannot remount EditorHost/Babylon/canvas.
+Background, visual workplane, minor grid and major grid are theme-aware presentation resources owned below the ADR-005 theme boundary. One read-only resolver derives `EffectiveThemeId = "light" | "dark"`: explicit themes resolve to themselves and `system` resolves from current `prefers-color-scheme`. UI presentation and the typed Babylon palette consume this same resolved value; Babylon does not read arbitrary CSS literals. Only `ThemeId` persists. Effective theme changes cannot mutate project, camera, fit, history, dirty state, entities, transforms or selection and cannot remount EditorHost/Babylon/canvas.
 
 ### Grid architecture
 
-The grid is world-aligned and metric: 1000 mm minor spacing and a major line every five intervals. Its deterministic extent is derived only from Machine and Civil plan bounds: 5000 mm margin per side, minimum 40000 x 40000 mm, rounded outward to 5000 mm boundaries. Empty layouts use the centered minimum at world origin. Camera and viewport pixels do not participate.
+The grid is world-aligned and metric: minor lines are phase-anchored to world origin at integer 1000 mm multiples and major lines are the subset at integer 5000 mm multiples. Extent/center changes never slide that phase. Its deterministic extent is derived only from rotation-applied Machine and Civil world-space Plan AABBs: 5000 mm margin per side, minimum 40000 x 40000 mm, rounded outward to 5000 mm boundaries. Raw unrotated width/depth bounds are invalid. Empty layouts use the centered minimum at world origin. Camera and viewport pixels do not participate.
 
 Grid rendering must use a bounded primitive count independent of extent. The current box-mesh-per-line architecture is rejected for PF-3B implementation.
 

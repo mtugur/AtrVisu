@@ -46,8 +46,8 @@ AtrVisu adoption is recorded explicitly by each `ATRVISU PRODUCT DECISION` entry
 - Access date: 2026-09-28.
 - Specific precedent: direct viewport selection and panel-based selection address the same layout objects; Ctrl adds/removes objects from the current selection.
 - Task similarity: AtrVisu already shares Runtime Selection between Viewport, Explorer and Inspector and needs a visual treatment for that same state.
-- **BENCHMARK FACT:** selection is an explicit cross-surface object state, not a material category or warning state.
-- **ATRVISU PRODUCT DECISION:** primary and secondary selection will use dedicated outline/frame/silhouette cues that remain distinct from warning and collision colors and work across placeholder, GLB and Civil geometry.
+- **BENCHMARK FACT:** direct viewport selection and panel-based selection can address the same scene/layout objects; Ctrl adds or removes an object from the current selection.
+- **ATRVISU PRODUCT DECISION:** selection is a dedicated object state, not a warning, collision or material category. Primary and secondary selection use dedicated outline/frame/silhouette cues that remain distinct from warning and collision colors and work across placeholder, GLB and Civil geometry.
 
 ## Autodesk Inventor Factory 2021 - Floor and Grid Settings
 
@@ -105,7 +105,7 @@ The official sources converge on these precedents:
 2. Major/minor grid cadence, visual appearance and extent are explicit presentation concerns.
 3. Content-driven auto-size may coexist with a deterministic minimum extent.
 4. Viewport projection, lighting/rendering and selection are separate responsibilities.
-5. Selection is an object state shared between viewport and panels, not a warning material.
+5. Direct viewport and panel-based selection can address the same scene/layout objects.
 6. Background, environment/lighting and floor are separable scene layers.
 
-The sources do not prescribe AtrVisu's colors, millimetre cadence, auto-size margins, lighting ratios or selection palette. Those values are frozen as explicit AtrVisu decisions in `docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md` and ADR-004.
+The sources do not prescribe AtrVisu's colors, millimetre cadence, auto-size margins, lighting ratios, selection palette or selection-not-warning rule. Those values and meanings are frozen as explicit AtrVisu decisions in `docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md` and ADR-004.

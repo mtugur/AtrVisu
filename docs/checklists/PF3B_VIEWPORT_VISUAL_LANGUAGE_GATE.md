@@ -10,13 +10,15 @@ Stage: A - contract, benchmark and acceptance freeze only.
 | Architecture decision | PASS | ADR-004 freezes the authority split and rejected alternatives before runtime implementation. |
 | Runtime scope | PASS | No `src/**`, E2E, package, storage, schema or runtime visual file changes are allowed in Stage A. |
 | Dark/light palette | PASS | Exact neutral sRGB values are recorded; no cyan/green cast, HDRI or skybox is accepted. |
-| Grid contract | PASS | 1000 mm minor, major every five, 5000 mm content margin, 40000 mm minimum and 5000 mm outward rounding are frozen. |
+| Effective system theme contract | PASS | One read-only `EffectiveThemeId` resolver drives UI and typed Babylon presentation; only user `ThemeId` persists. |
+| Grid contract | PASS | World-origin-phased 1000 mm minor/5000 mm major lines, rotation-applied world-space Plan AABBs, 5000 mm content margin, 40000 mm minimum and 5000 mm outward rounding are frozen. |
 | Workplane/Floor distinction | PASS | Visual workplane, ADR-001 drag plane and ADR-003 physical Floor Area are three separate authorities. |
 | Lighting/material hierarchy | PASS | Neutral key/fill/ambient and authored/material ownership are frozen without cinematic rendering. |
 | Selection hierarchy | PASS | Primary/secondary selection is distinct from warning/collision and respects physical depth. |
 | Performance boundary | PASS | Primitive count is extent-independent; no scene/canvas remount, per-frame React publication or expensive shadow/post-process baseline. |
 | Acceptance matrix | PASS | Ten exact capture IDs and deterministic industrial-scene requirements are defined below. |
 | Local governance checks | PASS | Interaction governance and governance policy stress tests pass; `git diff --check` is clean. |
+| Stage A repository/governance CI | PASS | Exact-head Quality Gate `36392043730` passed for the reviewed Stage A baseline. |
 | Automation Green | N/A/PENDING | Stage A has governance checks only; runtime automation belongs to Stage B. |
 | Contract Verified | PENDING | Independent review must verify evidence, standard, ADR and authority consistency. |
 | Product Accepted | PENDING | Product acceptance requires Stage B runtime implementation, exact-head CI and manual visual review. |
@@ -33,13 +35,16 @@ Stage: A - contract, benchmark and acceptance freeze only.
 | `06-primary-secondary-selection` | Distinct primary and secondary Machine/Civil selection. |
 | `07-selected-collision-distinction` | Selection and collision visible as separate simultaneous facts. |
 | `08-floor-area-physical-depth` | Real Machine/Beam overlap with Floor Area verifies physical top/below depth. |
-| `09-theme-switch-same-camera` | Camera, fit, transforms, selection and canvas lifecycle unchanged across theme switch. |
+| `09-theme-switch-same-camera` | Explicit and `system` effective theme changes preserve camera, fit, transforms, selection, history, dirty state and editor/Babylon/canvas lifecycle. |
 | `10-presentation-clean-capture` | Existing display authority produces a clean commercial capture without domain mutation. |
 
 ## Mandatory Stage B Checks
 
 - Dark and light palettes match the exact standard values.
+- One effective-theme resolver updates UI and typed Babylon presentation on `system` OS changes; effective theme is not persisted.
 - Grid extent follows Machine+Civil bounds and is unchanged by orbit, zoom, projection, fit or viewport resize.
+- Grid lines remain phase-anchored to world origin when content movement changes extent or center.
+- Rotated Machine/Civil world-space Plan AABBs remain fully enclosed with the exact 5000 mm margin; raw unrotated bounds are not accepted.
 - Zero/one/large extents retain bounded primitive count.
 - Grid/workplane are not selectable, pickable, collidable, persisted or exported.
 - Floor Area remains physical ADR-003 geometry; visual workplane never occludes it.

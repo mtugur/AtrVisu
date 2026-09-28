@@ -27,6 +27,8 @@ Normal depth remains authoritative within physical world geometry. The hierarchy
 Runtime implementation must expose one immutable, detached typed concept equivalent to:
 
 ```ts
+type EffectiveThemeId = "light" | "dark";
+
 interface ViewportVisualPalette {
   readonly background: string;
   readonly workplaneFill: string;
@@ -50,8 +52,11 @@ Rules:
 
 - Colors are neutral and low-saturation. Cyan/green cast, beige/brown wash, blue-black voids and saturated grid colors are forbidden.
 - No skybox, HDRI, environment image, decorative gradient or horizon effect is part of the Phase-1 viewport.
-- Dark/light UI themes select the corresponding viewport presentation palette through the ADR-005 theme boundary.
-- `system` resolves to the effective dark or light palette without creating a project preference or a second theme authority.
+- One read-only presentation resolver owns `EffectiveThemeId`: `light` resolves to `light`, `dark` resolves to `dark`, and `system` resolves to the current `prefers-color-scheme` result.
+- UI presentation and the typed Babylon viewport palette consume that same resolved value. CSS and Babylon cannot become independent theme authorities.
+- While `system` is active, an operating-system color-scheme change updates both UI and viewport presentation through that resolver.
+- Only the existing user-selected `ThemeId` preference persists. `EffectiveThemeId` and the resolved palette are derived presentation state and are never persisted.
+- Babylon receives `EffectiveThemeId` or `ViewportVisualPalette` through a typed presentation boundary and never reads arbitrary CSS literals.
 - Theme switching updates presentation resources only. It must not mutate project data, camera pose/projection/fit, history, dirty state, entities, transforms, selection, collision state or editor lifecycle.
 - Warning, collision, clearance, primary selection, secondary selection, labels and annotation colors are theme-stable engineering semantics and are not derived from generic theme accent colors.
 
@@ -61,19 +66,23 @@ Rules:
 
 - Minor spacing: exactly `1000 mm`.
 - Major cadence: exactly every `5` minor intervals, therefore `5000 mm`.
-- Grid is world-aligned to canonical Plan X/Y and remains independent of camera orientation.
+- Minor lines are phase-anchored to canonical world origin at integer multiples of `1000 mm` on Plan X/Y.
+- Major lines are exactly the minor-line subset at integer multiples of `5000 mm` from world origin.
+- Grid is world-aligned to canonical Plan X/Y and remains independent of camera orientation. Auto-size may change extent or center, but it cannot shift world grid phase.
 - Grid and global workplane are non-pickable, non-collidable and excluded from Platform Entity, selection, history, persistence, export and Plan Move authorities.
 - Grid visibility may remain a presentation preference, but changing it is not a project mutation.
 
 ### 4.2 Deterministic auto-size
 
-The displayed workplane extent derives from finite current Machine and Civil plan AABBs in canonical millimetres:
+The displayed workplane extent derives from finite current Machine and Civil transformed world-space Plan AABBs in canonical millimetres. Each AABB must be computed after applying the entity's current Plan rotation; raw unrotated width/depth boxes are forbidden:
 
 1. Union all current Machine and Civil plan bounds. Labels, selection/status overlays, annotations, camera, grid and temporary editor affordances do not contribute.
 2. Expand each side by exactly `5000 mm`.
 3. Enforce a minimum `40000 mm` width and `40000 mm` depth, centered on the content union. An empty layout uses this centered minimum at world origin.
 4. Round each resulting minimum outward and maximum outward to the nearest `5000 mm` boundary.
 5. Recompute only from domain bounds. Camera zoom, orbit, projection, fit-view, viewport pixel dimensions and theme changes cannot affect extent.
+
+Rotated rectangular Machines, Walls and Beams must remain fully enclosed by their transformed AABB, the exact `5000 mm` margin and the rounded extent. Content movement may resize or recenter the extent, but world-origin line phase remains unchanged.
 
 There is no extent hysteresis or camera-dependent density change in PF-3B. Implementation must use a bounded primitive count independent of world extent, such as one workplane/grid surface plus a bounded axis/edge set. Creating one box/mesh per grid line is forbidden.
 
@@ -171,7 +180,9 @@ Stage B implementation must produce reviewer-accessible deterministic captures w
 | `06-primary-secondary-selection` | Primary and secondary selections are distinct across Machine/Civil representation without material recolor. |
 | `07-selected-collision-distinction` | One selected colliding entity exposes selection and collision as simultaneous distinguishable states. |
 | `08-floor-area-physical-depth` | Machine and Beam above opaque Floor Area remain visible from above; slab may occlude geometry behind it from below. |
-| `09-theme-switch-same-camera` | Before/after theme switch proves identical camera pose/projection/target/fit, entity transforms, selection and canvas lifecycle. |
+| `09-theme-switch-same-camera` | Explicit theme and `system` effective dark-to-light/light-to-dark changes prove identical camera pose/projection/target/fit, entity transforms, selection, history, dirty state and editor/Babylon/canvas lifecycle. |
 | `10-presentation-clean-capture` | Clean commercial capture using existing display authority; no project or camera mutation. |
 
 The industrial scene and camera state must be deterministic and serialized by existing authorities. Captures must cover desktop and the existing supported narrow viewport where relevant, report no document overflow, and produce zero console errors/page errors. Stage A creates no screenshots and makes no claim that these runtime captures already pass.
+
+Stage B must also regress grid phase independently of screenshots: moving content may change extent but every minor/major line remains on the same world-origin multiple; a rotated rectangular Machine, Wall or Beam near an extent edge remains fully contained by its transformed world-space Plan AABB plus the exact `5000 mm` margin.
