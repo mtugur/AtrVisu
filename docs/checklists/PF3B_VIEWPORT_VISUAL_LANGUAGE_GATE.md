@@ -16,6 +16,7 @@ Stage: A - contract, benchmark and acceptance freeze only.
 | Selection hierarchy | PASS | Primary/secondary selection is distinct from warning/collision and respects physical depth. |
 | Performance boundary | PASS | Primitive count is extent-independent; no scene/canvas remount, per-frame React publication or expensive shadow/post-process baseline. |
 | Acceptance matrix | PASS | Ten exact capture IDs and deterministic industrial-scene requirements are defined below. |
+| Local governance checks | PASS | Interaction governance and governance policy stress tests pass; `git diff --check` is clean. |
 | Automation Green | N/A/PENDING | Stage A has governance checks only; runtime automation belongs to Stage B. |
 | Contract Verified | PENDING | Independent review must verify evidence, standard, ADR and authority consistency. |
 | Product Accepted | PENDING | Product acceptance requires Stage B runtime implementation, exact-head CI and manual visual review. |
