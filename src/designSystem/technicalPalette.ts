@@ -63,6 +63,10 @@ export type TechnicalColor4Id = keyof typeof TECHNICAL_COLOR_RGBA;
 
 export const TECHNICAL_CSS_COLORS = Object.freeze({
   labelText: "#f8fbf6",
+  labelDarkBackground: "rgba(12, 15, 17, 0.68)",
+  labelDarkBorder: "rgba(248, 251, 246, 0.18)",
+  labelLightBackground: "rgba(18, 22, 25, 0.82)",
+  labelLightBorder: "rgba(248, 251, 246, 0.22)",
   transparent: "transparent",
   annotationSelectedBorder: "#ffe58a",
   annotationSelectedText: "#fff2a8",

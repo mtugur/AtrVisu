@@ -68,7 +68,10 @@ import {
   getAnnotationVisualStyle,
   getRayPlanePlanPointMm
 } from "../utils/annotations";
-import { createBabylonCameraViewport } from "./babylonScene/cameraViewport";
+import {
+  applyBabylonCameraPose,
+  createBabylonCameraViewport
+} from "./babylonScene/cameraViewport";
 import {
   calculateCivilDragPosition,
   calculateMachineDragPositionUpdates,
@@ -84,7 +87,7 @@ import {
   type SceneDragMutationResult
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts, getMachineVerticalRenderPositions } from "./babylonScene/objectRendering";
-import { drawMachineLabelText } from "./babylonScene/machineLabelLifecycle";
+import { drawSceneLabelText } from "./babylonScene/sceneLabelPresentation";
 import {
   captureOrthographicFraming,
   getOrthographicBoundsForViewport,
@@ -235,6 +238,7 @@ type PlacedMachineNode = {
     marker: Mesh;
     label: Mesh;
     texture: DynamicTexture;
+    labelText: string;
     material: StandardMaterial;
     labelMaterial: StandardMaterial;
   }>;
@@ -263,6 +267,7 @@ type CivilReferenceNode = {
   selectionFrame: LinesMesh;
   label: Mesh;
   labelTexture: DynamicTexture;
+  labelText: string;
   signature: string;
 };
 
@@ -278,14 +283,16 @@ const getCivilColor = (item: CivilReferenceItem) => {
   return createTechnicalColor3FromHex(CIVIL_TECHNICAL_COLORS[item.type]);
 };
 
-const drawLabelText = (texture: DynamicTexture, text: string) => {
-  drawMachineLabelText(texture, text, TECHNICAL_CSS_COLORS.labelText);
-};
-
-const createLabel = (scene: Scene, textureKey: string, text: string, y: number) => {
+const createLabel = (
+  scene: Scene,
+  textureKey: string,
+  text: string,
+  y: number,
+  effectiveThemeId: EffectiveThemeId
+) => {
   const texture = new DynamicTexture(`label-texture-${textureKey}`, { width: 512, height: 128 }, scene);
   texture.hasAlpha = true;
-  drawLabelText(texture, text);
+  drawSceneLabelText(texture, text, effectiveThemeId);
 
   const material = new StandardMaterial(`label-material-${textureKey}`, scene);
   material.diffuseTexture = texture;
@@ -516,7 +523,8 @@ const connectionPointColor = (type: string) => {
 const createConnectionPointMarker = (
   scene: Scene,
   machine: PlacedMachine,
-  pointIndex: number
+  pointIndex: number,
+  effectiveThemeId: EffectiveThemeId
 ) => {
   const point = getConnectionPointsForObject(machine)[pointIndex];
   const markerMaterial = new StandardMaterial(`connection-point-material-${machine.instanceId}-${point.id}`, scene);
@@ -546,7 +554,7 @@ const createConnectionPointMarker = (
   texture.hasAlpha = true;
   const markerText = getConnectionPointMarkerLabel(point);
   const trimmedText = markerText.length > 28 ? `${markerText.slice(0, 25)}...` : markerText;
-  texture.drawText(trimmedText, null, 86, "bold 42px Arial", TECHNICAL_CSS_COLORS.labelText, TECHNICAL_CSS_COLORS.transparent, true, true);
+  drawSceneLabelText(texture, trimmedText, effectiveThemeId, "connection-point");
   const labelMaterial = new StandardMaterial(`connection-point-label-material-${machine.instanceId}-${point.id}`, scene);
   labelMaterial.diffuseTexture = texture;
   labelMaterial.opacityTexture = texture;
@@ -563,7 +571,14 @@ const createConnectionPointMarker = (
   label.isPickable = false;
   label.renderingGroupId = 2;
 
-  return { marker, label, texture, material: markerMaterial, labelMaterial };
+  return {
+    marker,
+    label,
+    texture,
+    labelText: trimmedText,
+    material: markerMaterial,
+    labelMaterial
+  };
 };
 
 const positionConnectionPointMarker = (
@@ -686,7 +701,11 @@ const createMetadataFrame = (scene: Scene, machine: PlacedMachine) => {
   );
 };
 
-const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): CivilReferenceNode => {
+const createCivilReferenceNode = (
+  scene: Scene,
+  item: CivilReferenceItem,
+  effectiveThemeId: EffectiveThemeId
+): CivilReferenceNode => {
   const width = mmToMeters(item.sizeMm.widthMm);
   const depth = mmToMeters(item.sizeMm.depthMm);
   const height = mmToMeters(item.sizeMm.heightMm ?? 20);
@@ -716,11 +735,25 @@ const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): Civil
   selectionFrame.parent = mesh;
   selectionFrame.isVisible = false;
 
-  const { label, texture } = createLabel(scene, `civil-${item.id}`, item.name, height + 0.35);
+  const { label, texture } = createLabel(
+    scene,
+    `civil-${item.id}`,
+    item.name,
+    height + 0.35,
+    effectiveThemeId
+  );
   label.isPickable = false;
   label.renderingGroupId = 2;
 
-  return { mesh, material, selectionFrame, label, labelTexture: texture, signature: getCivilReferenceNodeSignature(item) };
+  return {
+    mesh,
+    material,
+    selectionFrame,
+    label,
+    labelTexture: texture,
+    labelText: item.name,
+    signature: getCivilReferenceNodeSignature(item)
+  };
 };
 
 const getCivilReferenceNodeSignature = (item: CivilReferenceItem) =>
@@ -1305,6 +1338,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         existing.material.diffuseColor = getCivilColor(item);
         existing.material.emissiveColor = getCivilColor(item).scale(0.18);
         existing.material.alpha = item.style?.opacity ?? 0.45;
+        if (existing.labelText !== item.name) {
+          drawSceneLabelText(
+            existing.labelTexture,
+            item.name,
+            effectiveThemeIdRef.current
+          );
+          existing.labelText = item.name;
+        }
         positionCivilReferenceNode(
           existing,
           item,
@@ -1317,7 +1358,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       if (existing) {
         disposeCivilReferenceNode(existing);
       }
-      const node = createCivilReferenceNode(scene, item);
+      const node = createCivilReferenceNode(scene, item, effectiveThemeIdRef.current);
       positionCivilReferenceNode(
         node,
         item,
@@ -1569,13 +1610,15 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         orthographicBounds = resolved.bounds;
       }
 
-      camera.mode = mode === "orthographic"
-        ? Camera.ORTHOGRAPHIC_CAMERA
-        : Camera.PERSPECTIVE_CAMERA;
-      camera.alpha = cameraState.alpha;
-      camera.beta = cameraState.beta;
-      camera.radius = cameraState.radius;
-      camera.target = new Vector3(cameraState.targetX, cameraState.targetY, cameraState.targetZ);
+      applyBabylonCameraPose(camera, {
+        mode,
+        alpha: cameraState.alpha,
+        beta: cameraState.beta,
+        radius: cameraState.radius,
+        targetX: cameraState.targetX,
+        targetY: cameraState.targetY,
+        targetZ: cameraState.targetZ
+      });
       if (orthographicBounds) {
         camera.inertialRadiusOffset = 0;
         applyOrthographicBounds(camera, orthographicBounds);
@@ -2407,6 +2450,20 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     effectiveThemeIdRef.current = effectiveThemeId;
     visualContextRef.current?.updatePalette(effectiveThemeId);
+    machineNodesRef.current.forEach((node) => {
+      drawSceneLabelText(node.labelTexture, node.labelText, effectiveThemeId);
+      node.connectionPointMarkers.forEach((markerSet) => {
+        drawSceneLabelText(
+          markerSet.texture,
+          markerSet.labelText,
+          effectiveThemeId,
+          "connection-point"
+        );
+      });
+    });
+    civilReferenceNodesRef.current.forEach((node) => {
+      drawSceneLabelText(node.labelTexture, node.labelText, effectiveThemeId);
+    });
     const canvas = canvasRef.current;
     if (canvas && enableE2EDiagnosticsRef.current) {
       canvas.dataset.effectiveThemeId = effectiveThemeId;
@@ -2466,7 +2523,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       const displayName = getPlacedMachineDisplayName(machine);
       if (existingNode) {
         if (existingNode.labelText !== displayName) {
-          drawLabelText(existingNode.labelTexture, displayName);
+          drawSceneLabelText(
+            existingNode.labelTexture,
+            displayName,
+            effectiveThemeIdRef.current
+          );
           existingNode.labelText = displayName;
         }
         return;
@@ -2500,7 +2561,13 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       box.metadata = { instanceId };
       box.visibility = 0;
 
-      const { label, texture } = createLabel(scene, instanceId, displayName, vertical.labelY);
+      const { label, texture } = createLabel(
+        scene,
+        instanceId,
+        displayName,
+        vertical.labelY,
+        effectiveThemeIdRef.current
+      );
       label.metadata = {
         machineLabelInstanceId: instanceId,
         platformEntityId: createLegacyPlatformEntityId("machine", instanceId)
@@ -2547,7 +2614,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         product.parent = box;
       });
       const connectionPointMarkers = getConnectionPointsForObject(machine).map((_, pointIndex) => {
-        const markerSet = createConnectionPointMarker(scene, machine, pointIndex);
+        const markerSet = createConnectionPointMarker(
+          scene,
+          machine,
+          pointIndex,
+          effectiveThemeIdRef.current
+        );
         markerSet.marker.parent = box;
         markerSet.label.parent = box;
         positionConnectionPointMarker(markerSet, machine, pointIndex);
@@ -2661,7 +2733,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           markerSet.marker.dispose();
         });
         node.connectionPointMarkers = connectionPoints.map((_, pointIndex) => {
-          const markerSet = createConnectionPointMarker(scene, machine, pointIndex);
+          const markerSet = createConnectionPointMarker(
+            scene,
+            machine,
+            pointIndex,
+            effectiveThemeIdRef.current
+          );
           markerSet.marker.parent = node.box;
           markerSet.label.parent = node.box;
           return markerSet;

@@ -20,6 +20,8 @@ PF-3B Stage B implements the merged viewport visual standard without changing ca
 - Workplane bounds are the union of canonical rotation-applied Machine and Civil Plan AABBs, with exact 5000 mm margin, 40000 by 40000 mm minimum and outward 5000 mm rounding.
 - Neutral world-stable lighting uses directional key `1.00`, directional fill `0.45` and hemispheric ambient `0.35`, all sourced from the active viewport palette.
 - Selection uses only primary/secondary technical frames. Machine base material emissive state is collision-only, Civil color/opacity remains user-owned and mixed Machine/Civil primary presentation follows Runtime Selection `primaryId`.
+- Canonical camera-state application writes the ArcRotateCamera target before explicit mode/alpha/beta/radius. This preserves a request that changes target and orientation together without changing orbit, pan, wheel or movement semantics.
+- One shared scene-label presentation authority draws the existing Machine, Civil and connection-point text on a tight translucent neutral backplate. Effective-theme changes redraw those presentation textures in place without scene lifecycle or persistence mutation.
 - Presentation capture continues through the existing commercial-output authority, hides editor affordances through the existing helper and composites transparent render-target pixels over the active viewport background without changing scene state.
 
 ## Preserved Boundaries
@@ -31,11 +33,14 @@ PF-3B Stage B implements the merged viewport visual standard without changing ca
 
 ## Automated Evidence
 
-- Pure tests cover explicit/system effective theme resolution and listener cleanup, exact palettes, rotated world bounds, exact margins/rounding, world grid phase and huge finite coordinates.
+- Pure tests cover explicit/system effective theme resolution and listener cleanup, exact palettes, rotated world bounds, exact margins/rounding, world grid phase, huge finite coordinates and immutable dark/light label presentation.
 - NullEngine tests prove two constant visual-context meshes, separate pick/presentation resources, three exact lights and no resource growth across repeated theme or extent updates.
+- NullEngine camera regressions prove that a changed target plus explicit perspective or orthographic alpha/beta/radius survives camera matrix evaluation.
 - Selection tests protect global mixed primary/secondary roles and collision-only machine emissive behavior.
+- Chromium camera regression applies changed target/orientation payloads through the runtime bridge and checks the resulting snapshot after render. Capture 05 asserts a true plan camera before screenshot and records `alpha=-PI/2`, `beta=0.01`, radius `32` and orthographic vertical span `28`.
 - Chromium system-theme coverage proves effective dark-to-light changes preserve camera, selection, transforms, history, dirty state and scene/canvas identity.
 - Artifact `pf3b-viewport-visual-language` contains ten required PNGs and one JSON record. Its industrial scene contains one loaded GLB Machine, one placeholder Machine, Floor Area, Wall, Column, Beam and a planning Reference Zone. Claimed collision, viewport presence and Floor overlap are asserted before capture.
+- Captures 04, 09 and 10 show the shared restrained neutral label contrast treatment at normal screenshot scale in the light viewport and clean commercial capture; dark capture 03 uses the same label content and authority.
 - The JSON records effective theme, camera, lifecycle, selection, transforms, dirty/history depth, workplane bounds, grid cadence, visual-context mesh/light counts and console/page-error count for each capture.
 
 ## Local Validation
@@ -43,13 +48,13 @@ PF-3B Stage B implements the merged viewport visual standard without changing ca
 - Design-token governance: PASS across 276 maintained files.
 - Interaction governance and governance policy stress tests: PASS.
 - Build: PASS.
-- Unit: PASS, Vitest `4.1.11`, 167 files / 1392 tests.
-- E2E: PASS, 105 parallel Chromium scenarios plus one isolated Runtime Feature Access scenario (106 total).
+- Unit: PASS, Vitest `4.1.11`, 167 files / 1396 tests.
+- E2E: PASS, 106 parallel Chromium scenarios plus one isolated Runtime Feature Access scenario (107 total).
 - Artifact payload: PASS, ten required PNGs plus one JSON evidence record.
-- Dependency security audit: BLOCKED by one moderate transitive `undici@7.29.0` advisory (`GHSA-3wwx-pv8p-q78v`). This runtime package does not change package manifests or the lockfile.
+- Dependency security audit: PASS, zero vulnerabilities with the merged `undici@7.30.0` lock resolution. This runtime correction does not change package manifests or the lockfile.
 
 ## Acceptance State
 
-- Automation Green: PENDING final exact-head Quality Gate; dependency-security remediation is an explicit external blocker for this package.
+- Automation Green: PENDING final exact-head Quality Gate for the correction head; the complete local gate is green.
 - Contract Verified: PENDING independent review.
 - Product Accepted: PENDING manual visual acceptance after contract review.

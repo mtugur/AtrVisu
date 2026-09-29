@@ -4953,6 +4953,59 @@ test("annotation create and negative coordinate smoke has no red console errors"
   expect(errors).toEqual([]);
 });
 
+test("runtime camera state preserves explicit pose when target and projection change together", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await openCleanApp(page);
+  await waitForRuntimeViewportLifecycle(page);
+
+  const perspectiveRequest: RuntimeCameraApplyState = {
+    mode: "perspective",
+    alpha: 0.31,
+    beta: 1.12,
+    radius: 26,
+    targetX: 4,
+    targetY: 2,
+    targetZ: -3
+  };
+  expect(await applyRuntimeViewportCameraState(page, perspectiveRequest)).toBe(true);
+  await waitForSceneRenderFrames(page);
+  const perspective = (await getRuntimeViewportSnapshot(page)).camera;
+  expect(perspective?.mode).toBe("perspective");
+  expect(perspective?.alpha).toBeCloseTo(perspectiveRequest.alpha);
+  expect(perspective?.beta).toBeCloseTo(perspectiveRequest.beta);
+  expect(perspective?.radius).toBeCloseTo(perspectiveRequest.radius);
+  expect(perspective?.targetX).toBeCloseTo(perspectiveRequest.targetX);
+  expect(perspective?.targetY).toBeCloseTo(perspectiveRequest.targetY);
+  expect(perspective?.targetZ).toBeCloseTo(perspectiveRequest.targetZ);
+
+  const orthographicRequest: RuntimeCameraApplyState = {
+    mode: "orthographic",
+    alpha: -Math.PI / 2,
+    beta: 0.01,
+    radius: 32,
+    targetX: -2,
+    targetY: 0,
+    targetZ: 5,
+    orthographic: { centerX: 1, centerY: -1, verticalWorldSpan: 28 }
+  };
+  expect(await applyRuntimeViewportCameraState(page, orthographicRequest)).toBe(true);
+  await waitForSceneRenderFrames(page);
+  const orthographic = (await getRuntimeViewportSnapshot(page)).camera;
+  expect(orthographic?.mode).toBe("orthographic");
+  expect(orthographic?.alpha).toBeCloseTo(orthographicRequest.alpha);
+  expect(orthographic?.beta).toBeCloseTo(orthographicRequest.beta);
+  expect(orthographic?.radius).toBeCloseTo(orthographicRequest.radius);
+  expect(orthographic?.targetX).toBeCloseTo(orthographicRequest.targetX);
+  expect(orthographic?.targetY).toBeCloseTo(orthographicRequest.targetY);
+  expect(orthographic?.targetZ).toBeCloseTo(orthographicRequest.targetZ);
+  expect(orthographic?.orthographicIntent).toMatchObject({
+    centerX: 1,
+    centerY: -1,
+    verticalWorldSpan: 28
+  });
+  expect(errors).toEqual([]);
+});
+
 test("orthographic viewpoint framing can be captured, updated, and applied", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
@@ -5994,6 +6047,15 @@ test("PF-3B viewport visual language produces the frozen reviewer evidence matri
     orthographic: { centerX: 0, centerY: 0, verticalWorldSpan: 28 }
   })).toBe(true);
   await waitForSceneRenderFrames(page);
+  const planCamera = (await getRuntimeViewportSnapshot(page)).camera;
+  expect(planCamera?.mode).toBe("orthographic");
+  expect(planCamera?.alpha).toBeCloseTo(-Math.PI / 2);
+  expect(planCamera?.beta).toBeCloseTo(0.01);
+  expect(planCamera?.radius).toBeCloseTo(32);
+  expect(planCamera?.targetX).toBeCloseTo(0);
+  expect(planCamera?.targetY).toBeCloseTo(0);
+  expect(planCamera?.targetZ).toBeCloseTo(0);
+  expect(planCamera?.orthographicIntent?.verticalWorldSpan).toBeCloseTo(28);
   captures.push(await capturePf3bViewportEvidence(page, "05-dark-industrial-orthographic-plan.png", errors.length));
 
   const machineStylesBeforeSelection = await readCanvasRecord<unknown>(page, "data-machine-render-styles");

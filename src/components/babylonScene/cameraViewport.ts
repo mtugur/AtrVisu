@@ -1,4 +1,29 @@
-import { ArcRotateCamera, Scene, Vector3 } from "@babylonjs/core";
+import { ArcRotateCamera, Camera, Scene, Vector3 } from "@babylonjs/core";
+
+export type BabylonCameraPoseState = Readonly<{
+  mode: "perspective" | "orthographic";
+  alpha: number;
+  beta: number;
+  radius: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+}>;
+
+export const applyBabylonCameraPose = (
+  camera: ArcRotateCamera,
+  state: BabylonCameraPoseState
+) => {
+  // ArcRotateCamera recomputes its spherical pose when target changes, so the
+  // explicit orientation must be applied after the target.
+  camera.target = new Vector3(state.targetX, state.targetY, state.targetZ);
+  camera.mode = state.mode === "orthographic"
+    ? Camera.ORTHOGRAPHIC_CAMERA
+    : Camera.PERSPECTIVE_CAMERA;
+  camera.alpha = state.alpha;
+  camera.beta = state.beta;
+  camera.radius = state.radius;
+};
 
 export const BABYLON_CAMERA_VIEWPORT_SETTINGS = {
   name: "orbit-camera",
