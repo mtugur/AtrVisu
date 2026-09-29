@@ -8,6 +8,7 @@ PF-3B Stage B implements the merged viewport visual standard without changing ca
 
 - Base: exact `main` at `4c569c149cef6b9558ce8f75c3bb402b69c368aa`.
 - Branch: `feat/phase-1-pf3b-viewport-visual-runtime-v01`.
+- Bounded correction source: independent exact-head review `5352908847`.
 - Normative authorities remain `ATRVISU_VIEWPORT_VISUAL_STANDARD.md`, ADR-004, ADR-001 and ADR-003; this implementation does not modify them.
 
 ## Implemented Authorities
