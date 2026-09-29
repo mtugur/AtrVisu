@@ -1,14 +1,14 @@
 # PF-3B Viewport Visual Engineering Language Gate
 
-Stage: A - contract, benchmark and acceptance freeze only.
+Stage: B - runtime implementation and automated evidence delivery.
 
 | Gate | State | Evidence |
 | --- | --- | --- |
-| Exact base | PASS | Branch starts from main `aa248dc1d7be3ea14242668c93c3a32c9dd172a9`. |
+| Exact base | PASS | Runtime branch starts from main `4c569c149cef6b9558ce8f75c3bb402b69c368aa`. |
 | Official benchmark record | PASS | `docs/benchmarks/PF3B_VIEWPORT_VISUAL_LANGUAGE_EVIDENCE.md` records Visual Components, Autodesk Factory and SOLIDWORKS official sources with fact/decision separation. |
 | Normative viewport standard | PASS | `docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md` freezes hierarchy, palettes, grid, lighting, materials, selection, performance and acceptance. |
 | Architecture decision | PASS | ADR-004 freezes the authority split and rejected alternatives before runtime implementation. |
-| Runtime scope | PASS | No `src/**`, E2E, package, storage, schema or runtime visual file changes are allowed in Stage A. |
+| Runtime scope | PASS | Changes are bounded to the effective-theme boundary, typed viewport palette, Babylon visual context/presentation, deterministic tests and exact-head evidence automation. Package, storage, schema, camera and movement authorities are unchanged. |
 | Dark/light palette | PASS | Exact neutral sRGB values are recorded; no cyan/green cast, HDRI or skybox is accepted. |
 | Effective system theme contract | PASS | One read-only `EffectiveThemeId` resolver drives UI and typed Babylon presentation; only user `ThemeId` persists. |
 | Grid contract | PASS | World-origin-phased 1000 mm minor/5000 mm major lines, rotation-applied world-space Plan AABBs, 5000 mm content margin, 40000 mm minimum and 5000 mm outward rounding are frozen. |
@@ -17,11 +17,14 @@ Stage: A - contract, benchmark and acceptance freeze only.
 | Selection hierarchy | PASS | Primary/secondary selection is distinct from warning/collision and respects physical depth. |
 | Performance boundary | PASS | Primitive count is extent-independent; no scene/canvas remount, per-frame React publication or expensive shadow/post-process baseline. |
 | Acceptance matrix | PASS | Ten exact capture IDs and deterministic industrial-scene requirements are defined below. |
-| Local governance checks | PASS | Interaction governance and governance policy stress tests pass; `git diff --check` is clean. |
+| Local governance checks | PASS | Design-token governance covers 276 maintained files; interaction governance and governance policy stress tests pass; `git diff --check` is clean. |
 | Stage A repository/governance CI | PASS | Exact-head Quality Gate `36392043730` passed for the reviewed Stage A baseline. |
-| Automation Green | N/A/PENDING | Stage A has governance checks only; runtime automation belongs to Stage B. |
-| Contract Verified | PENDING | Independent review must verify evidence, standard, ADR and authority consistency. |
-| Product Accepted | PENDING | Product acceptance requires Stage B runtime implementation, exact-head CI and manual visual review. |
+| Stage B focused runtime evidence | PASS | The conditional Chromium matrix produces the ten required PNGs plus `pf3b-viewport-evidence.json`, verifies a loaded GLB, placeholder Machine, required Civil geometry, mixed selection, active collision, physical Floor overlap, system-theme invariance and clean presentation capture. |
+| Local runtime validation | PASS | Build passed; Vitest `4.1.11` passed 167 files / 1392 tests; Chromium passed 105 parallel scenarios plus the isolated Runtime Feature Access scenario (106 total). |
+| Dependency security audit | BLOCKED | `npm audit --audit-level=low` reports one moderate transitive `undici@7.29.0` advisory (`GHSA-3wwx-pv8p-q78v`). Package/lockfile remediation is outside this bounded runtime package. |
+| Automation Green | PENDING | Runtime automation is green locally, but PASS requires a successful final exact-head GitHub Quality Gate; the dependency-security advisory is an explicit blocker. |
+| Contract Verified | PENDING | Independent review must verify runtime conformance to the merged Stage A standard and ADR-004. |
+| Product Accepted | PENDING | Manual visual acceptance begins only after independent contract review and exact-head automation. |
 
 ## Stage B Acceptance Matrix
 
@@ -56,4 +59,4 @@ Stage: A - contract, benchmark and acceptance freeze only.
 
 ## Explicit Rejections
 
-No runtime screenshots are accepted from Stage A. No cyan/green cast, neon grid, HDRI/skybox, camera-sized grid, Active-Level grid, per-line mesh architecture, always-on-top physical geometry, selection-as-warning, theme-driven project mutation, Level/story clipping, ADR-001 drag redesign or PF-3B-adjacent feature work is authorized.
+No cyan/green cast, neon grid, HDRI/skybox, camera-sized grid, Active-Level grid, per-line mesh architecture, always-on-top physical geometry, selection-as-warning, theme-driven project mutation, Level/story clipping, ADR-001 drag redesign or PF-3B-adjacent feature work is authorized.

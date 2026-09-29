@@ -1,5 +1,5 @@
 import { expect, type Dialog, type Locator, type Page, test } from "@playwright/test";
-import { mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
@@ -20,6 +20,8 @@ const capturePf3aEvidence = process.env.ATRVISU_CAPTURE_PF3A_EVIDENCE === "1";
 const pf3aEvidenceDirectory = join(process.cwd(), "test-results", "pf3a-global-iconography-density");
 const captureP1Bld2Evidence = process.env.ATRVISU_CAPTURE_P1_BLD2_EVIDENCE === "1";
 const p1Bld2EvidenceDirectory = join(process.cwd(), "test-results", "p1-bld2-level-datum");
+const capturePf3bEvidence = process.env.ATRVISU_CAPTURE_PF3B_EVIDENCE === "1";
+const pf3bEvidenceDirectory = join(process.cwd(), "test-results", "pf3b-viewport-visual-language");
 
 const capturePf2aScreenshot = async (page: Page, fileName: string) => {
   if (!capturePf2aEvidence) {
@@ -798,6 +800,46 @@ const readCanvasRecord = async <T>(page: Page, attribute: string) => {
   return JSON.parse(raw ?? "{}") as Record<string, T>;
 };
 
+const capturePf3bViewportEvidence = async (
+  page: Page,
+  fileName: string,
+  errorCount: number
+) => {
+  await mkdir(pf3bEvidenceDirectory, { recursive: true });
+  await page.screenshot({ path: join(pf3bEvidenceDirectory, fileName), fullPage: false });
+  const runtime = await getRuntimeViewportSnapshot(page);
+  const machineTransforms = await readCanvasRecord<unknown>(page, "data-machine-render-transforms");
+  const civilTransforms = await readCanvasRecord<unknown>(page, "data-civil-render-transforms");
+  const canvasIdentity = await page.evaluate(() => ({
+    appCount: document.querySelectorAll('[data-testid="app-root"]').length,
+    editorHostCount: document.querySelectorAll('[data-testid="editor-host"]').length,
+    canvasCount: document.querySelectorAll("canvas.scene-canvas").length,
+    lifecycleGeneration: document.querySelector("canvas.scene-canvas")
+      ?.getAttribute("data-scene-lifecycle-generation") ?? null
+  }));
+  return {
+    fileName,
+    exactHeadSha: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD ?? null,
+    effectiveThemeId: runtime.viewport?.visualPresentation?.effectiveThemeId ?? null,
+    camera: runtime.camera,
+    sceneLifecycleGeneration: runtime.viewport?.sceneLifecycleGeneration ?? null,
+    canvasIdentity,
+    selectedEntityIds: runtime.invariants.selectionIds,
+    primarySelectionId: runtime.invariants.primarySelectionId,
+    machineTransforms,
+    civilTransforms,
+    projectDirty: runtime.invariants.projectDirty,
+    undoDepth: runtime.invariants.undoDepth,
+    redoDepth: runtime.invariants.redoDepth,
+    workplaneBounds: runtime.viewport?.visualPresentation?.workplaneBounds ?? null,
+    gridMinorSpacingMm: runtime.viewport?.visualPresentation?.gridMinorSpacingMm ?? null,
+    gridMajorSpacingMm: runtime.viewport?.visualPresentation?.gridMajorSpacingMm ?? null,
+    visualContextMeshCount: runtime.viewport?.visualPresentation?.visualContextMeshCount ?? null,
+    lightCount: runtime.viewport?.visualPresentation?.lightCount ?? null,
+    consoleAndPageErrorCount: errorCount
+  };
+};
+
 const readMachineSceneLabels = async (page: Page) => {
   const raw = await page.getByLabel("AtrVisu 3D workspace").getAttribute("data-machine-scene-labels");
   return JSON.parse(raw ?? "[]") as SceneMachineLabel[];
@@ -861,6 +903,15 @@ const getCivilScreenBounds = async (page: Page, civilId: string) => {
     page,
     "data-civil-screen-bounds"
   ))[civilId];
+};
+
+const expectScreenBoundsInsideCanvas = async (page: Page, bounds: ScreenBounds) => {
+  const canvasBounds = await page.getByLabel("AtrVisu 3D workspace").boundingBox();
+  expect(canvasBounds).not.toBeNull();
+  expect(bounds.left).toBeGreaterThanOrEqual(0);
+  expect(bounds.top).toBeGreaterThanOrEqual(0);
+  expect(bounds.left + bounds.width).toBeLessThanOrEqual(canvasBounds?.width ?? 0);
+  expect(bounds.top + bounds.height).toBeLessThanOrEqual(canvasBounds?.height ?? 0);
 };
 
 const clickSceneMachine = async (page: Page, machineId: string) => {
@@ -5720,6 +5771,415 @@ test("persisted theme density and panel updates hydrate without remounting the s
   expect(errors).toEqual([]);
 });
 
+test("effective system theme updates UI and viewport presentation without lifecycle or domain mutation", async ({ page }) => {
+  const errors = collectPageErrors(page);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await openCleanApp(page);
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await waitForMachineDiagnostics(page, 1);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const canvasHandle = await canvas.elementHandle();
+
+  await page.evaluate(async () => {
+    const result = window.__atrvisuUiPreferences?.updateTheme("system");
+    if (!result) throw new Error("UI preference bridge unavailable");
+    await result.persisted;
+  });
+  await expect(page.getByTestId("design-system-root"))
+    .toHaveAttribute("data-av-theme-preference", "system");
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "dark");
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.visualPresentation?.effectiveThemeId
+  ).toBe("dark");
+
+  const before = await getRuntimeViewportSnapshot(page);
+  const beforeTransforms = await canvas.getAttribute("data-machine-render-transforms");
+  expect(before.viewport?.visualPresentation?.palette).toMatchObject({
+    background: "#202326",
+    workplaneFill: "#2B2F33",
+    gridMinor: "#454C52",
+    gridMajor: "#707981",
+    neutralLight: "#F4F5F6"
+  });
+
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", "light");
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.visualPresentation?.effectiveThemeId
+  ).toBe("light");
+  const after = await getRuntimeViewportSnapshot(page);
+
+  expect(after.viewport?.visualPresentation?.palette).toMatchObject({
+    background: "#E7EAEC",
+    workplaneFill: "#D9DEE1",
+    gridMinor: "#BBC2C7",
+    gridMajor: "#858F97",
+    neutralLight: "#FFFFFF"
+  });
+  expect(after.camera).toEqual(before.camera);
+  expect(after.invariants).toEqual(before.invariants);
+  expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+  expect(after.viewport?.visualPresentation?.workplaneBounds)
+    .toEqual(before.viewport?.visualPresentation?.workplaneBounds);
+  expect(await canvas.getAttribute("data-machine-render-transforms")).toBe(beforeTransforms);
+  expect(await canvasHandle?.evaluate((element) =>
+    element === document.querySelector('[aria-label="AtrVisu 3D workspace"]')
+  )).toBe(true);
+  expect(await page.evaluate(() =>
+    window.__atrvisuUiPreferences?.getSnapshot().preferences.theme
+  )).toBe("system");
+  expect(errors).toEqual([]);
+});
+
+test("PF-3B viewport visual language produces the frozen reviewer evidence matrix", async ({ page }) => {
+  test.skip(!capturePf3bEvidence, "PF-3B evidence is generated only for its exact-head delivery branch.");
+  test.setTimeout(180_000);
+  const errors = collectPageErrors(page);
+  const captures: Awaited<ReturnType<typeof capturePf3bViewportEvidence>>[] = [];
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await openCleanApp(page);
+  await expectExactHeadServer(page);
+
+  const setTheme = async (theme: "light" | "dark" | "system") => {
+    await page.evaluate(async (nextTheme) => {
+      const result = window.__atrvisuUiPreferences?.updateTheme(nextTheme);
+      if (!result) throw new Error("UI preference bridge unavailable");
+      await result.persisted;
+    }, theme);
+    const expected = theme === "system"
+      ? await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : theme;
+    await expect(page.getByTestId("design-system-root")).toHaveAttribute("data-av-theme", expected);
+    await expect.poll(async () =>
+      (await getRuntimeViewportSnapshot(page)).viewport?.visualPresentation?.effectiveThemeId
+    ).toBe(expected);
+  };
+  const commitInput = async (label: string, value: string) => {
+    const input = page.getByLabel(label, { exact: true });
+    await input.fill(value);
+    await input.press("Enter");
+  };
+
+  await setTheme("dark");
+  const emptyDark = await waitForRuntimeViewport(page);
+  expect(emptyDark.viewport?.visualPresentation).toMatchObject({
+    effectiveThemeId: "dark",
+    workplaneBounds: {
+      minXMm: -20_000,
+      maxXMm: 20_000,
+      minYMm: -20_000,
+      maxYMm: 20_000,
+      widthMm: 40_000,
+      depthMm: 40_000
+    },
+    gridMinorSpacingMm: 1_000,
+    gridMajorSpacingMm: 5_000,
+    visualContextMeshCount: 2,
+    lightCount: 3
+  });
+  captures.push(await capturePf3bViewportEvidence(page, "01-dark-empty-perspective.png", errors.length));
+  const emptyCamera = emptyDark.camera;
+
+  await setTheme("light");
+  const emptyLight = await getRuntimeViewportSnapshot(page);
+  expect(emptyLight.camera).toEqual(emptyCamera);
+  expect(emptyLight.viewport?.sceneLifecycleGeneration).toBe(emptyDark.viewport?.sceneLifecycleGeneration);
+  captures.push(await capturePf3bViewportEvidence(page, "02-light-empty-perspective.png", errors.length));
+
+  await openProjectManagerFromFileMenu(page);
+  await page.getByTestId("new-project-name").fill("PF-3B Industrial Evidence");
+  await page.getByTestId("new-customer-name").fill("Atara Engineering");
+  await page.getByTestId("create-project").click();
+  await page.getByTestId("close-project-manager").click();
+
+  const importDialog = await openNativeAssetImport(page);
+  await importDialog.getByLabel("GLB file", { exact: true }).setInputFiles(
+    join(process.cwd(), "public", "library", "models", "test-forklift.glb")
+  );
+  await expect(importDialog.getByTestId("native-asset-preview")).toHaveAttribute("data-ready", "true");
+  await importDialog.getByRole("button", { name: "Next", exact: true }).click();
+  await importDialog.getByLabel("Model units").selectOption("m");
+  await importDialog.getByRole("button", { name: "Next", exact: true }).click();
+  await importDialog.getByLabel("Name", { exact: true }).fill("PF-3B Native Forklift");
+  await importDialog.getByLabel("Category", { exact: true }).fill("Material Handling");
+  await importDialog.getByLabel("Tags", { exact: true }).fill("pf3b, native, forklift");
+  await importDialog.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(importDialog.getByRole("button", { name: "Validate & Save", exact: true })).toBeEnabled();
+  await importDialog.getByRole("button", { name: "Validate & Save", exact: true }).click();
+  await expect(importDialog).toHaveCount(0);
+  const library = page.getByTestId("machine-library-panel");
+  await library.getByLabel("Search assets").fill("PF-3B Native Forklift");
+  const nativeCard = library.locator('.asset-card[data-asset-key^="project-custom::"]')
+    .filter({ hasText: "PF-3B Native Forklift" });
+  await expect(nativeCard).toBeVisible();
+  await nativeCard.getByRole("button", { name: "Add PF-3B Native Forklift to layout", exact: true }).click();
+  await waitForMachineDiagnostics(page, 1);
+  await expect.poll(async () => Object.values(
+    await readCanvasRecord<number>(page, "data-machine-loaded-model-counts")
+  ).some((count) => count > 0)).toBe(true);
+  await commitInput("Plan X", "-2000");
+  await commitInput("Plan Y", "-1000");
+  await library.getByLabel("Search assets").fill("");
+
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await waitForMachineDiagnostics(page, 2);
+  await commitInput("Plan X", "1800");
+  await commitInput("Plan Y", "-1000");
+
+  await addBuildPrimitive(page, "Floor Area", "Planning");
+  await commitInput("Civil Plan X", "-6000");
+  await commitInput("Civil Plan Y", "-4000");
+  await commitInput("Civil Floor Thickness", "350");
+  const floorId = Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions"))[0];
+
+  await addBuildPrimitive(page, "Wall", "Structure");
+  await commitInput("Civil Plan X", "-6000");
+  await commitInput("Civil Plan Y", "3500");
+  await addBuildPrimitive(page, "Column", "Structure");
+  await commitInput("Civil Plan X", "4500");
+  await commitInput("Civil Plan Y", "2500");
+  await addBuildPrimitive(page, "Beam", "Structure");
+  await commitInput("Civil Plan X", "-5000");
+  await commitInput("Civil Plan Y", "-3000");
+  const civilPositionsAfterBeam = await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions");
+  const beamId = Object.keys(civilPositionsAfterBeam).find((id) => id !== floorId
+    && civilPositionsAfterBeam[id].xMm === -5000
+    && civilPositionsAfterBeam[id].yMm === -3000);
+  expect(beamId).toBeTruthy();
+  await addBuildPrimitive(page, "Reference Zone", "Planning");
+  await commitInput("Civil Plan X", "7000");
+  await commitInput("Civil Plan Y", "-3000");
+
+  const machineIds = await getMachineIds(page);
+  expect(machineIds).toHaveLength(2);
+  const loadedCounts = await readCanvasRecord<number>(page, "data-machine-loaded-model-counts");
+  expect(Object.values(loadedCounts).some((count) => count > 0)).toBe(true);
+  expect(Object.values(loadedCounts).some((count) => count === 0)).toBe(true);
+  expect(civilPositionsAfterBeam[beamId!].xMm).toBeGreaterThanOrEqual(-6000);
+  expect(civilPositionsAfterBeam[beamId!].xMm + 6000).toBeLessThanOrEqual(6000);
+  expect(civilPositionsAfterBeam[beamId!].yMm).toBeGreaterThanOrEqual(-4000);
+  expect(civilPositionsAfterBeam[beamId!].yMm + 300).toBeLessThanOrEqual(4000);
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: Math.PI / 4,
+    beta: 0.9,
+    radius: 32,
+    targetX: 0,
+    targetY: 1,
+    targetZ: 0
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  await setTheme("dark");
+  captures.push(await capturePf3bViewportEvidence(page, "03-dark-industrial-perspective.png", errors.length));
+  const industrialDark = await getRuntimeViewportSnapshot(page);
+  await setTheme("light");
+  const industrialLight = await getRuntimeViewportSnapshot(page);
+  expect(industrialLight.camera).toEqual(industrialDark.camera);
+  expect(industrialLight.invariants).toEqual(industrialDark.invariants);
+  expect(industrialLight.viewport?.sceneLifecycleGeneration)
+    .toBe(industrialDark.viewport?.sceneLifecycleGeneration);
+  captures.push(await capturePf3bViewportEvidence(page, "04-light-industrial-perspective.png", errors.length));
+
+  await setTheme("dark");
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "orthographic",
+    alpha: -Math.PI / 2,
+    beta: 0.01,
+    radius: 32,
+    targetX: 0,
+    targetY: 0,
+    targetZ: 0,
+    orthographic: { centerX: 0, centerY: 0, verticalWorldSpan: 28 }
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  captures.push(await capturePf3bViewportEvidence(page, "05-dark-industrial-orthographic-plan.png", errors.length));
+
+  const machineStylesBeforeSelection = await readCanvasRecord<unknown>(page, "data-machine-render-styles");
+  const civilStylesBeforeSelection = await readCanvasRecord<unknown>(page, "data-civil-rendered-styles");
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  const machineRow = page.locator(`[data-entity-id="machine:${machineIds[0]}"]`);
+  const beamRow = page.locator(`[data-entity-id="civil:${beamId}"]`);
+  await machineRow.click();
+  await beamRow.click({ modifiers: ["Control"] });
+  const mixedSelection = await getRuntimeViewportSnapshot(page);
+  expect(mixedSelection.invariants.selectionIds).toEqual(expect.arrayContaining([
+    `machine:${machineIds[0]}`,
+    `civil:${beamId}`
+  ]));
+  expect(mixedSelection.invariants.primarySelectionId).toBe(`machine:${machineIds[0]}`);
+  expect((await readCanvasRecord<unknown>(page, "data-machine-render-styles"))[machineIds[0]])
+    .toEqual(machineStylesBeforeSelection[machineIds[0]]);
+  expect((await readCanvasRecord<unknown>(page, "data-civil-rendered-styles"))[beamId!])
+    .toEqual(civilStylesBeforeSelection[beamId!]);
+  await expectScreenBoundsInsideCanvas(page, await getMachineScreenBounds(page, machineIds[0]));
+  await expectScreenBoundsInsideCanvas(page, await getCivilScreenBounds(page, beamId!));
+  captures.push(await capturePf3bViewportEvidence(page, "06-primary-secondary-selection.png", errors.length));
+
+  await machineRow.click();
+  const selectedMachineProperties = page.getByLabel("Selected machine properties");
+  const nativePosition = (await readCanvasRecord<PlanPosition>(page, "data-machine-plan-positions"))[machineIds[0]];
+  await selectedMachineProperties.getByLabel("Plan X").fill("1800");
+  await selectedMachineProperties.getByLabel("Plan X").press("Enter");
+  await selectedMachineProperties.getByLabel("Plan Y").fill("-1000");
+  await selectedMachineProperties.getByLabel("Plan Y").press("Enter");
+  await expect.poll(async () => {
+    const colliding = JSON.parse(await page.getByLabel("AtrVisu 3D workspace")
+      .getAttribute("data-colliding-object-ids") ?? "[]") as string[];
+    return colliding.includes(machineIds[0]) && colliding.includes(machineIds[1]);
+  }).toBe(true);
+  const viewMenu = await openWorkbenchMenu(page, "View");
+  await viewMenu.locator('[data-command-id="view.displayOverlayControls"]').click();
+  const overlayControls = page.getByTestId("overlay-controls");
+  await overlayControls.getByLabel("Show Collision Envelope", { exact: true }).check();
+  await page.getByRole("button", { name: "Close Display / Overlay Controls" }).click();
+  await expect.poll(async () => {
+    const visibleActiveCollisionFrames = JSON.parse(
+      await page.getByLabel("AtrVisu 3D workspace")
+        .getAttribute("data-visible-active-collision-frame-ids") ?? "[]"
+    ) as string[];
+    return visibleActiveCollisionFrames.includes(machineIds[0])
+      && visibleActiveCollisionFrames.includes(machineIds[1]);
+  }).toBe(true);
+  expect(nativePosition).toEqual({ xMm: -2000, yMm: -1000 });
+  captures.push(await capturePf3bViewportEvidence(page, "07-selected-collision-distinction.png", errors.length));
+
+  expect(await applyRuntimeViewportCameraState(page, {
+    mode: "perspective",
+    alpha: Math.PI / 4,
+    beta: 0.35,
+    radius: 34,
+    targetX: -2,
+    targetY: 0,
+    targetZ: -2
+  })).toBe(true);
+  await waitForSceneRenderFrames(page);
+  await getMachineScreenBounds(page, machineIds[0]);
+  await getCivilScreenBounds(page, beamId!);
+  captures.push(await capturePf3bViewportEvidence(page, "08-floor-area-physical-depth.png", errors.length));
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await setTheme("system");
+  const themeSwitchBefore = await getRuntimeViewportSnapshot(page);
+  const themeSwitchMachineBefore = await readCanvasRecord<unknown>(page, "data-machine-render-transforms");
+  const themeSwitchCivilBefore = await readCanvasRecord<unknown>(page, "data-civil-render-transforms");
+  const canvasHandle = await page.getByLabel("AtrVisu 3D workspace").elementHandle();
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect.poll(async () =>
+    (await getRuntimeViewportSnapshot(page)).viewport?.visualPresentation?.effectiveThemeId
+  ).toBe("light");
+  const themeSwitchAfter = await getRuntimeViewportSnapshot(page);
+  const themeSwitchMachineAfter = await readCanvasRecord<unknown>(page, "data-machine-render-transforms");
+  const themeSwitchCivilAfter = await readCanvasRecord<unknown>(page, "data-civil-render-transforms");
+  expect(themeSwitchAfter.camera).toEqual(themeSwitchBefore.camera);
+  expect(themeSwitchAfter.invariants).toEqual(themeSwitchBefore.invariants);
+  expect(themeSwitchAfter.viewport?.sceneLifecycleGeneration)
+    .toBe(themeSwitchBefore.viewport?.sceneLifecycleGeneration);
+  expect(themeSwitchMachineAfter).toEqual(themeSwitchMachineBefore);
+  expect(themeSwitchCivilAfter).toEqual(themeSwitchCivilBefore);
+  expect(await canvasHandle?.evaluate((element) =>
+    element === document.querySelector('[aria-label="AtrVisu 3D workspace"]')
+  )).toBe(true);
+  captures.push(await capturePf3bViewportEvidence(page, "09-theme-switch-same-camera.png", errors.length));
+
+  const captureBefore = await getRuntimeViewportSnapshot(page);
+  const fileMenu = await openWorkbenchMenu(page, "File");
+  await fileMenu.locator('[data-command-id="project.commercialOutputs"]').click();
+  const [pngDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByTestId("export-commercial-snapshot").click()
+  ]);
+  const cleanCapturePath = await pngDownload.path();
+  expect(cleanCapturePath).not.toBeNull();
+  const captureRecord = await capturePf3bViewportEvidence(
+    page,
+    "10-presentation-clean-capture.png",
+    errors.length
+  );
+  await copyFile(cleanCapturePath ?? "", join(pf3bEvidenceDirectory, "10-presentation-clean-capture.png"));
+  const cleanCaptureBase64 = (await readFile(cleanCapturePath ?? "")).toString("base64");
+  const cleanCaptureCornerPixel = await page.evaluate(async (base64) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${base64}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    context?.drawImage(image, 0, 0);
+    return [...(context?.getImageData(0, 0, 1, 1).data ?? [])];
+  }, cleanCaptureBase64);
+  expect(cleanCaptureCornerPixel).toHaveLength(4);
+  expect(cleanCaptureCornerPixel.slice(0, 3).every((channel) => channel > 160)).toBe(true);
+  const captureAfter = await getRuntimeViewportSnapshot(page);
+  expect(captureAfter.camera).toEqual(captureBefore.camera);
+  expect(captureAfter.invariants).toEqual(captureBefore.invariants);
+  expect(captureAfter.viewport?.sceneLifecycleGeneration)
+    .toBe(captureBefore.viewport?.sceneLifecycleGeneration);
+  captures.push(captureRecord);
+
+  const themeSwitchEvidence = {
+    before: {
+      effectiveThemeId: themeSwitchBefore.viewport?.visualPresentation?.effectiveThemeId ?? null,
+      camera: themeSwitchBefore.camera,
+      sceneLifecycleGeneration: themeSwitchBefore.viewport?.sceneLifecycleGeneration ?? null,
+      selectedEntityIds: themeSwitchBefore.invariants.selectionIds,
+      primarySelectionId: themeSwitchBefore.invariants.primarySelectionId,
+      projectDirty: themeSwitchBefore.invariants.projectDirty,
+      undoDepth: themeSwitchBefore.invariants.undoDepth,
+      redoDepth: themeSwitchBefore.invariants.redoDepth,
+      machineTransforms: themeSwitchMachineBefore,
+      civilTransforms: themeSwitchCivilBefore
+    },
+    after: {
+      effectiveThemeId: themeSwitchAfter.viewport?.visualPresentation?.effectiveThemeId ?? null,
+      camera: themeSwitchAfter.camera,
+      sceneLifecycleGeneration: themeSwitchAfter.viewport?.sceneLifecycleGeneration ?? null,
+      selectedEntityIds: themeSwitchAfter.invariants.selectionIds,
+      primarySelectionId: themeSwitchAfter.invariants.primarySelectionId,
+      projectDirty: themeSwitchAfter.invariants.projectDirty,
+      undoDepth: themeSwitchAfter.invariants.undoDepth,
+      redoDepth: themeSwitchAfter.invariants.redoDepth,
+      machineTransforms: themeSwitchMachineAfter,
+      civilTransforms: themeSwitchCivilAfter
+    },
+    cameraEqual: true,
+    invariantsEqual: true,
+    machineTransformsEqual: true,
+    civilTransformsEqual: true,
+    canvasIdentityPreserved: true
+  };
+
+  expect(errors).toEqual([]);
+  await writeFile(
+    join(pf3bEvidenceDirectory, "pf3b-viewport-evidence.json"),
+    JSON.stringify({
+      artifact: "pf3b-viewport-visual-language",
+      exactHeadSha: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD ?? null,
+      captures,
+      industrialScene: {
+        loadedGlbMachineCount: Object.values(loadedCounts).filter((count) => count > 0).length,
+        placeholderMachineCount: Object.values(loadedCounts).filter((count) => count === 0).length,
+        civilCount: Object.keys(await readCanvasRecord<PlanPosition>(page, "data-civil-plan-positions")).length,
+        floorId,
+        beamId,
+        floorBeamOverlapVerified: true
+      },
+      selectionPresentation: {
+        primarySelectionId: mixedSelection.invariants.primarySelectionId,
+        selectedEntityIds: mixedSelection.invariants.selectionIds,
+        machineBaseMaterialUnchanged: true,
+        civilBaseStyleUnchanged: true,
+        collisionEnvelopeVisibleIndependently: true
+      },
+      themeSwitch: themeSwitchEvidence,
+      consoleAndPageErrorCount: errors.length
+    }, null, 2),
+    "utf8"
+  );
+});
+
 test("visible panel updates survive a deliberately pending preference hydration", async ({ page }) => {
   const errors = collectPageErrors(page);
   const persistedSeed = createE2EUiPreferences({ theme: "light", density: "compact", width: 420 });
@@ -5955,9 +6415,16 @@ test("theme retains workspace identity and density override returns to Custom Wo
     await expect(themeBranch.surface).toBeVisible();
     await expect(themeBranch.branchTrigger).toContainText(theme);
     await expect(page.getByTestId("design-system-root")).toHaveAttribute(
-      "data-av-theme",
+      "data-av-theme-preference",
       theme.toLowerCase()
     );
+    if (theme === "System") {
+      await expect(page.getByTestId("design-system-root"))
+        .toHaveAttribute("data-av-theme", /^(light|dark)$/);
+    } else {
+      await expect(page.getByTestId("design-system-root"))
+        .toHaveAttribute("data-av-theme", theme.toLowerCase());
+    }
     await expect(page.getByTestId("workspace-preferences-trigger")).toContainText("Sales Layout");
   }
   const densityBranch = await openPreferenceBranch(page, "density");

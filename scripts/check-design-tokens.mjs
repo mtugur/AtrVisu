@@ -39,6 +39,16 @@ export const DESIGN_TOKEN_ALLOWLIST = Object.freeze([
       "color4-constructor",
       "from-hex-string"
     ])
+  }),
+  Object.freeze({
+    path: "src/designSystem/viewportVisualPalette.ts",
+    reason: "Exact PF-3B light and dark viewport presentation palette values are defined here.",
+    matchTypes: Object.freeze(["hex"])
+  }),
+  Object.freeze({
+    path: "src/designSystem/viewportVisualPaletteBabylon.ts",
+    reason: "Babylon viewport palette color instances are created only by this typed adapter.",
+    matchTypes: Object.freeze(["color3-constructor", "color4-constructor"])
   })
 ]);
 

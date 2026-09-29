@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import type { CSSProperties } from "react";
 import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { EditorHost } from "./components/EditorHost";
 import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
@@ -420,6 +421,7 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 });
 
 export function App() {
+  const effectiveThemeId = useEffectiveThemeId();
   const uiPreferencesStore = useUiPreferencesStore();
   const {
     preferences: uiPreferences,
@@ -4913,6 +4915,7 @@ export function App() {
             annotations={visibleAnnotations}
             selectedMachineIds={selectedMachineIds}
             primarySelectedMachineId={primarySelectedMachineId}
+            primarySelectedEntityId={runtimeSelection.primaryId ?? null}
             selectedCivilReferenceId={selectedCivilReferenceId}
             selectedCivilReferenceIds={selectedCivilReferenceIds}
             selectedAnnotationId={selectedAnnotationId}
@@ -4935,6 +4938,7 @@ export function App() {
             simulationSpeed={simulationSpeed}
             overlaySettings={overlaySettings}
             collisionResult={collisionResult}
+            effectiveThemeId={effectiveThemeId}
             enableE2EDiagnostics={enableE2EDiagnostics}
             onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
             onPerformanceMetricsChange={isPerformanceBenchmarkOpen ? setLatestPerformanceMetrics : undefined}
