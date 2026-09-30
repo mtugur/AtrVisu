@@ -40,6 +40,12 @@ No other technical blocker was found.
   PF-1/PF-2/PF-3, Build/Levels and final viewport work.
 - Audit scope: current-state source/runtime/governance reconciliation and
   closeout documentation only.
+- Source fingerprint check: the mounted Project Master Plan SHA-256 matches
+  `MASTER_PLAN_SOURCE_FINGERPRINT.md` exactly:
+  `0ff97ed5c07213b1a875cd3ebdd498cc739c0f07eb35c48b9777cacf9bd58da7`.
+- Audit finding: `docs/roadmap/ATRVISU_LAYERED_MASTER_PLAN.md` had drifted from
+  that exact v3.0 source, especially Phase 2/4/5 placement. This audit realigns
+  the repository roadmap projection with the canonical source.
 
 This package changes no production runtime, command behavior, scene behavior,
 domain schema, persistence schema, package manifest or lockfile.
@@ -124,7 +130,7 @@ has a successful exact-head Quality Gate.
 | H09 | Unit / coordinate integrity | PASS | Transform, Build, Level, outputs and grid use canonical mm contracts. |
 | H10 | Commercial outputs | PASS | XLSX BOM, measured A3 PDF and clean 1920x1080 PNG are merged and manually accepted. |
 | H11 | Professional viewport / presentation | PASS | PF-3B dark/light grid, lighting, label readability, selection/collision separation and clean capture are manually accepted. |
-| H12 | Documentation / governance | PASS AFTER DOC SYNC | ADR/standards exist for architecture, interaction, Build/Levels and viewport visual language; Feature Access prose is corrected by this audit. |
+| H12 | Documentation / governance | PASS AFTER DOC SYNC | ADR/standards exist for architecture, interaction, Build/Levels and viewport visual language; Feature Access prose and the stale layered roadmap projection are corrected by this audit. |
 
 Technical totals: **12 PASS / 0 PARTIAL / 0 FAIL** after this audit's
 documentation-only sync.
@@ -210,6 +216,13 @@ them as real workflow obstacles:
   Phase 1.
 
 ## 10. Phase 2 Entry Boundary
+
+Repository-roadmap note: the previous `ATRVISU_LAYERED_MASTER_PLAN.md` projected
+Phase 2 as a narrower Layout Engineering package and moved Smart Components to
+Phase 4. That did not match the reviewed Master Plan v3.0 source fingerprint.
+This audit corrects the repository projection: Phase 2 is **Layer 4 Platform
+Core** and Smart eCatalog maturity belongs in Phase 2; Phase 4 is **Layer 3
+Selective Digital Twin**.
 
 Phase 2 must start only after Phase 1 is formally closed or after an explicit
 decision that a requested item belongs to Phase 2 and does not invalidate the
