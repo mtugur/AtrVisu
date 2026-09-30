@@ -4,7 +4,7 @@
 
 **PHASE 1 TECHNICAL EXIT: PASS**
 
-**FORMAL PHASE 1 CLOSEOUT: PENDING TWO FINAL GATES**
+**FORMAL PHASE 1 CLOSEOUT: PENDING PRODUCT-OWNER CLOSEOUT PACKAGES + FINAL HUMAN GATE**
 
 The current product on merged `main` satisfies the Phase 1 technical/product
 scope substantially beyond the original v0.1 exit audit baseline. Asset
@@ -12,22 +12,53 @@ discovery, entity rename, Build Library, Levels, native GLB import, premium
 interaction governance, compact iconography, and the professional viewport
 visual language are now merged and accepted.
 
-Phase 1 is **not declared closed by this audit** because two final closeout
-items remain:
+Phase 1 is **not declared closed by this audit**. The 2026-09-30 product-owner
+closeout review identified additional professional-workflow gaps that materially
+affect the Layer-1 Sales Layout experience and therefore must be resolved before
+the final 15-minute acceptance run.
 
-1. **C01 — Human 15-minute Sales Layout gate:** the Master Plan requires a new
-   user to build a simple packaging/palletizing layout and obtain
-   PDF/Excel/3D outputs within 15 minutes. This must be timed through normal
-   product UI and cannot be certified by automation.
-2. **C02 — Fit View normative reconciliation:** Master Plan v3.0 includes Fit
-   View in the professional quick-toolbar/View command grammar. Current
-   canonical Feature Access deliberately classifies `view.fitView` as
-   `declared-planned` with no live user-facing route. This is not dead UI,
-   but it is a source-to-product mismatch that must be either implemented
-   before Phase 1 closure or explicitly moved by an approved roadmap/ADR
-   decision. This audit does not silently waive it.
+Current closeout gates:
 
-No other technical blocker was found.
+1. **C01 — Human 15-minute Sales Layout gate.**
+2. **C02 — Fit View normative reconciliation / implementation.**
+3. **C03 — Professional Measure Tool foundation.** Replace the current
+   machine-only center-distance helper with viewport point picking and
+   engineering measurement modes: point-to-point distance, plan/XYZ deltas,
+   three-point angle, and plan area/perimeter. Measurements must be visible in
+   the viewport while active. Persistent associative CAD-style dimensions are
+   Phase 2, not required for Phase 1 closeout.
+4. **C04 — Arrange / Advanced Alignment UX correction.** The current blocking
+   full-screen modal is rejected. Common align/distribute actions must use the
+   icon grammar and stay viewport-contextual; advanced pair/gap/anchor controls
+   must become a compact non-blocking palette/task-pane style surface.
+5. **C05 — Multi-selection common-property editing.** Mixed Machine/Civil
+   selection must expose the true intersection of compatible editable
+   properties and apply changes atomically. Layer and Level assignment are
+   mandatory examples. Mixed values need an explicit mixed-state presentation.
+6. **C06 — Dock open/close screen-space viewport stability.** Current left/right
+   insets resize the canvas and visibly shift the scene. Product requirement is
+   stronger than the existing camera-state-only invariant: panel collapse/open
+   must not move the scene on screen or mutate camera/entity/selection state.
+7. **C07 — Inspector information hierarchy + Civil property parity.** Editable
+   selection properties must appear before diagnostics/tool clutter. Common
+   high-frequency actions belong in the compact command/quick-property grammar.
+   Build Library template properties and placed Civil instance properties must
+   share one canonical property definition rather than drift as hard-coded
+   parallel forms.
+8. **C08 — View orientation controls.** Add a professional viewport orientation
+   control: clickable standard/axonometric view cube plus a passive world-axis
+   triad/orientation indicator. Canonical +/-X, +/-Y, +/-Z meanings must be
+   explicit and camera changes must use the existing viewport camera authority.
+9. **C09 — Phase-language cleanup.** The current user-facing
+   "Simulation Controls" surface only drives presentation/product-flow animation,
+   not deterministic throughput simulation. Before Phase 1 closure it must be
+   renamed/repositioned as a presentation Flow Preview or hidden until the
+   appropriate later phase; it must not imply Phase-3 DES capability.
+
+No other current technical regression blocker was found. Additional engineering
+depth such as clipboard, selection cycling/pick list, Z alignment, associative
+dimensions, clearance reporting, templates/revisions, and Smart eCatalog
+maturity remains Phase 2.
 
 ## 2. Audit Baseline
 
@@ -246,6 +277,7 @@ metadata, but must not pull the Phase 3 simulation engine forward.
 - C02 Fit View reconciliation: **PENDING**
 - Formal Phase 1 closed: **NO**
 
-Once the audit PR is exact-head green, C01 and C02 are the only remaining
-closeout decisions unless the product owner's upcoming requests reveal a
-regression against the Phase 1 acceptance contract.
+The audit PR is exact-head green on the pre-closeout-request head. The
+2026-09-30 product-owner review intentionally expands the formal closeout set to
+C01-C09 above. Implement C02-C09 as bounded, benchmark-first packages; then run
+C01 exactly once against the final Phase-1 candidate.
