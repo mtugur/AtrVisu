@@ -113,12 +113,45 @@ Choose exactly one before closeout:
 
 Do not satisfy this row by exposing a dead button.
 
-## G. Final audit delivery gate
+## G. Product-owner closeout packages
+
+Status: **PENDING**
+
+- [ ] C03 Professional Measure Tool foundation: viewport point-to-point,
+      plan/XYZ deltas, three-point angle, plan area/perimeter, active viewport
+      callouts; no fake CAD topology claims.
+- [ ] C04 Replace blocking Advanced Alignment modal with compact icon-based,
+      non-blocking viewport/task-pane interaction.
+- [ ] C05 Mixed Machine/Civil multi-selection exposes compatible common
+      properties with explicit mixed values and atomic batch mutation; Layer and
+      Level assignment included.
+- [ ] C06 Left/right dock open/collapse does not move the rendered scene in
+      screen space and does not mutate camera/entity/selection/history.
+- [ ] C07 Inspector puts editable properties first, diagnostics later; common
+      high-frequency actions use the compact action grammar; Build Library and
+      Civil instance property definitions do not drift.
+- [ ] C08 Standard/axonometric ViewCube plus passive world-axis orientation
+      indicator is live, canonical +/-X +/-Y +/-Z mapping is documented, and
+      all camera changes use Runtime Viewport authority.
+- [ ] C09 Rename/reposition the current presentation-only "Simulation Controls"
+      so it cannot be mistaken for Phase-3 throughput/DES simulation.
+- [ ] C02 Fit View is implemented through canonical command + viewport
+      authority and exposed on the accepted quick/view surface.
+
+Deferred to Phase 2 by design:
+- persistent associative CAD-style dimensions/markups;
+- clipboard Copy/Cut/Paste command transactions;
+- selection cycling/pick list and broader selection tooling;
+- Z alignment / Arrange v2 depth;
+- Smart eCatalog maturity, layer/zone maturity, collision/clearance reports,
+  templates, and project/revision workflow.
+
+## H. Final audit delivery gate
 
 - [ ] Audit PR exact-head GitHub Quality Gate PASS.
 - [ ] Independent review confirms the final report matches current source.
 - [ ] C01 human 15-minute gate PASS.
-- [ ] C02 Fit View reconciliation PASS.
+- [ ] C02-C09 closeout packages PASS.
 - [ ] Product owner explicitly accepts Phase 1 closeout.
 - [ ] Audit PR merged.
 
