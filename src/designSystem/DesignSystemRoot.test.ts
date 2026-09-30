@@ -15,7 +15,7 @@ describe("DesignSystemRoot", () => {
     ["dark", "comfortable"],
     ["light", "compact"],
     ["system", "comfortable"]
-  ] as const)("renders %s theme with %s density", (themeId, densityId) => {
+  ] as const)("renders %s preference with %s density", (themeId, densityId) => {
     const markup = renderToStaticMarkup(createElement(
       DesignSystemRoot,
       {
@@ -25,15 +25,17 @@ describe("DesignSystemRoot", () => {
       }
     ));
 
-    expect(markup).toContain(`data-av-theme="${themeId}"`);
+    expect(markup).toContain(`data-av-theme-preference="${themeId}"`);
+    expect(markup).toContain(`data-av-theme="${themeId === "system" ? "dark" : themeId}"`);
     expect(markup).toContain(`data-av-density="${densityId}"`);
     expect(markup).toContain("editor");
   });
 
-  it("owns no persistence, domain, browser, or Babylon dependency", () => {
+  it("uses only the bounded system-theme browser observer and owns no persistence, domain, or Babylon dependency", () => {
     const source = readSource("./DesignSystemRoot.tsx");
 
-    expect(source).not.toMatch(/localStorage|indexedDB|window\.|document\./);
+    expect(source).not.toMatch(/localStorage|indexedDB|document\./);
+    expect(source.match(/window\.matchMedia/g)).toHaveLength(2);
     expect(source).not.toMatch(/types\/(machine|project)|Babylon/);
     expect(source).toContain('className="av-design-system-root"');
   });
@@ -119,12 +121,11 @@ describe("semantic token contract", () => {
     expect(tokenSource).toContain("--av-font-weight-normal: 400");
   });
 
-  it("provides complete dark, light, and CSS-driven system theme paths", () => {
+  it("provides complete effective dark and light theme paths", () => {
     expect(themeSource).toContain('data-av-theme="dark"');
     expect(themeSource).toContain('data-av-theme="light"');
-    expect(themeSource).toContain('data-av-theme="system"');
-    expect(themeSource).toContain("@media (prefers-color-scheme: light)");
-    expect(themeSource).toContain("@media (prefers-color-scheme: dark)");
+    expect(themeSource).not.toContain('data-av-theme="system"');
+    expect(themeSource).not.toContain("@media (prefers-color-scheme:");
     expect(themeSource).not.toContain("matchMedia");
 
     const requiredTokens = [
@@ -139,7 +140,7 @@ describe("semantic token contract", () => {
       "--av-viewport-overlay-collision"
     ];
     requiredTokens.forEach((token) => {
-      expect(themeSource.match(new RegExp(token, "g"))?.length).toBeGreaterThanOrEqual(3);
+      expect(themeSource.match(new RegExp(token, "g"))?.length).toBeGreaterThanOrEqual(2);
     });
   });
 

@@ -41,6 +41,31 @@ export type RuntimeViewportCameraApplyState = ViewpointCameraState & {
   mode: RuntimeViewportCameraMode;
 };
 
+export type RuntimeViewportVisualPresentationState = Readonly<{
+  effectiveThemeId: "light" | "dark";
+  palette: Readonly<{
+    background: string;
+    workplaneFill: string;
+    gridMinor: string;
+    gridMajor: string;
+    neutralLight: string;
+  }>;
+  workplaneBounds: Readonly<{
+    minXMm: number;
+    maxXMm: number;
+    minYMm: number;
+    maxYMm: number;
+    centerXMm: number;
+    centerYMm: number;
+    widthMm: number;
+    depthMm: number;
+  }>;
+  gridMinorSpacingMm: number;
+  gridMajorSpacingMm: number;
+  visualContextMeshCount: number;
+  lightCount: number;
+}>;
+
 export type RuntimeViewportState = {
   visible: boolean;
   available: boolean;
@@ -54,6 +79,7 @@ export type RuntimeViewportState = {
   lastResizeReason?: ViewportResizeReason;
   cameraMode?: RuntimeViewportCameraMode;
   cameraResolvable: boolean;
+  visualPresentation?: RuntimeViewportVisualPresentationState;
   reason?: string;
 };
 

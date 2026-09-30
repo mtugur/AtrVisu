@@ -68,7 +68,10 @@ import {
   getAnnotationVisualStyle,
   getRayPlanePlanPointMm
 } from "../utils/annotations";
-import { createBabylonCameraViewport } from "./babylonScene/cameraViewport";
+import {
+  applyBabylonCameraPose,
+  createBabylonCameraViewport
+} from "./babylonScene/cameraViewport";
 import {
   calculateCivilDragPosition,
   calculateMachineDragPositionUpdates,
@@ -84,7 +87,7 @@ import {
   type SceneDragMutationResult
 } from "./babylonScene/dragPlacement";
 import { getMachinePlaceholderVisualParts, getMachineVerticalRenderPositions } from "./babylonScene/objectRendering";
-import { drawMachineLabelText } from "./babylonScene/machineLabelLifecycle";
+import { drawSceneLabelText } from "./babylonScene/sceneLabelPresentation";
 import {
   captureOrthographicFraming,
   getOrthographicBoundsForViewport,
@@ -104,12 +107,20 @@ import {
   isToggleSelectionEvent,
   setMachinePickMetadata
 } from "./babylonScene/selectionPicking";
+import {
+  getMachineEmissiveRole,
+  getSelectionFrameRole
+} from "./babylonScene/selectionPresentation";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import {
   getCivilRenderingGroupId,
   preserveWorldGeometryDepthAcrossRenderingGroups
 } from "./babylonScene/renderingDepth";
-import { createSceneVisualContext } from "./babylonScene/visualContext";
+import {
+  createSceneVisualContext,
+  type SceneVisualContext
+} from "./babylonScene/visualContext";
+import { calculateSceneWorkplaneBounds } from "./babylonScene/workplaneGrid";
 import {
   createViewportResizeController,
   type ViewportResizeController
@@ -117,14 +128,21 @@ import {
 import type { ArcRotateCamera } from "@babylonjs/core";
 import {
   CIVIL_TECHNICAL_COLORS,
-  TECHNICAL_CSS_COLORS
+  TECHNICAL_CSS_COLORS,
+  getViewportVisualPalette,
+  type EffectiveThemeId
 } from "../designSystem";
 import {
   createTechnicalColor3,
   createTechnicalColor3FromHex
 } from "../designSystem/technicalPaletteBabylon";
+import { createViewportPaletteColor4 } from "../designSystem/viewportVisualPaletteBabylon";
 import { CreateScreenshotUsingRenderTargetAsync } from "@babylonjs/core/Misc/screenshotTools";
-import { captureWithoutEditorAffordances } from "../commercialOutputs/presentationCapture";
+import { DumpData } from "@babylonjs/core/Misc/dumpTools";
+import {
+  captureWithoutEditorAffordances,
+  compositeRgbaOverBackground
+} from "../commercialOutputs/presentationCapture";
 
 const CONNECTION_POINT_MARKER_OFFSET_MM = 40;
 const CONNECTION_POINT_LABEL_OFFSET_METERS = 0.72;
@@ -153,6 +171,7 @@ type BabylonSceneProps = {
   annotations: AnnotationObject[];
   selectedMachineIds: string[];
   primarySelectedMachineId: string | null;
+  primarySelectedEntityId: string | null;
   selectedCivilReferenceId: string | null;
   selectedCivilReferenceIds: string[];
   selectedAnnotationId: string | null;
@@ -189,6 +208,7 @@ type BabylonSceneProps = {
   simulationSpeed: number;
   overlaySettings: OverlaySettings;
   collisionResult: CollisionCheckResult;
+  effectiveThemeId: EffectiveThemeId;
   enableE2EDiagnostics?: boolean;
   onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
   onPerformanceMetricsChange?: (metrics: ScenePerformanceMetrics) => void;
@@ -218,6 +238,7 @@ type PlacedMachineNode = {
     marker: Mesh;
     label: Mesh;
     texture: DynamicTexture;
+    labelText: string;
     material: StandardMaterial;
     labelMaterial: StandardMaterial;
   }>;
@@ -246,6 +267,7 @@ type CivilReferenceNode = {
   selectionFrame: LinesMesh;
   label: Mesh;
   labelTexture: DynamicTexture;
+  labelText: string;
   signature: string;
 };
 
@@ -261,14 +283,16 @@ const getCivilColor = (item: CivilReferenceItem) => {
   return createTechnicalColor3FromHex(CIVIL_TECHNICAL_COLORS[item.type]);
 };
 
-const drawLabelText = (texture: DynamicTexture, text: string) => {
-  drawMachineLabelText(texture, text, TECHNICAL_CSS_COLORS.labelText);
-};
-
-const createLabel = (scene: Scene, textureKey: string, text: string, y: number) => {
+const createLabel = (
+  scene: Scene,
+  textureKey: string,
+  text: string,
+  y: number,
+  effectiveThemeId: EffectiveThemeId
+) => {
   const texture = new DynamicTexture(`label-texture-${textureKey}`, { width: 512, height: 128 }, scene);
   texture.hasAlpha = true;
-  drawLabelText(texture, text);
+  drawSceneLabelText(texture, text, effectiveThemeId);
 
   const material = new StandardMaterial(`label-material-${textureKey}`, scene);
   material.diffuseTexture = texture;
@@ -499,7 +523,8 @@ const connectionPointColor = (type: string) => {
 const createConnectionPointMarker = (
   scene: Scene,
   machine: PlacedMachine,
-  pointIndex: number
+  pointIndex: number,
+  effectiveThemeId: EffectiveThemeId
 ) => {
   const point = getConnectionPointsForObject(machine)[pointIndex];
   const markerMaterial = new StandardMaterial(`connection-point-material-${machine.instanceId}-${point.id}`, scene);
@@ -529,7 +554,7 @@ const createConnectionPointMarker = (
   texture.hasAlpha = true;
   const markerText = getConnectionPointMarkerLabel(point);
   const trimmedText = markerText.length > 28 ? `${markerText.slice(0, 25)}...` : markerText;
-  texture.drawText(trimmedText, null, 86, "bold 42px Arial", TECHNICAL_CSS_COLORS.labelText, TECHNICAL_CSS_COLORS.transparent, true, true);
+  drawSceneLabelText(texture, trimmedText, effectiveThemeId, "connection-point");
   const labelMaterial = new StandardMaterial(`connection-point-label-material-${machine.instanceId}-${point.id}`, scene);
   labelMaterial.diffuseTexture = texture;
   labelMaterial.opacityTexture = texture;
@@ -546,7 +571,14 @@ const createConnectionPointMarker = (
   label.isPickable = false;
   label.renderingGroupId = 2;
 
-  return { marker, label, texture, material: markerMaterial, labelMaterial };
+  return {
+    marker,
+    label,
+    texture,
+    labelText: trimmedText,
+    material: markerMaterial,
+    labelMaterial
+  };
 };
 
 const positionConnectionPointMarker = (
@@ -669,7 +701,11 @@ const createMetadataFrame = (scene: Scene, machine: PlacedMachine) => {
   );
 };
 
-const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): CivilReferenceNode => {
+const createCivilReferenceNode = (
+  scene: Scene,
+  item: CivilReferenceItem,
+  effectiveThemeId: EffectiveThemeId
+): CivilReferenceNode => {
   const width = mmToMeters(item.sizeMm.widthMm);
   const depth = mmToMeters(item.sizeMm.depthMm);
   const height = mmToMeters(item.sizeMm.heightMm ?? 20);
@@ -699,11 +735,25 @@ const createCivilReferenceNode = (scene: Scene, item: CivilReferenceItem): Civil
   selectionFrame.parent = mesh;
   selectionFrame.isVisible = false;
 
-  const { label, texture } = createLabel(scene, `civil-${item.id}`, item.name, height + 0.35);
+  const { label, texture } = createLabel(
+    scene,
+    `civil-${item.id}`,
+    item.name,
+    height + 0.35,
+    effectiveThemeId
+  );
   label.isPickable = false;
   label.renderingGroupId = 2;
 
-  return { mesh, material, selectionFrame, label, labelTexture: texture, signature: getCivilReferenceNodeSignature(item) };
+  return {
+    mesh,
+    material,
+    selectionFrame,
+    label,
+    labelTexture: texture,
+    labelText: item.name,
+    signature: getCivilReferenceNodeSignature(item)
+  };
 };
 
 const getCivilReferenceNodeSignature = (item: CivilReferenceItem) =>
@@ -720,7 +770,8 @@ const disposeCivilReferenceNode = (node: CivilReferenceNode) => {
 const positionCivilReferenceNode = (
   node: CivilReferenceNode,
   item: CivilReferenceItem,
-  selectedCivilReferenceId: string | null,
+  isSelected: boolean,
+  isPrimary: boolean,
   showLabels: boolean
 ) => {
   const height = mmToMeters(item.sizeMm.heightMm ?? 20);
@@ -731,7 +782,10 @@ const positionCivilReferenceNode = (
     mmToMeters(center.yMm)
   );
   applyPlanRotationY(node.mesh, item.rotationDeg);
-  node.selectionFrame.isVisible = selectedCivilReferenceId === item.id;
+  node.selectionFrame.isVisible = isSelected;
+  node.selectionFrame.color = isPrimary
+    ? createTechnicalColor3("selectionPrimary")
+    : createTechnicalColor3("selectionSecondary");
   node.label.position = new Vector3(
     node.mesh.position.x,
     mmToMeters(item.positionMm.zMm ?? 0) + height + 0.35,
@@ -1032,6 +1086,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   annotations,
   selectedMachineIds,
   primarySelectedMachineId,
+  primarySelectedEntityId,
   selectedCivilReferenceId,
   selectedCivilReferenceIds,
   selectedAnnotationId,
@@ -1054,6 +1109,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   simulationSpeed,
   overlaySettings,
   collisionResult,
+  effectiveThemeId,
   enableE2EDiagnostics = false,
   onVisualDiagnosticsChange,
   onPerformanceMetricsChange
@@ -1065,6 +1121,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const sceneLifecycleGenerationRef = useRef(0);
   const viewportResizeControllerRef = useRef<ViewportResizeController | null>(null);
   const runtimeViewportStateRef = useRef<RuntimeViewportState | null>(null);
+  const visualContextRef = useRef<SceneVisualContext | null>(null);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
   const civilReferenceNodesRef = useRef<Map<string, CivilReferenceNode>>(new Map());
   const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
@@ -1079,6 +1136,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const lockedAnnotationIdsRef = useRef<string[]>(lockedAnnotationIds);
   const activeGroupEditMachineIdsRef = useRef<string[]>(activeGroupEditMachineIds);
   const primarySelectedMachineIdRef = useRef<string | null>(primarySelectedMachineId);
+  const primarySelectedEntityIdRef = useRef<string | null>(primarySelectedEntityId);
+  const effectiveThemeIdRef = useRef<EffectiveThemeId>(effectiveThemeId);
   const isSimulationRunningRef = useRef(isSimulationRunning);
   const simulationSpeedRef = useRef(simulationSpeed);
   const overlaySettingsRef = useRef<OverlaySettings>(overlaySettings);
@@ -1124,13 +1183,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         delete canvas.dataset.machineElevationsMm;
         delete canvas.dataset.civilElevationsMm;
         delete canvas.dataset.civilRenderedStyles;
+        delete canvas.dataset.civilRenderTransforms;
         delete canvas.dataset.machineSceneLabels;
         delete canvas.dataset.machineLoadedModelCounts;
+        delete canvas.dataset.machineRenderStyles;
         delete canvas.dataset.machineRenderTransforms;
         delete canvas.dataset.lastSceneDragResult;
         delete canvas.dataset.lastDragPlaneElevationMeters;
         delete canvas.dataset.lastDragResolveStatus;
         delete canvas.dataset.lastDragPointerPlaneErrorPx;
+        delete canvas.dataset.effectiveThemeId;
+        delete canvas.dataset.collidingObjectIds;
+        delete canvas.dataset.visibleActiveCollisionFrameIds;
       }
     }
   }, [enableE2EDiagnostics]);
@@ -1163,12 +1227,19 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     selectedMachineIdsRef.current = selectedMachineIds;
     primarySelectedMachineIdRef.current = primarySelectedMachineId;
+    primarySelectedEntityIdRef.current = primarySelectedEntityId;
     machineNodesRef.current.forEach((node, instanceId) => {
       const isSelected = selectedMachineIds.includes(instanceId);
-      const isPrimary = instanceId === primarySelectedMachineId;
+      const selectionRole = getSelectionFrameRole(
+        createLegacyPlatformEntityId("machine", instanceId),
+        isSelected,
+        primarySelectedEntityId
+      );
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(instanceId);
       node.selectionFrame.isVisible = isSelected && overlaySettingsRef.current.showSelectionBox;
-      node.selectionFrame.color = isPrimary ? createTechnicalColor3("selectionPrimary") : createTechnicalColor3("selectionSecondary");
+      node.selectionFrame.color = selectionRole === "primary"
+        ? createTechnicalColor3("selectionPrimary")
+        : createTechnicalColor3("selectionSecondary");
       node.metadataFrame.isVisible = isSelected && overlaySettingsRef.current.showMetadataBox;
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
       node.collisionFrame.color = isColliding ? createTechnicalColor3("collisionActive") : createTechnicalColor3("collisionFrame");
@@ -1179,36 +1250,36 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         markerSet.marker.isVisible = shouldShowConnectionPointMarker(isSelected, overlaySettingsRef.current);
         markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettingsRef.current);
       });
-      node.material.emissiveColor = isSelected
-        ? isColliding
-          ? createTechnicalColor3("collisionTint")
-          : createTechnicalColor3("warningTint")
-        : isColliding
-          ? createTechnicalColor3("collisionEmissive")
-          : createTechnicalColor3("black");
+      node.material.emissiveColor = createTechnicalColor3(getMachineEmissiveRole(isColliding));
     });
-  }, [primarySelectedMachineId, selectedMachineIds]);
+  }, [primarySelectedEntityId, primarySelectedMachineId, selectedMachineIds]);
 
   useEffect(() => {
     selectedCivilReferenceIdRef.current = selectedCivilReferenceId;
     selectedCivilReferenceIdsRef.current = selectedCivilReferenceIds;
     civilReferenceNodesRef.current.forEach((node, id) => {
       const isSelected = selectedCivilReferenceIds.includes(id);
+      const selectionRole = getSelectionFrameRole(
+        createLegacyPlatformEntityId("civil", id),
+        isSelected,
+        primarySelectedEntityId
+      );
       node.selectionFrame.isVisible = isSelected;
-      node.material.emissiveColor = isSelected
-        ? createTechnicalColor3("warningEmissive")
-        : getCivilColor(civilReferencesRef.current.find((item) => item.id === id) ?? {
-            id,
-            type: "reference-zone",
-            name: "",
-            positionMm: { xMm: 0, yMm: 0 },
-            sizeMm: { widthMm: 1, depthMm: 1 },
-            rotationDeg: 0,
-            createdAt: "",
-            updatedAt: ""
-          }).scale(0.18);
+      node.selectionFrame.color = selectionRole === "primary"
+        ? createTechnicalColor3("selectionPrimary")
+        : createTechnicalColor3("selectionSecondary");
+      node.material.emissiveColor = getCivilColor(civilReferencesRef.current.find((item) => item.id === id) ?? {
+        id,
+        type: "reference-zone",
+        name: "",
+        positionMm: { xMm: 0, yMm: 0 },
+        sizeMm: { widthMm: 1, depthMm: 1 },
+        rotationDeg: 0,
+        createdAt: "",
+        updatedAt: ""
+      }).scale(0.18);
     });
-  }, [selectedCivilReferenceId, selectedCivilReferenceIds]);
+  }, [primarySelectedEntityId, selectedCivilReferenceId, selectedCivilReferenceIds]);
 
   useEffect(() => {
     lockedMachineIdsRef.current = lockedMachineIds;
@@ -1267,14 +1338,34 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         existing.material.diffuseColor = getCivilColor(item);
         existing.material.emissiveColor = getCivilColor(item).scale(0.18);
         existing.material.alpha = item.style?.opacity ?? 0.45;
-        positionCivilReferenceNode(existing, item, selectedCivilReferenceIdRef.current, overlaySettingsRef.current.showLabels);
+        if (existing.labelText !== item.name) {
+          drawSceneLabelText(
+            existing.labelTexture,
+            item.name,
+            effectiveThemeIdRef.current
+          );
+          existing.labelText = item.name;
+        }
+        positionCivilReferenceNode(
+          existing,
+          item,
+          selectedCivilReferenceIdsRef.current.includes(item.id),
+          primarySelectedEntityIdRef.current === createLegacyPlatformEntityId("civil", item.id),
+          overlaySettingsRef.current.showLabels
+        );
         return;
       }
       if (existing) {
         disposeCivilReferenceNode(existing);
       }
-      const node = createCivilReferenceNode(scene, item);
-      positionCivilReferenceNode(node, item, selectedCivilReferenceIdRef.current, overlaySettingsRef.current.showLabels);
+      const node = createCivilReferenceNode(scene, item, effectiveThemeIdRef.current);
+      positionCivilReferenceNode(
+        node,
+        item,
+        selectedCivilReferenceIdsRef.current.includes(item.id),
+        primarySelectedEntityIdRef.current === createLegacyPlatformEntityId("civil", item.id),
+        overlaySettingsRef.current.showLabels
+      );
       civilReferenceNodesRef.current.set(item.id, node);
     });
   }, [civilReferences]);
@@ -1352,17 +1443,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   useEffect(() => {
     collisionResultRef.current = collisionResult;
     machineNodesRef.current.forEach((node, instanceId) => {
-      const isSelected = selectedMachineIdsRef.current.includes(instanceId);
       const isColliding = collisionResult.collidingObjectIds.includes(instanceId);
       node.collisionFrame.color = isColliding ? createTechnicalColor3("collisionActive") : createTechnicalColor3("collisionFrame");
       node.collisionFrame.isVisible = overlaySettingsRef.current.showCollisionEnvelope;
-      node.material.emissiveColor = isSelected
-        ? isColliding
-          ? createTechnicalColor3("collisionTint")
-          : createTechnicalColor3("warningTint")
-        : isColliding
-          ? createTechnicalColor3("collisionEmissive")
-          : createTechnicalColor3("black");
+      node.material.emissiveColor = createTechnicalColor3(getMachineEmissiveRole(isColliding));
     });
   }, [collisionResult]);
 
@@ -1399,7 +1483,38 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           true,
           undefined,
           true,
-          false
+          false,
+          true,
+          1,
+          (renderTarget) => {
+            const backgroundColor = createViewportPaletteColor4(
+              getViewportVisualPalette(effectiveThemeIdRef.current),
+              "background"
+            );
+            renderTarget.clearColor = backgroundColor;
+            renderTarget.onClearObservable.add((engine) => {
+              engine.clear(backgroundColor, true, true, true);
+            });
+          },
+          (width, height, data, successCallback, mimeType, fileName, invertY, toArrayBuffer, quality) => {
+            const palette = getViewportVisualPalette(effectiveThemeIdRef.current);
+            const background = [
+              Number.parseInt(palette.background.slice(1, 3), 16),
+              Number.parseInt(palette.background.slice(3, 5), 16),
+              Number.parseInt(palette.background.slice(5, 7), 16)
+            ] as const;
+            DumpData(
+              width,
+              height,
+              compositeRgbaOverBackground(data, background),
+              successCallback,
+              mimeType,
+              fileName,
+              invertY,
+              toArrayBuffer,
+              quality
+            );
+          }
         )
       );
     },
@@ -1495,20 +1610,40 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         orthographicBounds = resolved.bounds;
       }
 
-      camera.mode = mode === "orthographic"
-        ? Camera.ORTHOGRAPHIC_CAMERA
-        : Camera.PERSPECTIVE_CAMERA;
-      camera.alpha = cameraState.alpha;
-      camera.beta = cameraState.beta;
-      camera.radius = cameraState.radius;
-      camera.target = new Vector3(cameraState.targetX, cameraState.targetY, cameraState.targetZ);
+      applyBabylonCameraPose(camera, {
+        mode,
+        alpha: cameraState.alpha,
+        beta: cameraState.beta,
+        radius: cameraState.radius,
+        targetX: cameraState.targetX,
+        targetY: cameraState.targetY,
+        targetZ: cameraState.targetZ
+      });
       if (orthographicBounds) {
         camera.inertialRadiusOffset = 0;
         applyOrthographicBounds(camera, orthographicBounds);
       }
       return true;
     },
-    getRuntimeViewportState: () => runtimeViewportStateRef.current,
+    getRuntimeViewportState: () => {
+      const state = runtimeViewportStateRef.current;
+      const visualDiagnostics = visualContextRef.current?.getDiagnostics();
+      if (!state || !visualDiagnostics) {
+        return state;
+      }
+      return {
+        ...state,
+        visualPresentation: {
+          effectiveThemeId: visualDiagnostics.effectiveThemeId,
+          palette: visualDiagnostics.palette,
+          workplaneBounds: visualDiagnostics.workplaneBounds,
+          gridMinorSpacingMm: visualDiagnostics.gridMinorSpacingMm,
+          gridMajorSpacingMm: visualDiagnostics.gridMajorSpacingMm,
+          visualContextMeshCount: visualDiagnostics.meshCount,
+          lightCount: visualDiagnostics.lightCount
+        }
+      };
+    },
     getRuntimeViewportCameraSnapshot: () => {
       const camera = cameraRef.current;
       if (!camera) {
@@ -1630,8 +1765,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     });
     viewportResizeControllerRef.current = viewportResizeController;
 
-    const { floor } = createSceneVisualContext(scene);
-    floorRef.current = floor;
+    const visualContext = createSceneVisualContext(
+      scene,
+      effectiveThemeIdRef.current,
+      calculateSceneWorkplaneBounds({
+        machines: placedMachinesRef.current,
+        civilReferences: civilReferencesRef.current
+      })
+    );
+    visualContextRef.current = visualContext;
+    floorRef.current = visualContext.interactionPlane;
 
     const createPointerRay = (event?: PointerEvent) => {
       const activeScene = sceneRef.current;
@@ -2180,13 +2323,40 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
             opacity: node.material.alpha
           }])
         ));
+        canvas.dataset.civilRenderTransforms = JSON.stringify(Object.fromEntries(
+          [...civilReferenceNodesRef.current].slice(0, 16).map(([id, node]) => [id, {
+            mesh: node.mesh.getAbsolutePosition().asArray(),
+            rotationY: node.mesh.rotation.y,
+            scaling: node.mesh.scaling.asArray()
+          }])
+        ));
+        canvas.dataset.collidingObjectIds = JSON.stringify(collisionResultRef.current.collidingObjectIds);
+        canvas.dataset.visibleActiveCollisionFrameIds = JSON.stringify(
+          [...machineNodesRef.current]
+            .filter(([instanceId, node]) =>
+              node.collisionFrame.isVisible
+              && collisionResultRef.current.collidingObjectIds.includes(instanceId)
+            )
+            .map(([instanceId]) => instanceId)
+        );
+        canvas.dataset.machineRenderStyles = JSON.stringify(Object.fromEntries(
+          [...machineNodesRef.current].slice(0, 16).map(([id, node]) => [id, {
+            diffuseColor: node.material.diffuseColor.toHexString().toLowerCase(),
+            emissiveColor: node.material.emissiveColor.toHexString().toLowerCase()
+          }])
+        ));
         canvas.dataset.machineRenderTransforms = JSON.stringify(Object.fromEntries(
           [...machineNodesRef.current].slice(0, 16).map(([id, node]) => {
             const worldPosition = (mesh: AbstractMesh) => mesh.getAbsolutePosition().asArray();
             return [id, {
               box: worldPosition(node.box),
               label: worldPosition(node.label),
-              children: node.box.getChildMeshes().map((mesh) => ({ name: mesh.name, position: worldPosition(mesh) }))
+              children: node.box.getChildMeshes().map((mesh) => ({
+                name: mesh.name,
+                position: worldPosition(mesh),
+                materialId: mesh.material?.uniqueId ?? null,
+                materialName: mesh.material?.name ?? null
+              }))
             }];
           })
         ));
@@ -2259,6 +2429,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         civilReferenceNodesRef.current.clear();
         annotationNodesRef.current.forEach(disposeAnnotationNode);
         annotationNodesRef.current.clear();
+        visualContext.dispose();
+        visualContextRef.current = null;
         cameraRef.current = null;
         floorRef.current = null;
         sceneRef.current = null;
@@ -2274,6 +2446,36 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     onSetMachinePositions,
     onUpdateMachine
   ]);
+
+  useEffect(() => {
+    effectiveThemeIdRef.current = effectiveThemeId;
+    visualContextRef.current?.updatePalette(effectiveThemeId);
+    machineNodesRef.current.forEach((node) => {
+      drawSceneLabelText(node.labelTexture, node.labelText, effectiveThemeId);
+      node.connectionPointMarkers.forEach((markerSet) => {
+        drawSceneLabelText(
+          markerSet.texture,
+          markerSet.labelText,
+          effectiveThemeId,
+          "connection-point"
+        );
+      });
+    });
+    civilReferenceNodesRef.current.forEach((node) => {
+      drawSceneLabelText(node.labelTexture, node.labelText, effectiveThemeId);
+    });
+    const canvas = canvasRef.current;
+    if (canvas && enableE2EDiagnosticsRef.current) {
+      canvas.dataset.effectiveThemeId = effectiveThemeId;
+    }
+  }, [effectiveThemeId]);
+
+  useEffect(() => {
+    visualContextRef.current?.updateBounds(calculateSceneWorkplaneBounds({
+      machines: placedMachines,
+      civilReferences
+    }));
+  }, [civilReferences, placedMachines]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -2321,7 +2523,11 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       const displayName = getPlacedMachineDisplayName(machine);
       if (existingNode) {
         if (existingNode.labelText !== displayName) {
-          drawLabelText(existingNode.labelTexture, displayName);
+          drawSceneLabelText(
+            existingNode.labelTexture,
+            displayName,
+            effectiveThemeIdRef.current
+          );
           existingNode.labelText = displayName;
         }
         return;
@@ -2355,7 +2561,13 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       box.metadata = { instanceId };
       box.visibility = 0;
 
-      const { label, texture } = createLabel(scene, instanceId, displayName, vertical.labelY);
+      const { label, texture } = createLabel(
+        scene,
+        instanceId,
+        displayName,
+        vertical.labelY,
+        effectiveThemeIdRef.current
+      );
       label.metadata = {
         machineLabelInstanceId: instanceId,
         platformEntityId: createLegacyPlatformEntityId("machine", instanceId)
@@ -2369,7 +2581,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       selectionFrame.isVisible =
         selectedMachineIdsRef.current.includes(instanceId) && overlaySettingsRef.current.showSelectionBox;
       selectionFrame.color =
-        primarySelectedMachineIdRef.current === instanceId ? createTechnicalColor3("selectionPrimary") : createTechnicalColor3("selectionSecondary");
+        primarySelectedEntityIdRef.current === createLegacyPlatformEntityId("machine", instanceId)
+          ? createTechnicalColor3("selectionPrimary")
+          : createTechnicalColor3("selectionSecondary");
 
       const metadataFrame = createMetadataFrame(scene, machine);
       metadataFrame.parent = box;
@@ -2400,7 +2614,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         product.parent = box;
       });
       const connectionPointMarkers = getConnectionPointsForObject(machine).map((_, pointIndex) => {
-        const markerSet = createConnectionPointMarker(scene, machine, pointIndex);
+        const markerSet = createConnectionPointMarker(
+          scene,
+          machine,
+          pointIndex,
+          effectiveThemeIdRef.current
+        );
         markerSet.marker.parent = box;
         markerSet.label.parent = box;
         positionConnectionPointMarker(markerSet, machine, pointIndex);
@@ -2514,7 +2733,12 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           markerSet.marker.dispose();
         });
         node.connectionPointMarkers = connectionPoints.map((_, pointIndex) => {
-          const markerSet = createConnectionPointMarker(scene, machine, pointIndex);
+          const markerSet = createConnectionPointMarker(
+            scene,
+            machine,
+            pointIndex,
+            effectiveThemeIdRef.current
+          );
           markerSet.marker.parent = node.box;
           markerSet.label.parent = node.box;
           return markerSet;
@@ -2533,7 +2757,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       node.selectionFrame.isVisible =
         selectedMachineIdsRef.current.includes(machine.instanceId) && overlaySettingsRef.current.showSelectionBox;
       node.selectionFrame.color =
-        machine.instanceId === primarySelectedMachineIdRef.current
+        createLegacyPlatformEntityId("machine", machine.instanceId) === primarySelectedEntityIdRef.current
           ? createTechnicalColor3("selectionPrimary")
           : createTechnicalColor3("selectionSecondary");
       node.metadataFrame.isVisible =
@@ -2553,13 +2777,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         markerSet.label.isVisible = shouldShowConnectionPointLabel(isSelected, overlaySettingsRef.current);
       });
       const isColliding = collisionResultRef.current.collidingObjectIds.includes(machine.instanceId);
-      node.material.emissiveColor = isSelected
-        ? isColliding
-          ? createTechnicalColor3("collisionTint")
-          : createTechnicalColor3("warningTint")
-        : isColliding
-          ? createTechnicalColor3("collisionEmissive")
-          : createTechnicalColor3("black");
+      node.material.emissiveColor = createTechnicalColor3(getMachineEmissiveRole(isColliding));
     });
   }, [placedMachines]);
 
