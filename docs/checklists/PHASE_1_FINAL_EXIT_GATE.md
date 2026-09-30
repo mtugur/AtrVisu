@@ -19,6 +19,8 @@ Allowed states: `PASS`, `PENDING`, `FAIL`.
 - [x] Every accepted package head listed in the final audit has a successful
       exact-head Quality Gate.
 - [x] Obsolete PR #109 is closed unmerged and is not closure authority.
+- [x] Master Plan source SHA matches the repository source fingerprint.
+- [x] Stale `ATRVISU_LAYERED_MASTER_PLAN.md` phase projection is realigned to the canonical v3.0 source.
 
 ## B. Hard technical gates
 
