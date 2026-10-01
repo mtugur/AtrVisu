@@ -83,6 +83,9 @@ not part of the exported scene.
   overflow. Existing Viewpoint restoration now asserts HUD orientation and no
   implicit Fit View. Existing orthographic resize and panel tests retain real
   browser-resize coverage but reject synthetic side-dock resize.
+  Legacy toolbar/Feature Access expectations include the newly live Fit View;
+  empty-scene clicks prove they hit the canvas between the overlaid side docks.
+  Inspector pinning, deselect, Group and body-drag assertions remain intact.
 - Exact-head artifact `p1-close-nav-viewport-navigation`: ten required captures,
   four additional Left/Back/Bottom/edge captures and `p1-close-nav-evidence.json`.
   JSON records provenance, camera/vector dot products, included/excluded geometry,

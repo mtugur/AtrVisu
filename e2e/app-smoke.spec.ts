@@ -1182,6 +1182,22 @@ const clickSceneMachine = async (page: Page, machineId: string) => {
   await page.mouse.click(box.x + point.x, box.y + point.y);
 };
 
+const clickEmptySceneSpace = async (page: Page) => {
+  // These fixtures contain small centered machines. Choose empty lower canvas
+  // space between the actual overlaid side docks, not underneath a dock.
+  const point = await page.getByLabel("AtrVisu 3D workspace").evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(document.querySelector('[data-testid="app-root"]')!);
+    const left = parseFloat(style.getPropertyValue("--av-viewport-hud-left-inset")) || 0;
+    const right = parseFloat(style.getPropertyValue("--av-viewport-hud-right-inset")) || 0;
+    const x = rect.left + left + (rect.width - left - right) / 2;
+    const y = rect.bottom - 24;
+    return { x, y, hitsCanvas: document.elementFromPoint(x, y) === element };
+  });
+  expect(point.hitsCanvas).toBe(true);
+  await page.mouse.click(point.x, point.y);
+};
+
 const dragSceneMachine = async (page: Page, machineId: string, deltaX: number, deltaY: number) => {
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const box = await canvas.boundingBox();
@@ -1728,11 +1744,12 @@ test("required runtime command bindings are live without executing during report
     command.registered && command.bound && command.reachable
   )).toBe(true);
   expect(report.features.find((feature) => feature.featureId === "view.fitView")).toMatchObject({
-    classification: "declared-planned",
-    status: "planned-unbound",
-    bound: false,
-    reachable: false
+    classification: "required-runtime",
+    status: "contextually-unavailable",
+    bound: true,
+    reachable: true
   });
+  expect((await getRuntimeCommandExecution(page, "view.fitView")).attemptCount).toBe(0);
 
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
@@ -1854,7 +1871,8 @@ test("Viewpoints is a truthful Primary Dock toggle and leaves no empty Bottom Do
 
   await groupsTab.click();
   await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
-  expect(await viewport.evaluate((element) => element.getBoundingClientRect().left)).toBeGreaterThan(0);
+  expect(await primaryDock.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0);
+  expect(await viewport.evaluate((element) => element.getBoundingClientRect().left)).toBe(0);
   await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
   await expect(groupsTab).toBeHidden();
@@ -7588,7 +7606,7 @@ test("PF-3A Inspector modes and group selection avoid React update-depth feedbac
 
   const canvasBox = await canvas.boundingBox();
   if (!canvasBox) throw new Error("Scene canvas geometry is unavailable.");
-  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await clickEmptySceneSpace(page);
   await expect(page.getByTestId("inspector-empty-state")).toBeVisible();
   await expect(inspector).toBeVisible();
 
@@ -7612,7 +7630,7 @@ test("PF-3A Inspector modes and group selection avoid React update-depth feedbac
   await arrangeMenu.locator('[data-command-id="arrange.alignmentTools"]').click();
   await expect(page.getByTestId("advanced-alignment-tool-surface")).toBeVisible();
   await page.getByRole("button", { name: "Close Advanced Alignment", exact: true }).click();
-  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await clickEmptySceneSpace(page);
   await expect(inspector).toHaveCount(0);
 
   await openPrimaryDockPanel(page, "panel.groups");
@@ -7670,9 +7688,7 @@ test("PF-3A persisted collapsed shells remain console-clean through body drag an
     return current.xMm !== before.xMm || current.yMm !== before.yMm;
   }).toBe(true);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-  const canvasBox = await canvas.boundingBox();
-  if (!canvasBox) throw new Error("Scene canvas geometry is unavailable.");
-  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await clickEmptySceneSpace(page);
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
 
   await page.reload();
@@ -7729,7 +7745,7 @@ test("PF-1 premium command information architecture is accessible and responsive
   ]);
 
   const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(8);
+  await expect(commandButtons).toHaveCount(9);
   await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
   await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
   await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
@@ -7740,7 +7756,7 @@ test("PF-1 premium command information architecture is accessible and responsive
     expect(await button.getAttribute("title")).toBeTruthy();
   }
   expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
-    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Labels", "Connection Points", "Viewpoints"
+    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Fit View", "Labels", "Connection Points", "Viewpoints"
   ]);
   await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
   await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
