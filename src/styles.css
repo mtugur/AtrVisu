@@ -117,6 +117,77 @@ select:disabled {
   outline: none;
 }
 
+.viewport-navigation-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--av-z-content, 1);
+}
+
+.viewport-viewcube {
+  position: absolute;
+  top: 12px;
+  right: calc(var(--av-viewport-hud-right-inset, 0px) + 12px);
+  width: 112px;
+  height: 112px;
+  overflow: visible;
+}
+
+.viewcube-zone {
+  pointer-events: auto;
+  cursor: pointer;
+  outline: none;
+}
+
+.viewcube-zone polygon {
+  fill: var(--av-surface-raised);
+  stroke: var(--av-text-muted);
+  stroke-width: .8px;
+  stroke-linejoin: round;
+}
+
+.viewcube-zone.is-edge polygon,
+.viewcube-zone.is-corner polygon {
+  fill: var(--av-surface-panel);
+}
+
+.viewcube-zone.is-current polygon {
+  fill: var(--av-surface-control);
+  stroke: var(--av-text-primary);
+}
+
+.viewcube-zone:hover polygon,
+.viewcube-zone:focus-visible polygon {
+  fill: var(--av-surface-control-hover);
+  stroke: var(--av-focus-ring);
+  stroke-width: 1.5px;
+}
+
+.viewcube-zone text {
+  fill: var(--av-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.viewport-axis-triad {
+  position: absolute;
+  bottom: calc(var(--av-viewport-hud-bottom-inset, 0px) + 12px);
+  left: calc(var(--av-viewport-hud-left-inset, 0px) + 12px);
+  width: 88px;
+  height: 88px;
+}
+
+.viewport-axis-triad line { stroke: currentColor; stroke-width: 2px; }
+.viewport-axis-triad circle { fill: currentColor; }
+.viewport-axis-triad text { fill: currentColor; font-size: 12px; font-weight: 600; }
+
+@media (max-width: 720px) {
+  .app-shell:has(.machine-panel) {
+    --av-viewport-hud-bottom-inset: min(44vh, 360px);
+  }
+}
+
 .workbench-application-bar,
 .workbench-menu-bar,
 .workbench-command-bar {

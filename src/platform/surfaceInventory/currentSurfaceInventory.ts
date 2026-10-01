@@ -2,6 +2,12 @@ import type { PlatformSurfaceInventoryItem } from "./surfaceInventoryTypes";
 
 export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryItem[] = [
   {
+    surfaceId: "surface.workbenchCommandPalette", surfaceType: "toolbar-action", label: "Command Palette", owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/workbench/CommandPalette.tsx", "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"],
+    commandIds: ["view.fitView"], featureIds: ["view.fitView"],
+    notes: "Fit View is searchable and executed through the same registered runtime binding as View and Quick Toolbar."
+  },
+  {
     surfaceId: "surface.nativeAssetImport", surfaceType: "modal", label: "Import 3D Asset", owner: "existing-ui",
     sourceFiles: ["src/components/NativeAssetImport.tsx", "src/components/MachineLibrary.tsx", "src/App.tsx"],
     commandIds: ["library.importAsset"], featureIds: ["library.importAsset"],
@@ -50,6 +56,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.toggleLabels",
+      "view.fitView",
       "view.viewpoints",
       "view.toggleConnectionPoints",
       "view.showMeasurements",
@@ -87,6 +94,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
+      "view.fitView",
       "view.viewpoints",
       "connectionPoints.toggle",
       "measurements.show",
@@ -115,6 +123,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "edit.redo",
       "edit.duplicateSelected",
       "edit.deleteSelected",
+      "view.fitView",
       "view.toggleLabels",
       "view.toggleConnectionPoints",
       "view.viewpoints"
@@ -126,10 +135,11 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "object.duplicate",
       "edit.deleteSelected",
       "view.toggleLabels",
+      "view.fitView",
       "connectionPoints.toggle",
       "view.viewpoints"
     ],
-    notes: "The flat icon-only Quick Toolbar projects Save, Undo, Redo, Duplicate, Delete, Labels, Connection Points, and Viewpoints through the existing command registry with accessible names, tooltips, live enablement, disabled reasons, and pressed state. Save is also reachable from the File menu; the Application Bar retains project context and saved-state presentation without a duplicate action."
+    notes: "The flat icon-only Quick Toolbar projects Save, Undo, Redo, Duplicate, Delete, Fit View, Labels, Connection Points, and Viewpoints through the existing command registry with accessible names, tooltips, live enablement, disabled reasons, and pressed state. Save is also reachable from the File menu; the Application Bar retains project context and saved-state presentation without a duplicate action."
   },
   {
     surfaceId: "surface.help",

@@ -84,7 +84,7 @@ describe("AppShell render contract", () => {
     expect(markup).toContain('data-app-shell-zone="modal-layer"');
   });
 
-  it("applies the committed right-panel inset to the viewport host", () => {
+  it("keeps side-dock insets in HUD presentation without changing viewport geometry", () => {
     const markup = renderToStaticMarkup(
       createElement(AppShell, {
         viewport: createSlot("viewport-slot", "viewport-slot"),
@@ -93,8 +93,10 @@ describe("AppShell render contract", () => {
     );
 
     expect(markup).toContain('class="scene-viewport-host"');
-    expect(markup).toContain('style="--av-shell-top-inset:0px"');
-    expect(markup).toContain('style="left:min(0px, calc(100vw - 28px));right:min(420px, calc(100vw - 28px));bottom:0px"');
+    expect(markup).toContain('--av-shell-top-inset:0px;');
+    expect(markup).toContain('--av-viewport-hud-right-inset:420px');
+    expect(markup).toContain('--av-viewport-hud-left-inset:0px');
+    expect(markup).toContain('style="left:0;right:0;bottom:0px"');
   });
 
   it("owns one shell inset property without injecting right-panel geometry", () => {
@@ -107,7 +109,7 @@ describe("AppShell render contract", () => {
     }));
     const rightPanelMarkup = markup.match(/<aside[^>]*>right-panel<\/aside>/)?.[0] ?? "";
 
-    expect(markup).toContain('style="--av-shell-top-inset:var(--canonical-inset)"');
+    expect(markup).toContain('--av-shell-top-inset:var(--canonical-inset);');
     expect(rightPanelMarkup).toContain("--panel-width:360px");
     expect(rightPanelMarkup).not.toMatch(/(?:^|;)top:/);
     expect(rightPanelMarkup).not.toMatch(/(?:^|;)height:/);

@@ -46,6 +46,7 @@ export const COMMAND_SURFACE_MENU_DEFINITIONS = [
     fallbackLabel: "View",
     commandIds: [
       RUNTIME_FEATURE_COMMAND_IDS.displayOverlayControls,
+      RUNTIME_FEATURE_COMMAND_IDS.fitView,
       RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
       RUNTIME_FEATURE_COMMAND_IDS.viewpoints,
       RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints
@@ -111,6 +112,7 @@ export const COMMAND_BAR_COMMAND_IDS = [
   CORE_EDITOR_COMMAND_IDS.redo,
   CORE_EDITOR_COMMAND_IDS.duplicateSelected,
   CORE_EDITOR_COMMAND_IDS.deleteSelected,
+  RUNTIME_FEATURE_COMMAND_IDS.fitView,
   RUNTIME_FEATURE_COMMAND_IDS.toggleLabels,
   RUNTIME_FEATURE_COMMAND_IDS.toggleConnectionPoints,
   RUNTIME_FEATURE_COMMAND_IDS.viewpoints

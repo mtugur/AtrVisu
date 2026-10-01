@@ -1,4 +1,6 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { fitViewCamera, getFitViewGeometry, createPresetCameraState } from "./viewportNavigation/navigationGeometry";
+import type { createCameraTelemetry } from "./viewportNavigation/cameraTelemetry";
 import { modelKeyFromPath } from "../nativeAssets/modelContract";
 import { resolveImportedModel } from "../nativeAssets/modelStorage";
 import { loadImportedModelRoot, calibrateImportedRoot } from "../nativeAssets/modelRendering";
@@ -210,6 +212,7 @@ type BabylonSceneProps = {
   collisionResult: CollisionCheckResult;
   effectiveThemeId: EffectiveThemeId;
   enableE2EDiagnostics?: boolean;
+  cameraTelemetry?: ReturnType<typeof createCameraTelemetry>;
   onVisualDiagnosticsChange: (diagnostics: VisualModelDiagnostics) => void;
   onPerformanceMetricsChange?: (metrics: ScenePerformanceMetrics) => void;
 };
@@ -217,6 +220,9 @@ type BabylonSceneProps = {
 export type BabylonSceneHandle = {
   getCameraState: () => ViewpointCameraState | null;
   applyCameraState: (camera: ViewpointCameraState) => boolean;
+  fitView: () => boolean;
+  getNavigationGeometry: () => { entityId: string; corners: readonly { x: number; y: number; z: number }[]; projected: { x: number; y: number; z: number }[] }[];
+  applyViewPreset: (presetId: string) => boolean;
   getRuntimeViewportState: () => RuntimeViewportState | null;
   getRuntimeViewportCameraSnapshot: () => RuntimeViewportCameraSnapshot | null;
   requestRuntimeViewportResize: (request: ViewportResizeRequest) => RuntimeViewportResizeResult;
@@ -1110,6 +1116,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   overlaySettings,
   collisionResult,
   effectiveThemeId,
+  cameraTelemetry,
   enableE2EDiagnostics = false,
   onVisualDiagnosticsChange,
   onPerformanceMetricsChange
@@ -1455,6 +1462,125 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     lastPerformanceMetricsPublishedAtRef.current = null;
   }, [onPerformanceMetricsChange]);
 
+  const applyNavigationCameraState = useCallback((cameraState: ViewpointCameraState) => {
+    const camera = cameraRef.current;
+    if (!camera) {
+      return false;
+    }
+
+    const mode = cameraState.mode ?? "perspective";
+    const numericValues = [
+      cameraState.alpha,
+      cameraState.beta,
+      cameraState.radius,
+      cameraState.targetX,
+      cameraState.targetY,
+      cameraState.targetZ,
+      cameraState.positionX,
+      cameraState.positionY,
+      cameraState.positionZ
+    ].filter((value): value is number => value !== undefined);
+    if (
+      (mode !== "perspective" && mode !== "orthographic")
+      || numericValues.some((value) => !Number.isFinite(value))
+      || cameraState.radius <= 0
+    ) {
+      return false;
+    }
+
+    let orthographicBounds: {
+      left: number;
+      right: number;
+      top: number;
+      bottom: number;
+    } | null = null;
+    if (mode === "orthographic") {
+      const viewportState = runtimeViewportStateRef.current;
+      if (
+        !viewportState
+        || viewportState.cssWidth <= 0
+        || viewportState.cssHeight <= 0
+        || !Number.isFinite(viewportState.cssWidth)
+        || !Number.isFinite(viewportState.cssHeight)
+      ) {
+        return false;
+      }
+      const framing = resolveOrthographicFramingForApplication({
+        requestedFraming: cameraState.orthographic,
+        previousMode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA
+          ? "orthographic"
+          : "perspective",
+        currentBounds: getOrthographicBounds(camera),
+        perspectiveTargetDistance: cameraState.radius,
+        verticalFov: camera.fov
+      });
+      const resolved = framing
+        ? getOrthographicBoundsForViewport(framing, {
+            width: viewportState.cssWidth,
+            height: viewportState.cssHeight
+          })
+        : null;
+      if (!resolved) {
+        return false;
+      }
+      orthographicBounds = resolved.bounds;
+    }
+
+    applyBabylonCameraPose(camera, {
+      mode,
+      alpha: cameraState.alpha,
+      beta: cameraState.beta,
+      radius: cameraState.radius,
+      targetX: cameraState.targetX,
+      targetY: cameraState.targetY,
+      targetZ: cameraState.targetZ
+    });
+    camera.inertialAlphaOffset = 0;
+    camera.inertialBetaOffset = 0;
+    camera.inertialPanningX = 0;
+    camera.inertialPanningY = 0;
+    camera.inertialRadiusOffset = 0;
+    if (orthographicBounds) {
+      applyOrthographicBounds(camera, orthographicBounds);
+    }
+    return true;
+  }, []);
+
+  const readNavigationCameraSnapshot = useCallback((): RuntimeViewportCameraSnapshot | null => {
+    const camera = cameraRef.current;
+    if (!camera) {
+      return null;
+    }
+    const viewportState = runtimeViewportStateRef.current;
+    const orthographicFraming = camera.mode === Camera.ORTHOGRAPHIC_CAMERA
+      ? captureOrthographicFraming(getOrthographicBounds(camera))
+      : null;
+    const orthographicIntent = orthographicFraming && viewportState
+      ? getOrthographicBoundsForViewport(orthographicFraming, {
+          width: viewportState.cssWidth,
+          height: viewportState.cssHeight
+        })?.intent
+      : undefined;
+    return {
+      mode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA ? "orthographic" : "perspective",
+      alpha: camera.alpha,
+      beta: camera.beta,
+      radius: camera.radius,
+      targetX: camera.target.x,
+      targetY: camera.target.y,
+      targetZ: camera.target.z,
+      positionX: camera.position.x,
+      positionY: camera.position.y,
+      positionZ: camera.position.z,
+      fov: camera.fov,
+      ...(camera.orthoLeft !== null ? { orthoLeft: camera.orthoLeft } : {}),
+      ...(camera.orthoRight !== null ? { orthoRight: camera.orthoRight } : {}),
+      ...(camera.orthoTop !== null ? { orthoTop: camera.orthoTop } : {}),
+      ...(camera.orthoBottom !== null ? { orthoBottom: camera.orthoBottom } : {}),
+      ...(orthographicIntent ? { orthographicIntent } : {})
+    };
+  }, []);
+
   useImperativeHandle(ref, () => ({
     capturePresentationSnapshot: async () => {
       const scene = sceneRef.current;
@@ -1546,84 +1672,38 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         ...(orthographic ? { orthographic } : {})
       };
     },
-    applyCameraState: (cameraState) => {
+    applyCameraState: applyNavigationCameraState,
+    fitView: () => {
+      const camera = readNavigationCameraSnapshot();
+      const viewport = runtimeViewportStateRef.current;
+      if (!camera || !viewport) return false;
+      const geometry = getFitViewGeometry(placedMachinesRef.current, civilReferencesRef.current, []).included;
+      const fitted = fitViewCamera(geometry, camera, viewport.cssWidth / viewport.cssHeight);
+      const engineCamera = cameraRef.current;
+      if (!fitted || !engineCamera) return false;
+      engineCamera.upperRadiusLimit = Math.max(engineCamera.upperRadiusLimit ?? 0, fitted.radius);
+      engineCamera.maxZ = Math.max(engineCamera.maxZ, fitted.radius * 4);
+      return applyNavigationCameraState(fitted);
+    },
+    getNavigationGeometry: () => {
+      const scene = sceneRef.current;
       const camera = cameraRef.current;
-      if (!camera) {
-        return false;
-      }
-
-      const mode = cameraState.mode ?? "perspective";
-      const numericValues = [
-        cameraState.alpha,
-        cameraState.beta,
-        cameraState.radius,
-        cameraState.targetX,
-        cameraState.targetY,
-        cameraState.targetZ,
-        cameraState.positionX,
-        cameraState.positionY,
-        cameraState.positionZ
-      ].filter((value): value is number => value !== undefined);
-      if (
-        (mode !== "perspective" && mode !== "orthographic")
-        || numericValues.some((value) => !Number.isFinite(value))
-        || cameraState.radius <= 0
-      ) {
-        return false;
-      }
-
-      let orthographicBounds: {
-        left: number;
-        right: number;
-        top: number;
-        bottom: number;
-      } | null = null;
-      if (mode === "orthographic") {
-        const viewportState = runtimeViewportStateRef.current;
-        if (
-          !viewportState
-          || viewportState.cssWidth <= 0
-          || viewportState.cssHeight <= 0
-          || !Number.isFinite(viewportState.cssWidth)
-          || !Number.isFinite(viewportState.cssHeight)
-        ) {
-          return false;
-        }
-        const framing = resolveOrthographicFramingForApplication({
-          requestedFraming: cameraState.orthographic,
-          previousMode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA
-            ? "orthographic"
-            : "perspective",
-          currentBounds: getOrthographicBounds(camera),
-          perspectiveTargetDistance: cameraState.radius,
-          verticalFov: camera.fov
-        });
-        const resolved = framing
-          ? getOrthographicBoundsForViewport(framing, {
-              width: viewportState.cssWidth,
-              height: viewportState.cssHeight
-            })
-          : null;
-        if (!resolved) {
-          return false;
-        }
-        orthographicBounds = resolved.bounds;
-      }
-
-      applyBabylonCameraPose(camera, {
-        mode,
-        alpha: cameraState.alpha,
-        beta: cameraState.beta,
-        radius: cameraState.radius,
-        targetX: cameraState.targetX,
-        targetY: cameraState.targetY,
-        targetZ: cameraState.targetZ
-      });
-      if (orthographicBounds) {
-        camera.inertialRadiusOffset = 0;
-        applyOrthographicBounds(camera, orthographicBounds);
-      }
-      return true;
+      const canvas = canvasRef.current;
+      if (!scene || !camera || !canvas) return [];
+      const rect = canvas.getBoundingClientRect();
+      const viewport = camera.viewport.toGlobal(scene.getEngine().getRenderWidth(), scene.getEngine().getRenderHeight());
+      return getFitViewGeometry(placedMachinesRef.current, civilReferencesRef.current, []).included.map((item) => ({
+        ...item,
+        projected: item.corners.map((p) => {
+          const screen = Vector3.Project(new Vector3(p.x, p.y, p.z), Matrix.Identity(), scene.getTransformMatrix(), viewport);
+          return { x: rect.left + screen.x * rect.width / viewport.width, y: rect.top + screen.y * rect.height / viewport.height, z: screen.z };
+        })
+      }));
+    },
+    applyViewPreset: (presetId) => {
+      const camera = readNavigationCameraSnapshot();
+      const state = camera && createPresetCameraState(camera, presetId);
+      return state ? applyNavigationCameraState(state) : false;
     },
     getRuntimeViewportState: () => {
       const state = runtimeViewportStateRef.current;
@@ -1644,40 +1724,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         }
       };
     },
-    getRuntimeViewportCameraSnapshot: () => {
-      const camera = cameraRef.current;
-      if (!camera) {
-        return null;
-      }
-      const viewportState = runtimeViewportStateRef.current;
-      const orthographicFraming = camera.mode === Camera.ORTHOGRAPHIC_CAMERA
-        ? captureOrthographicFraming(getOrthographicBounds(camera))
-        : null;
-      const orthographicIntent = orthographicFraming && viewportState
-        ? getOrthographicBoundsForViewport(orthographicFraming, {
-            width: viewportState.cssWidth,
-            height: viewportState.cssHeight
-          })?.intent
-        : undefined;
-      return {
-        mode: camera.mode === Camera.ORTHOGRAPHIC_CAMERA ? "orthographic" : "perspective",
-        alpha: camera.alpha,
-        beta: camera.beta,
-        radius: camera.radius,
-        targetX: camera.target.x,
-        targetY: camera.target.y,
-        targetZ: camera.target.z,
-        positionX: camera.position.x,
-        positionY: camera.position.y,
-        positionZ: camera.position.z,
-        fov: camera.fov,
-        ...(camera.orthoLeft !== null ? { orthoLeft: camera.orthoLeft } : {}),
-        ...(camera.orthoRight !== null ? { orthoRight: camera.orthoRight } : {}),
-        ...(camera.orthoTop !== null ? { orthoTop: camera.orthoTop } : {}),
-        ...(camera.orthoBottom !== null ? { orthoBottom: camera.orthoBottom } : {}),
-        ...(orthographicIntent ? { orthographicIntent } : {})
-      };
-    },
+    getRuntimeViewportCameraSnapshot: readNavigationCameraSnapshot,
     requestRuntimeViewportResize: (request) =>
       viewportResizeControllerRef.current?.requestResize(request) ?? {
         status: "deferred",
@@ -2373,6 +2420,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           }));
       }
       scene.render();
+      cameraTelemetry?.publish(readNavigationCameraSnapshot());
       const publishPerformanceMetrics = onPerformanceMetricsChangeRef.current;
       const currentTimeMs = performance.now();
       if (publishPerformanceMetrics && shouldPublishScenePerformanceMetrics(
@@ -2389,6 +2437,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       viewportResizeController.dispose();
       viewportResizeControllerRef.current = null;
       runtimeViewportStateRef.current = null;
+      cameraTelemetry?.publish(null);
       lifecycle.dispose(() => {
         canvas.removeEventListener("contextmenu", handleContextMenu);
         canvas.removeEventListener("wheel", handleWheel, true);
@@ -2437,6 +2486,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       });
     };
   }, [
+    cameraTelemetry,
+    readNavigationCameraSnapshot,
     canBeginObjectDrag,
     onSelectAnnotation,
     onSelectCivilReference,

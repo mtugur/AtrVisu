@@ -113,11 +113,11 @@ export const platformFeatureAccessMatrix = [
     requiresSurfaceExecutionEvidence: true
   }),
 
-  feature("view.fitView", "Fit view", ["api"], {
-    classification: "declared-planned",
+  feature("view.fitView", "Fit view", ["toolbar", "menu"], {
     commandIds: ["view.fitView"],
-    requiredForRegression: false,
-    notes: "No current user-facing Fit View action exists."
+    runtimeRequirements: ["viewport"],
+    requiresSurfaceExecutionEvidence: true,
+    notes: "Fits visible Machine and Civil geometry through the Runtime Viewport authority; empty layouts are unavailable."
   }),
   feature("view.displayOverlayControls", "Display and overlay controls", ["menu", "modal"], {
     commandIds: ["view.displayOverlayControls"],
