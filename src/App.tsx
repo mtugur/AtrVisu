@@ -4,6 +4,10 @@ import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
+import { ViewportNavigationHud } from "./components/viewportNavigation/ViewportNavigationHud";
+import { getViewportHudSafeInsets } from "./components/viewportNavigation/hudSafeArea";
+import { getFitViewGeometry } from "./components/viewportNavigation/navigationGeometry";
 import { EditorHost } from "./components/EditorHost";
 import { EmptyProjectWelcome } from "./components/EmptyProjectWelcome";
 import { HelpModal, type HelpSection } from "./components/HelpModal";
@@ -25,6 +29,7 @@ import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDoc
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
 import {
+  getInspectorDockPresentation,
   getInspectorSelectionSignature,
   isResponsiveInspectorPresentation,
   isResponsivePrimaryDockPresentation,
@@ -239,7 +244,6 @@ import {
   type RuntimePanelState
 } from "./platform/runtimePanels";
 import {
-  createViewportResizeRequest,
   type CommandContext,
   type EntityId,
   type PanelId,
@@ -249,7 +253,6 @@ import {
   RUNTIME_VIEWPORT_IDS,
   createRuntimeViewportInvariantSnapshot,
   createRuntimeViewportBridge,
-  getRuntimeViewportShellResizeReason,
   refreshRuntimeViewportInvariantSnapshot,
   type RuntimeViewportBindings,
   type RuntimeViewportInvariantSnapshot,
@@ -421,6 +424,7 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 });
 
 export function App() {
+  const cameraTelemetry = useMemo(createCameraTelemetry, []);
   const effectiveThemeId = useEffectiveThemeId();
   const uiPreferencesStore = useUiPreferencesStore();
   const {
@@ -457,6 +461,7 @@ export function App() {
   const [inspectorVisibilityMode, setInspectorVisibilityMode] = useState<"auto" | "manual">("auto");
   const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
   const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
+  const inspectorDockPresentation = getInspectorDockPresentation(workbenchViewportSize.width);
   const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
   const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
   const responsivePrimaryDockPresentationRef = useRef(responsivePrimaryDockPresentation);
@@ -720,14 +725,6 @@ export function App() {
     simulationRunning: false,
     simulationSpeed: 1
   });
-  const previousViewportShellStateRef = useRef({
-    isPanelCollapsed: isInspectorPresentationCollapsed,
-    panelWidth,
-    isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
-    primaryDockWidth: effectivePrimaryDockWidth,
-    isBottomDockCollapsed: true,
-    bottomDockHeight: 0
-  });
   const runtimePanelStateRef = useRef({
     panelSectionExpansion,
     panelSectionVisibility,
@@ -770,6 +767,8 @@ export function App() {
         reason: "Babylon viewport runtime is not ready."
       },
       getCameraSnapshot: () => sceneRef.current?.getRuntimeViewportCameraSnapshot() ?? null,
+      fitView: () => sceneRef.current?.fitView() ?? false,
+      applyViewPreset: (id) => sceneRef.current?.applyViewPreset(id) ?? false,
       requestResize: (request) =>
         sceneRef.current?.requestRuntimeViewportResize(request) ?? {
           status: "deferred",
@@ -1799,41 +1798,6 @@ export function App() {
     runtimeViewportBindingsRef.current = runtimeViewportBindings;
   }, [runtimeViewportBindings]);
 
-  useLayoutEffect(() => {
-    const previous = previousViewportShellStateRef.current;
-    const next = {
-      isPanelCollapsed: isInspectorPresentationCollapsed,
-      panelWidth,
-      isPrimaryDockCollapsed: isPrimaryDockPresentationCollapsed,
-      primaryDockWidth: effectivePrimaryDockWidth,
-      isBottomDockCollapsed: true,
-      bottomDockHeight: 0
-    };
-    previousViewportShellStateRef.current = next;
-    const reason = getRuntimeViewportShellResizeReason(previous, next);
-    if (!reason) {
-      return;
-    }
-
-    const viewport = runtimeViewportBridge.getRuntimeViewport(RUNTIME_VIEWPORT_IDS.main);
-    if (!viewport?.available || viewport.cssWidth <= 0 || viewport.cssHeight <= 0) {
-      return;
-    }
-    runtimeViewportBridge.requestResize(
-      RUNTIME_VIEWPORT_IDS.main,
-      createViewportResizeRequest(
-        reason,
-        { width: viewport.cssWidth, height: viewport.cssHeight }
-      )
-    );
-  }, [
-    effectivePrimaryDockWidth,
-    isInspectorPresentationCollapsed,
-    isPrimaryDockPresentationCollapsed,
-    panelWidth,
-    runtimeViewportBridge
-  ]);
-
   useEffect(() => {
     if (!enableE2EDiagnostics) {
       return;
@@ -1892,6 +1856,10 @@ export function App() {
       return;
     }
     window.__atrvisuRuntimeViewport = {
+      getNavigationGeometry: () => ({
+        included: sceneRef.current?.getNavigationGeometry() ?? [],
+        excludedIds: getFitViewGeometry(placedMachinesRef.current, civilReferencesRef.current, layersRef.current).excludedIds
+      }),
       get: runtimeViewportBridge.getRuntimeViewport,
       list: runtimeViewportBridge.listRuntimeViewports,
       requestResize: runtimeViewportBridge.requestResize,
@@ -3628,6 +3596,14 @@ export function App() {
 
   const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
     ...projectRuntimeCommandBindings,
+    [RUNTIME_FEATURE_COMMAND_IDS.fitView]: {
+      getEnableState: () => visiblePlacedMachines.length + visibleCivilReferences.length > 0
+        ? { enabled: true }
+        : { enabled: false, reason: "No visible Machine or Civil geometry to fit." },
+      execute: () => runtimeViewportBridge.fitView(RUNTIME_VIEWPORT_IDS.main)
+        ? createExecutedRuntimeFeatureCommandResult()
+        : createUnavailableRuntimeCommandResult("Viewport camera is not ready.")
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.projectRestorePrompt]: {
       getEnableState: () => recoveryLayout
         ? { enabled: true }
@@ -4037,6 +4013,9 @@ export function App() {
     setLevelDatum,
     runtimePanelBridge,
     runtimeSelectionMovementEvaluation.allowed,
+    runtimeViewportBridge,
+    visiblePlacedMachines.length,
+    visibleCivilReferences.length,
     arrangeSelectedEntityIds.length
   ]);
 
@@ -4939,9 +4918,14 @@ export function App() {
             overlaySettings={overlaySettings}
             collisionResult={collisionResult}
             effectiveThemeId={effectiveThemeId}
+            cameraTelemetry={cameraTelemetry}
             enableE2EDiagnostics={enableE2EDiagnostics}
             onVisualDiagnosticsChange={handleVisualDiagnosticsChange}
             onPerformanceMetricsChange={isPerformanceBenchmarkOpen ? setLatestPerformanceMetrics : undefined}
+          />
+          <ViewportNavigationHud
+            source={cameraTelemetry.source}
+            onPreset={(id) => runtimeViewportBridge.applyViewPreset(RUNTIME_VIEWPORT_IDS.main, id)}
           />
           <div className="workbench-viewport-context-layer" aria-live="polite">
             <ViewportArrangeBar
@@ -5053,6 +5037,11 @@ export function App() {
     ? platformEntities.find((entity) => entity.id === runtimeSelection.primaryId)
     : undefined;
   const primaryDockInset = isPrimaryDockPresentationCollapsed ? 0 : effectivePrimaryDockWidth;
+  const hudSafeInsets = getViewportHudSafeInsets(
+    primaryDockInset,
+    isInspectorPresentationCollapsed || inspectorDockPresentation === "bottom-sheet" ? 0 : panelWidth,
+    workbenchViewportSize.width
+  );
   const bottomDockInset = STATUS_BAR_HEIGHT;
   const layerNames = new Map(layers.map((layer) => [layer.id, layer.name]));
   const showLegacyCompatibilityStack = false;
@@ -5277,8 +5266,8 @@ export function App() {
           onResize={setPrimaryDockWidth}
         />
       )}
-      editorLeftInset={primaryDockInset}
-      editorRightInset={isInspectorPresentationCollapsed ? 0 : panelWidth}
+      editorLeftInset={hudSafeInsets.left}
+      editorRightInset={hudSafeInsets.right}
       editorBottomInset={bottomDockInset}
       editorHost={(
         <EditorHost
@@ -5300,6 +5289,7 @@ export function App() {
         <aside
           className="machine-panel"
           data-testid="right-panel"
+          data-inspector-presentation={inspectorDockPresentation}
           data-app-shell-zone="machine-properties"
           style={{
             "--panel-width": `${panelWidth}px`,

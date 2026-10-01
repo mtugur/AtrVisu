@@ -76,19 +76,19 @@ describe("WorkbenchShell", () => {
       editorRightInset: -100
     }));
 
-    expect(positive).toContain('style="--av-shell-top-inset:var(--av-workbench-top-inset)"');
-    expect(positive).toContain('style="left:min(0px, calc(100vw - 28px));right:min(420px, calc(100vw - 28px));bottom:0px"');
-    expect(negative).toContain('style="left:min(0px, calc(100vw - 28px));right:min(0px, calc(100vw - 28px));bottom:0px"');
+    expect(positive).toContain('--av-shell-top-inset:var(--av-workbench-top-inset);');
+    expect(positive).toContain('style="left:0;right:0;bottom:0px"');
+    expect(negative).toContain('style="left:0;right:0;bottom:0px"');
   });
 
-  it("applies independent left and bottom dock insets", () => {
+  it("keeps the left HUD inset independent of the bottom viewport geometry", () => {
     const markup = renderToStaticMarkup(createElement(WorkbenchShell, {
       editorHost: slot("editorHost"),
       editorLeftInset: 312,
       editorBottomInset: 208
     }));
 
-    expect(markup).toContain('style="left:min(312px, calc(100vw - 28px));right:min(0px, calc(100vw - 28px));bottom:208px"');
+    expect(markup).toContain('style="left:0;right:0;bottom:208px"');
   });
 
   it("does not remount the editor when secondary dock content changes", async () => {

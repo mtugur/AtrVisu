@@ -92,6 +92,8 @@ export type RuntimeViewportBinding = {
   getState: () => RuntimeViewportState;
   getCameraSnapshot: () => RuntimeViewportCameraSnapshot | null;
   requestResize: (request: ViewportResizeRequest) => RuntimeViewportResizeResult;
+  fitView?: () => boolean;
+  applyViewPreset?: (presetId: string) => boolean;
 };
 
 export type RuntimeViewportBindings = Readonly<
@@ -259,6 +261,9 @@ export const createRuntimeViewportBridge = (
     listRuntimeViewports,
     requestResize,
     getCameraSnapshot,
+    fitView: (viewportId: RuntimeViewportId) => getBindings()[viewportId]?.fitView?.() ?? false,
+    applyViewPreset: (viewportId: RuntimeViewportId, presetId: string) =>
+      getBindings()[viewportId]?.applyViewPreset?.(presetId) ?? false,
     getReachabilityReport
   };
 };
@@ -357,6 +362,10 @@ export const areRuntimeViewportInvariantSnapshotsEqual = (
   JSON.stringify(left) === JSON.stringify(right);
 
 export type RuntimeViewportE2EBridge = {
+  getNavigationGeometry: () => {
+    included: readonly { entityId: string; corners: readonly { x: number; y: number; z: number }[]; projected: readonly { x: number; y: number; z: number }[] }[];
+    excludedIds: readonly string[];
+  };
   get: (viewportId: RuntimeViewportId) => RuntimeViewportReachability | undefined;
   list: () => RuntimeViewportReachability[];
   requestResize: (

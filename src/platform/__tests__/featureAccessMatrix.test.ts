@@ -66,7 +66,7 @@ describe("platform feature access matrix", () => {
   });
 
   it("keeps planned definitions explicit and excludes them from regression", () => {
-    ["view.fitView", "panel.diagnostics"].forEach((featureId) => {
+    ["panel.diagnostics"].forEach((featureId) => {
       expect(featureAccessEntries.find((entry) => entry.featureId === featureId)).toMatchObject({
         classification: "declared-planned",
         requiredForRegression: false

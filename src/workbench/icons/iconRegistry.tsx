@@ -14,6 +14,7 @@ import {
   Eye,
   EyeOff,
   Focus,
+  Scan,
   Info,
   Keyboard,
   Layers3,
@@ -51,6 +52,7 @@ import {
 
 export const WORKBENCH_ICON_IDS = [
   "save",
+  "fit-view",
   "undo",
   "redo",
   "duplicate",
@@ -112,6 +114,7 @@ export type WorkbenchIconId = typeof WORKBENCH_ICON_IDS[number];
 
 const iconById = Object.freeze({
   save: Save,
+  "fit-view": Scan,
   undo: Undo2,
   redo: Redo2,
   duplicate: Copy,

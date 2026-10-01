@@ -29,7 +29,9 @@ describe("surface inventory audit", () => {
   });
 
   it("does not represent planned or quality-only capabilities as runtime commands", () => {
-    expect(getSurfaceInventoryItemsByCommandId("view.fitView")).toEqual([]);
+    expect(getSurfaceInventoryItemsByCommandId("view.fitView").map(item => item.surfaceId)).toEqual([
+      "surface.workbenchCommandPalette", "surface.workbenchMenuBar", "surface.workbenchCommandBar"
+    ]);
     expect(getSurfaceInventoryItemsByCommandId("diagnostics.noRedConsole")).toEqual([]);
   });
 

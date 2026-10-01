@@ -66,6 +66,7 @@ jobs:
           ATRVISU_CAPTURE_PF2B_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-native-asset-import-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_PF3A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-global-iconography-density-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_PF3B_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-pf3b-viewport-visual-runtime-v01' && '1' || '0' }}
+          ATRVISU_CAPTURE_CLOSE_NAV_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/p1-close-nav-runtime-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_P1_BLD2_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-level-datum-v01' && '1' || '0' }}
           ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
@@ -120,5 +121,14 @@ jobs:
         with:
           name: pf3b-viewport-visual-language
           path: test-results/pf3b-viewport-visual-language
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload P1-CLOSE-NAV viewport navigation evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/p1-close-nav-runtime-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-close-nav-viewport-navigation
+          path: test-results/p1-close-nav-viewport-navigation
           if-no-files-found: error
           retention-days: 30
