@@ -182,10 +182,19 @@ select:disabled {
 .viewport-axis-triad circle { fill: currentColor; }
 .viewport-axis-triad text { fill: currentColor; font-size: 12px; font-weight: 600; }
 
-@media (max-width: 720px) {
-  .app-shell:has(.machine-panel) {
-    --av-viewport-hud-bottom-inset: min(44vh, 360px);
-  }
+.app-shell:has(.machine-panel[data-inspector-presentation="bottom-sheet"]) {
+  --av-viewport-hud-bottom-inset: min(44vh, 360px);
+}
+
+.machine-panel[data-inspector-presentation="bottom-sheet"] {
+  top: auto;
+  bottom: var(--av-workbench-status-bar-height) !important;
+  width: 100%;
+  max-width: 100%;
+  height: min(44vh, 360px) !important;
+  padding: 18px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--av-text-secondary) 18%, transparent);
+  border-left: 0;
 }
 
 .workbench-application-bar,
@@ -4949,17 +4958,6 @@ body.is-resizing-workbench-dock {
   .workbench-status-bar span:nth-child(2),
   .workbench-status-bar span:nth-child(4) {
     display: none;
-  }
-
-  .machine-panel {
-    top: auto;
-    bottom: var(--av-workbench-status-bar-height) !important;
-    width: 100%;
-    max-width: 100%;
-    height: min(44vh, 360px) !important;
-    padding: 18px 16px;
-    border-top: 1px solid color-mix(in srgb, var(--av-text-secondary) 18%, transparent);
-    border-left: 0;
   }
 
   .panel-resize-handle {

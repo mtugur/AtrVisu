@@ -110,6 +110,7 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
   const presets: unknown[] = [];
   const dockOperations: unknown[] = [];
   const fits: unknown[] = [];
+  const responsiveInspector: unknown[] = [];
   const geometry = () => page.evaluate(() => window.__atrvisuRuntimeViewport!.getNavigationGeometry());
   const capture = async (filename: string) => {
     const snapshot = await getRuntimeViewportSnapshot(page);
@@ -251,6 +252,91 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
   await checkDock("right-open", () => page.getByRole("button", { name: "Expand Inspector", exact: true }).click());
   await capture("10-right-dock-open-stable.png");
   await checkDock("right-resize", () => resize(page.getByRole("button", { name: "Resize right panel" }), -50));
+  const machineId = (await geometry()).included.find(item => item.entityId.startsWith("machine:"))!.entityId;
+  for (const width of [1024, 640]) {
+    await page.setViewportSize({ width, height: 800 });
+    if (width === 640) await page.getByRole("button", { name: "Open Explorer", exact: true }).click();
+    await openPrimaryDockPanel(page, "panel.layoutExplorer");
+    await page.getByTestId(`layout-explorer-entity-${machineId}`).click();
+    await expect.poll(async () => (await getRuntimeViewportSnapshot(page)).invariants.primarySelectionId).toBe(machineId);
+    if (width === 640) {
+      await page.getByTestId("primary-dock-collapse-toggle").click();
+      await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+    }
+    const inspector = page.getByTestId("right-panel");
+    if (await inspector.isVisible()) await page.getByRole("button", { name: "Collapse Inspector", exact: true }).click();
+    await expect(inspector).toHaveCount(0);
+    // Prepare a usable view through the real command after the browser resize,
+    // before measuring the Inspector operation. No fit occurs during opening.
+    await (await getMenuCommand(page, "View", "view.fitView")).click();
+    await waitForSceneRenderFrames(page);
+    const before = await getRuntimeViewportSnapshot(page);
+    const canvasBefore = await canvas.boundingBox();
+    const anchorBefore = (await geometry()).included.find(item => item.entityId === machineId)!.projected[0];
+    expect(Object.values(anchorBefore).every(Number.isFinite)).toBe(true);
+    expect(anchorBefore.x).toBeGreaterThan(0);
+    expect(anchorBefore.x).toBeLessThan(width);
+    expect(anchorBefore.y).toBeGreaterThan(canvasBefore!.y);
+    expect(anchorBefore.y).toBeLessThan(canvasBefore!.y + canvasBefore!.height);
+    await page.getByRole("button", { name: "Expand Inspector", exact: true }).click();
+    await expect(inspector).toBeVisible();
+    const presentation = width === 640 ? "bottom-sheet" : "right-overlay";
+    await expect(inspector).toHaveAttribute("data-inspector-presentation", presentation);
+    await expect(inspector.getByLabel("Selected machine properties")).toBeVisible();
+    await waitForSceneRenderFrames(page);
+    const after = await getRuntimeViewportSnapshot(page);
+    const anchorAfter = (await geometry()).included.find(item => item.entityId === machineId)!.projected[0];
+    const delta = { x: Math.abs(anchorAfter.x - anchorBefore.x), y: Math.abs(anchorAfter.y - anchorBefore.y) };
+    expect(delta.x).toBeLessThanOrEqual(1);
+    expect(delta.y).toBeLessThanOrEqual(1);
+    expect(after.camera).toEqual(before.camera);
+    expect(after.invariants).toEqual(before.invariants);
+    expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+    expect(after.viewport?.resizeGeneration).toBe(before.viewport?.resizeGeneration);
+    expect(await canvas.boundingBox()).toEqual(canvasBefore);
+    const sameCanvas = await canvasHandle!.evaluate(element => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'));
+    expect(sameCanvas).toBe(true);
+    const inspectorBounds = (await inspector.boundingBox())!;
+    const viewcubeBounds = (await page.getByTestId("viewcube").boundingBox())!;
+    const triadBounds = (await page.getByTestId("world-axis-triad").boundingBox())!;
+    const primaryDockBounds = (await page.getByTestId("primary-dock").boundingBox())!;
+    const hudSafeInsets = await page.getByTestId("app-root").evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        left: parseFloat(style.getPropertyValue("--av-viewport-hud-left-inset")),
+        right: parseFloat(style.getPropertyValue("--av-viewport-hud-right-inset")),
+        bottom: style.getPropertyValue("--av-viewport-hud-bottom-inset").trim()
+      };
+    });
+    expect(triadBounds.x).toBeGreaterThanOrEqual(primaryDockBounds.x + primaryDockBounds.width);
+    expect(viewcubeBounds.y).toBeGreaterThanOrEqual(canvasBefore!.y);
+    expect(viewcubeBounds.x + viewcubeBounds.width).toBeLessThanOrEqual(width);
+    if (width === 1024) {
+      expect(inspectorBounds.x).toBeGreaterThan(0);
+      expect(inspectorBounds.y).toBeCloseTo(canvasBefore!.y);
+      expect(viewcubeBounds.x + viewcubeBounds.width).toBeLessThanOrEqual(inspectorBounds.x);
+      expect(hudSafeInsets.right).toBeCloseTo(inspectorBounds.width);
+      expect(primaryDockBounds.width).toBeGreaterThan(0);
+    } else {
+      expect(primaryDockBounds.width).toBe(0);
+      expect(inspectorBounds.x).toBe(0);
+      expect(inspectorBounds.width).toBe(width);
+      expect(inspectorBounds.y).toBeGreaterThanOrEqual(canvasBefore!.y + canvasBefore!.height / 2);
+      expect(triadBounds.y + triadBounds.height).toBeLessThanOrEqual(inspectorBounds.y);
+      expect(hudSafeInsets.right).toBe(0);
+      expect(viewcubeBounds.x).toBeGreaterThan(width / 2);
+      expect(viewcubeBounds.y + viewcubeBounds.height).toBeLessThan(inspectorBounds.y);
+    }
+    responsiveInspector.push({ width, presentation, inspectorOpen: true, inspectorBounds, primaryDockBounds,
+      viewcubeBounds, triadBounds, hudSafeInsets, anchorEntityId: machineId, anchorBefore, anchorAfter, delta,
+      canvasBefore, canvasAfter: await canvas.boundingBox(), sameCanvas, before, after });
+    await capture(width === 1024 ? "15-inspector-1024-side-overlay.png" : "16-inspector-640-bottom-sheet.png");
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.getByTestId(`layout-explorer-entity-${baseline.invariants.primarySelectionId}`).click();
+  await waitForSceneRenderFrames(page);
+  await assertDomainUnchanged();
   // Existing render-target PNG authority captures Babylon, not the editor DOM.
   const beforeCapture = await getRuntimeViewportSnapshot(page);
   const fileMenu = await openWorkbenchMenu(page, "File");
@@ -275,7 +361,7 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
   expect(errors).toEqual([]);
   expect(pageErrors).toEqual([]);
   if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "p1-close-nav-evidence.json"), JSON.stringify({
-    exactHeadSha: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, captures, presets, fits, dockOperations,
+    exactHeadSha: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, captures, presets, fits, dockOperations, responsiveInspector,
     commercialCapture: { pngValid: true, visibleAndHiddenHudPngIdentical: true, editorHudSource: "DOM-only; existing Babylon render-target capture excludes DOM", cameraPreserved: true },
     consoleErrorCount: errors.length, pageErrorCount: pageErrors.length
   }, null, 2));

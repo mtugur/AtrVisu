@@ -115,11 +115,12 @@ describe("AppShell render contract", () => {
     expect(rightPanelMarkup).not.toMatch(/(?:^|;)height:/);
   });
 
-  it("keeps desktop inset geometry in CSS and restores the mobile bottom sheet", () => {
+  it("keeps desktop inset geometry and uses the canonical Inspector presentation for the bottom sheet", () => {
     const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
     expect(styles).toMatch(/\.scene-viewport-host\s*{[^}]*top:\s*var\(--av-shell-top-inset\)/s);
     expect(styles).toMatch(/\.machine-panel\s*{[^}]*top:\s*var\(--av-shell-top-inset\)[^}]*height:\s*calc\(100% - var\(--av-shell-top-inset\)\)/s);
-    expect(styles).toMatch(/@media \(max-width: 720px\)\s*{[\s\S]*?\.machine-panel\s*{[^}]*top:\s*auto;[^}]*bottom:\s*var\(--av-workbench-status-bar-height\)(?:\s*!important)?;[^}]*height:\s*min\(44vh, 360px\)(?:\s*!important)?/);
+    expect(styles).toMatch(/\.machine-panel\[data-inspector-presentation="bottom-sheet"\]\s*{[^}]*top:\s*auto;[^}]*bottom:\s*var\(--av-workbench-status-bar-height\)(?:\s*!important)?;[^}]*height:\s*min\(44vh, 360px\)(?:\s*!important)?/);
+    expect(styles).toMatch(/\.app-shell:has\(\.machine-panel\[data-inspector-presentation="bottom-sheet"\]\)\s*{[^}]*--av-viewport-hud-bottom-inset:\s*min\(44vh, 360px\)/);
   });
 });

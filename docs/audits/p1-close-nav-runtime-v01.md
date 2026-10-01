@@ -29,8 +29,12 @@ resize requests; actual host/window resize retains the existing engine resize
 controller. Bottom-dock/status geometry remains unchanged.
 
 Side insets now describe only HUD presentation. One deterministic safe-inset
-helper bounds them; the responsive Inspector bottom sheet does not incorrectly
-claim a side inset. The passive triad clears the existing bottom-sheet geometry.
+helper bounds them. `getInspectorDockPresentation` independently resolves the
+Inspector's right overlay versus bottom sheet using the existing shared 720 px
+dock breakpoint. Its result drives both the Inspector CSS presentation attribute
+and the right HUD inset; Primary Dock responsive state is not Inspector geometry
+authority. The bottom sheet claims no side inset. The passive triad clears the
+same bottom-sheet presentation attribute, not a separately resolved breakpoint.
 Neither HUD movement nor panel operations write camera or domain state.
 
 Fit View is the existing `view.fitView` command, now required-runtime. View,
@@ -80,7 +84,15 @@ not part of the exported scene.
   The existing Layers route also proves hidden geometry disables/excludes Fit
   View, showing restores it, and annotations are not Fit View geometry.
 - Chromium responsive HUD tests: 1440/1024/640 in light and dark; no horizontal
-  overflow. Existing Viewpoint restoration now asserts HUD orientation and no
+  overflow. The real navigation route additionally selects a real Machine in
+  Explorer and opens Inspector through Expand Inspector at 1024 and 640 px.
+  At 1024 the side overlay clears ViewCube while the open left dock clears the
+  triad. At 640 the Primary Dock is explicitly closed before opening the bottom
+  sheet; the right HUD inset is zero, ViewCube remains upper-right and the triad
+  clears the sheet vertically. Both routes compare projected world anchors,
+  camera, canvas identity/geometry, lifecycle, resize generation, selection,
+  transforms, history and dirty state before/after actual Inspector opening.
+  Existing Viewpoint restoration now asserts HUD orientation and no
   implicit Fit View. Existing orthographic resize and panel tests retain real
   browser-resize coverage but reject synthetic side-dock resize.
   Legacy toolbar/Feature Access expectations include the newly live Fit View;
@@ -91,6 +103,9 @@ not part of the exported scene.
   JSON records provenance, camera/vector dot products, included/excluded geometry,
   projected corner margins, each dock anchor/delta, HUD insets, effective theme,
   lifecycle/canvas identity, selection, transforms, history, dirty and errors.
+  Two additional Inspector-open captures and `responsiveInspector` JSON entries
+  include the actual panel/Primary Dock/ViewCube/triad rectangles, presentation,
+  HUD insets, projected anchor before/after/delta and full invariant snapshots.
 
 ## Interaction Change Gate evidence (A-J)
 
@@ -104,7 +119,8 @@ E: focused mixed-scene and dock routes above plus the complete existing
 preferences, selection, snap, Undo/Redo and persistence regression suite.
 F: unfiltered console-error/pageerror collectors, including Maximum update depth.
 No new user-reported stack trace; stack-specific reproduction is N/A.
-G: one implementation round under the frozen Stage A contract. Independent
+G: one implementation round plus the consolidated correction authorized by
+review comment 5929033364 under the frozen Stage A contract. Independent
 contract review and product acceptance are not claimed by the implementer.
 H: compact theme-aware engineering HUD; actual mixed-scene captures, no default
 framework gizmo, no additional canvas. Reviewer visual inspection remains open.

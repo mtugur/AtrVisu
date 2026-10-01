@@ -5,6 +5,7 @@ import { createCameraTelemetry } from "./cameraTelemetry";
 import { getViewportHudSafeInsets } from "./hudSafeArea";
 import { ViewportNavigationHud, getCubeZoneVertices } from "./ViewportNavigationHud";
 import { VIEW_PRESETS } from "./navigationGeometry";
+import { getInspectorDockPresentation } from "../workbench/responsivePresentation";
 
 describe("navigation presentation boundary", () => {
   it("exposes only read-only snapshots/subscriptions and removes listeners on cleanup", () => {
@@ -53,5 +54,12 @@ describe("navigation presentation boundary", () => {
     const insets = getViewportHudSafeInsets(292, 360, 640);
     expect(insets.left + insets.right).toBeCloseTo(480);
     expect(getViewportHudSafeInsets(NaN, -4, 80)).toEqual({ left: 0, right: 0 });
+  });
+  it("reserves the right HUD side inset only for a side-presented Inspector", () => {
+    const insets = (width: number) => getViewportHudSafeInsets(
+      0, getInspectorDockPresentation(width) === "right-overlay" ? 360 : 0, width
+    );
+    expect(insets(1024)).toEqual({ left: 0, right: 360 });
+    expect(insets(640)).toEqual({ left: 0, right: 0 });
   });
 });

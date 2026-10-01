@@ -29,6 +29,7 @@ import { WorkbenchPrimaryDock } from "./components/workbench/WorkbenchPrimaryDoc
 import { WorkbenchStatusBar } from "./components/workbench/WorkbenchStatusBar";
 import { WorkbenchContextContribution } from "./components/workbench/WorkbenchContextContribution";
 import {
+  getInspectorDockPresentation,
   getInspectorSelectionSignature,
   isResponsiveInspectorPresentation,
   isResponsivePrimaryDockPresentation,
@@ -460,6 +461,7 @@ export function App() {
   const [inspectorVisibilityMode, setInspectorVisibilityMode] = useState<"auto" | "manual">("auto");
   const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
   const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
+  const inspectorDockPresentation = getInspectorDockPresentation(workbenchViewportSize.width);
   const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
   const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
   const responsivePrimaryDockPresentationRef = useRef(responsivePrimaryDockPresentation);
@@ -5037,7 +5039,7 @@ export function App() {
   const primaryDockInset = isPrimaryDockPresentationCollapsed ? 0 : effectivePrimaryDockWidth;
   const hudSafeInsets = getViewportHudSafeInsets(
     primaryDockInset,
-    isInspectorPresentationCollapsed || responsivePrimaryDockPresentation ? 0 : panelWidth,
+    isInspectorPresentationCollapsed || inspectorDockPresentation === "bottom-sheet" ? 0 : panelWidth,
     workbenchViewportSize.width
   );
   const bottomDockInset = STATUS_BAR_HEIGHT;
@@ -5287,6 +5289,7 @@ export function App() {
         <aside
           className="machine-panel"
           data-testid="right-panel"
+          data-inspector-presentation={inspectorDockPresentation}
           data-app-shell-zone="machine-properties"
           style={{
             "--panel-width": `${panelWidth}px`,

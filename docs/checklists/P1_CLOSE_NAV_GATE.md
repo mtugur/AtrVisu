@@ -32,6 +32,10 @@ Status at Stage B implementation authoring:
 - [x] E2E: mixed/elevated/rotated Fit View.
 - [x] E2E: left/right open/collapse/resize pixel stability.
 - [x] E2E: camera/selection/entity/history/dirty invariants.
+- [x] E2E: real 1024 side Inspector and 640 bottom-sheet Inspector opening,
+  panel/HUD geometry, projected anchor and unchanged runtime invariants.
+- [x] Inspector presentation independently owns its HUD geometry; existing
+  shared breakpoint is reused without new breakpoint literals.
 - [x] E2E: clean snapshot excludes navigation HUD.
 - [x] no-red-console.
 - [ ] exact-head Quality Gate PASS (pending the delivery head; see PR Validation and run).
@@ -63,6 +67,13 @@ Evidence JSON must include:
 - Fit View included entity IDs;
 - viewport dimensions;
 - console/page-error counts.
+- responsive Inspector evidence at 1024 and 640: actual panel/HUD rectangles,
+  side/bottom-sheet presentation, safe insets, anchor before/after/delta and
+  camera/canvas/lifecycle/domain/history/dirty invariants.
+
+Additional correction captures:
+- 15-inspector-1024-side-overlay.png
+- 16-inspector-640-bottom-sheet.png
 
 ## Rejection conditions
 FAIL if:
