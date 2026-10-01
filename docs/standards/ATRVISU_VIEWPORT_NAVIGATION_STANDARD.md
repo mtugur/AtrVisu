@@ -61,6 +61,22 @@ Face semantics:
 - Z+ / Top: camera is above (+Z) looking downward.
 - Z- / Bottom: camera is below (-Z) looking upward.
 
+Preset-vector contract:
+- represent each clicked cube zone as a camera-side vector in AtrVisu domain axes;
+- face vectors are exactly one of (+/-X, +/-Y, +/-Z);
+- edge vectors are the normalized sum of their two adjacent face vectors;
+- corner vectors are the normalized sum of their three adjacent face vectors;
+- adapter mapping to Babylon camera-side coordinates is
+  `(domainX, domainY, domainZ) -> (babylonX, babylonY, babylonZ) = (domainX, domainZ, domainY)`;
+- derive ArcRotate orientation from the mapped unit vector using
+  `alpha = atan2(babylonZ, babylonX)` and
+  `beta = acos(clamp(babylonY, -1, 1))`;
+- pure Top and Bottom use canonical `alpha = -PI/2` so Top keeps +X to screen-right and +Y toward screen-up;
+- ArcRotate pole singularity is handled only by a frozen pole epsilon:
+  `VIEW_PRESET_POLE_EPSILON_RAD = 0.01`; clamp beta to
+  `[0.01, PI - 0.01]`;
+- no sign repair, camera-angle exception or fallback orientation is allowed.
+
 All face presets:
 - orthographic;
 - preserve current target;
@@ -210,7 +226,7 @@ a later snapshot if the user invokes it before capture.
 
 ### Camera preset tests
 For every face:
-- resulting camera direction matches the canonical side;
+- resulting camera-side unit vector matches the canonical preset vector; for Top/Bottom compare direction with the frozen 0.01-rad pole approximation rather than requiring beta=0/PI;
 - mode is orthographic;
 - target is unchanged;
 - no project/history/selection mutation.
