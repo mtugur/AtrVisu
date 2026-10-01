@@ -1,6 +1,12 @@
 # P1-CLOSE-NAV Benchmark Evidence
 
-Access date: 2026-10-01
+Review date: 2026-10-01
+
+Task similarity: standard engineering viewport orientation, fit-to-content navigation, and continuous world-axis orientation feedback in mature CAD/factory-layout tools directly match AtrVisu's 3D layout-navigation task. Exact dock pixel-stability is a product-owner requirement rather than a claimed vendor precedent.
+
+AtrVisu adoption: adopt the mature ViewCube / standard-view / orientation-triad / explicit-fit interaction family, while keeping AtrVisu's canonical domain axes, one Runtime Viewport authority, no implicit Fit View on orientation changes, and a stronger dock screen-space stability invariant.
+
+Official source records are listed below. Vendor-documented behavior is separated from AtrVisu product decisions.
 
 Scope: Phase-1 closeout navigation package only: Fit View, ViewCube / standard
 views, orientation indicator, and side-dock screen-space viewport stability.
