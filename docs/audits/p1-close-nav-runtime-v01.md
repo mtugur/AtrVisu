@@ -132,10 +132,34 @@ camera-angle fallback, smoothing or movement redesign.
 The final local gate is run once after focused implementation validation:
 `npm ci`, low-severity audit, dependency tree, design tokens, interaction
 governance, policy stress tests, build, full unit, full Chromium and diff-check.
-Exact-head counts/results are recorded in the PR Validation section and the
-Quality Gate run; artifact provenance uses the checked-out head, not a merge ref.
+Corrected runtime head `1fc08add0f4fe25c2492fa113dfc93acecfe002e` passed
+[Quality Gate 36852063846](https://github.com/mtugur/AtrVisu/actions/runs/36852063846):
+provenance, governance/policies/PR declaration, install, audit (zero vulnerabilities),
+tokens (280 files), build, 169 unit files / 1441 tests and 110 Chromium tests
+(109 parallel plus one isolated Feature Access; one branch-conditional PF-3B skip).
+The same complete local gates passed; Vitest remains 4.1.11, dependencies unchanged.
 
-- Automation Green: PENDING exact-head Quality Gate at commit authoring.
+Downloaded artifact `11155929782` contains exactly 16 PNGs and evidence JSON,
+with that exact source head, zero console/page errors and responsive Inspector
+records for 1024 right overlay and 640 bottom sheet. Both measured anchor deltas
+are exactly zero CSS pixels. Camera, canvas identity/geometry, lifecycle/resize
+generation, selection, transforms, history and dirty snapshots remain unchanged
+across real Inspector opening. At 1024 the right HUD inset is 410 px and the left
+inset is 294 px; at 640 both side insets are zero and the triad clears the sheet.
+
+Visual evidence limitation: the 640 Inspector-open PNG shows the actual sheet
+and HUD geometry, but its exposed scene area appears blank despite the finite
+projected Machine anchor. It does not prove nonblank rendered scene geometry.
+An additional fresh 640 real-UI selection/Inspector check read nonblank WebGL
+pixels (64 sampled colors, GL error zero, context not lost), but its DOM screenshot
+also did not expose clear scene geometry above the sheet. No root cause or visual
+acceptance is claimed, and no out-of-scope camera/runtime workaround was added.
+This limitation remains open for evidence review.
+
+The final documentation-delivery exact-head run and artifact are recorded in the
+PR Validation section. Artifact provenance uses the checked-out head, not a merge ref.
+
+- Automation Green: PASS on the corrected runtime head/run recorded above.
 - Contract Verified: PENDING independent reviewer inspection.
 - Product Accepted: PENDING.
 

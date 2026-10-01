@@ -1,7 +1,7 @@
 # P1-CLOSE-NAV Gate
 
-Status at Stage B implementation authoring:
-- Automation Green: PENDING
+Status after corrected runtime exact-head verification:
+- Automation Green: PASS
 - Contract Verified: PENDING
 - Product Accepted: PENDING
 
@@ -38,7 +38,9 @@ Status at Stage B implementation authoring:
   shared breakpoint is reused without new breakpoint literals.
 - [x] E2E: clean snapshot excludes navigation HUD.
 - [x] no-red-console.
-- [ ] exact-head Quality Gate PASS (pending the delivery head; see PR Validation and run).
+- [x] exact-head Quality Gate PASS: corrected runtime head
+  `1fc08add0f4fe25c2492fa113dfc93acecfe002e`,
+  [run 36852063846](https://github.com/mtugur/AtrVisu/actions/runs/36852063846).
 
 ## Visual evidence
 Required artifact:
@@ -95,6 +97,15 @@ FAIL if:
 Implementation and Interaction Change Gate A-J evidence:
 `docs/audits/p1-close-nav-runtime-v01.md`.
 
-The final complete local gate and exact-head CI results are recorded in the
-PR Validation section. Contract Verified and Product Accepted remain PENDING.
+The corrected runtime head passed 169 unit files / 1441 tests and 110 Chromium
+tests (one additional branch-conditional PF-3B test skipped). Audit reported zero
+vulnerabilities. Artifact `11155929782` contains 16 PNGs plus evidence JSON;
+both responsive Inspector routes recorded zero projected-anchor delta and
+unchanged camera/canvas/lifecycle/domain/history/dirty snapshots.
+
+The 640 Inspector-open PNG verifies panel/HUD geometry but its exposed scene
+area appears blank; it is not evidence of nonblank scene rendering. This visual
+evidence limitation remains open, without a camera or runtime workaround.
+The documentation-delivery exact-head run/artifact are recorded in PR Validation.
+Contract Verified and Product Accepted remain PENDING.
 The navigation standard, ADR-006 and benchmark record are unchanged.
