@@ -167,18 +167,31 @@ Mixed machine/civil Groups remain rigid through move, Undo/Redo, save/reload and
 ## 9. Camera navigation vs entity manipulation
 
 ### Benchmark precedent
-Professional 3D engineering workbenches separate camera gestures from object manipulation modes/handles.
+Professional 3D engineering workbenches separate camera gestures from object manipulation modes/handles. Visual Components pans along viewport horizontal/vertical axes; AutoCAD preserves viewing direction and magnification; 3ds Max documents view-parallel pan. Mouse bindings differ, including SOLIDWORKS Ctrl+MMB. The traceable facts and AtrVisu choice are recorded in `docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md`; ADR-007 freezes the reference-model decision before Stage B code.
 
 ### AtrVisu behavior
 - Camera orbit/pan/zoom never changes domain transforms.
 - During an active entity manipulation gesture, camera controls are detached only for the gesture and restored deterministically.
 - Camera angle changes presentation only; it does not alter the semantic meaning of a Move/Rotate handle.
+- Canonical camera Pan is view-parallel camera translation, not floor dragging and not entity dragging.
+- Direct middle-mouse drag is the required Phase-1 binding. Existing secondary pan bindings may remain only through the same canonical pan authority.
+- Pan MUST NOT require a floor hit, scene hit, selected entity, depth-buffer hit or ray intersection with domain Z=0.
+- Pan means grab and move the view: pointer right/down moves viewed content right/down at the canonical reference depth.
+- Perspective pan scale uses camera-target depth; orthographic pan scale uses the current orthographic world span. The reference plane is viewport-parallel through the gesture-start camera target, not a domain working plane.
+- Pan translates camera position and target together in the viewport plane. It preserves alpha/beta/orientation, radius, FOV, projection mode and orthographic span.
+- Vertical pan in a non-Top view may change camera-target Elevation; domain Elevation MUST NOT change.
+- Pan remains available in every canonical face/edge/corner view, including exact Front/Back/Left/Right orthographic views, without floor-ray singularities.
+- Pan is event-cadence independent: one pointer path and subdivisions of that same path produce the same final view within the acceptance tolerance below.
+
+These rules are a governance-only Stage A contract. Stage B implementation remains PENDING. They do not certify the historical floor-based runtime or authorize a fix in PR #122. Interaction Standard section 3 / ADR-001 Plan Move remains unchanged: its fixed horizontal picked-elevation plane is for entity movement only.
 
 ### Forbidden behavior
-Camera pitch changing movement direction, panel resize changing drag math, or camera controls competing with an active manipulator.
+Camera pitch changing entity movement direction, panel resize changing drag math, or camera controls competing with an active manipulator. Camera Pan must not use floor/scene/entity picking as a prerequisite or gain clamps, catch-up, alternating compensation, angle-specific sign repair, hidden fallback planes, smoothing, hysteresis or retry loops to rescue a wrong model.
 
 ### Acceptance
 The same entity operation before and after orbit/pan/zoom yields the same domain-axis semantics and no scene lifecycle reset.
+
+For camera Pan, real middle-mouse paths in the camera-state matrix of `ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md` section 11 must satisfy final screen residual <= 1 CSS px at the gesture-start reference plane. One 120 px move, 8x15 px and 24x5 px subdivisions must agree within <= 1 CSS px; a reverse path must return within <= 1 CSS px. Camera orientation/framing, selection, transforms, history, dirty state and scene/canvas lifecycle remain unchanged. Tests observe projected world points and the visible trajectory, not a solver formula. Zero console/page errors. Stage A records this oracle; only Stage B can demonstrate runtime conformance.
 
 ## 10. Inspector numeric editing
 

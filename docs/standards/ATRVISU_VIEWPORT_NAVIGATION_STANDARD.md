@@ -3,12 +3,15 @@
 Status: Phase-1 closeout normative contract.
 
 Applies to:
+- canonical view-parallel camera Pan (Stage A contract; Stage B PENDING)
 - Fit View
 - ViewCube / standard and axonometric view presets
 - passive world-axis orientation triad
 - left/right dock screen-space viewport stability
 
 Does not redefine PF-3A object movement.
+
+The Pan contract extension is the separate governance package authorized by PR #122 review `5407842477`. It does not certify or modify PR #122 runtime. Benchmark: `docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md`; decision: `docs/adr/ADR-007-view-parallel-camera-pan-grid-readability.md`.
 
 ## 1. Authority
 
@@ -211,7 +214,7 @@ a later snapshot if the user invokes it before capture.
 ## 9. Frozen out-of-scope
 
 - PF-3A Plan Move changes;
-- new orbit/pan gesture model;
+- new orbit gesture model; Pan runtime replacement is outside the original P1-CLOSE-NAV PR #122 and belongs only to the separately reviewed Stage B package after the section 11 contract is merged;
 - camera smoothing/tuning experiments;
 - camera collision;
 - animated view transitions;
@@ -266,3 +269,45 @@ All navigation and dock operations:
 - same scene/canvas lifecycle unless application itself is unloaded;
 - no Maximum update depth;
 - no GL_INVALID_VALUE.
+
+## 11. Canonical camera Pan and acceptance
+
+### Mental model and authority
+
+- Pan is view-parallel camera translation, not floor dragging or PF-3A entity Plan Move.
+- Direct middle-mouse drag remains required. Existing secondary pan bindings may remain only if they resolve through the exact same Runtime Viewport / BabylonScene camera-pan authority.
+- Pan MUST NOT require a floor hit, scene hit, selected entity, depth-buffer hit or intersection with domain Z=0. It works on empty viewport space as well as over geometry.
+- Grab direction is explicit: pointer right/down moves viewed content right/down at the reference depth.
+- Perspective scale is defined at camera-target depth. Orthographic scale is defined by the current orthographic world span, not camera pixels interpreted as world units.
+- At gesture start, the canonical reference plane passes through the current camera target and is parallel to the viewport. The reference plane and initial reference point are fixed for the gesture's acceptance oracle; neither comes from a floor/entity pick.
+- Camera position and target translate together in that viewport plane. Alpha, beta, orientation, radius, FOV, projection mode and orthographic span remain unchanged.
+- A non-Top vertical pan may change camera-target Elevation. This is camera-only state: entity/domain Elevation does not change.
+- Pan remains available in every canonical face/edge/corner view, including exact Front, Back, Left and Right orthographic views. There is no floor-ray dead zone.
+- Event cadence cannot change meaning, gain or final framing. Gain clamps, catch-up, alternating compensation, angle-specific sign repair, hidden fallback planes, smoothing, hysteresis and retry loops are forbidden.
+- No entity mutation, selection change, project history/dirty transition or scene/canvas recreation is permitted. Existing control release/cancel and other orbit/wheel routes must remain deterministic and unchanged.
+
+### User-observable acceptance oracle
+
+Use real MMB input at 1440x900 DPR1 and the supported narrow viewport (640x800 DPR1 where applicable), without diagnostic-only camera mutation. Use existing real controls to enter:
+
+1. default perspective;
+2. ordinary wheel-zoomed perspective;
+3. oblique and shallow perspective;
+4. real Fit perspective;
+5. Top orthographic;
+6. exact Front/Back/Left/Right orthographic; Bottom availability is also required by the all-face rule;
+7. a representative axonometric edge and corner.
+
+In each state run +120/-120 horizontal, +120/-120 vertical, 120x80 diagonal and slow 240 px multi-step drags from the same initial camera. Restore through existing authority between comparisons. Include empty space and mixed Machine/Civil/Group context; selection does not control Pan availability.
+
+- Pick the initial pointer's reference point on the gesture-start camera-target-depth, viewport-parallel plane as an observation oracle, not a scene hit requirement.
+- Project that same fixed world point at every pointer step. It follows grab direction continuously without alternating stalls, reversal or catch-up; final screen residual <= 1 CSS px versus the pointer displacement.
+- Compare 1x120, 8x15 and 24x5 representations of the same path from the same camera. Their final projected positions differ by <= 1 CSS px.
+- Reverse the path and return within <= 1 CSS px of the initial projection.
+- Alpha/beta/radius/FOV/projection/ortho span remain unchanged; position and target undergo the same camera translation.
+- Selection IDs/order/primary, canonical entity transforms/Elevation, history, dirty state, canvas identity and engine/scene/canvas lifecycle remain unchanged. No console/page errors; no blocker warning filtering.
+- Record viewport CSS/render dimensions, DPR, pointer trajectory, reference plane/point, projected point, complete before/after camera state and invariants. Do not assert only helper math, finite deltas or implementation-specific internal gains.
+
+### Stage boundary
+
+Stage A is governance only. Stage B implementation remains PENDING and requires an independent bounded task after governance review/merge. Fit inclusion/framing, ViewCube preset vectors/pole epsilon, side-dock invariance, saved viewpoints, existing orbit/wheel semantics and ADR-001 body drag are not changed by this contract. No runtime acceptance is claimed by Stage A CI.
