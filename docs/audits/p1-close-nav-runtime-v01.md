@@ -147,19 +147,62 @@ generation, selection, transforms, history and dirty snapshots remain unchanged
 across real Inspector opening. At 1024 the right HUD inset is 410 px and the left
 inset is 294 px; at 640 both side insets are zero and the triad clears the sheet.
 
-Visual evidence limitation: the 640 Inspector-open PNG shows the actual sheet
-and HUD geometry, but its exposed scene area appears blank despite the finite
-projected Machine anchor. It does not prove nonblank rendered scene geometry.
-An additional fresh 640 real-UI selection/Inspector check read nonblank WebGL
-pixels (64 sampled colors, GL error zero, context not lost), but its DOM screenshot
-also did not expose clear scene geometry above the sheet. No root cause or visual
-acceptance is claimed, and no out-of-scope camera/runtime workaround was added.
-This limitation remains open for evidence review.
+### Review 5379882289: renderer versus compositor investigation
 
-The final documentation-delivery exact-head run and artifact are recorded in the
+Before any runtime modification, detached exact base `b727f4e` and reviewed
+head `f2b8e06` were started with verified HTTP source-head provenance. Both used
+640x800, real Level 2/Flow Pack Machine/Beam/Floor UI creation, Explorer Machine
+selection, Primary Dock collapse, closed Inspector then real Expand Inspector.
+The base View menu has no live Fit View: its existing camera was retained and no
+diagnostic camera substitute was injected. Current head invoked real View Fit View.
+This is an explicit limit to identical base/head framing, not fabricated base Fit.
+
+Both ordinary page captures show Machine pixels before opening and omit them
+after opening, while associated framebuffer samples remain filled:
+
+| Source | Machine sample | Framebuffer before/after | Page before/after |
+| --- | --- | --- | --- |
+| exact base `b727f4e` | x341 y219, 23x14 | 322/322, 322/322 | 322/322, 0/322 |
+| reviewed head `f2b8e06` | x386 y278, 25x15 | 375/375, 375/375 | 375/375, 0/375 |
+
+Effective clear RGB is (32,35,38); GL error is zero, context is not lost and
+camera/canvas/lifecycle/domain/history/dirty state stays unchanged. The same
+composited-layer omission occurs on the exact pre-runtime base: it was not
+introduced by PR #122. Classification is a pre-existing headless Chromium
+compositor/evidence limitation on bottom-sheet opening, not missing entity rendering.
+No assertion about Chromium's internal implementation or a real-user browser
+defect is inferred beyond the measured framebuffer/page discrepancy.
+The initial informal global "64 sampled colors" is superseded by this entity proof.
+
+The strengthened real navigation E2E projects all eight canonical Machine corners
+and derives a central 30%-by-30% integer sampling region inside those bounds.
+The elevated Flow Pack fixture's interior is separated from ground Civil geometry;
+the central inset excludes its label, selection border and empty AABB corners.
+At least 64 samples and 75% filled pixels with RGB channel distance >=24 from
+effective WebGL clear color are required. This proves a filled interior, not sparse
+grid/outline pixels, without hardcoding cyan or any Machine material color.
+Pure negative tests reject background-only, near-black compositor background,
+sparse lines, incomplete data, transparent pixels and undersized regions.
+
+Focused 640 real Fit evidence: bounds x376.501/y199.135, width55.958/height92.516,
+sample x397/y232, 15x27. Framebuffer before/after is 405/405 filled (ratio1), page
+before is 405/405 and after is 0/405. All bounds lie above sheet y423; pixel region
+hit-testing still resolves CANVAS, opacity1/displayblock/visibilityvisible.
+The test fails if projected-visible Machine framebuffer pixels are missing.
+There is no pixel retry, timeout, camera/Fit compensation or scene remount.
+
+Artifact additions: ordinary before/after captures 17/18 and exact, vertically
+flipped WebGL readback PNGs 19/20. Ordinary after PNG remains truthful about the
+compositor limitation; direct readback visibly renders the selected Machine.
+`baseVsHeadReproduction` and per-route `machinePixelEvidence` record provenance,
+eight projected corners, bounds/region/counts/clear color, page and framebuffer
+results and unchanged snapshots. No production source changed in this correction.
+
+The final evidence-correction exact-head run and artifact are recorded in the
 PR Validation section. Artifact provenance uses the checked-out head, not a merge ref.
 
-- Automation Green: PASS on the corrected runtime head/run recorded above.
+- Automation Green: preceding runtime PASS is recorded above; the evidence-only
+  correction requires its own final exact-head PASS, recorded in PR Validation.
 - Contract Verified: PENDING independent reviewer inspection.
 - Product Accepted: PENDING.
 

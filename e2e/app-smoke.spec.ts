@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
 import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection, dot3 } from "../src/components/viewportNavigation/navigationGeometry";
+import { measureMachinePixels } from "./navigationPixelEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -65,6 +66,7 @@ for (const width of [1440, 1024, 640]) {
 
 test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen projection", async ({ page }) => {
   test.setTimeout(120_000);
+  const navigationBaseReproduction = JSON.parse(await readFile(join(process.cwd(), "e2e/navigationBaseReproduction.json"), "utf8"));
   await page.setViewportSize({ width: 1440, height: 900 });
   const errors = collectPageErrors(page);
   const pageErrors: string[] = [];
@@ -112,7 +114,7 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
   const fits: unknown[] = [];
   const responsiveInspector: unknown[] = [];
   const geometry = () => page.evaluate(() => window.__atrvisuRuntimeViewport!.getNavigationGeometry());
-  const capture = async (filename: string) => {
+  const capture = async (filename: string, png?: Buffer) => {
     const snapshot = await getRuntimeViewportSnapshot(page);
     const hud = await page.evaluate(() => {
       const root = document.querySelector<HTMLElement>('[data-testid="app-root"]')!;
@@ -123,7 +125,7 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
     captures.push({ filename, ...snapshot, hud, consoleErrorCount: errors.length, pageErrorCount: pageErrors.length });
     if (captureCloseNavEvidence) {
       await mkdir(closeNavEvidenceDirectory, { recursive: true });
-      await page.screenshot({ path: join(closeNavEvidenceDirectory, filename) });
+      await writeFile(join(closeNavEvidenceDirectory, filename), png ?? await page.screenshot());
     }
   };
   const assertDomainUnchanged = async () => {
@@ -272,12 +274,22 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
     await waitForSceneRenderFrames(page);
     const before = await getRuntimeViewportSnapshot(page);
     const canvasBefore = await canvas.boundingBox();
-    const anchorBefore = (await geometry()).included.find(item => item.entityId === machineId)!.projected[0];
+    const machineGeometryBefore = (await geometry()).included.find(item => item.entityId === machineId)!;
+    const anchorBefore = machineGeometryBefore.projected[0];
     expect(Object.values(anchorBefore).every(Number.isFinite)).toBe(true);
     expect(anchorBefore.x).toBeGreaterThan(0);
     expect(anchorBefore.x).toBeLessThan(width);
     expect(anchorBefore.y).toBeGreaterThan(canvasBefore!.y);
     expect(anchorBefore.y).toBeLessThan(canvasBefore!.y + canvasBefore!.height);
+    const pixelsBefore = width === 640 ? await measureMachinePixels(page, machineId, machineGeometryBefore.projected) : null;
+    if (pixelsBefore) {
+      expect(machineGeometryBefore.projected.every(point => point.z > 0 && point.z < 1)).toBe(true);
+      expect(pixelsBefore.evidence.machinePixelEvidence.pass, "Projected Machine must have actual filled framebuffer pixels before Inspector opens.").toBe(true);
+      expect(pixelsBefore.evidence.renderer.glError).toBe(0);
+      expect(pixelsBefore.evidence.renderer.contextLost).toBe(false);
+      await capture("17-inspector-640-before-open.png", pixelsBefore.pagePng);
+      if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "19-inspector-640-before-framebuffer.png"), pixelsBefore.framebufferPng);
+    }
     await page.getByRole("button", { name: "Expand Inspector", exact: true }).click();
     await expect(inspector).toBeVisible();
     const presentation = width === 640 ? "bottom-sheet" : "right-overlay";
@@ -285,7 +297,8 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
     await expect(inspector.getByLabel("Selected machine properties")).toBeVisible();
     await waitForSceneRenderFrames(page);
     const after = await getRuntimeViewportSnapshot(page);
-    const anchorAfter = (await geometry()).included.find(item => item.entityId === machineId)!.projected[0];
+    const machineGeometryAfter = (await geometry()).included.find(item => item.entityId === machineId)!;
+    const anchorAfter = machineGeometryAfter.projected[0];
     const delta = { x: Math.abs(anchorAfter.x - anchorBefore.x), y: Math.abs(anchorAfter.y - anchorBefore.y) };
     expect(delta.x).toBeLessThanOrEqual(1);
     expect(delta.y).toBeLessThanOrEqual(1);
@@ -297,6 +310,25 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
     const sameCanvas = await canvasHandle!.evaluate(element => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'));
     expect(sameCanvas).toBe(true);
     const inspectorBounds = (await inspector.boundingBox())!;
+    const pixelsAfter = width === 640 ? await measureMachinePixels(page, machineId, machineGeometryAfter.projected) : null;
+    if (pixelsBefore && pixelsAfter) {
+      expect(machineGeometryAfter.projected.every(point => point.z > 0 && point.z < 1)).toBe(true);
+      expect(pixelsAfter.evidence.machinePixelEvidence.pass, "Projection alone cannot pass with a blank selected-Machine framebuffer.").toBe(true);
+      expect(pixelsAfter.evidence.renderer.glError).toBe(0);
+      expect(pixelsAfter.evidence.renderer.contextLost).toBe(false);
+      expect(pixelsAfter.evidence.renderer.canvasStyle).toEqual({ opacity: "1", visibility: "visible", display: "block" });
+      expect(pixelsAfter.evidence.renderer.sampleOccluder).toBe("CANVAS");
+      for (const evidence of [pixelsBefore.evidence, pixelsAfter.evidence]) {
+        const bounds = evidence.machinePixelEvidence.projectedBounds;
+        expect(bounds.x).toBeGreaterThanOrEqual(canvasBefore!.x);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+        expect(bounds.y).toBeGreaterThanOrEqual(canvasBefore!.y);
+        expect(bounds.y + bounds.height).toBeLessThan(inspectorBounds.y);
+      }
+      expect(pixelsAfter.evidence.machinePixelEvidence.projectedBounds).toEqual(pixelsBefore.evidence.machinePixelEvidence.projectedBounds);
+      await capture("18-inspector-640-after-open.png", pixelsAfter.pagePng);
+      if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "20-inspector-640-after-framebuffer.png"), pixelsAfter.framebufferPng);
+    }
     const viewcubeBounds = (await page.getByTestId("viewcube").boundingBox())!;
     const triadBounds = (await page.getByTestId("world-axis-triad").boundingBox())!;
     const primaryDockBounds = (await page.getByTestId("primary-dock").boundingBox())!;
@@ -329,7 +361,8 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
     }
     responsiveInspector.push({ width, presentation, inspectorOpen: true, inspectorBounds, primaryDockBounds,
       viewcubeBounds, triadBounds, hudSafeInsets, anchorEntityId: machineId, anchorBefore, anchorAfter, delta,
-      canvasBefore, canvasAfter: await canvas.boundingBox(), sameCanvas, before, after });
+      canvasBefore, canvasAfter: await canvas.boundingBox(), sameCanvas, before, after,
+      machinePixelEvidence: pixelsBefore && pixelsAfter ? { before: pixelsBefore.evidence, after: pixelsAfter.evidence } : null });
     await capture(width === 1024 ? "15-inspector-1024-side-overlay.png" : "16-inspector-640-bottom-sheet.png");
   }
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -362,6 +395,7 @@ test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen p
   expect(pageErrors).toEqual([]);
   if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "p1-close-nav-evidence.json"), JSON.stringify({
     exactHeadSha: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, captures, presets, fits, dockOperations, responsiveInspector,
+    baseVsHeadReproduction: navigationBaseReproduction,
     commercialCapture: { pngValid: true, visibleAndHiddenHudPngIdentical: true, editorHudSource: "DOM-only; existing Babylon render-target capture excludes DOM", cameraPreserved: true },
     consoleErrorCount: errors.length, pageErrorCount: pageErrors.length
   }, null, 2));

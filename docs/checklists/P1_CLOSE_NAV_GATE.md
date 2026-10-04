@@ -1,6 +1,6 @@
 # P1-CLOSE-NAV Gate
 
-Status after corrected runtime exact-head verification:
+Status of the unchanged runtime after its preceding exact-head verification:
 - Automation Green: PASS
 - Contract Verified: PENDING
 - Product Accepted: PENDING
@@ -76,6 +76,26 @@ Evidence JSON must include:
 Additional correction captures:
 - 15-inspector-1024-side-overlay.png
 - 16-inspector-640-bottom-sheet.png
+- 17-inspector-640-before-open.png
+- 18-inspector-640-after-open.png
+- 19-inspector-640-before-framebuffer.png
+- 20-inspector-640-after-framebuffer.png
+
+## Machine pixel evidence correction (review 5379882289)
+
+- [x] Compare exact Stage A base `b727f4e` and reviewed runtime head `f2b8e06`
+  through real selection/collapse/Inspector controls, with source provenance.
+- [x] Record base Fit View unavailable, rather than injecting a substitute camera.
+- [x] Project all eight canonical Machine corners; keep the full projected bounds
+  in the exposed scene above the actual bottom sheet.
+- [x] Before/after filled Machine-region framebuffer pixels, not arbitrary colors.
+- [x] Fail closed for missing/background-only, sparse, transparent or incomplete pixels.
+- [x] Keep ordinary screenshot results even when they omit the WebGL layer.
+- [x] Add direct framebuffer PNGs without camera mutation, re-render, resize or retry.
+
+The evidence-only correction's final exact-head CI run/counts/artifact are recorded
+in PR Validation. The preceding PASS above is historical runtime verification,
+not a claim that an untested evidence-delivery commit passed CI.
 
 ## Rejection conditions
 FAIL if:
@@ -103,9 +123,14 @@ vulnerabilities. Artifact `11155929782` contains 16 PNGs plus evidence JSON;
 both responsive Inspector routes recorded zero projected-anchor delta and
 unchanged camera/canvas/lifecycle/domain/history/dirty snapshots.
 
-The 640 Inspector-open PNG verifies panel/HUD geometry but its exposed scene
-area appears blank; it is not evidence of nonblank scene rendering. This visual
-evidence limitation remains open, without a camera or runtime workaround.
-The documentation-delivery exact-head run/artifact are recorded in PR Validation.
+The 640 Inspector-open ordinary PNG still omits the WebGL layer, but the bounded
+investigation now distinguishes that headless compositor limitation from rendering:
+base and head framebuffer Machine regions remain filled before/after Inspector
+opening, while their page regions go from filled to background-only. The base has
+no live Fit View; that comparison limit is recorded explicitly. Current-head
+real Fit View and eight-corner Machine-region assertions pass. Direct framebuffer
+PNG/JSON provide renderer proof; ordinary screenshots are not claimed nonblank.
+No runtime code or camera workaround was needed. Final exact-head CI and artifact
+are recorded in PR Validation; this correction expects 20 PNGs plus evidence JSON.
 Contract Verified and Product Accepted remain PENDING.
 The navigation standard, ADR-006 and benchmark record are unchanged.

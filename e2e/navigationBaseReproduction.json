@@ -1,0 +1,35 @@
+{
+  "reviewId": "5379882289",
+  "investigationDate": "2026-10-04",
+  "classification": "pre-existing-headless-Chromium-compositor-evidence-limitation-on-Inspector-open",
+  "runtimeChanged": false,
+  "route": "640x800; real Level 2 6000 + rotated Flow Pack Machine + Beam + Floor Area; real Explorer Machine selection; Primary Dock collapsed; Inspector closed -> real Expand Inspector bottom sheet",
+  "base": {
+    "exactHeadSha": "b727f4ee59875f9bbfbab7cc9b813486b20b353f",
+    "fitViewAvailable": false,
+    "comparisonLimit": "Stage A base has no live Fit View implementation. The real UI route verifies this and retains its existing camera; no substitute camera mutation was injected.",
+    "projectedBounds": { "x": 314.08349811269125, "y": 201.134305570591, "width": 77.61872114534191, "height": 48.0231067504821 },
+    "sampleBounds": { "x": 341, "y": 219, "width": 23, "height": 14 },
+    "effectiveBackgroundRgb": [32, 35, 38],
+    "before": { "sampledPixelCount": 322, "framebufferNonBackgroundPixelCount": 322, "framebufferNonBackgroundRatio": 1, "pageNonBackgroundPixelCount": 322, "pageNonBackgroundRatio": 1 },
+    "after": { "sampledPixelCount": 322, "framebufferNonBackgroundPixelCount": 322, "framebufferNonBackgroundRatio": 1, "pageNonBackgroundPixelCount": 0, "pageNonBackgroundRatio": 0 },
+    "glError": 0,
+    "contextLost": false,
+    "cameraCanvasLifecycleDomainHistoryDirtyUnchanged": true,
+    "consoleErrors": 0
+  },
+  "reviewedHead": {
+    "exactHeadSha": "f2b8e0642d357e4632a9a4a6e85a6163e115e405",
+    "fitViewAvailable": true,
+    "fitViewInvokedThroughRealViewMenu": true,
+    "projectedBounds": { "x": 357.1056545373626, "y": 257.7046980588837, "width": 84.76916163693215, "height": 53.32568838380192 },
+    "sampleBounds": { "x": 386, "y": 278, "width": 25, "height": 15 },
+    "effectiveBackgroundRgb": [32, 35, 38],
+    "before": { "sampledPixelCount": 375, "framebufferNonBackgroundPixelCount": 375, "framebufferNonBackgroundRatio": 1, "pageNonBackgroundPixelCount": 375, "pageNonBackgroundRatio": 1 },
+    "after": { "sampledPixelCount": 375, "framebufferNonBackgroundPixelCount": 375, "framebufferNonBackgroundRatio": 1, "pageNonBackgroundPixelCount": 0, "pageNonBackgroundRatio": 0 },
+    "glError": 0,
+    "contextLost": false,
+    "cameraCanvasLifecycleDomainHistoryDirtyUnchanged": true,
+    "consoleErrors": 0
+  }
+}
