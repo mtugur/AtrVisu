@@ -5,6 +5,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
 import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection, dot3 } from "../src/components/viewportNavigation/navigationGeometry";
 import { measureMachinePixels } from "./navigationPixelEvidence";
+import { registerPanGridTests } from "./panGridEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -8097,4 +8098,9 @@ for (const imported of [false, true]) {
     expect(errors).toEqual([]);
   });
 }
+
+registerPanGridTests({
+  openCleanApp, expectExactHeadServer, openPrimaryDockPanel, addBuildPrimitive,
+  createTwoMachineAssembly, getMenuCommand, openPreferenceBranch
+});
 

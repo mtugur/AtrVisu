@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { NullEngine, Scene, StandardMaterial } from "@babylonjs/core";
-import { getViewportVisualPalette } from "../../designSystem";
+import { NullEngine, Scene, ShaderMaterial } from "@babylonjs/core";
 import {
-  createWorkplaneGridTextureData,
   createSceneVisualContext,
   SCENE_INTERACTION_PLANE_SIZE_METERS,
   SCENE_VISUAL_CONTEXT_MESH_COUNT,
-  SCENE_VISUAL_CONTEXT_TEXTURE_SIZE,
   SCENE_VISUAL_LIGHT_SPECS
 } from "./visualContext";
 import { calculateWorkplaneBoundsFromPlanBounds } from "./workplaneGrid";
@@ -26,10 +23,8 @@ describe("scene visual context", () => {
     }]);
 
     expect(SCENE_VISUAL_CONTEXT_MESH_COUNT).toBe(2);
-    expect(createWorkplaneGridTextureData(empty, getViewportVisualPalette("dark")))
-      .toHaveLength(SCENE_VISUAL_CONTEXT_TEXTURE_SIZE ** 2 * 4);
-    expect(createWorkplaneGridTextureData(large, getViewportVisualPalette("light")))
-      .toHaveLength(SCENE_VISUAL_CONTEXT_TEXTURE_SIZE ** 2 * 4);
+    expect(empty.widthMm).toBe(40000);
+    expect(large.widthMm).toBeGreaterThan(empty.widthMm);
   });
 
   it("defines the exact neutral three-light hierarchy", () => {
@@ -38,19 +33,6 @@ describe("scene visual context", () => {
       { id: "fill-light", type: "directional", intensity: 0.45 },
       { id: "ambient-light", type: "hemispheric", intensity: 0.35 }
     ]);
-  });
-
-  it("encodes minor and major grid colors over the workplane fill", () => {
-    const data = createWorkplaneGridTextureData(
-      calculateWorkplaneBoundsFromPlanBounds([]),
-      getViewportVisualPalette("dark"),
-      101
-    );
-    const colors = new Set<string>();
-    for (let index = 0; index < data.length; index += 4) {
-      colors.add(`${data[index]},${data[index + 1]},${data[index + 2]}`);
-    }
-    expect(colors.size).toBeGreaterThanOrEqual(3);
   });
 
   it("keeps presentation resources bounded across palette and extent updates", () => {
@@ -74,8 +56,9 @@ describe("scene visual context", () => {
       .toBeCloseTo(SCENE_INTERACTION_PLANE_SIZE_METERS / 2);
     expect(scene.meshes).toHaveLength(2);
     expect(scene.lights).toHaveLength(3);
-    const workplaneMaterial = scene.getMaterialByName("visual-workplane-material") as StandardMaterial;
-    expect(workplaneMaterial.emissiveColor.toHexString()).toBe("#FFFFFF");
+    const workplaneMaterial = scene.getMaterialByName("visual-workplane-material");
+    expect(workplaneMaterial).toBeInstanceOf(ShaderMaterial);
+    expect(scene.textures).toHaveLength(0);
 
     for (let index = 0; index < 12; index += 1) {
       context.updatePalette(index % 2 === 0 ? "light" : "dark");
@@ -106,7 +89,10 @@ describe("scene visual context", () => {
     expect(context.getDiagnostics()).toMatchObject({
       effectiveThemeId: "dark",
       meshCount: 2,
-      lightCount: 3
+      lightCount: 3,
+      gridSampling: { renderer: "world-space-derivative-antialiasing", phaseOriginMeters: 0 },
+      gridMinorSpacingMm: 1000,
+      gridMajorSpacingMm: 5000
     });
 
     context.dispose();

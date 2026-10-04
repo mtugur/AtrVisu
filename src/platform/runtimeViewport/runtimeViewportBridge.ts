@@ -1,5 +1,6 @@
 import type { ViewportResizeRequest, ViewportResizeReason } from "../contracts";
 import type { ViewpointCameraState } from "../../types/viewpoints";
+import type { PlacementSettings } from "../../types/placement";
 
 export const RUNTIME_VIEWPORT_IDS = {
   main: "viewport.main"
@@ -64,6 +65,14 @@ export type RuntimeViewportVisualPresentationState = Readonly<{
   gridMajorSpacingMm: number;
   visualContextMeshCount: number;
   lightCount: number;
+  gridSampling?: Readonly<{
+    renderer: "world-space-derivative-antialiasing";
+    lineHalfWidthPixels: number;
+    fadeStartPeriodPixels: number;
+    fadeEndPeriodPixels: number;
+    phaseOriginMeters: number;
+  }>;
+  workplaneTransform?: Readonly<{ position: readonly number[]; scaling: readonly number[] }>;
 }>;
 
 export type RuntimeViewportState = {
@@ -361,7 +370,14 @@ export const areRuntimeViewportInvariantSnapshotsEqual = (
 ) =>
   JSON.stringify(left) === JSON.stringify(right);
 
+export type NavigationProjectionProbe = {
+  reference: { x: number; y: number; z: number };
+  projected: { x: number; y: number; z: number };
+  placementSettings: Readonly<PlacementSettings>;
+};
+
 export type RuntimeViewportE2EBridge = {
+  probeProjection: (clientX: number, clientY: number, reference?: NavigationProjectionProbe["reference"]) => NavigationProjectionProbe | null;
   getNavigationGeometry: () => {
     included: readonly { entityId: string; corners: readonly { x: number; y: number; z: number }[]; projected: readonly { x: number; y: number; z: number }[] }[];
     excludedIds: readonly string[];

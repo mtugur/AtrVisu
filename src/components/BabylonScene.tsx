@@ -37,6 +37,7 @@ import { createLegacyPlatformEntityId } from "../platform/adapters/legacyEntityA
 import type { ViewportResizeRequest } from "../platform/contracts";
 import type {
   RuntimeViewportCameraSnapshot,
+  NavigationProjectionProbe,
   RuntimeViewportResizeResult,
   RuntimeViewportState
 } from "../platform/runtimeViewport";
@@ -114,6 +115,7 @@ import {
   getSelectionFrameRole
 } from "./babylonScene/selectionPresentation";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
+import { beginCameraPan, applyCameraPan, type CameraPanGesture } from "./babylonScene/cameraPan";
 import {
   getCivilRenderingGroupId,
   preserveWorldGeometryDepthAcrossRenderingGroups
@@ -218,6 +220,7 @@ type BabylonSceneProps = {
 };
 
 export type BabylonSceneHandle = {
+  probeProjection: (clientX: number, clientY: number, reference?: NavigationProjectionProbe["reference"]) => NavigationProjectionProbe | null;
   getCameraState: () => ViewpointCameraState | null;
   applyCameraState: (camera: ViewpointCameraState) => boolean;
   fitView: () => boolean;
@@ -1164,9 +1167,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     initialPointerPosition: { xMm: number; yMm: number };
     initialAnnotationPosition: { xMm: number; yMm: number };
   } | null>(null);
-  const panStateRef = useRef<{
-    lastFloorPoint: Vector3;
-  } | null>(null);
+  const panStateRef = useRef<CameraPanGesture | null>(null);
 
   useEffect(() => {
     placedMachinesRef.current = placedMachines;
@@ -1673,6 +1674,31 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       };
     },
     applyCameraState: applyNavigationCameraState,
+    probeProjection: (clientX, clientY, reference) => {
+      const scene = sceneRef.current;
+      const camera = cameraRef.current;
+      const canvas = canvasRef.current;
+      if (!enableE2EDiagnosticsRef.current || !scene || !camera || !canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const engine = scene.getEngine();
+      const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+      let point = reference && new Vector3(reference.x, reference.y, reference.z);
+      if (!point) {
+        // Read-only acceptance oracle: ray intersection with the target-depth
+        // view plane. Production Pan never depends on this probe or a pick.
+        const ray = scene.createPickingRay(clientX - rect.left, clientY - rect.top, Matrix.Identity(), camera);
+        const normal = camera.target.subtract(camera.position).normalize();
+        const distance = Vector3.Dot(camera.target.subtract(ray.origin), normal) / Vector3.Dot(ray.direction, normal);
+        point = ray.origin.add(ray.direction.scale(distance));
+      }
+      const projected = Vector3.Project(point, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+      return {
+        reference: { x: point.x, y: point.y, z: point.z },
+        placementSettings: { ...placementSettingsRef.current },
+        projected: { x: rect.left + projected.x * rect.width / viewport.width,
+          y: rect.top + projected.y * rect.height / viewport.height, z: projected.z }
+      };
+    },
     fitView: () => {
       const camera = readNavigationCameraSnapshot();
       const viewport = runtimeViewportStateRef.current;
@@ -1720,7 +1746,9 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           gridMinorSpacingMm: visualDiagnostics.gridMinorSpacingMm,
           gridMajorSpacingMm: visualDiagnostics.gridMajorSpacingMm,
           visualContextMeshCount: visualDiagnostics.meshCount,
-          lightCount: visualDiagnostics.lightCount
+          lightCount: visualDiagnostics.lightCount,
+          gridSampling: visualDiagnostics.gridSampling,
+          workplaneTransform: visualDiagnostics.workplaneTransform
         }
       };
     },
@@ -1977,11 +2005,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         const { instanceId, civilReferenceId, annotationId } = getSelectionPickTarget(pick);
         const sourceEvent = pointerInfo.event as PointerEvent | undefined;
         const isToggleSelection = isToggleSelectionEvent(sourceEvent);
-        const panPoint = pickFloorPoint();
-
-        if (isPanPointer(sourceEvent) && panPoint) {
+        const panCamera = cameraRef.current;
+        if (isPanPointer(sourceEvent) && panCamera && sourceEvent) {
           sourceEvent?.preventDefault();
-          panStateRef.current = { lastFloorPoint: panPoint.clone() };
+          panCamera.inertialAlphaOffset = 0;
+          panCamera.inertialBetaOffset = 0;
+          panCamera.inertialRadiusOffset = 0;
+          panCamera.inertialPanningX = 0;
+          panCamera.inertialPanningY = 0;
+          panStateRef.current = beginCameraPan(
+            panCamera, sourceEvent.clientX, sourceEvent.clientY,
+            canvas.clientWidth, canvas.clientHeight
+          );
           dragStateRef.current = null;
           civilDragStateRef.current = null;
           annotationDragStateRef.current = null;
@@ -2131,13 +2166,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
         const panState = panStateRef.current;
         if (panState) {
-          const floorPoint = pickFloorPoint();
           const activeCamera = cameraRef.current;
-          if (floorPoint && activeCamera) {
-            const delta = panState.lastFloorPoint.subtract(floorPoint);
-            delta.y = 0;
-            activeCamera.target.addInPlace(delta);
-            panStateRef.current = { lastFloorPoint: floorPoint.clone() };
+          const event = pointerInfo.event as PointerEvent;
+          if (activeCamera) {
+            applyCameraPan(activeCamera, panState, event.clientX, event.clientY);
           }
           return;
         }

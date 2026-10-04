@@ -1856,6 +1856,7 @@ export function App() {
       return;
     }
     window.__atrvisuRuntimeViewport = {
+      probeProjection: (clientX, clientY, reference) => sceneRef.current?.probeProjection(clientX, clientY, reference) ?? null,
       getNavigationGeometry: () => ({
         included: sceneRef.current?.getNavigationGeometry() ?? [],
         excludedIds: getFitViewGeometry(placedMachinesRef.current, civilReferencesRef.current, layersRef.current).excludedIds

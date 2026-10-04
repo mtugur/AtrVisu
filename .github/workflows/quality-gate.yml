@@ -67,8 +67,24 @@ jobs:
           ATRVISU_CAPTURE_PF3A_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-global-iconography-density-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_PF3B_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-pf3b-viewport-visual-runtime-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_CLOSE_NAV_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/p1-close-nav-runtime-v01' && '1' || '0' }}
+          ATRVISU_CAPTURE_PAN_GRID_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/p1-viewport-pan-grid-runtime-v01' && '1' || '0' }}
           ATRVISU_CAPTURE_P1_BLD2_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-level-datum-v01' && '1' || '0' }}
           ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate exact-head Pan and grid evidence
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/p1-viewport-pan-grid-runtime-v01' }}
+        run: node scripts/validate-pan-grid-evidence.mjs
+        env:
+          ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+
+      - name: Upload Pan and grid runtime evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/p1-viewport-pan-grid-runtime-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-viewport-pan-grid-runtime
+          path: test-results/p1-viewport-pan-grid-runtime
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload PF-1 review evidence
         if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.number == 110 }}
