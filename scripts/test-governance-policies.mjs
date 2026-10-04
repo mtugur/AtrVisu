@@ -186,6 +186,12 @@ const staticFiles = [
   "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md",
   "docs/standards/ATRVISU_INTERACTION_STANDARD.md",
   "docs/adr/ADR-001-phase-1-direct-plan-body-drag.md",
+  "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md",
+  "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md",
+  "docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md",
+  "docs/adr/ADR-007-view-parallel-camera-pan-grid-readability.md",
+  "docs/product/P1_VIEWPORT_PAN_GRID_CONTRACT.md",
+  "docs/checklists/P1_VIEWPORT_PAN_GRID_GATE.md",
   "docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md",
   "docs/checklists/INTERACTION_CHANGE_GATE.md",
   "docs/protocols/CODEX_SYNC_PROTOCOL.md",
@@ -268,6 +274,39 @@ expectStaticFail(
   () => fs.rmSync(path.join(staticRoot, "docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md")),
   "missing required authority file"
 );
+
+for (const [name, relative, clause, expectedText] of [
+  ["removing view-parallel Pan mental model is detected", "docs/standards/ATRVISU_INTERACTION_STANDARD.md", "view-parallel camera translation, not floor dragging and not entity dragging", "camera Pan interaction missing invariant"],
+  ["requiring a floor hit for Pan is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "Pan MUST NOT require a floor hit, scene hit, selected entity, depth-buffer hit", "camera Pan navigation missing invariant"],
+  ["removing target-depth Pan reference is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "Perspective scale is defined at camera-target depth", "camera Pan navigation missing invariant"],
+  ["removing side-view Pan availability is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "exact Front, Back, Left and Right orthographic views", "camera Pan navigation missing invariant"],
+  ["weakening Pan pixel oracle is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "final screen residual <= 1 CSS px", "camera Pan navigation missing invariant"],
+  ["removing event-cadence equivalence is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "1x120, 8x15 and 24x5", "camera Pan navigation missing invariant"],
+  ["removing reverse-return oracle is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "Reverse the path and return within <= 1 CSS px", "camera Pan navigation missing invariant"],
+  ["permitting hidden Pan rescue models is detected", "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md", "Gain clamps, catch-up, alternating compensation, angle-specific sign repair, hidden fallback planes, smoothing, hysteresis and retry loops are forbidden", "camera Pan navigation missing invariant"],
+  ["changing engineering grid cadence is detected", "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md", "minor 1000 mm, major 5000 mm", "grid readability missing invariant"],
+  ["weakening fixed grid phase is detected", "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md", "canonical world-origin multiples", "grid readability missing invariant"],
+  ["conflating visual LOD with grid sizing is detected", "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md", "Camera/fit/viewport-driven grid sizing remains forbidden", "grid readability missing invariant"],
+  ["removing LOD domain invariants is detected", "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md", "MUST NOT change snap spacing, world coordinates, major/minor world phase, entity placement, workplane bounds or mesh transform", "grid readability missing invariant"],
+  ["removing temporal readability rejection is detected", "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md", "broad false bands, alternating phase or temporal popping", "grid readability missing invariant"],
+  ["claiming Stage B implementation is complete is detected", "docs/product/P1_VIEWPORT_PAN_GRID_CONTRACT.md", "Stage B implementation remains PENDING", "Pan contract package missing invariant"],
+  ["claiming independent contract review passed is detected", "docs/checklists/P1_VIEWPORT_PAN_GRID_GATE.md", "Contract Verified: PENDING independent Stage A governance review", "Pan gate missing invariant"]
+]) {
+  expectStaticFail(name, () => {
+    const file = path.join(staticRoot, relative);
+    const original = fs.readFileSync(file, "utf8");
+    if (!original.includes(clause)) throw new Error(`Mutation clause missing: ${clause}`);
+    fs.writeFileSync(file, original.replaceAll(clause, "REMOVED OR WEAKENED CONTRACT CLAUSE"));
+  }, expectedText);
+}
+
+for (const relative of [
+  "docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md",
+  "docs/adr/ADR-007-view-parallel-camera-pan-grid-readability.md"
+]) {
+  expectStaticFail(`removing Pan authority ${relative} is detected`,
+    () => fs.rmSync(path.join(staticRoot, relative)), "missing required authority file");
+}
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
 

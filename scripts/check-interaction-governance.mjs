@@ -17,6 +17,12 @@ const requiredFiles = [
   "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md",
   "docs/standards/ATRVISU_INTERACTION_STANDARD.md",
   "docs/adr/ADR-001-phase-1-direct-plan-body-drag.md",
+  "docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md",
+  "docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md",
+  "docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md",
+  "docs/adr/ADR-007-view-parallel-camera-pan-grid-readability.md",
+  "docs/product/P1_VIEWPORT_PAN_GRID_CONTRACT.md",
+  "docs/checklists/P1_VIEWPORT_PAN_GRID_GATE.md",
   "docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md",
   "docs/checklists/INTERACTION_CHANGE_GATE.md",
   "docs/protocols/CODEX_SYNC_PROTOCOL.md",
@@ -42,6 +48,12 @@ const benchmarkStandard = read("docs/standards/ATRVISU_BENCHMARK_EVIDENCE_STANDA
 const benchmarkBaseline = read("docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md");
 const interaction = read("docs/standards/ATRVISU_INTERACTION_STANDARD.md");
 const planMoveAdr = read("docs/adr/ADR-001-phase-1-direct-plan-body-drag.md");
+const navigation = read("docs/standards/ATRVISU_VIEWPORT_NAVIGATION_STANDARD.md");
+const visual = read("docs/standards/ATRVISU_VIEWPORT_VISUAL_STANDARD.md");
+const panEvidence = read("docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md");
+const panAdr = read("docs/adr/ADR-007-view-parallel-camera-pan-grid-readability.md");
+const panPackage = read("docs/product/P1_VIEWPORT_PAN_GRID_CONTRACT.md");
+const panGate = read("docs/checklists/P1_VIEWPORT_PAN_GRID_GATE.md");
 const delivery = read("docs/protocols/INTERACTION_DELIVERY_PROTOCOL.md");
 const checklist = read("docs/checklists/INTERACTION_CHANGE_GATE.md");
 const protocol = read("docs/protocols/CODEX_SYNC_PROTOCOL.md");
@@ -132,6 +144,79 @@ requireText("Plan Move ADR", planMoveAdr, [
   "approximately 20 m Elevation",
   "No alternate solver or remapping is permitted",
   "P1-BLD1, P1-BLD2 and PF-3B implementation remain outside"
+]);
+
+const cameraInteraction = interaction.slice(
+  interaction.indexOf("## 9. Camera navigation vs entity manipulation"),
+  interaction.indexOf("## 10. Inspector numeric editing")
+);
+requireText("camera Pan interaction", cameraInteraction, [
+  "view-parallel camera translation, not floor dragging and not entity dragging",
+  "Direct middle-mouse drag is the required Phase-1 binding",
+  "Pan MUST NOT require a floor hit, scene hit, selected entity, depth-buffer hit",
+  "Perspective pan scale uses camera-target depth",
+  "orthographic pan scale uses the current orthographic world span",
+  "domain Elevation MUST NOT change",
+  "event-cadence independent",
+  "final screen residual <= 1 CSS px",
+  "Stage B implementation remains PENDING"
+]);
+
+const cameraPan = navigation.slice(navigation.indexOf("## 11. Canonical camera Pan and acceptance"));
+requireText("camera Pan navigation", cameraPan, [
+  "Pan is view-parallel camera translation",
+  "Pan MUST NOT require a floor hit, scene hit, selected entity, depth-buffer hit",
+  "Perspective scale is defined at camera-target depth",
+  "reference plane passes through the current camera target",
+  "Camera position and target translate together",
+  "exact Front, Back, Left and Right orthographic views",
+  "final screen residual <= 1 CSS px",
+  "1x120, 8x15 and 24x5",
+  "Reverse the path and return within <= 1 CSS px",
+  "canvas identity and engine/scene/canvas lifecycle remain unchanged",
+  "Gain clamps, catch-up, alternating compensation, angle-specific sign repair, hidden fallback planes, smoothing, hysteresis and retry loops are forbidden",
+  "Stage B implementation remains PENDING"
+]);
+
+const gridReadability = visual.slice(
+  visual.indexOf("### 4.4 Temporal readability and visual LOD"),
+  visual.indexOf("## 5. Lighting Hierarchy")
+);
+requireText("grid readability", gridReadability, [
+  "minor 1000 mm, major 5000 mm",
+  "canonical world-origin multiples",
+  "Presentation MAY reduce, fade or suppress sub-pixel minor-grid detail",
+  "MUST NOT change snap spacing, world coordinates, major/minor world phase, entity placement, workplane bounds or mesh transform",
+  "Camera/fit/viewport-driven grid sizing remains forbidden",
+  "broad false bands, alternating phase or temporal popping",
+  "Top view remains straight and phase-legible",
+  "start/25/50/75/end captures",
+  "Stage B implementation remains PENDING"
+]);
+
+requireText("Pan benchmark", panEvidence, [
+  "Review date:", "Official source", "Task similarity", "AtrVisu adoption",
+  "BENCHMARK FACT", "ATRVISU PRODUCT DECISION",
+  "help.visualcomponents.com/4.10/", "AutoCAD-Core", "3DSMax-Basics",
+  "help.solidworks.com/2025/", "Inventor-Factory-Help", "Inventor-Help",
+  "Dynamically reduce line count", "not vendor attribution", "5407842477"
+]);
+requireText("Pan ADR", panAdr, [
+  "view-parallel camera translation", "gesture-start camera-target depth",
+  "domain Elevation never changes", "<= 1 CSS px",
+  "Stage B implementation remains PENDING", "ADR-001", "PR #122"
+]);
+requireText("Pan contract package", panPackage, [
+  "b727f4ee59875f9bbfbab7cc9b813486b20b353f", "5407842477",
+  "Stage B implementation remains PENDING", "Interaction Change Gate evidence",
+  "Product Owner exploratory testing is NOT REQUIRED",
+  "baseline unit/E2E green results do not certify the new contract"
+]);
+requireText("Pan gate", panGate, [
+  "Stage B implementation remains PENDING",
+  "Contract Verified: PENDING independent Stage A governance review",
+  "new runtime Product Accepted remains PENDING Stage B",
+  "1x120 / 8x15 / 24x5", "fixed 1000/5000 mm origin phase"
 ]);
 
 requireText("interaction delivery", delivery, [

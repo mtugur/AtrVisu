@@ -84,7 +84,7 @@ The displayed workplane extent derives from finite current Machine and Civil tra
 
 Rotated rectangular Machines, Walls and Beams must remain fully enclosed by their transformed AABB, the exact `5000 mm` margin and the rounded extent. Content movement may resize or recenter the extent, but world-origin line phase remains unchanged.
 
-There is no extent hysteresis or camera-dependent density change in PF-3B. Implementation must use a bounded primitive count independent of world extent, such as one workplane/grid surface plus a bounded axis/edge set. Creating one box/mesh per grid line is forbidden.
+There is no extent hysteresis or camera-dependent engineering-spacing change. Camera-dependent visual detail reduction is bounded by section 4.4; it cannot change world geometry, phase, spacing or bounds. Implementation must use a bounded primitive count independent of world extent, such as one workplane/grid surface plus a bounded axis/edge set. Creating one box/mesh per grid line is forbidden.
 
 ### 4.3 Workplane versus Floor Area
 
@@ -93,6 +93,21 @@ There is no extent hysteresis or camera-dependent density change in PF-3B. Imple
 - `floor-area` is physical Civil slab/world geometry governed by ADR-003. It participates in normal world depth with Machine, Wall, Column and Beam.
 - The global workplane must not occlude physical geometry from above or below and must not change Floor Area depth/blending.
 - The workplane is not moved to Active Level in PF-3B. Active-Level grids, story clipping, level isolation and datum-specific workplanes are explicitly out of scope.
+
+### 4.4 Temporal readability and visual LOD
+
+This governance-only extension follows contract-owner review `5407842477`, benchmark `docs/benchmarks/P1_VIEWPORT_PAN_GRID_EVIDENCE.md` and ADR-007. Stage B implementation remains PENDING; the historical repeated texture is not certified by this text.
+
+- Canonical world spacing stays fixed: minor 1000 mm, major 5000 mm. All retained line samples remain on canonical world-origin multiples.
+- Presentation MAY reduce, fade or suppress sub-pixel minor-grid detail as projected density decreases. Visual LOD only changes displayed detail; it MUST NOT change snap spacing, world coordinates, major/minor world phase, entity placement, workplane bounds or mesh transform.
+- Camera/fit/viewport-driven grid sizing remains forbidden. Adaptive visual sampling/LOD is not engineering-grid rescaling or recentering.
+- Major/minor presentation must not create broad false bands, alternating phase or temporal popping that reads as workplane deformation during normal pan/orbit/zoom.
+- Top view remains straight and phase-legible. Representative oblique, shallow and zoomed sequences require reviewer-accessible visual evidence in both existing themes, not just a static endpoint screenshot.
+- Geometry/bounds/transform/texture phase diagnostics accompany start/25/50/75/end captures to distinguish camera projection from sampling effects. Readability evidence does not substitute for fixed-phase numeric checks.
+- GPU-specific filtering, mipmaps, shader algorithms and LOD thresholds are not frozen here. No camera-angle hack, movement change or domain/grid-density migration is authorized.
+- Presentation changes reuse bounded resources and preserve camera state, selection, transforms, history, dirty state and scene/canvas lifecycle. No new grid store, persistence setting or active-Level workplane is introduced.
+
+Stage B must validate normal/slow navigation at 1440x900 DPR1 and supported narrow dimensions where relevant, through Top, perspective, wheel zoom, oblique/shallow and representative corner states. Major/minor fixed cadence remains testable even when sub-pixel minor lines are visually suppressed. Independent contract/visual review must inspect temporal sequences; no arbitrary pixel-image threshold or claim of universal GPU conformance is implied by governance CI.
 
 ## 5. Lighting Hierarchy
 
