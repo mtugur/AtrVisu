@@ -283,3 +283,26 @@ A proposed change to an interaction in this file must include:
 9. ADR when the change is a new/deviating product decision.
 
 No code for the changed interaction is merged before this procedure is satisfied.
+
+## 15. Professional Measure viewport tool (C03)
+
+Status: Stage A proposed contract delta; independent governance review/merge and separate Stage B runtime instruction required. Existing runtime is not certified by this section.
+
+Benchmark: official Visual Components Measuring Components, AutoCAD MEASUREGEOM and SOLIDWORKS Measure. Traceable facts/adoption/deviations: `docs/benchmarks/P1_MEASURE_TOOL_EVIDENCE.md`. Decision: `docs/adr/ADR-008-phase-1-professional-measure-tool.md`. Full frozen behavior/tolerances/evidence: `docs/product/P1_MEASURE_TOOL_CONTRACT.md`, sections 3-8; gate: `docs/checklists/P1_MEASURE_TOOL_GATE.md`.
+
+### Required behavior
+
+- Measure is a transient viewport tool, not Precision Placement, Inspector visibility or a persistent dimension/annotation. It never mutates geometry, Runtime Selection, history, dirty state or persistence.
+- New registered `view.measure` / `viewport.measure` route owns Quick Toolbar and viewport controls. Existing `view.showMeasurements` retains Precision Placement Helpers semantics/compatibility; no Stage A runtime migration or dead toolbar UI.
+- Explicit Pick/Navigate arbitrates LMB: Pick confirms measurement operands, never selects/body-drags/orbits; Navigate suspends picking and uses unchanged LMB orbit. MMB Pan and wheel work in both through existing camera authority. No global binding redesign or hidden click/drag solver.
+- Geometry and displayed active-Level FFL Plane are explicit point sources. Geometry misses do not become plane points; overlays/helpers are excluded; locked visible geometry is readable. Actual world-hit elevation and canonical mm/domain-axis mapping are preserved, with no Floor support inference or placement snap mutation.
+- Distance confirms A/B with live B preview, signed B-A XYZ, total 3D and named Plan distance. Angle confirms A-B-C with B vertex and live C preview. Plan XY polygon shows rubberband/closed preview; Enter/Finish completes a valid simple polygon, invalid/degenerate/self-intersecting input gives a reason rather than NaN/fake results.
+- Canonical selected Machine/Civil local Width/Depth/Height and named entity-pair reference measurements appear in the viewport. Reuse existing dimensions/coordinate/diagnostic authority; no minimum-GLB-clearance/topology claim or competing selection source.
+- Escape/Exit/toggle deterministically clears all transient tool state/graphics and restores normal input ownership. Entry/exit never changes camera implicitly: no navigation means prior pose unchanged; intentional navigation is preserved, not rewound. Selection IDs/order/primary and domain/history/dirty stay unchanged.
+- Confirmed points/results remain fixed under orbit/pan/zoom; only graphics reproject. Both themes and narrow viewport use restrained readable safe-area callouts, no geometry/panel/camera compensation, remount or overflow. Clean commercial capture excludes tool artifacts through existing authority.
+
+### Forbidden behavior and acceptance
+
+No implicit miss fallback, snap relocation, fake CAD topology, persistent measurements, dead UI, Inspector-only substitute, movement/camera redesign or console suppression. No C04/C05/C07/C09 scope expansion. Product UI Design Spec section 10 remains fully required.
+
+Contract M01-M10 freezes real pointer/keyboard routes, numeric fixtures/tolerances, camera/viewport states, lifecycle/selection/history/dirty invariants and exact-head evidence. Baseline CI does not satisfy new Measure acceptance. Stage A is docs-only; runtime Automation Green/Contract Verified/Product Accepted remain PENDING until separately implemented, independently reviewed and genuinely accepted. PR #120 Final Exit status is not changed.
