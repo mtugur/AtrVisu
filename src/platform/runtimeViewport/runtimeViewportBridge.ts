@@ -1,5 +1,6 @@
 import type { ViewportResizeRequest, ViewportResizeReason } from "../contracts";
 import type { ViewpointCameraState } from "../../types/viewpoints";
+import type { PlacementSettings } from "../../types/placement";
 
 export const RUNTIME_VIEWPORT_IDS = {
   main: "viewport.main"
@@ -64,6 +65,15 @@ export type RuntimeViewportVisualPresentationState = Readonly<{
   gridMajorSpacingMm: number;
   visualContextMeshCount: number;
   lightCount: number;
+  gridGeometry?: Readonly<{
+    renderer: "rigid-world-line-systems";
+    phaseOriginMm: number;
+    generation: number;
+    rebuildCount: number;
+    minor: { meshId: number; linesMm: readonly (readonly [readonly [number, number], readonly [number, number]])[]; verticesMeters: readonly number[] };
+    major: { meshId: number; linesMm: readonly (readonly [readonly [number, number], readonly [number, number]])[]; verticesMeters: readonly number[] };
+  }>;
+  workplaneTransform?: Readonly<{ position: readonly number[]; scaling: readonly number[] }>;
 }>;
 
 export type RuntimeViewportState = {
@@ -92,6 +102,8 @@ export type RuntimeViewportBinding = {
   getState: () => RuntimeViewportState;
   getCameraSnapshot: () => RuntimeViewportCameraSnapshot | null;
   requestResize: (request: ViewportResizeRequest) => RuntimeViewportResizeResult;
+  fitView?: () => boolean;
+  applyViewPreset?: (presetId: string) => boolean;
 };
 
 export type RuntimeViewportBindings = Readonly<
@@ -259,6 +271,9 @@ export const createRuntimeViewportBridge = (
     listRuntimeViewports,
     requestResize,
     getCameraSnapshot,
+    fitView: (viewportId: RuntimeViewportId) => getBindings()[viewportId]?.fitView?.() ?? false,
+    applyViewPreset: (viewportId: RuntimeViewportId, presetId: string) =>
+      getBindings()[viewportId]?.applyViewPreset?.(presetId) ?? false,
     getReachabilityReport
   };
 };
@@ -356,7 +371,40 @@ export const areRuntimeViewportInvariantSnapshotsEqual = (
 ) =>
   JSON.stringify(left) === JSON.stringify(right);
 
+export type NavigationProjectionProbe = {
+  reference: { x: number; y: number; z: number };
+  projected: { x: number; y: number; z: number };
+  placementSettings: Readonly<PlacementSettings>;
+};
+
+export type NavigationRenderFrame = {
+  frame: number;
+  timeMs: number;
+  pointer: { x: number; y: number; timeMs: number; sequence: number; buttons: number };
+  panActive: boolean;
+  target: readonly number[];
+  position: readonly number[];
+  alpha: number;
+  beta: number;
+  radius: number;
+  fov: number;
+  mode: "perspective" | "orthographic";
+  ortho: readonly (number | null)[];
+  viewMatrix: readonly number[];
+  projectionMatrix: readonly number[];
+  projected: readonly { x: number; y: number; z: number }[];
+  canvas: { id: number; sceneId: number; lifecycle: number; cssWidth: number; cssHeight: number; renderWidth: number; renderHeight: number; dpr: number };
+  inertia: readonly number[];
+};
+
 export type RuntimeViewportE2EBridge = {
+  startRenderFrameProbe: (anchors: readonly NavigationProjectionProbe["reference"][]) => boolean;
+  readRenderFrameProbe: (stop?: boolean) => readonly NavigationRenderFrame[];
+  probeProjection: (clientX: number, clientY: number, reference?: NavigationProjectionProbe["reference"]) => NavigationProjectionProbe | null;
+  getNavigationGeometry: () => {
+    included: readonly { entityId: string; corners: readonly { x: number; y: number; z: number }[]; projected: readonly { x: number; y: number; z: number }[] }[];
+    excludedIds: readonly string[];
+  };
   get: (viewportId: RuntimeViewportId) => RuntimeViewportReachability | undefined;
   list: () => RuntimeViewportReachability[];
   requestResize: (

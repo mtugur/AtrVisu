@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { NullEngine, Scene, StandardMaterial } from "@babylonjs/core";
-import { getViewportVisualPalette } from "../../designSystem";
 import {
-  createWorkplaneGridTextureData,
   createSceneVisualContext,
   SCENE_INTERACTION_PLANE_SIZE_METERS,
   SCENE_VISUAL_CONTEXT_MESH_COUNT,
-  SCENE_VISUAL_CONTEXT_TEXTURE_SIZE,
   SCENE_VISUAL_LIGHT_SPECS
 } from "./visualContext";
 import { calculateWorkplaneBoundsFromPlanBounds } from "./workplaneGrid";
 
 describe("scene visual context", () => {
-  it("uses a constant two-mesh presentation/interaction architecture for small and large extents", () => {
+  it("uses four bounded fill/line/interaction meshes for small and large extents", () => {
     const empty = calculateWorkplaneBoundsFromPlanBounds([]);
     const large = calculateWorkplaneBoundsFromPlanBounds([{
       minXMm: -200_000,
@@ -25,11 +22,9 @@ describe("scene visual context", () => {
       depthMm: 400_000
     }]);
 
-    expect(SCENE_VISUAL_CONTEXT_MESH_COUNT).toBe(2);
-    expect(createWorkplaneGridTextureData(empty, getViewportVisualPalette("dark")))
-      .toHaveLength(SCENE_VISUAL_CONTEXT_TEXTURE_SIZE ** 2 * 4);
-    expect(createWorkplaneGridTextureData(large, getViewportVisualPalette("light")))
-      .toHaveLength(SCENE_VISUAL_CONTEXT_TEXTURE_SIZE ** 2 * 4);
+    expect(SCENE_VISUAL_CONTEXT_MESH_COUNT).toBe(4);
+    expect(empty.widthMm).toBe(40000);
+    expect(large.widthMm).toBeGreaterThan(empty.widthMm);
   });
 
   it("defines the exact neutral three-light hierarchy", () => {
@@ -38,19 +33,6 @@ describe("scene visual context", () => {
       { id: "fill-light", type: "directional", intensity: 0.45 },
       { id: "ambient-light", type: "hemispheric", intensity: 0.35 }
     ]);
-  });
-
-  it("encodes minor and major grid colors over the workplane fill", () => {
-    const data = createWorkplaneGridTextureData(
-      calculateWorkplaneBoundsFromPlanBounds([]),
-      getViewportVisualPalette("dark"),
-      101
-    );
-    const colors = new Set<string>();
-    for (let index = 0; index < data.length; index += 4) {
-      colors.add(`${data[index]},${data[index + 1]},${data[index + 2]}`);
-    }
-    expect(colors.size).toBeGreaterThanOrEqual(3);
   });
 
   it("keeps presentation resources bounded across palette and extent updates", () => {
@@ -72,14 +54,19 @@ describe("scene visual context", () => {
       .toBeCloseTo(-SCENE_INTERACTION_PLANE_SIZE_METERS / 2);
     expect(context.interactionPlane.getBoundingInfo().boundingBox.maximumWorld.x)
       .toBeCloseTo(SCENE_INTERACTION_PLANE_SIZE_METERS / 2);
-    expect(scene.meshes).toHaveLength(2);
+    expect(scene.meshes).toHaveLength(4);
     expect(scene.lights).toHaveLength(3);
-    const workplaneMaterial = scene.getMaterialByName("visual-workplane-material") as StandardMaterial;
-    expect(workplaneMaterial.emissiveColor.toHexString()).toBe("#FFFFFF");
+    const workplaneMaterial = scene.getMaterialByName("visual-workplane-material");
+    expect(workplaneMaterial).toBeInstanceOf(StandardMaterial);
+    expect((workplaneMaterial as StandardMaterial).disableLighting).toBe(true);
+    expect(workplaneMaterial!.disableDepthWrite).toBe(true);
+    expect(scene.textures).toHaveLength(0);
 
     for (let index = 0; index < 12; index += 1) {
       context.updatePalette(index % 2 === 0 ? "light" : "dark");
     }
+    expect(scene.meshes).toEqual(initialMeshes);
+    const gridBeforeBounds = context.getDiagnostics().gridGeometry;
     context.updateBounds(calculateWorkplaneBoundsFromPlanBounds([{
       minXMm: -200_000,
       maxXMm: 200_000,
@@ -91,9 +78,12 @@ describe("scene visual context", () => {
       depthMm: 400_000
     }]));
 
-    expect(scene.meshes).toEqual(initialMeshes);
+    expect(scene.meshes).toHaveLength(4);
+    expect(scene.meshes).toContain(context.visualWorkplane);
+    expect(scene.meshes).toContain(context.interactionPlane);
     expect(scene.lights).toEqual(initialLights);
-    expect(scene.materials).toEqual(initialMaterials);
+    expect(scene.materials).toHaveLength(initialMaterials.length);
+    expect(context.getDiagnostics().gridGeometry.generation).toBe(gridBeforeBounds.generation + 1);
     expect(scene.textures).toEqual(initialTextures);
     expect(context.interactionPlane.position.x).toBe(0);
     expect(context.interactionPlane.position.z).toBe(0);
@@ -105,8 +95,11 @@ describe("scene visual context", () => {
       .toBeCloseTo(SCENE_INTERACTION_PLANE_SIZE_METERS / 2);
     expect(context.getDiagnostics()).toMatchObject({
       effectiveThemeId: "dark",
-      meshCount: 2,
-      lightCount: 3
+      meshCount: 4,
+      lightCount: 3,
+      gridGeometry: { renderer: "rigid-world-line-systems", phaseOriginMm: 0, rebuildCount: 1 },
+      gridMinorSpacingMm: 1000,
+      gridMajorSpacingMm: 5000
     });
 
     context.dispose();

@@ -1,13 +1,10 @@
 import {
-  Color3,
   DirectionalLight,
   HemisphericLight,
   Mesh,
   MeshBuilder,
-  RawTexture,
   Scene,
   StandardMaterial,
-  Texture,
   Vector3
 } from "@babylonjs/core";
 import type { EffectiveThemeId, ViewportVisualPalette } from "../../designSystem";
@@ -21,24 +18,12 @@ import {
   EMPTY_WORKPLANE_BOUNDS_MM,
   WORKPLANE_GRID_MAJOR_SPACING_MM,
   WORKPLANE_GRID_MINOR_SPACING_MM,
-  getWorldGridPhaseMm,
   type WorkplaneBoundsMm
 } from "./workplaneGrid";
 
-export const SCENE_VISUAL_CONTEXT_TEXTURE_SIZE = 512;
-export const SCENE_VISUAL_CONTEXT_MESH_COUNT = 2;
+import { createWorkplaneGridGeometry } from "./workplaneGridGeometry";
+export const SCENE_VISUAL_CONTEXT_MESH_COUNT = 4;
 export const SCENE_INTERACTION_PLANE_SIZE_METERS = 84;
-
-const WORKPLANE_GRID_TILE_BOUNDS_MM: WorkplaneBoundsMm = Object.freeze({
-  minXMm: 0,
-  maxXMm: WORKPLANE_GRID_MAJOR_SPACING_MM,
-  minYMm: 0,
-  maxYMm: WORKPLANE_GRID_MAJOR_SPACING_MM,
-  centerXMm: WORKPLANE_GRID_MAJOR_SPACING_MM / 2,
-  centerYMm: WORKPLANE_GRID_MAJOR_SPACING_MM / 2,
-  widthMm: WORKPLANE_GRID_MAJOR_SPACING_MM,
-  depthMm: WORKPLANE_GRID_MAJOR_SPACING_MM
-});
 
 export const SCENE_VISUAL_LIGHT_SPECS = Object.freeze([
   Object.freeze({ id: "key-light", type: "directional", intensity: 1 }),
@@ -54,6 +39,8 @@ export type SceneVisualContextDiagnostics = Readonly<{
   gridMajorSpacingMm: number;
   meshCount: number;
   lightCount: number;
+  gridGeometry: ReturnType<ReturnType<typeof createWorkplaneGridGeometry>["getDiagnostics"]>;
+  workplaneTransform: Readonly<{ position: readonly number[]; scaling: readonly number[] }>;
 }>;
 
 export type SceneVisualContext = {
@@ -63,66 +50,6 @@ export type SceneVisualContext = {
   updateBounds: (bounds: WorkplaneBoundsMm) => void;
   getDiagnostics: () => SceneVisualContextDiagnostics;
   dispose: () => void;
-};
-
-type RgbBytes = readonly [red: number, green: number, blue: number];
-
-const hexToRgbBytes = (hex: string): RgbBytes => {
-  const value = Number.parseInt(hex.slice(1), 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
-};
-
-const distanceToWorldMultiple = (coordinateMm: number, spacingMm: number) => {
-  const remainder = ((coordinateMm % spacingMm) + spacingMm) % spacingMm;
-  return Math.min(remainder, spacingMm - remainder);
-};
-
-const getGridColorAtCoordinate = (
-  coordinateMm: number,
-  worldUnitsPerPixel: number,
-  palette: ViewportVisualPalette
-) => {
-  const lineHalfWidthMm = Math.max(worldUnitsPerPixel * 0.6, 1);
-  if (distanceToWorldMultiple(coordinateMm, WORKPLANE_GRID_MAJOR_SPACING_MM) <= lineHalfWidthMm) {
-    return hexToRgbBytes(palette.gridMajor);
-  }
-  if (distanceToWorldMultiple(coordinateMm, WORKPLANE_GRID_MINOR_SPACING_MM) <= lineHalfWidthMm) {
-    return hexToRgbBytes(palette.gridMinor);
-  }
-  return null;
-};
-
-export const createWorkplaneGridTextureData = (
-  bounds: WorkplaneBoundsMm,
-  palette: ViewportVisualPalette,
-  textureSize = SCENE_VISUAL_CONTEXT_TEXTURE_SIZE
-) => {
-  const data = new Uint8Array(textureSize * textureSize * 4);
-  const fill = hexToRgbBytes(palette.workplaneFill);
-  const worldUnitsPerPixelX = bounds.widthMm / Math.max(1, textureSize - 1);
-  const worldUnitsPerPixelY = bounds.depthMm / Math.max(1, textureSize - 1);
-  const xColors = Array.from({ length: textureSize }, (_, pixel) => getGridColorAtCoordinate(
-    bounds.minXMm + pixel * worldUnitsPerPixelX,
-    worldUnitsPerPixelX,
-    palette
-  ));
-  const yColors = Array.from({ length: textureSize }, (_, pixel) => getGridColorAtCoordinate(
-    bounds.minYMm + pixel * worldUnitsPerPixelY,
-    worldUnitsPerPixelY,
-    palette
-  ));
-
-  for (let y = 0; y < textureSize; y += 1) {
-    for (let x = 0; x < textureSize; x += 1) {
-      const color = xColors[x] ?? yColors[y] ?? fill;
-      const offset = (y * textureSize + x) * 4;
-      data[offset] = color[0];
-      data[offset + 1] = color[1];
-      data[offset + 2] = color[2];
-      data[offset + 3] = 255;
-    }
-  }
-  return data;
 };
 
 export const createSceneVisualContext = (
@@ -141,23 +68,7 @@ export const createSceneVisualContext = (
   fillLight.intensity = SCENE_VISUAL_LIGHT_SPECS[1].intensity;
   ambientLight.intensity = SCENE_VISUAL_LIGHT_SPECS[2].intensity;
 
-  const texture = RawTexture.CreateRGBATexture(
-    createWorkplaneGridTextureData(WORKPLANE_GRID_TILE_BOUNDS_MM, palette),
-    SCENE_VISUAL_CONTEXT_TEXTURE_SIZE,
-    SCENE_VISUAL_CONTEXT_TEXTURE_SIZE,
-    scene,
-    false,
-    false,
-    Texture.BILINEAR_SAMPLINGMODE
-  );
-  texture.name = "visual-workplane-grid-texture";
-  texture.wrapU = Texture.WRAP_ADDRESSMODE;
-  texture.wrapV = Texture.WRAP_ADDRESSMODE;
-
   const workplaneMaterial = new StandardMaterial("visual-workplane-material", scene);
-  workplaneMaterial.diffuseTexture = texture;
-  workplaneMaterial.emissiveTexture = texture;
-  workplaneMaterial.emissiveColor = Color3.White();
   workplaneMaterial.disableLighting = true;
   workplaneMaterial.disableDepthWrite = true;
   workplaneMaterial.backFaceCulling = true;
@@ -171,6 +82,7 @@ export const createSceneVisualContext = (
   visualWorkplane.isPickable = false;
   visualWorkplane.checkCollisions = false;
   visualWorkplane.position.y = -0.001;
+  const grid = createWorkplaneGridGeometry(scene, initialBounds, palette);
 
   const interactionPlane = MeshBuilder.CreateGround(
     "floor-pick-plane",
@@ -197,7 +109,8 @@ export const createSceneVisualContext = (
       light.specular = neutralLight.clone();
     });
     ambientLight.groundColor = neutralLight.scale(0.18);
-    texture.update(createWorkplaneGridTextureData(WORKPLANE_GRID_TILE_BOUNDS_MM, palette));
+    workplaneMaterial.emissiveColor = createViewportPaletteColor3(palette, "workplaneFill");
+    grid.updatePalette(palette);
   };
 
   const applyBounds = () => {
@@ -209,16 +122,6 @@ export const createSceneVisualContext = (
     visualWorkplane.scaling.z = depthMeters;
     visualWorkplane.position.x = centerXMeters;
     visualWorkplane.position.z = centerYMeters;
-    texture.uScale = workplaneBounds.widthMm / WORKPLANE_GRID_MAJOR_SPACING_MM;
-    texture.vScale = workplaneBounds.depthMm / WORKPLANE_GRID_MAJOR_SPACING_MM;
-    texture.uOffset = getWorldGridPhaseMm(
-      workplaneBounds.minXMm,
-      WORKPLANE_GRID_MAJOR_SPACING_MM
-    ) / WORKPLANE_GRID_MAJOR_SPACING_MM;
-    texture.vOffset = getWorldGridPhaseMm(
-      workplaneBounds.minYMm,
-      WORKPLANE_GRID_MAJOR_SPACING_MM
-    ) / WORKPLANE_GRID_MAJOR_SPACING_MM;
   };
 
   applyPalette();
@@ -235,6 +138,7 @@ export const createSceneVisualContext = (
     updateBounds: (nextBounds) => {
       workplaneBounds = nextBounds;
       applyBounds();
+      grid.updateBounds(nextBounds);
     },
     getDiagnostics: () => Object.freeze({
       effectiveThemeId,
@@ -243,11 +147,17 @@ export const createSceneVisualContext = (
       gridMinorSpacingMm: WORKPLANE_GRID_MINOR_SPACING_MM,
       gridMajorSpacingMm: WORKPLANE_GRID_MAJOR_SPACING_MM,
       meshCount: SCENE_VISUAL_CONTEXT_MESH_COUNT,
-      lightCount: SCENE_VISUAL_LIGHT_SPECS.length
+      lightCount: SCENE_VISUAL_LIGHT_SPECS.length,
+      gridGeometry: grid.getDiagnostics(),
+      workplaneTransform: Object.freeze({
+        position: Object.freeze(visualWorkplane.position.asArray()),
+        scaling: Object.freeze(visualWorkplane.scaling.asArray())
+      })
     }),
     dispose: () => {
       interactionPlane.dispose(false, false);
       visualWorkplane.dispose(false, false);
+      grid.dispose();
       interactionMaterial.dispose(true, true);
       workplaneMaterial.dispose(true, true);
       keyLight.dispose();

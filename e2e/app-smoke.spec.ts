@@ -3,6 +3,9 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { strFromU8, unzipSync } from "fflate";
 import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
+import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection, dot3 } from "../src/components/viewportNavigation/navigationGeometry";
+import { measureMachinePixels } from "./navigationPixelEvidence";
+import { registerPanGridTests } from "./panGridEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -22,6 +25,382 @@ const captureP1Bld2Evidence = process.env.ATRVISU_CAPTURE_P1_BLD2_EVIDENCE === "
 const p1Bld2EvidenceDirectory = join(process.cwd(), "test-results", "p1-bld2-level-datum");
 const capturePf3bEvidence = process.env.ATRVISU_CAPTURE_PF3B_EVIDENCE === "1";
 const pf3bEvidenceDirectory = join(process.cwd(), "test-results", "pf3b-viewport-visual-language");
+const captureCloseNavEvidence = process.env.ATRVISU_CAPTURE_CLOSE_NAV_EVIDENCE === "1";
+const closeNavEvidenceDirectory = join(process.cwd(), "test-results", "p1-close-nav-viewport-navigation");
+
+for (const width of [1440, 1024, 640]) {
+  test(`P1-CLOSE-NAV HUD safe area remains visible in both themes at ${width}px`, async ({ page }) => {
+    const errors = collectPageErrors(page);
+    await page.setViewportSize({ width, height: 800 });
+    await openCleanApp(page);
+    await waitForRuntimeViewport(page);
+    const checkHud = async () => {
+      for (const testId of ["viewcube", "world-axis-triad"]) {
+        const hud = page.getByTestId(testId);
+        await expect(hud).toBeVisible();
+        const bounds = (await hud.boundingBox())!;
+        expect(bounds.x).toBeGreaterThanOrEqual(0);
+        expect(bounds.y).toBeGreaterThanOrEqual(0);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(800);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    };
+    await checkHud();
+    if (width <= 720) {
+      await page.getByRole("button", { name: "Open Library", exact: true }).click();
+      await checkHud();
+      const dock = (await page.getByTestId("primary-dock").boundingBox())!;
+      const triad = (await page.getByTestId("world-axis-triad").boundingBox())!;
+      expect(triad.x).toBeGreaterThanOrEqual(dock.x + dock.width);
+    }
+    for (const theme of ["light", "dark"] as const) {
+      const control = await openPreferenceBranch(page, "theme");
+      await control.surface.getByRole("radio", { name: theme === "light" ? "Light" : "Dark", exact: true }).check();
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+      await checkHud();
+    }
+    expect(errors).toEqual([]);
+  });
+}
+
+test("P1-CLOSE-NAV real navigation controls preserve authority and dock screen projection", async ({ page }) => {
+  test.setTimeout(120_000);
+  const navigationBaseReproduction = JSON.parse(await readFile(join(process.cwd(), "e2e/navigationBaseReproduction.json"), "utf8"));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const errors = collectPageErrors(page);
+  const pageErrors: string[] = [];
+  page.on("pageerror", error => pageErrors.push(error.message));
+  await openCleanApp(page);
+  await expectExactHeadServer(page);
+  await waitForRuntimeViewport(page);
+  const fitButton = getCommandBarCommand(page, "view.fitView");
+  await expect(fitButton).toBeDisabled();
+  await expect(fitButton).toHaveAttribute("title", /No visible Machine or Civil geometry/);
+  await openPrimaryDockPanel(page, "panel.levels");
+  const levelAnswers = ["Level 2", "6000"];
+  const answerLevel = async (dialog: Dialog) => dialog.accept(levelAnswers.shift() ?? "");
+  page.on("dialog", answerLevel);
+  await page.getByTestId("add-level").click();
+  page.off("dialog", answerLevel);
+  await addCanonicalAtaraMachine(page, "Flow Pack Machine", ["Primary Packaging", "Horizontal Flow Pack"]);
+  await expect(page.getByLabel("Selected machine properties").getByLabel("Machine Level")).toHaveValue(/level-/);
+  await expect(page.getByTestId("machine-world-elevation")).toContainText("6000 mm");
+  const commit = async (label: string, value: string) => {
+    const input = label === "Rotation Angle"
+      ? page.getByRole("spinbutton", { name: /^Rotation Angle/ })
+      : page.getByLabel(label, { exact: true });
+    await input.fill(value);
+    await input.press("Tab");
+    await expect(input).toHaveValue(value);
+  };
+  await commit("Rotation Angle", "30");
+  await openPrimaryDockPanel(page, "panel.levels");
+  await page.getByTestId("level-row-ground").locator(".layer-main-button").click();
+  await addBuildPrimitive(page, "Beam", "Structure");
+  await commit("Civil Rotation Angle", "45");
+  await commit("Civil Plan X", "-5000");
+  await commit("Civil Plan Y", "-2000");
+  await addBuildPrimitive(page, "Floor Area", "Planning");
+  await commit("Civil Floor Thickness", "350");
+  await page.getByTestId("civil-world-elevation").click();
+  await waitForSceneRenderFrames(page);
+  const canvas = page.getByLabel("AtrVisu 3D workspace");
+  const canvasHandle = await canvas.elementHandle();
+  const baseline = await waitForRuntimeViewport(page);
+  const captures: unknown[] = [];
+  const presets: unknown[] = [];
+  const dockOperations: unknown[] = [];
+  const fits: unknown[] = [];
+  const responsiveInspector: unknown[] = [];
+  const geometry = () => page.evaluate(() => window.__atrvisuRuntimeViewport!.getNavigationGeometry());
+  const capture = async (filename: string, png?: Buffer) => {
+    const snapshot = await getRuntimeViewportSnapshot(page);
+    const hud = await page.evaluate(() => {
+      const root = document.querySelector<HTMLElement>('[data-testid="app-root"]')!;
+      const rect = document.querySelector('[aria-label="AtrVisu 3D workspace"]')!.getBoundingClientRect();
+      const style = getComputedStyle(root);
+      return { cssWidth: rect.width, cssHeight: rect.height, leftSafeInset: style.getPropertyValue("--av-viewport-hud-left-inset"), rightSafeInset: style.getPropertyValue("--av-viewport-hud-right-inset"), canvasCount: document.querySelectorAll('[aria-label="AtrVisu 3D workspace"]').length };
+    });
+    captures.push({ filename, ...snapshot, hud, consoleErrorCount: errors.length, pageErrorCount: pageErrors.length });
+    if (captureCloseNavEvidence) {
+      await mkdir(closeNavEvidenceDirectory, { recursive: true });
+      await writeFile(join(closeNavEvidenceDirectory, filename), png ?? await page.screenshot());
+    }
+  };
+  const assertDomainUnchanged = async () => {
+    const after = await getRuntimeViewportSnapshot(page);
+    expect(after.invariants).toEqual(baseline.invariants);
+    expect(after.viewport?.sceneLifecycleGeneration).toBe(baseline.viewport?.sceneLifecycleGeneration);
+    expect(await canvasHandle!.evaluate(element => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'))).toBe(true);
+  };
+  const clickZone = async (id: string) => {
+    const zone = page.getByTestId("viewcube").locator(`[data-preset-id="${id}"]`);
+    await expect(zone).toBeVisible();
+    const point = await zone.locator("polygon").evaluate(element => {
+      const polygon = element as SVGPolygonElement;
+      const points = Array.from({ length: polygon.points.numberOfItems }, (_, i) => polygon.points.getItem(i));
+      const center = new DOMPoint(points.reduce((s, p) => s + p.x, 0) / points.length, points.reduce((s, p) => s + p.y, 0) / points.length);
+      const result = center.matrixTransform(polygon.getScreenCTM()!);
+      return { x: result.x, y: result.y };
+    });
+    await page.mouse.click(point.x, point.y);
+    await waitForSceneRenderFrames(page);
+  };
+  await capture("01-viewcube-default.png");
+  const filenames: Record<string, string> = { "z+": "02-viewcube-top.png", "y-": "03-viewcube-front.png", "x+": "04-viewcube-right.png", "x-": "11-viewcube-left.png", "y+": "12-viewcube-back.png", "z-": "13-viewcube-bottom.png" };
+  const edge = VIEW_PRESETS.find(p => p.kind === "edge" && p.direction.x > 0 && p.direction.z > 0)!;
+  const corner = VIEW_PRESETS.find(p => p.kind === "corner" && p.direction.x > 0 && p.direction.y < 0 && p.direction.z > 0)!;
+  for (const preset of [...VIEW_PRESETS.filter(p => p.kind === "face"), edge, corner]) {
+    const angles = getPresetAngles(preset.direction);
+    // Canonical public camera application exposes a zone; the tested action is
+    // an actual click in its polygon, never a diagnostic preset mutation.
+    expect(await applyRuntimeViewportCameraState(page, { mode: "perspective", alpha: angles.alpha + .15, beta: Math.max(.2, Math.min(Math.PI - .2, angles.beta)), radius: 34, targetX: 1, targetY: 2, targetZ: -2 })).toBe(true);
+    await waitForSceneRenderFrames(page);
+    const before = await getRuntimeViewportSnapshot(page);
+    await clickZone(preset.id);
+    const after = await getRuntimeViewportSnapshot(page);
+    const actual = getCameraBasis(after.camera!.alpha, after.camera!.beta).side;
+    const expected = domainToBabylonDirection(preset.direction);
+    const directionDot = dot3(actual, expected);
+    expect(directionDot).toBeGreaterThan(.99994);
+    expect(after.camera).toMatchObject({ mode: "orthographic", targetX: before.camera!.targetX, targetY: before.camera!.targetY, targetZ: before.camera!.targetZ });
+    expect(after.camera?.orthographicIntent?.verticalWorldSpan).toBeCloseTo(2 * before.camera!.radius * Math.tan(before.camera!.fov / 2));
+    await assertDomainUnchanged();
+    presets.push({ presetId: preset.id, expectedDomainCameraSide: preset.direction, actualCameraSide: { x: actual.x, y: actual.z, z: actual.y }, directionDot, tolerance: .99994, before: before.camera, after: after.camera });
+    await capture(filenames[preset.id] ?? (preset.kind === "edge" ? "14-viewcube-edge.png" : "05-viewcube-axonometric-corner.png"));
+  }
+  // A real orbit changes localized read-only presentation without App/domain updates.
+  const orientationBefore = await page.getByTestId("viewcube").getAttribute("data-orientation");
+  const box = (await canvas.boundingBox())!;
+  // Preserve the existing empty-space deselect UX; verify orbit from the
+  // resulting unselected state, then restore the original selection via Explorer.
+  await page.mouse.click(box.x + box.width * .53, box.y + box.height * .15);
+  await expect.poll(async () => (await getRuntimeViewportSnapshot(page)).invariants.selectionIds).toEqual([]);
+  const orbitDomain = (await getRuntimeViewportSnapshot(page)).invariants;
+  await page.mouse.move(box.x + box.width * .53, box.y + box.height * .15);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * .60, box.y + box.height * .23, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByTestId("viewcube")).not.toHaveAttribute("data-orientation", orientationBefore!);
+  await expect.poll(async () => (await page.getByTestId("world-axis-triad").getAttribute("data-orientation")) === (await page.getByTestId("viewcube").getAttribute("data-orientation"))).toBe(true);
+  expect((await getRuntimeViewportSnapshot(page)).invariants).toEqual(orbitDomain);
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.getByTestId(`layout-explorer-entity-${baseline.invariants.primarySelectionId}`).click();
+  await assertDomainUnchanged();
+  await capture("06-axis-triad-orbit.png");
+
+  for (const mode of ["perspective", "orthographic"] as const) {
+    expect(await applyRuntimeViewportCameraState(page, { mode, alpha: .7, beta: 1.1, radius: 34, targetX: -2, targetY: 0, targetZ: 2, orthographic: { centerX: 0, centerY: 0, verticalWorldSpan: 28 } })).toBe(true);
+    await waitForSceneRenderFrames(page);
+    const before = await getRuntimeViewportSnapshot(page);
+    await expectRuntimeCommandExecutionOnce(page, "view.fitView", () => fitButton.click());
+    await waitForSceneRenderFrames(page);
+    const after = await getRuntimeViewportSnapshot(page);
+    expect(after.camera).toMatchObject({ mode, alpha: before.camera!.alpha, beta: before.camera!.beta });
+    const included = await geometry();
+    expect(included.included).toHaveLength(3);
+    const rect = (await canvas.boundingBox())!;
+    const marginFraction = (1 - 1 / 1.20) / 2;
+    for (const item of included.included) for (const p of item.projected) {
+      expect(p.x).toBeGreaterThanOrEqual(rect.x + rect.width * marginFraction - 1);
+      expect(p.x).toBeLessThanOrEqual(rect.x + rect.width * (1 - marginFraction) + 1);
+      expect(p.y).toBeGreaterThanOrEqual(rect.y + rect.height * marginFraction - 1);
+      expect(p.y).toBeLessThanOrEqual(rect.y + rect.height * (1 - marginFraction) + 1);
+      expect(p.z).toBeGreaterThan(0);
+      expect(p.z).toBeLessThan(1);
+    }
+    fits.push({ mode, before: before.camera, after: after.camera, ...included, marginFraction, marginPassed: true });
+    await assertDomainUnchanged();
+    await capture(mode === "perspective" ? "07-fit-view-perspective.png" : "08-fit-view-orthographic.png");
+  }
+  await expectOneRuntimeCommandExecution(page, "view.fitView", async () => (await getMenuCommand(page, "View", "view.fitView")).click());
+  await page.getByRole("button", { name: "Search commands", exact: true }).click();
+  const palette = page.getByTestId("command-palette");
+  await palette.getByRole("textbox", { name: "Search commands" }).fill("Fit View");
+  await expectRuntimeCommandExecutionOnce(page, "view.fitView", () => palette.getByRole("option", { name: /Fit View/ }).click());
+  await waitForSceneRenderFrames(page);
+  await assertDomainUnchanged();
+  const checkDock = async (operation: string, action: () => Promise<unknown>) => {
+    const before = await getRuntimeViewportSnapshot(page);
+    const anchorBefore = (await geometry()).included[0].projected[0];
+    const canvasBefore = await canvas.boundingBox();
+    await action();
+    await waitForSceneRenderFrames(page);
+    const after = await getRuntimeViewportSnapshot(page);
+    const anchorAfter = (await geometry()).included[0].projected[0];
+    const delta = { x: Math.abs(anchorAfter.x - anchorBefore.x), y: Math.abs(anchorAfter.y - anchorBefore.y) };
+    expect(delta.x).toBeLessThanOrEqual(1);
+    expect(delta.y).toBeLessThanOrEqual(1);
+    expect(await canvas.boundingBox()).toEqual(canvasBefore);
+    expect(after.camera).toEqual(before.camera);
+    expect(after.viewport?.resizeGeneration).toBe(before.viewport?.resizeGeneration);
+    await assertDomainUnchanged();
+    dockOperations.push({ operation, anchorBefore, anchorAfter, delta, before, after });
+  };
+  const resize = async (handle: Locator, dx: number) => {
+    const r = (await handle.boundingBox())!;
+    await page.mouse.move(r.x + r.width / 2, r.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(r.x + r.width / 2 + dx, r.y + 40, { steps: 6 });
+    await page.mouse.up();
+  };
+  await checkDock("left-collapse", () => page.getByTestId("primary-dock-collapse-toggle").click());
+  await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+  await checkDock("left-open", () => page.getByRole("button", { name: "Open Explorer", exact: true }).click());
+  await capture("09-left-dock-open-stable.png");
+  await checkDock("left-resize", () => resize(page.getByTestId("primary-dock-resize-handle"), 50));
+  await checkDock("right-collapse", () => page.getByRole("button", { name: "Collapse Inspector", exact: true }).click());
+  await checkDock("right-open", () => page.getByRole("button", { name: "Expand Inspector", exact: true }).click());
+  await capture("10-right-dock-open-stable.png");
+  await checkDock("right-resize", () => resize(page.getByRole("button", { name: "Resize right panel" }), -50));
+  const machineId = (await geometry()).included.find(item => item.entityId.startsWith("machine:"))!.entityId;
+  for (const width of [1024, 640]) {
+    await page.setViewportSize({ width, height: 800 });
+    if (width === 640) await page.getByRole("button", { name: "Open Explorer", exact: true }).click();
+    await openPrimaryDockPanel(page, "panel.layoutExplorer");
+    await page.getByTestId(`layout-explorer-entity-${machineId}`).click();
+    await expect.poll(async () => (await getRuntimeViewportSnapshot(page)).invariants.primarySelectionId).toBe(machineId);
+    if (width === 640) {
+      await page.getByTestId("primary-dock-collapse-toggle").click();
+      await expect(page.getByTestId("primary-dock")).toHaveAttribute("data-collapsed", "true");
+    }
+    const inspector = page.getByTestId("right-panel");
+    if (await inspector.isVisible()) await page.getByRole("button", { name: "Collapse Inspector", exact: true }).click();
+    await expect(inspector).toHaveCount(0);
+    // Prepare a usable view through the real command after the browser resize,
+    // before measuring the Inspector operation. No fit occurs during opening.
+    await (await getMenuCommand(page, "View", "view.fitView")).click();
+    await waitForSceneRenderFrames(page);
+    const before = await getRuntimeViewportSnapshot(page);
+    const canvasBefore = await canvas.boundingBox();
+    const machineGeometryBefore = (await geometry()).included.find(item => item.entityId === machineId)!;
+    const anchorBefore = machineGeometryBefore.projected[0];
+    expect(Object.values(anchorBefore).every(Number.isFinite)).toBe(true);
+    expect(anchorBefore.x).toBeGreaterThan(0);
+    expect(anchorBefore.x).toBeLessThan(width);
+    expect(anchorBefore.y).toBeGreaterThan(canvasBefore!.y);
+    expect(anchorBefore.y).toBeLessThan(canvasBefore!.y + canvasBefore!.height);
+    const pixelsBefore = width === 640 ? await measureMachinePixels(page, machineId, machineGeometryBefore.projected) : null;
+    if (pixelsBefore) {
+      expect(machineGeometryBefore.projected.every(point => point.z > 0 && point.z < 1)).toBe(true);
+      expect(pixelsBefore.evidence.machinePixelEvidence.pass, "Projected Machine must have actual filled framebuffer pixels before Inspector opens.").toBe(true);
+      expect(pixelsBefore.evidence.renderer.glError).toBe(0);
+      expect(pixelsBefore.evidence.renderer.contextLost).toBe(false);
+      await capture("17-inspector-640-before-open.png", pixelsBefore.pagePng);
+      if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "19-inspector-640-before-framebuffer.png"), pixelsBefore.framebufferPng);
+    }
+    await page.getByRole("button", { name: "Expand Inspector", exact: true }).click();
+    await expect(inspector).toBeVisible();
+    const presentation = width === 640 ? "bottom-sheet" : "right-overlay";
+    await expect(inspector).toHaveAttribute("data-inspector-presentation", presentation);
+    await expect(inspector.getByLabel("Selected machine properties")).toBeVisible();
+    await waitForSceneRenderFrames(page);
+    const after = await getRuntimeViewportSnapshot(page);
+    const machineGeometryAfter = (await geometry()).included.find(item => item.entityId === machineId)!;
+    const anchorAfter = machineGeometryAfter.projected[0];
+    const delta = { x: Math.abs(anchorAfter.x - anchorBefore.x), y: Math.abs(anchorAfter.y - anchorBefore.y) };
+    expect(delta.x).toBeLessThanOrEqual(1);
+    expect(delta.y).toBeLessThanOrEqual(1);
+    expect(after.camera).toEqual(before.camera);
+    expect(after.invariants).toEqual(before.invariants);
+    expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
+    expect(after.viewport?.resizeGeneration).toBe(before.viewport?.resizeGeneration);
+    expect(await canvas.boundingBox()).toEqual(canvasBefore);
+    const sameCanvas = await canvasHandle!.evaluate(element => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'));
+    expect(sameCanvas).toBe(true);
+    const inspectorBounds = (await inspector.boundingBox())!;
+    const pixelsAfter = width === 640 ? await measureMachinePixels(page, machineId, machineGeometryAfter.projected) : null;
+    if (pixelsBefore && pixelsAfter) {
+      expect(machineGeometryAfter.projected.every(point => point.z > 0 && point.z < 1)).toBe(true);
+      expect(pixelsAfter.evidence.machinePixelEvidence.pass, "Projection alone cannot pass with a blank selected-Machine framebuffer.").toBe(true);
+      expect(pixelsAfter.evidence.renderer.glError).toBe(0);
+      expect(pixelsAfter.evidence.renderer.contextLost).toBe(false);
+      expect(pixelsAfter.evidence.renderer.canvasStyle).toEqual({ opacity: "1", visibility: "visible", display: "block" });
+      expect(pixelsAfter.evidence.renderer.sampleOccluder).toBe("CANVAS");
+      for (const evidence of [pixelsBefore.evidence, pixelsAfter.evidence]) {
+        const bounds = evidence.machinePixelEvidence.projectedBounds;
+        expect(bounds.x).toBeGreaterThanOrEqual(canvasBefore!.x);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+        expect(bounds.y).toBeGreaterThanOrEqual(canvasBefore!.y);
+        expect(bounds.y + bounds.height).toBeLessThan(inspectorBounds.y);
+      }
+      expect(pixelsAfter.evidence.machinePixelEvidence.projectedBounds).toEqual(pixelsBefore.evidence.machinePixelEvidence.projectedBounds);
+      await capture("18-inspector-640-after-open.png", pixelsAfter.pagePng);
+      if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "20-inspector-640-after-framebuffer.png"), pixelsAfter.framebufferPng);
+    }
+    const viewcubeBounds = (await page.getByTestId("viewcube").boundingBox())!;
+    const triadBounds = (await page.getByTestId("world-axis-triad").boundingBox())!;
+    const primaryDockBounds = (await page.getByTestId("primary-dock").boundingBox())!;
+    const hudSafeInsets = await page.getByTestId("app-root").evaluate(element => {
+      const style = getComputedStyle(element);
+      return {
+        left: parseFloat(style.getPropertyValue("--av-viewport-hud-left-inset")),
+        right: parseFloat(style.getPropertyValue("--av-viewport-hud-right-inset")),
+        bottom: style.getPropertyValue("--av-viewport-hud-bottom-inset").trim()
+      };
+    });
+    expect(triadBounds.x).toBeGreaterThanOrEqual(primaryDockBounds.x + primaryDockBounds.width);
+    expect(viewcubeBounds.y).toBeGreaterThanOrEqual(canvasBefore!.y);
+    expect(viewcubeBounds.x + viewcubeBounds.width).toBeLessThanOrEqual(width);
+    if (width === 1024) {
+      expect(inspectorBounds.x).toBeGreaterThan(0);
+      expect(inspectorBounds.y).toBeCloseTo(canvasBefore!.y);
+      expect(viewcubeBounds.x + viewcubeBounds.width).toBeLessThanOrEqual(inspectorBounds.x);
+      expect(hudSafeInsets.right).toBeCloseTo(inspectorBounds.width);
+      expect(primaryDockBounds.width).toBeGreaterThan(0);
+    } else {
+      expect(primaryDockBounds.width).toBe(0);
+      expect(inspectorBounds.x).toBe(0);
+      expect(inspectorBounds.width).toBe(width);
+      expect(inspectorBounds.y).toBeGreaterThanOrEqual(canvasBefore!.y + canvasBefore!.height / 2);
+      expect(triadBounds.y + triadBounds.height).toBeLessThanOrEqual(inspectorBounds.y);
+      expect(hudSafeInsets.right).toBe(0);
+      expect(viewcubeBounds.x).toBeGreaterThan(width / 2);
+      expect(viewcubeBounds.y + viewcubeBounds.height).toBeLessThan(inspectorBounds.y);
+    }
+    responsiveInspector.push({ width, presentation, inspectorOpen: true, inspectorBounds, primaryDockBounds,
+      viewcubeBounds, triadBounds, hudSafeInsets, anchorEntityId: machineId, anchorBefore, anchorAfter, delta,
+      canvasBefore, canvasAfter: await canvas.boundingBox(), sameCanvas, before, after,
+      machinePixelEvidence: pixelsBefore && pixelsAfter ? { before: pixelsBefore.evidence, after: pixelsAfter.evidence } : null });
+    await capture(width === 1024 ? "15-inspector-1024-side-overlay.png" : "16-inspector-640-bottom-sheet.png");
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openPrimaryDockPanel(page, "panel.layoutExplorer");
+  await page.getByTestId(`layout-explorer-entity-${baseline.invariants.primarySelectionId}`).click();
+  await waitForSceneRenderFrames(page);
+  await assertDomainUnchanged();
+  // Existing render-target PNG authority captures Babylon, not the editor DOM.
+  const beforeCapture = await getRuntimeViewportSnapshot(page);
+  const fileMenu = await openWorkbenchMenu(page, "File");
+  await fileMenu.locator('[data-command-id="project.commercialOutputs"]').click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("export-commercial-snapshot").click()]);
+  const path = (await download.path())!;
+  const png = await readFile(path);
+  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  const hud = page.locator('.viewport-navigation-hud');
+  await hud.evaluate(element => { (element as HTMLElement).style.visibility = "hidden"; });
+  try {
+    const [withoutHudDownload] = await Promise.all([page.waitForEvent("download"), page.getByTestId("export-commercial-snapshot").click()]);
+    const withoutHud = await readFile((await withoutHudDownload.path())!);
+    // Actual render-target output is identical with editor HUD visible/hidden,
+    // rather than searching compressed PNG bytes for a DOM label.
+    expect(withoutHud.equals(png)).toBe(true);
+  } finally {
+    await hud.evaluate(element => { (element as HTMLElement).style.removeProperty("visibility"); });
+  }
+  expect((await getRuntimeViewportSnapshot(page)).camera).toEqual(beforeCapture.camera);
+  await assertDomainUnchanged();
+  expect(errors).toEqual([]);
+  expect(pageErrors).toEqual([]);
+  if (captureCloseNavEvidence) await writeFile(join(closeNavEvidenceDirectory, "p1-close-nav-evidence.json"), JSON.stringify({
+    exactHeadSha: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, captures, presets, fits, dockOperations, responsiveInspector,
+    baseVsHeadReproduction: navigationBaseReproduction,
+    commercialCapture: { pngValid: true, visibleAndHiddenHudPngIdentical: true, editorHudSource: "DOM-only; existing Babylon render-target capture excludes DOM", cameraPreserved: true },
+    consoleErrorCount: errors.length, pageErrorCount: pageErrors.length
+  }, null, 2));
+});
 
 const capturePf2aScreenshot = async (page: Page, fileName: string) => {
   if (!capturePf2aEvidence) {
@@ -924,6 +1303,22 @@ const clickSceneMachine = async (page: Page, machineId: string) => {
   await page.mouse.click(box.x + point.x, box.y + point.y);
 };
 
+const clickEmptySceneSpace = async (page: Page) => {
+  // These fixtures contain small centered machines. Choose empty lower canvas
+  // space between the actual overlaid side docks, not underneath a dock.
+  const point = await page.getByLabel("AtrVisu 3D workspace").evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(document.querySelector('[data-testid="app-root"]')!);
+    const left = parseFloat(style.getPropertyValue("--av-viewport-hud-left-inset")) || 0;
+    const right = parseFloat(style.getPropertyValue("--av-viewport-hud-right-inset")) || 0;
+    const x = rect.left + left + (rect.width - left - right) / 2;
+    const y = rect.bottom - 24;
+    return { x, y, hitsCanvas: document.elementFromPoint(x, y) === element };
+  });
+  expect(point.hitsCanvas).toBe(true);
+  await page.mouse.click(point.x, point.y);
+};
+
 const dragSceneMachine = async (page: Page, machineId: string, deltaX: number, deltaY: number) => {
   const canvas = page.getByLabel("AtrVisu 3D workspace");
   const box = await canvas.boundingBox();
@@ -1067,7 +1462,6 @@ test("runtime feature access baseline requires observed surface execution eviden
   expect(report.missingSurfaceExecutionCommandIds)
     .toEqual(diagnostics.requiredCommandIds);
   expect(report.plannedFeatures.map((feature) => feature.featureId)).toEqual([
-    "view.fitView",
     "panel.civilReferences",
     "panel.diagnostics"
   ]);
@@ -1297,6 +1691,10 @@ test("runtime feature access complete gate is bound to observed visible command 
   await page.getByTestId("close-performance-benchmark").click();
   await expect(page.getByTestId("performance-benchmark-modal")).toHaveCount(0);
 
+  // Explicit framing comes after the pointer-based legacy routes, so fitting
+  // the initial three small pallets cannot move later-added targets offscreen.
+  await observe("view.fitView", () => getCommandBarCommand(page, "view.fitView").click());
+
   const authorityEvidence = await getRuntimeSurfaceExecutionEvidence(page);
   expect(authorityEvidence.complete).toBe(true);
   expect(authorityEvidence.verifiedCommandIds).toEqual(diagnostics.requiredCommandIds);
@@ -1467,11 +1865,12 @@ test("required runtime command bindings are live without executing during report
     command.registered && command.bound && command.reachable
   )).toBe(true);
   expect(report.features.find((feature) => feature.featureId === "view.fitView")).toMatchObject({
-    classification: "declared-planned",
-    status: "planned-unbound",
-    bound: false,
-    reachable: false
+    classification: "required-runtime",
+    status: "contextually-unavailable",
+    bound: true,
+    reachable: true
   });
+  expect((await getRuntimeCommandExecution(page, "view.fitView")).attemptCount).toBe(0);
 
   await expect(page.getByTestId("library-manager-modal")).toHaveCount(0);
   await expect(page.getByTestId("taxonomy-manager-modal")).toHaveCount(0);
@@ -1593,7 +1992,8 @@ test("Viewpoints is a truthful Primary Dock toggle and leaves no empty Bottom Do
 
   await groupsTab.click();
   await expect(groupsTab).toHaveAttribute("aria-pressed", "true");
-  expect(await viewport.evaluate((element) => element.getBoundingClientRect().left)).toBeGreaterThan(0);
+  expect(await primaryDock.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(0);
+  expect(await viewport.evaluate((element) => element.getBoundingClientRect().left)).toBe(0);
   await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
   await expect(primaryDock).toHaveAttribute("data-collapsed", "true");
   await expect(groupsTab).toBeHidden();
@@ -3129,7 +3529,7 @@ test("runtime panel registry opens and closes the actual Machine Library section
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
   await expect.poll(async () =>
     (await getRuntimeViewportSnapshot(page)).viewport?.resizeGeneration ?? 0
-  ).toBeGreaterThan(resizeGeneration ?? 0);
+  ).toBe(resizeGeneration ?? 0);
   expect(errors).toEqual([]);
 });
 
@@ -3259,13 +3659,13 @@ test("orthographic framing survives panel and browser aspect-ratio changes after
   await expect(page.getByRole("button", { name: "Expand Inspector" })).toBeVisible();
   await expect.poll(async () =>
     (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? 0
-  ).toBeGreaterThan(before.viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER);
+  ).toBe(before.viewport?.cssWidth);
   const collapsed = await getRuntimeViewportSnapshot(page);
-  expect(collapsed.viewport?.resizeGeneration).toBe((before.viewport?.resizeGeneration ?? 0) + 1);
-  expect(collapsed.viewport?.lastResizeReason).toBe("dock-collapse");
+  expect(collapsed.viewport?.resizeGeneration).toBe(before.viewport?.resizeGeneration);
+  expect(collapsed.viewport?.lastResizeReason).toBe(before.viewport?.lastResizeReason);
   expect(collapsed.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   expect(collapsed.camera?.orthographicIntent?.viewportAspectRatio)
-    .not.toBeCloseTo(before.camera?.orthographicIntent?.viewportAspectRatio ?? Number.NaN);
+    .toBeCloseTo(before.camera?.orthographicIntent?.viewportAspectRatio ?? Number.NaN);
   expectOrthographicFramingEquivalent(before, collapsed);
   expect(collapsed.invariants).toEqual(before.invariants);
 
@@ -3277,8 +3677,8 @@ test("orthographic framing survives panel and browser aspect-ratio changes after
     (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth
   ).toBe(before.viewport?.cssWidth);
   const reopened = await getRuntimeViewportSnapshot(page);
-  expect(reopened.viewport?.resizeGeneration).toBe((collapsed.viewport?.resizeGeneration ?? 0) + 1);
-  expect(reopened.viewport?.lastResizeReason).toBe("dock-collapse");
+  expect(reopened.viewport?.resizeGeneration).toBe(collapsed.viewport?.resizeGeneration);
+  expect(reopened.viewport?.lastResizeReason).toBe(collapsed.viewport?.lastResizeReason);
   expect(reopened.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   expectOrthographicFramingEquivalent(before, reopened);
   expect(reopened.invariants).toEqual(before.invariants);
@@ -3307,7 +3707,7 @@ test("orthographic framing survives panel and browser aspect-ratio changes after
   expect(errors).toEqual([]);
 });
 
-test("runtime panel width drag resizes only the viewport", async ({ page }) => {
+test("runtime panel width drag changes HUD safe area without resizing the viewport", async ({ page }) => {
   const errors = collectPageErrors(page);
   await openCleanApp(page);
   await page.locator(".machine-card").first().click();
@@ -3332,10 +3732,10 @@ test("runtime panel width drag resizes only the viewport", async ({ page }) => {
   ).toBeGreaterThan(panelWidthBefore);
   await expect.poll(async () =>
     (await getRuntimeViewportSnapshot(page)).viewport?.cssWidth ?? Number.MAX_SAFE_INTEGER
-  ).toBeLessThan(before.viewport?.cssWidth ?? 0);
+  ).toBe(before.viewport?.cssWidth);
   const after = await getRuntimeViewportSnapshot(page);
-  expect(after.viewport?.resizeGeneration).toBeGreaterThan(before.viewport?.resizeGeneration ?? 0);
-  expect(after.viewport?.lastResizeReason).toBe("dock-resize");
+  expect(after.viewport?.resizeGeneration).toBe(before.viewport?.resizeGeneration);
+  expect(after.viewport?.lastResizeReason).toBe(before.viewport?.lastResizeReason);
   expect(after.viewport?.sceneLifecycleGeneration).toBe(before.viewport?.sceneLifecycleGeneration);
   expect(after.camera).toEqual(before.camera);
   expect(after.invariants).toEqual(before.invariants);
@@ -3774,10 +4174,10 @@ test("dirty Library Manager blocks parent panel collapse until discard is accept
   await expect.poll(async () => (await getRuntimePanel(page, "panel.libraryManager"))?.open).toBe(false);
   await expect.poll(async () =>
     (await getRuntimeViewportSnapshot(page)).viewport?.resizeGeneration ?? 0
-  ).toBeGreaterThan(beforeCancelledCollapse.viewport?.resizeGeneration ?? 0);
+  ).toBe(beforeCancelledCollapse.viewport?.resizeGeneration ?? 0);
   const afterAcceptedCollapse = await getRuntimeViewportSnapshot(page);
   expect(afterAcceptedCollapse.viewport?.resizeGeneration ?? 0)
-    .toBeGreaterThan(beforeCancelledCollapse.viewport?.resizeGeneration ?? 0);
+    .toBe(beforeCancelledCollapse.viewport?.resizeGeneration ?? 0);
   expect(afterAcceptedCollapse.viewport?.sceneLifecycleGeneration)
     .toBe(beforeCancelledCollapse.viewport?.sceneLifecycleGeneration);
   expect(afterAcceptedCollapse.camera).toEqual(beforeCancelledCollapse.camera);
@@ -5035,6 +5435,8 @@ test("orthographic viewpoint framing can be captured, updated, and applied", asy
 
   expect(await applyRuntimeViewportCameraState(page, {
     ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
+    alpha: -1.2,
+    beta: .45,
     orthographic: {
       centerX: -4,
       centerY: 5,
@@ -5044,13 +5446,18 @@ test("orthographic viewpoint framing can be captured, updated, and applied", asy
   await page.getByTestId("apply-viewpoint").click();
   await expect.poll(async () => {
     const intent = (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent;
-    return [intent?.centerX, intent?.centerY, intent?.verticalWorldSpan];
-  }).toEqual([3, -2, 14]);
+    return intent !== null && intent !== undefined &&
+      Math.abs(intent.centerX - 3) < 1e-6 && Math.abs(intent.centerY + 2) < 1e-6 &&
+      Math.abs(intent.verticalWorldSpan - 14) < 1e-6;
+  }).toBe(true);
   const restored = await getRuntimeViewportSnapshot(page);
   expect(restored.camera?.alpha).toBeCloseTo(captured.camera?.alpha ?? Number.NaN);
   expect(restored.camera?.beta).toBeCloseTo(captured.camera?.beta ?? Number.NaN);
   expect(restored.camera?.radius).toBeCloseTo(captured.camera?.radius ?? Number.NaN);
   expect(restored.invariants).toEqual(captured.invariants);
+  await expect(page.getByTestId("viewcube")).toHaveAttribute("data-orientation", `${captured.camera!.alpha.toFixed(6)},${captured.camera!.beta.toFixed(6)}`);
+  await expect(page.getByTestId("world-axis-triad")).toHaveAttribute("data-orientation", `${captured.camera!.alpha.toFixed(6)},${captured.camera!.beta.toFixed(6)}`);
+  expect((await getRuntimeCommandExecution(page, "view.fitView")).attemptCount).toBe(0);
 
   expect(await applyRuntimeViewportCameraState(page, {
     ...DEFAULT_ORTHOGRAPHIC_CAMERA_STATE,
@@ -5072,8 +5479,10 @@ test("orthographic viewpoint framing can be captured, updated, and applied", asy
   await page.getByTestId("apply-viewpoint").click();
   await expect.poll(async () => {
     const intent = (await getRuntimeViewportSnapshot(page)).camera?.orthographicIntent;
-    return [intent?.centerX, intent?.centerY, intent?.verticalWorldSpan];
-  }).toEqual([6, 1, 10]);
+    return intent !== null && intent !== undefined &&
+      Math.abs(intent.centerX - 6) < 1e-6 && Math.abs(intent.centerY - 1) < 1e-6 &&
+      Math.abs(intent.verticalWorldSpan - 10) < 1e-6;
+  }).toBe(true);
 
   expect(errors).toEqual([]);
 });
@@ -5114,7 +5523,13 @@ test("layers can be created, assigned, hidden, and shown without red console err
   await expect(defaultLayerRow).toContainText("0 items");
   await layerRow.getByRole("button", { name: "Hide Test Layer" }).click();
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
+  await expect(getCommandBarCommand(page, "view.fitView")).toBeDisabled();
+  const hiddenGeometry = await page.evaluate(() => window.__atrvisuRuntimeViewport!.getNavigationGeometry());
+  expect(hiddenGeometry.included).toEqual([]);
+  expect(hiddenGeometry.excludedIds).toHaveLength(1);
   await layerRow.getByRole("button", { name: "Show Test Layer" }).click();
+  await expect(getCommandBarCommand(page, "view.fitView")).toBeEnabled();
+  expect((await page.evaluate(() => window.__atrvisuRuntimeViewport!.getNavigationGeometry())).included).toHaveLength(1);
   await layerRow.getByRole("button", { name: "Isolate Test Layer" }).click();
   await expect(defaultLayerRow).not.toHaveClass(/is-hidden/);
   await page.getByRole("button", { name: "Show All Layers" }).click();
@@ -5124,6 +5539,10 @@ test("layers can be created, assigned, hidden, and shown without red console err
   await expect(page.getByTestId("annotation-properties")).toBeVisible();
   await expect(page.getByTestId("annotation-properties").getByLabel("Layer")).toHaveValue("default");
   await expect(defaultLayerRow).toContainText("1 item");
+
+  // Annotation geometry never becomes a Fit View target.
+  expect((await page.evaluate(() => window.__atrvisuRuntimeViewport!.getNavigationGeometry())).included.map(item => item.entityId))
+    .toEqual(hiddenGeometry.excludedIds);
 
   expect(errors).toEqual([]);
 });
@@ -5928,7 +6347,7 @@ test("PF-3B viewport visual language produces the frozen reviewer evidence matri
     },
     gridMinorSpacingMm: 1_000,
     gridMajorSpacingMm: 5_000,
-    visualContextMeshCount: 2,
+    visualContextMeshCount: 4,
     lightCount: 3
   });
   captures.push(await capturePf3bViewportEvidence(page, "01-dark-empty-perspective.png", errors.length));
@@ -7308,7 +7727,7 @@ test("PF-3A Inspector modes and group selection avoid React update-depth feedbac
 
   const canvasBox = await canvas.boundingBox();
   if (!canvasBox) throw new Error("Scene canvas geometry is unavailable.");
-  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await clickEmptySceneSpace(page);
   await expect(page.getByTestId("inspector-empty-state")).toBeVisible();
   await expect(inspector).toBeVisible();
 
@@ -7332,7 +7751,7 @@ test("PF-3A Inspector modes and group selection avoid React update-depth feedbac
   await arrangeMenu.locator('[data-command-id="arrange.alignmentTools"]').click();
   await expect(page.getByTestId("advanced-alignment-tool-surface")).toBeVisible();
   await page.getByRole("button", { name: "Close Advanced Alignment", exact: true }).click();
-  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await clickEmptySceneSpace(page);
   await expect(inspector).toHaveCount(0);
 
   await openPrimaryDockPanel(page, "panel.groups");
@@ -7390,9 +7809,7 @@ test("PF-3A persisted collapsed shells remain console-clean through body drag an
     return current.xMm !== before.xMm || current.yMm !== before.yMm;
   }).toBe(true);
   await expect(canvas).toHaveAttribute("data-scene-lifecycle-generation", lifecycleGeneration ?? "");
-  const canvasBox = await canvas.boundingBox();
-  if (!canvasBox) throw new Error("Scene canvas geometry is unavailable.");
-  await page.mouse.click(canvasBox.x + 24, canvasBox.y + canvasBox.height - 24);
+  await clickEmptySceneSpace(page);
   await expect(page.getByTestId("right-panel")).toHaveCount(0);
 
   await page.reload();
@@ -7449,7 +7866,7 @@ test("PF-1 premium command information architecture is accessible and responsive
   ]);
 
   const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(8);
+  await expect(commandButtons).toHaveCount(9);
   await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
   await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
   await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
@@ -7460,7 +7877,7 @@ test("PF-1 premium command information architecture is accessible and responsive
     expect(await button.getAttribute("title")).toBeTruthy();
   }
   expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
-    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Labels", "Connection Points", "Viewpoints"
+    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Fit View", "Labels", "Connection Points", "Viewpoints"
   ]);
   await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
   await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
@@ -7681,4 +8098,9 @@ for (const imported of [false, true]) {
     expect(errors).toEqual([]);
   });
 }
+
+registerPanGridTests({
+  openCleanApp, expectExactHeadServer, openPrimaryDockPanel, addBuildPrimitive,
+  createTwoMachineAssembly, getMenuCommand, openPreferenceBranch
+});
 

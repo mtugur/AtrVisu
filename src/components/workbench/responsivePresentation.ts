@@ -1,5 +1,10 @@
+import { DOCK_RESIZE_BREAKPOINT } from "../../workbench/dockSizing";
+
 export const RESPONSIVE_INSPECTOR_BREAKPOINT_PX = 1100;
-export const RESPONSIVE_PRIMARY_DOCK_BREAKPOINT_PX = 720;
+export const RESPONSIVE_PRIMARY_DOCK_BREAKPOINT_PX = DOCK_RESIZE_BREAKPOINT;
+
+export const getInspectorDockPresentation = (viewportWidth: number) =>
+  viewportWidth <= DOCK_RESIZE_BREAKPOINT ? "bottom-sheet" : "right-overlay";
 
 export const isResponsiveInspectorPresentation = (viewportWidth: number) =>
   viewportWidth <= RESPONSIVE_INSPECTOR_BREAKPOINT_PX;

@@ -1,40 +1,46 @@
 # P1-CLOSE-NAV Gate
 
-Status at contract stage:
-- Automation Green: PENDING
+Status of the unchanged runtime after its preceding exact-head verification:
+- Automation Green: PASS
 - Contract Verified: PENDING
 - Product Accepted: PENDING
 
 ## Contract
-- [ ] Benchmark evidence reviewed.
-- [ ] Canonical domain axis mapping frozen.
-- [ ] ViewCube face/edge/corner semantics frozen.
-- [ ] ViewCube does not imply Fit View.
-- [ ] Passive triad semantics frozen.
-- [ ] Fit View inclusion/exclusion and framing algorithm frozen.
-- [ ] Side-dock exact screen-space stability contract frozen.
-- [ ] PF-3A movement explicitly untouched.
+- [x] Benchmark evidence reviewed.
+- [x] Canonical domain axis mapping frozen.
+- [x] ViewCube face/edge/corner semantics frozen.
+- [x] ViewCube does not imply Fit View.
+- [x] Passive triad semantics frozen.
+- [x] Fit View inclusion/exclusion and framing algorithm frozen.
+- [x] Side-dock exact screen-space stability contract frozen.
+- [x] PF-3A movement explicitly untouched.
 
 ## Runtime
-- [ ] `view.fitView` required-runtime and reachable.
-- [ ] Quick Toolbar + View menu + Command Palette reach Fit View.
-- [ ] ViewCube uses Runtime Viewport camera authority.
-- [ ] Triad reads camera orientation and never writes it.
-- [ ] Side docks overlay stable viewport.
-- [ ] HUD safe areas prevent dock occlusion.
-- [ ] Commercial capture excludes ViewCube/triad.
+- [x] `view.fitView` required-runtime and reachable.
+- [x] Quick Toolbar + View menu + Command Palette reach Fit View.
+- [x] ViewCube uses Runtime Viewport camera authority.
+- [x] Triad reads camera orientation and never writes it.
+- [x] Side docks overlay stable viewport.
+- [x] HUD safe areas prevent dock occlusion.
+- [x] Commercial capture excludes ViewCube/triad.
 
 ## Automation
-- [ ] Unit tests: orientation vector/preset conversion.
-- [ ] Unit tests: Fit View bounds/framing.
-- [ ] Unit tests: HUD safe-area layout.
-- [ ] E2E: six faces + representative edge/corner.
-- [ ] E2E: mixed/elevated/rotated Fit View.
-- [ ] E2E: left/right open/collapse/resize pixel stability.
-- [ ] E2E: camera/selection/entity/history/dirty invariants.
-- [ ] E2E: clean snapshot excludes navigation HUD.
-- [ ] no-red-console.
-- [ ] exact-head Quality Gate PASS.
+- [x] Unit tests: orientation vector/preset conversion.
+- [x] Unit tests: Fit View bounds/framing.
+- [x] Unit tests: HUD safe-area layout.
+- [x] E2E: six faces + representative edge/corner.
+- [x] E2E: mixed/elevated/rotated Fit View.
+- [x] E2E: left/right open/collapse/resize pixel stability.
+- [x] E2E: camera/selection/entity/history/dirty invariants.
+- [x] E2E: real 1024 side Inspector and 640 bottom-sheet Inspector opening,
+  panel/HUD geometry, projected anchor and unchanged runtime invariants.
+- [x] Inspector presentation independently owns its HUD geometry; existing
+  shared breakpoint is reused without new breakpoint literals.
+- [x] E2E: clean snapshot excludes navigation HUD.
+- [x] no-red-console.
+- [x] exact-head Quality Gate PASS: corrected runtime head
+  `1fc08add0f4fe25c2492fa113dfc93acecfe002e`,
+  [run 36852063846](https://github.com/mtugur/AtrVisu/actions/runs/36852063846).
 
 ## Visual evidence
 Required artifact:
@@ -63,6 +69,33 @@ Evidence JSON must include:
 - Fit View included entity IDs;
 - viewport dimensions;
 - console/page-error counts.
+- responsive Inspector evidence at 1024 and 640: actual panel/HUD rectangles,
+  side/bottom-sheet presentation, safe insets, anchor before/after/delta and
+  camera/canvas/lifecycle/domain/history/dirty invariants.
+
+Additional correction captures:
+- 15-inspector-1024-side-overlay.png
+- 16-inspector-640-bottom-sheet.png
+- 17-inspector-640-before-open.png
+- 18-inspector-640-after-open.png
+- 19-inspector-640-before-framebuffer.png
+- 20-inspector-640-after-framebuffer.png
+
+## Machine pixel evidence correction (review 5379882289)
+
+- [x] Compare exact Stage A base `b727f4e` and reviewed runtime head `f2b8e06`
+  through real selection/collapse/Inspector controls, with source provenance.
+- [x] Record base Fit View unavailable, rather than injecting a substitute camera.
+- [x] Project all eight canonical Machine corners; keep the full projected bounds
+  in the exposed scene above the actual bottom sheet.
+- [x] Before/after filled Machine-region framebuffer pixels, not arbitrary colors.
+- [x] Fail closed for missing/background-only, sparse, transparent or incomplete pixels.
+- [x] Keep ordinary screenshot results even when they omit the WebGL layer.
+- [x] Add direct framebuffer PNGs without camera mutation, re-render, resize or retry.
+
+The evidence-only correction's final exact-head CI run/counts/artifact are recorded
+in PR Validation. The preceding PASS above is historical runtime verification,
+not a claim that an untested evidence-delivery commit passed CI.
 
 ## Rejection conditions
 FAIL if:
@@ -77,3 +110,27 @@ FAIL if:
 - camera operation changes project history/dirty state;
 - PF-3A Plan Move changes;
 - red console or lifecycle regression appears.
+
+
+## Stage B evidence
+
+Implementation and Interaction Change Gate A-J evidence:
+`docs/audits/p1-close-nav-runtime-v01.md`.
+
+The corrected runtime head passed 169 unit files / 1441 tests and 110 Chromium
+tests (one additional branch-conditional PF-3B test skipped). Audit reported zero
+vulnerabilities. Artifact `11155929782` contains 16 PNGs plus evidence JSON;
+both responsive Inspector routes recorded zero projected-anchor delta and
+unchanged camera/canvas/lifecycle/domain/history/dirty snapshots.
+
+The 640 Inspector-open ordinary PNG still omits the WebGL layer, but the bounded
+investigation now distinguishes that headless compositor limitation from rendering:
+base and head framebuffer Machine regions remain filled before/after Inspector
+opening, while their page regions go from filled to background-only. The base has
+no live Fit View; that comparison limit is recorded explicitly. Current-head
+real Fit View and eight-corner Machine-region assertions pass. Direct framebuffer
+PNG/JSON provide renderer proof; ordinary screenshots are not claimed nonblank.
+No runtime code or camera workaround was needed. Final exact-head CI and artifact
+are recorded in PR Validation; this correction expects 20 PNGs plus evidence JSON.
+Contract Verified and Product Accepted remain PENDING.
+The navigation standard, ADR-006 and benchmark record are unchanged.

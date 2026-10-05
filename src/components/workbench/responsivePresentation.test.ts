@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
+  getInspectorDockPresentation,
   getInspectorSelectionSignature,
   isResponsiveInspectorPresentation,
   isResponsivePrimaryDockPresentation,
   resolveInspectorPresentationCollapsed,
   resolvePrimaryDockPresentationCollapsed
 } from "./responsivePresentation";
+import { DOCK_RESIZE_BREAKPOINT } from "../../workbench/dockSizing";
 
 describe("responsive workbench presentation", () => {
+  it("resolves Inspector geometry independently of responsive open/collapse and Primary Dock state", () => {
+    expect(isResponsiveInspectorPresentation(1024)).toBe(true);
+    expect(getInspectorDockPresentation(1024)).toBe("right-overlay");
+    expect(getInspectorDockPresentation(640)).toBe("bottom-sheet");
+    expect(getInspectorDockPresentation(DOCK_RESIZE_BREAKPOINT)).toBe("bottom-sheet");
+    expect(getInspectorDockPresentation(DOCK_RESIZE_BREAKPOINT + 1)).toBe("right-overlay");
+    expect(getInspectorDockPresentation(1440)).toBe("right-overlay");
+  });
   it("uses ordered semantic selection identity instead of render-volatile snapshot identity", () => {
     expect(getInspectorSelectionSignature(["machine:a", "civil:b"]))
       .toBe(getInspectorSelectionSignature(["machine:a", "civil:b"]));

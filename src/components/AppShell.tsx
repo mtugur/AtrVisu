@@ -31,6 +31,8 @@ type ShellAnchorProps = {
 
 type AppShellStyle = CSSProperties & {
   "--av-shell-top-inset": string;
+  "--av-viewport-hud-left-inset": string;
+  "--av-viewport-hud-right-inset": string;
 };
 
 const withZoneAnchor = (
@@ -72,7 +74,11 @@ export function AppShell({
         data-testid="app-root"
         data-app-shell-zone="app-root"
         data-workspace-inspector-mode={workspaceInspectorMode}
-        style={{ "--av-shell-top-inset": shellTopInset } as AppShellStyle}
+        style={{
+          "--av-shell-top-inset": shellTopInset,
+          "--av-viewport-hud-left-inset": `${Math.max(0, viewportLeftInset)}px`,
+          "--av-viewport-hud-right-inset": `${Math.max(0, viewportRightInset)}px`
+        } as AppShellStyle}
       >
         {beforeViewport}
         <div
@@ -82,8 +88,8 @@ export function AppShell({
             ? { "data-workbench-region": viewportWorkbenchRegion }
             : {})}
           style={{
-            left: `min(${Math.max(0, viewportLeftInset)}px, calc(100vw - 28px))`,
-            right: `min(${Math.max(0, viewportRightInset)}px, calc(100vw - 28px))`,
+            left: 0,
+            right: 0,
             bottom: `${Math.max(0, viewportBottomInset)}px`
           }}
         >

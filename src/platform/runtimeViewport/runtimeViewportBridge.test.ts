@@ -25,6 +25,47 @@ const availableState = (): RuntimeViewportState => ({
 const request = createViewportResizeRequest("manual", { width: 1200, height: 800 });
 
 describe("runtime viewport bridge", () => {
+  it("forwards navigation once to the current live binding without a second camera authority", () => {
+    const firstFit = vi.fn(() => true);
+    const firstPreset = vi.fn(() => true);
+    let bindings: RuntimeViewportBindings = {
+      [RUNTIME_VIEWPORT_IDS.main]: {
+        getState: availableState,
+        getCameraSnapshot: () => null,
+        requestResize: () => ({ status: "unchanged" }),
+        fitView: firstFit,
+        applyViewPreset: firstPreset
+      }
+    };
+    const bridge = createRuntimeViewportBridge(() => bindings);
+    expect(bridge.fitView(RUNTIME_VIEWPORT_IDS.main)).toBe(true);
+    expect(bridge.applyViewPreset(RUNTIME_VIEWPORT_IDS.main, "z+")).toBe(true);
+    expect(firstFit).toHaveBeenCalledOnce();
+    expect(firstPreset).toHaveBeenCalledExactlyOnceWith("z+");
+
+    const nextFit = vi.fn(() => false);
+    const nextPreset = vi.fn(() => false);
+    bindings = {
+      [RUNTIME_VIEWPORT_IDS.main]: {
+        ...bindings[RUNTIME_VIEWPORT_IDS.main]!,
+        fitView: nextFit,
+        applyViewPreset: nextPreset
+      }
+    };
+    expect(bridge.fitView(RUNTIME_VIEWPORT_IDS.main)).toBe(false);
+    expect(bridge.applyViewPreset(RUNTIME_VIEWPORT_IDS.main, "x+")).toBe(false);
+    expect(nextFit).toHaveBeenCalledOnce();
+    expect(nextPreset).toHaveBeenCalledExactlyOnceWith("x+");
+    expect(firstFit).toHaveBeenCalledOnce();
+    expect(firstPreset).toHaveBeenCalledOnce();
+  });
+
+  it("never reports navigation handled without an installed navigation callback", () => {
+    const bridge = createRuntimeViewportBridge(() => ({}));
+    expect(bridge.fitView(RUNTIME_VIEWPORT_IDS.main)).toBe(false);
+    expect(bridge.applyViewPreset(RUNTIME_VIEWPORT_IDS.main, "z+")).toBe(false);
+  });
+
   it("registers the canonical main viewport deterministically", () => {
     const bridge = createRuntimeViewportBridge(() => ({}));
 

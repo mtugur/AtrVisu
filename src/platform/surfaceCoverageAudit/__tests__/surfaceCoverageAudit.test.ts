@@ -63,7 +63,7 @@ describe("surface coverage audit", () => {
   });
 
   it("keeps planned and quality-only definitions out while linking live workbench panels", () => {
-    expect(getSurfaceIdsByCommandId("view.fitView")).toEqual([]);
+    expect(getSurfaceIdsByCommandId("view.fitView")).toEqual(["surface.workbenchCommandPalette", "surface.workbenchMenuBar", "surface.workbenchCommandBar"]);
     expect(getSurfaceIdsByCommandId("diagnostics.noRedConsole")).toEqual([]);
     expect(getSurfaceIdsByPanelId("panel.layoutExplorer")).toContain("surface.layoutExplorer");
     expect(getSurfaceIdsByPanelId("panel.statusBar")).toContain("surface.workbenchStatusBar");
