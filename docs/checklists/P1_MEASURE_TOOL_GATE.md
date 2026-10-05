@@ -13,6 +13,8 @@ Status: Stage A benchmark/contract only. Stage B runtime PENDING.
 - [x] ADR-008 records Pick/Navigate arbitration, picking, semantic migration and deviations before implementation.
 - [x] `P1_MEASURE_TOOL_CONTRACT.md` freezes all twenty requested outcomes and maps Interaction Change Gate A-J.
 - [x] Numerical, real-input, camera, responsive, invalid, transient and evidence oracle M01-M10 is written before tests/runtime.
+- [x] Review `5413470723`: Measure-local maximum radial displacement <=4 CSS px (DPR-independent, non-tunable) and exact confirmation/cancel/capture rules frozen in contract section 4.1/ADR-008; no nonexistent shared click authority or Pick-to-Orbit threshold.
+- [x] Review `5413470723`: Plan Area Geometry first-A world Z and explicit Level Plane operation-start FFL capture frozen separately; presentation cannot rewrite original Z/Plan XY or follow camera/Level changes. M05/M08 extended before runtime; these are specified oracles, not executed acceptance.
 - [x] No production TS/TSX/CSS, dependency, registry, persistence, test or workflow edits; no runtime screenshots or dead Measure UI added.
 
 Stage A exact-head local/CI results belong in the Draft PR Validation section. No later documentation-only PASS commit is required. Do not check a runtime box because the unchanged baseline unit/E2E tests pass.
@@ -32,10 +34,10 @@ Stage A exact-head local/CI results belong in the Draft PR Validation section. N
 - [ ] M02 geometry/GLB/Civil/locked-visible/hidden exclusions and actual world elevations.
 - [ ] M03 distance/Plan/signed XYZ arithmetic, zero/reverse/non-finite and real fixture picking within contract tolerances.
 - [ ] M04 three-point A-B-C angle, live preview, zero arm invalid and 0/60/90/180-degree cases.
-- [ ] M05 Plan polygon live graphics, Enter/Finish, concavity/winding, source-Z projection, invalid duplicate/collinear/crossing/touching and Escape.
+- [ ] M05 Plan polygon live graphics, Enter/Finish, concavity/winding, differing-Z Geometry projected at first-A Z and Level Plane projected at captured FFL; original/projected XYZ and capture/reset evidence, no camera/Level reanchor; invalid duplicate/collinear/crossing/touching and Escape.
 - [ ] M06 canonical local Width/Depth/Height plus named pair reference viewport results; existing machine Plan diagnostic equality and unsupported reasons.
 - [ ] M07 explicit Pick/Navigate, real LMB/MMB/wheel and ViewCube/Fit/viewpoint paths without changed values or hidden fallback.
-- [ ] M08 selection/order/primary, Escape/focus/cancel/command restoration and normal UX after exit.
+- [ ] M08 real stationary/3/4/5 CSS px and out-and-back Pick trajectories at DPR1/2, maximum excursion not accumulated travel, exact once-on-up and cancellation/capture/focus/late-up evidence; selection/order/primary, Escape/command restoration and normal UX after exit.
 - [ ] M09 1440x900/1024x768/640x800 DPR1, light/dark, dock/Inspector states and readable live/confirmed graphics with stable lifecycle.
 - [ ] M10 no project/history/dirty/schema/transform/Level/layer persistence effects; reload clears session; clean commercial capture excludes tool artifacts.
 - [ ] Per-scenario input, points, calculations/units, camera, canvas/lifecycle, selection/domain/history/dirty and projected dock invariants in `p1-close-measure-tool` manifest/JSON.

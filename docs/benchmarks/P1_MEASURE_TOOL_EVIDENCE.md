@@ -42,8 +42,9 @@ The evidence supports tool ownership, visible point confirmation/preview and res
 
 ATRVISU PRODUCT DECISION, recorded before implementation in ADR-008 and Interaction Standard section 15:
 
-- Pick owns LMB confirmations; Navigate suspends picking and enables the unchanged LMB orbit. MMB Pan and wheel zoom remain available in both. No new modifier binding, click/drag threshold solver or hidden intent fallback is introduced.
+- Pick owns LMB confirmations; Navigate suspends picking and enables the unchanged LMB orbit. MMB Pan and wheel zoom remain available in both. Review `5413470723` clarifies a Measure-only maximum radial 4 CSS px inclusive confirmation tolerance, DPR-independent and non-tunable in Stage B, with cancellation/capture semantics in contract section 4.1. It is not a vendor fact or existing classifier and never decides Pick-versus-Orbit. No new modifier binding, movement solver or hidden intent fallback is introduced.
 - Geometry and Level Plane are separate visible point sources. Geometry misses do not become plane points. The latter uses an explicitly displayed active-Level FFL plane, not Floor thickness inference.
+- Plan Area presentation captures Geometry first-confirmed-point world Z or the explicit Level Plane operation-start FFL, respectively. Those immutable presentation planes do not change Plan XY arithmetic/original operand Z or follow camera/Level observations. This review clarification is an AtrVisu decision, not a claim about benchmark projection behavior.
 - Entry selection is read-only; measurement operands never replace Runtime Selection. One transient result/sequence exists until Restart, mode/source change or exit.
 - Entity dimensions and pair reference readouts reuse canonical adapters/helpers. No fake imported-GLB edges, surface-clearance solver or duplicate diagnostic authority.
 - Distance, angle and simple Plan polygons use fixed presentation/tolerances; invalid/self-intersecting inputs fail visibly. These rules are AtrVisu acceptance decisions, not vendor assertions.
