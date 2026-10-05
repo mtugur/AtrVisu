@@ -5,6 +5,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
 import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection, dot3 } from "../src/components/viewportNavigation/navigationGeometry";
 import { measureMachinePixels } from "./navigationPixelEvidence";
+import { registerPanGridTests } from "./panGridEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -6346,7 +6347,7 @@ test("PF-3B viewport visual language produces the frozen reviewer evidence matri
     },
     gridMinorSpacingMm: 1_000,
     gridMajorSpacingMm: 5_000,
-    visualContextMeshCount: 2,
+    visualContextMeshCount: 4,
     lightCount: 3
   });
   captures.push(await capturePf3bViewportEvidence(page, "01-dark-empty-perspective.png", errors.length));
@@ -8097,4 +8098,9 @@ for (const imported of [false, true]) {
     expect(errors).toEqual([]);
   });
 }
+
+registerPanGridTests({
+  openCleanApp, expectExactHeadServer, openPrimaryDockPanel, addBuildPrimitive,
+  createTwoMachineAssembly, getMenuCommand, openPreferenceBranch
+});
 
