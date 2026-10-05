@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Locator } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { RuntimeViewportCameraSnapshot, NavigationProjectionProbe } from "../src/platform/runtimeViewport/runtimeViewportBridge";
+import type { RuntimeViewportCameraSnapshot, NavigationProjectionProbe, NavigationRenderFrame } from "../src/platform/runtimeViewport/runtimeViewportBridge";
 import { VIEW_PRESETS, getPresetAngles } from "../src/components/viewportNavigation/navigationGeometry";
 
 const capture = process.env.ATRVISU_CAPTURE_PAN_GRID_EVIDENCE === "1";
@@ -104,7 +104,90 @@ const writeEvidence = async (filename: string, value: unknown) => {
   await writeFile(join(directory, filename), JSON.stringify(value, null, 2));
 };
 
+const analyzeRenderFrames = (samples: readonly NavigationRenderFrame[], origin: readonly NavigationProjectionProbe[], x: number, y: number) => {
+  let residual = 0, reversal = 0, wobble = 0, jump = 0, stalls = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const frame = samples[i];
+    for (let a = 0; a < origin.length; a++) {
+      const dx = frame.projected[a].x - origin[a].projected.x;
+      const dy = frame.projected[a].y - origin[a].projected.y;
+      residual = Math.max(residual, Math.hypot(dx - (frame.pointer.x - x), dy - (frame.pointer.y - y)));
+      wobble = Math.max(wobble, Math.abs(dy - (frame.pointer.y - y)));
+      if (i > 0) {
+        const previous = samples[i - 1];
+        const input = frame.pointer.x - previous.pointer.x;
+        const movement = frame.projected[a].x - previous.projected[a].x;
+        reversal = Math.max(reversal, Math.max(0, -movement));
+        jump = Math.max(jump, Math.abs(movement - input));
+        if (input > 1 && Math.abs(movement) < 0.01) stalls++;
+      }
+    }
+  }
+  return { residual, reversal, wobble, jump, stalls, frameCount: samples.length };
+};
+
 export function registerPanGridTests(helpers: Helpers) {
+  for (const dpr of [1, 1.25, 1.5, 2]) test.describe(`render-frame DPR ${dpr}`, () => {
+    test.use({ deviceScaleFactor: dpr });
+    for (const width of [1440, 640]) for (const state of ["default", "fit", "shallow", "y-", "x+-y+-z+"]) {
+      test(`P1-PAN-FRAME ${state} ${width}px DPR${dpr}`, async ({ page }) => {
+        test.setTimeout(120_000);
+        const errors: string[] = [];
+        page.on("console", m => { if (m.type() === "error" || /Maximum update depth|GL_INVALID_VALUE|Uncaught|removeChild/.test(m.text())) errors.push(m.text()); });
+        page.on("pageerror", e => errors.push(e.message));
+        await page.setViewportSize({ width, height: width === 1440 ? 900 : 800 });
+        await helpers.openCleanApp(page); await helpers.expectExactHeadServer(page);
+        if (await page.getByTestId("primary-dock").getAttribute("data-collapsed") === "true") {
+          await page.getByRole("button", { name: "Open Library", exact: true }).click();
+        }
+        await helpers.createTwoMachineAssembly(page, "Frame Pan Assembly");
+        await helpers.addBuildPrimitive(page, "Beam", "Structure");
+        await closeDocks(page); await enterState(page, state, helpers); await settle(page);
+        const restore = await saveCamera(page, helpers);
+        const canvas = page.getByLabel("AtrVisu 3D workspace");
+        const handle = await canvas.elementHandle(); const box = (await canvas.boundingBox())!;
+        const x = box.x + box.width * 0.4, y = box.y + box.height * 0.45;
+        const paths = [];
+        for (const speed of ["normal", "slow"] as const) {
+          await restore(); await settle(page);
+          const before = await snapshot(page);
+          await page.mouse.move(x, y); await frames(page);
+          const anchors = await Promise.all([[x, y], [x + 60, y], [x, y + 60]].map(([px, py]) => probe(page, px, py)));
+          expect(await page.evaluate(a => window.__atrvisuRuntimeViewport!.startRenderFrameProbe(a), anchors.map(a => a.reference))).toBe(true);
+          await page.mouse.down({ button: "middle" }); await frames(page);
+          if (speed === "normal") await page.mouse.move(x + 120, y, { steps: 12 });
+          else for (let step = 1; step <= 48; step++) {
+            await page.mouse.move(x + 120 * step / 48, y);
+            // Pace real input by display frames, not an arbitrary sleep. The
+            // observer records ALL renders, including intermediate input lag.
+            await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => r())));
+          }
+          await frames(page); await page.mouse.up({ button: "middle" }); await frames(page);
+          const samples = await page.evaluate(() => window.__atrvisuRuntimeViewport!.readRenderFrameProbe(true));
+          const analysis = analyzeRenderFrames(samples, anchors, x, y);
+          expect(analysis.frameCount).toBeGreaterThan(speed === "slow" ? 40 : 4);
+          expect(analysis.residual).toBeLessThanOrEqual(1);
+          expect(analysis.reversal).toBeLessThanOrEqual(0.01);
+          expect(analysis.wobble).toBeLessThanOrEqual(1);
+          expect(analysis.jump).toBeLessThanOrEqual(1);
+          expect(analysis.stalls).toBe(0);
+          const first = samples[0];
+          for (const f of samples) {
+            expect([f.alpha, f.beta, f.radius, f.fov, f.mode, f.ortho]).toEqual([first.alpha, first.beta, first.radius, first.fov, first.mode, first.ortho]);
+            expect(f.canvas).toEqual(first.canvas); expect(f.inertia).toEqual([0, 0, 0, 0, 0]);
+            expect(f.viewMatrix.every(Number.isFinite)).toBe(true);
+          }
+          const after = await snapshot(page);
+          expect(after.invariants).toEqual(before.invariants); expect(after.worldGeometry).toEqual(before.worldGeometry);
+          expect(after.viewport.visualPresentation).toEqual(before.viewport.visualPresentation);
+          expect(await handle!.evaluate(el => el === document.querySelector('[aria-label="AtrVisu 3D workspace"]'))).toBe(true);
+          paths.push({ speed, anchors, origin: { x, y }, before, after, samples, analysis });
+        }
+        expect(errors).toEqual([]);
+        await writeEvidence(`frames-${width}-dpr${dpr}-${state}.json`, { exactHeadSha, state, width, dpr, paths, errors });
+      });
+    }
+  });
   const states = ["default", "wheel", "oblique", "shallow", "fit", "z+", "y-", "y+", "x-", "x+", "z-", "x+-z+", "x+-y+-z+"];
   for (const width of [1440, 640]) for (const state of states) {
     test(`P1-PAN-GRID real MMB ${state} at ${width}px`, async ({ page }) => {
@@ -220,8 +303,11 @@ export function registerPanGridTests(helpers: Helpers) {
     });
   }
 
-  for (const theme of ["light", "dark"] as const) for (const state of ["z+", "default", "oblique", "shallow", "wheel", "x+-y+-z+"]) {
-    test(`P1-PAN-GRID temporal grid ${theme} ${state}`, async ({ page }) => {
+  for (const dpr of [1, 1.25, 1.5, 2]) test.describe(`rigid-grid DPR ${dpr}`, () => {
+    test.use({ deviceScaleFactor: dpr });
+    for (const theme of ["light", "dark"] as const) for (const state of (dpr === 1
+      ? ["z+", "default", "oblique", "shallow", "wheel", "x+-y+-z+", "fit"] : ["shallow"])) {
+    test(`P1-PAN-GRID temporal grid ${theme} ${state} DPR${dpr}`, async ({ page }) => {
       test.setTimeout(120_000);
       const errors: string[] = [];
       page.on("console", message => { if (message.type() === "error" || /Maximum update depth|GL_INVALID_VALUE|Uncaught|removeChild/.test(message.text())) errors.push(message.text()); });
@@ -229,6 +315,13 @@ export function registerPanGridTests(helpers: Helpers) {
       await page.setViewportSize({ width: 1440, height: 900 });
       await helpers.openCleanApp(page); await helpers.expectExactHeadServer(page);
       await expect.poll(async () => Boolean((await snapshot(page)).camera)).toBe(true);
+      if (await page.getByTestId("primary-dock").getAttribute("data-collapsed") === "true") {
+        await page.getByRole("button", { name: "Open Library", exact: true }).click();
+      }
+      await helpers.createTwoMachineAssembly(page, "Grid Evidence Assembly");
+      await helpers.addBuildPrimitive(page, "Beam", "Structure");
+      await page.keyboard.press("Escape"); await frames(page);
+      expect((await snapshot(page)).invariants.selectionIds).toEqual([]);
       const themeControl = await helpers.openPreferenceBranch(page, "theme");
       await themeControl.surface.getByRole("radio", { name: theme === "light" ? "Light" : "Dark", exact: true }).check();
       await page.keyboard.press("Escape"); await page.keyboard.press("Escape");
@@ -239,35 +332,61 @@ export function registerPanGridTests(helpers: Helpers) {
       const handle = await canvas.elementHandle(); const rect = (await canvas.boundingBox())!;
       const x = rect.x + rect.width / 2, y = rect.y + rect.height / 2;
       const captures: unknown[] = [];
+      const trajectories: unknown[] = [];
       for (const operation of ["pan-normal", "pan-slow", "orbit", "zoom"] as const) {
-        await restore();
-        await page.mouse.move(x, y);
+        await restore(); await settle(page);
+        const orbitStart = operation === "orbit" ? await page.evaluate(({ rect }) => {
+          const bounds = window.__atrvisuRuntimeViewport!.getNavigationGeometry().included.map(item => ({
+            minX: Math.min(...item.projected.map(p => p.x)), maxX: Math.max(...item.projected.map(p => p.x)),
+            minY: Math.min(...item.projected.map(p => p.y)), maxY: Math.max(...item.projected.map(p => p.y))
+          }));
+          return [0.04, 0.12, 0.22, 0.94].map(y => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height * y }))
+            .find(p => bounds.every(b => p.x < b.minX - 2 || p.x > b.maxX + 2 || p.y < b.minY - 2 || p.y > b.maxY + 2));
+        }, { rect }) : { x, y };
+        expect(orbitStart).toBeTruthy();
+        const inputX = orbitStart!.x, inputY = orbitStart!.y;
+        await page.mouse.move(inputX, inputY);
+        expect(await page.evaluate(() => window.__atrvisuRuntimeViewport!.startRenderFrameProbe([
+          { x: 0, y: -0.001, z: 0 }, { x: 5, y: -0.001, z: 0 }, { x: 0, y: -0.001, z: 5 }
+        ]))).toBe(true);
         if (operation !== "zoom") await page.mouse.down({ button: operation.startsWith("pan") ? "middle" : "left" });
-        const steps = operation === "pan-slow" ? 24 : 4;
+        const steps = 12;
         for (let step = 0; step <= steps; step++) {
           if (step > 0) {
-            if (operation === "zoom") await page.mouse.wheel(0, -80);
-            else await page.mouse.move(x + 200 * step / steps, y + (operation === "orbit" ? -60 : 80) * step / steps);
-            await frames(page);
+            if (operation === "zoom") await page.mouse.wheel(0, -320 / steps);
+            else await page.mouse.move(inputX + (operation === "pan-slow" ? 60 : 200) * step / steps,
+              inputY + (operation === "orbit" ? 60 : operation === "pan-slow" ? 24 : 80) * step / steps);
+            await page.evaluate(() => new Promise<void>(r => requestAnimationFrame(() => r())));
           }
-          if (step % (steps / 4) === 0 && (operation === "orbit" || operation === "zoom")) await settle(page);
           const current = await snapshot(page);
           expect(current.invariants).toEqual(baseline.invariants);
           expect(current.worldGeometry).toEqual(baseline.worldGeometry);
           expect(current.viewport.sceneLifecycleGeneration).toBe(baseline.viewport.sceneLifecycleGeneration);
           expect(current.viewport.visualPresentation).toEqual(baseline.viewport.visualPresentation);
           expect(await handle!.evaluate(element => element === document.querySelector('[aria-label="AtrVisu 3D workspace"]'))).toBe(true);
-          if (step % (steps / 4) === 0) {
-            const filename = `grid-${theme}-${state}-${operation}-${step * 100 / steps}.png`;
+          {
+            const filename = `grid-dpr${dpr}-${theme}-${state}-${operation}-${String(step).padStart(2, "0")}.png`;
+            const renderBoundary = () => page.evaluate(() => {
+              const samples = window.__atrvisuRuntimeViewport!.readRenderFrameProbe();
+              const last = samples[samples.length - 1];
+              return last ? { frame: last.frame, timeMs: last.timeMs } : null;
+            });
+            const captureStart = await renderBoundary();
             if (capture) { await mkdir(directory, { recursive: true }); await page.screenshot({ path: join(directory, filename) }); }
-            captures.push({ filename, progress: step / steps, operation, ...current, css: rect, dpr: await page.evaluate(() => devicePixelRatio), errors: [...errors] });
+            const captureEnd = await renderBoundary();
+            captures.push({ filename, progress: step / steps, operation, ...current, captureWindow: { start: captureStart, end: captureEnd },
+              css: rect, dpr: await page.evaluate(() => devicePixelRatio), errors: [...errors] });
           }
         }
         if (operation !== "zoom") await page.mouse.up({ button: operation.startsWith("pan") ? "middle" : "left" });
         await settle(page);
+        const renderFrames = await page.evaluate(() => window.__atrvisuRuntimeViewport!.readRenderFrameProbe(true));
+        expect(renderFrames.length).toBeGreaterThan(12);
+        trajectories.push({ operation, renderFrames });
       }
       expect(errors).toEqual([]);
-      await writeEvidence(`grid-${theme}-${state}.json`, { exactHeadSha, theme, state, baseline, captures, errors });
+      await writeEvidence(`grid-dpr${dpr}-${theme}-${state}.json`, { exactHeadSha, theme, state, dpr, baseline, captures, trajectories, errors });
     });
   }
+  });
 }

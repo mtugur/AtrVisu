@@ -40,3 +40,33 @@ describe.each(["perspective", "orthographic"] as const)("%s view-parallel Pan", 
     scene.dispose(); engine.dispose();
   });
 });
+
+describe("rendered ArcRotate Pan ownership investigation", () => {
+  it.each(["perspective", "orthographic"] as const)("compares dual-write and target-only at every actual %s render without assuming causality", mode => {
+    const engine = new NullEngine({ renderWidth: 1440, renderHeight: 900, textureSize: 512, deterministicLockstep: false, lockstepMaxSteps: 4 });
+    const scene = new Scene(engine);
+    for (const { alpha, beta } of orientations) {
+      const dual = new ArcRotateCamera("dual", alpha, beta, 34, new Vector3(3, 6, -2), scene);
+      const derived = new ArcRotateCamera("derived", alpha, beta, 34, new Vector3(3, 6, -2), scene);
+      for (const camera of [dual, derived]) {
+        camera.mode = mode === "orthographic" ? Camera.ORTHOGRAPHIC_CAMERA : Camera.PERSPECTIVE_CAMERA;
+        camera.orthoLeft = -24; camera.orthoRight = 24; camera.orthoBottom = -15; camera.orthoTop = 15;
+      }
+      const start = beginCameraPan(dual, 720, 450, 1440, 900);
+      const targetOnlyStart = beginCameraPan(derived, 720, 450, 1440, 900);
+      for (let step = 1; step <= 24; step++) {
+        applyCameraPan(dual, start, 720 + step * 5, 450 + step * 2);
+        scene.activeCamera = dual; scene.render();
+        const dualView = Array.from(scene.getViewMatrix().m);
+        const delta = targetOnlyStart.rightPerPixel.scale(-step * 5).add(targetOnlyStart.upPerPixel.scale(step * 2));
+        derived.target.copyFrom(targetOnlyStart.target.add(delta));
+        scene.activeCamera = derived; scene.render();
+        expect(Array.from(scene.getViewMatrix().m)).toEqual(dualView);
+        expect(derived.position.asArray()).toEqual(dual.position.asArray());
+        expect([dual.alpha, dual.beta, dual.radius]).toEqual([alpha, beta, 34]);
+      }
+      dual.dispose(); derived.dispose();
+    }
+    scene.dispose(); engine.dispose();
+  });
+});

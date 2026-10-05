@@ -116,6 +116,7 @@ import {
 } from "./babylonScene/selectionPresentation";
 import { createBabylonSceneLifecycle } from "./babylonScene/sceneLifecycle";
 import { beginCameraPan, applyCameraPan, type CameraPanGesture } from "./babylonScene/cameraPan";
+import { createNavigationRenderProbe } from "./babylonScene/navigationRenderProbe";
 import {
   getCivilRenderingGroupId,
   preserveWorldGeometryDepthAcrossRenderingGroups
@@ -221,6 +222,8 @@ type BabylonSceneProps = {
 
 export type BabylonSceneHandle = {
   probeProjection: (clientX: number, clientY: number, reference?: NavigationProjectionProbe["reference"]) => NavigationProjectionProbe | null;
+  startRenderFrameProbe: (anchors: readonly NavigationProjectionProbe["reference"][]) => boolean;
+  readRenderFrameProbe: (stop?: boolean) => ReturnType<ReturnType<typeof createNavigationRenderProbe>["read"]>;
   getCameraState: () => ViewpointCameraState | null;
   applyCameraState: (camera: ViewpointCameraState) => boolean;
   fitView: () => boolean;
@@ -1168,6 +1171,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     initialAnnotationPosition: { xMm: number; yMm: number };
   } | null>(null);
   const panStateRef = useRef<CameraPanGesture | null>(null);
+  const navigationRenderProbeRef = useRef<ReturnType<typeof createNavigationRenderProbe> | null>(null);
 
   useEffect(() => {
     placedMachinesRef.current = placedMachines;
@@ -1674,6 +1678,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       };
     },
     applyCameraState: applyNavigationCameraState,
+    startRenderFrameProbe: (anchors) => navigationRenderProbeRef.current?.start(anchors) ?? false,
+    readRenderFrameProbe: (stop) => navigationRenderProbeRef.current?.read(stop) ?? [],
     probeProjection: (clientX, clientY, reference) => {
       const scene = sceneRef.current;
       const camera = cameraRef.current;
@@ -1747,7 +1753,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
           gridMajorSpacingMm: visualDiagnostics.gridMajorSpacingMm,
           visualContextMeshCount: visualDiagnostics.meshCount,
           lightCount: visualDiagnostics.lightCount,
-          gridSampling: visualDiagnostics.gridSampling,
+          gridGeometry: visualDiagnostics.gridGeometry,
           workplaneTransform: visualDiagnostics.workplaneTransform
         }
       };
@@ -1783,6 +1789,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     const camera = createBabylonCameraViewport(scene, canvas);
     cameraRef.current = camera;
+    if (enableE2EDiagnosticsRef.current) {
+      navigationRenderProbeRef.current = createNavigationRenderProbe(scene, camera, canvas,
+        sceneLifecycleGenerationRef.current, () => panStateRef.current !== null);
+    }
 
     const viewportHost = canvas.parentElement ?? canvas;
     const viewportResizeController = createViewportResizeController({
@@ -2471,6 +2481,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       runtimeViewportStateRef.current = null;
       cameraTelemetry?.publish(null);
       lifecycle.dispose(() => {
+        navigationRenderProbeRef.current?.dispose();
+        navigationRenderProbeRef.current = null;
         canvas.removeEventListener("contextmenu", handleContextMenu);
         canvas.removeEventListener("wheel", handleWheel, true);
         if (pointerObserver) {

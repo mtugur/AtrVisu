@@ -21,8 +21,8 @@ import {
   type WorkplaneBoundsMm
 } from "./workplaneGrid";
 
-import { applyWorkplaneGridPalette, createWorkplaneGridMaterial, GRID_SAMPLING } from "./workplaneGridMaterial";
-export const SCENE_VISUAL_CONTEXT_MESH_COUNT = 2;
+import { createWorkplaneGridGeometry } from "./workplaneGridGeometry";
+export const SCENE_VISUAL_CONTEXT_MESH_COUNT = 4;
 export const SCENE_INTERACTION_PLANE_SIZE_METERS = 84;
 
 export const SCENE_VISUAL_LIGHT_SPECS = Object.freeze([
@@ -39,7 +39,7 @@ export type SceneVisualContextDiagnostics = Readonly<{
   gridMajorSpacingMm: number;
   meshCount: number;
   lightCount: number;
-  gridSampling: typeof GRID_SAMPLING;
+  gridGeometry: ReturnType<ReturnType<typeof createWorkplaneGridGeometry>["getDiagnostics"]>;
   workplaneTransform: Readonly<{ position: readonly number[]; scaling: readonly number[] }>;
 }>;
 
@@ -68,7 +68,10 @@ export const createSceneVisualContext = (
   fillLight.intensity = SCENE_VISUAL_LIGHT_SPECS[1].intensity;
   ambientLight.intensity = SCENE_VISUAL_LIGHT_SPECS[2].intensity;
 
-  const workplaneMaterial = createWorkplaneGridMaterial(scene, palette);
+  const workplaneMaterial = new StandardMaterial("visual-workplane-material", scene);
+  workplaneMaterial.disableLighting = true;
+  workplaneMaterial.disableDepthWrite = true;
+  workplaneMaterial.backFaceCulling = true;
 
   const visualWorkplane = MeshBuilder.CreateGround(
     "visual-workplane-grid",
@@ -79,6 +82,7 @@ export const createSceneVisualContext = (
   visualWorkplane.isPickable = false;
   visualWorkplane.checkCollisions = false;
   visualWorkplane.position.y = -0.001;
+  const grid = createWorkplaneGridGeometry(scene, initialBounds, palette);
 
   const interactionPlane = MeshBuilder.CreateGround(
     "floor-pick-plane",
@@ -105,7 +109,8 @@ export const createSceneVisualContext = (
       light.specular = neutralLight.clone();
     });
     ambientLight.groundColor = neutralLight.scale(0.18);
-    applyWorkplaneGridPalette(workplaneMaterial, palette);
+    workplaneMaterial.emissiveColor = createViewportPaletteColor3(palette, "workplaneFill");
+    grid.updatePalette(palette);
   };
 
   const applyBounds = () => {
@@ -133,6 +138,7 @@ export const createSceneVisualContext = (
     updateBounds: (nextBounds) => {
       workplaneBounds = nextBounds;
       applyBounds();
+      grid.updateBounds(nextBounds);
     },
     getDiagnostics: () => Object.freeze({
       effectiveThemeId,
@@ -142,7 +148,7 @@ export const createSceneVisualContext = (
       gridMajorSpacingMm: WORKPLANE_GRID_MAJOR_SPACING_MM,
       meshCount: SCENE_VISUAL_CONTEXT_MESH_COUNT,
       lightCount: SCENE_VISUAL_LIGHT_SPECS.length,
-      gridSampling: GRID_SAMPLING,
+      gridGeometry: grid.getDiagnostics(),
       workplaneTransform: Object.freeze({
         position: Object.freeze(visualWorkplane.position.asArray()),
         scaling: Object.freeze(visualWorkplane.scaling.asArray())
@@ -151,6 +157,7 @@ export const createSceneVisualContext = (
     dispose: () => {
       interactionPlane.dispose(false, false);
       visualWorkplane.dispose(false, false);
+      grid.dispose();
       interactionMaterial.dispose(true, true);
       workplaneMaterial.dispose(true, true);
       keyLight.dispose();

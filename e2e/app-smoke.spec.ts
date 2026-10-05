@@ -6347,7 +6347,7 @@ test("PF-3B viewport visual language produces the frozen reviewer evidence matri
     },
     gridMinorSpacingMm: 1_000,
     gridMajorSpacingMm: 5_000,
-    visualContextMeshCount: 2,
+    visualContextMeshCount: 4,
     lightCount: 3
   });
   captures.push(await capturePf3bViewportEvidence(page, "01-dark-empty-perspective.png", errors.length));

@@ -65,12 +65,13 @@ export type RuntimeViewportVisualPresentationState = Readonly<{
   gridMajorSpacingMm: number;
   visualContextMeshCount: number;
   lightCount: number;
-  gridSampling?: Readonly<{
-    renderer: "world-space-derivative-antialiasing";
-    lineHalfWidthPixels: number;
-    fadeStartPeriodPixels: number;
-    fadeEndPeriodPixels: number;
-    phaseOriginMeters: number;
+  gridGeometry?: Readonly<{
+    renderer: "rigid-world-line-systems";
+    phaseOriginMm: number;
+    generation: number;
+    rebuildCount: number;
+    minor: { meshId: number; linesMm: readonly (readonly [readonly [number, number], readonly [number, number]])[]; verticesMeters: readonly number[] };
+    major: { meshId: number; linesMm: readonly (readonly [readonly [number, number], readonly [number, number]])[]; verticesMeters: readonly number[] };
   }>;
   workplaneTransform?: Readonly<{ position: readonly number[]; scaling: readonly number[] }>;
 }>;
@@ -376,7 +377,29 @@ export type NavigationProjectionProbe = {
   placementSettings: Readonly<PlacementSettings>;
 };
 
+export type NavigationRenderFrame = {
+  frame: number;
+  timeMs: number;
+  pointer: { x: number; y: number; timeMs: number; sequence: number; buttons: number };
+  panActive: boolean;
+  target: readonly number[];
+  position: readonly number[];
+  alpha: number;
+  beta: number;
+  radius: number;
+  fov: number;
+  mode: "perspective" | "orthographic";
+  ortho: readonly (number | null)[];
+  viewMatrix: readonly number[];
+  projectionMatrix: readonly number[];
+  projected: readonly { x: number; y: number; z: number }[];
+  canvas: { id: number; sceneId: number; lifecycle: number; cssWidth: number; cssHeight: number; renderWidth: number; renderHeight: number; dpr: number };
+  inertia: readonly number[];
+};
+
 export type RuntimeViewportE2EBridge = {
+  startRenderFrameProbe: (anchors: readonly NavigationProjectionProbe["reference"][]) => boolean;
+  readRenderFrameProbe: (stop?: boolean) => readonly NavigationRenderFrame[];
   probeProjection: (clientX: number, clientY: number, reference?: NavigationProjectionProbe["reference"]) => NavigationProjectionProbe | null;
   getNavigationGeometry: () => {
     included: readonly { entityId: string; corners: readonly { x: number; y: number; z: number }[]; projected: readonly { x: number; y: number; z: number }[] }[];
