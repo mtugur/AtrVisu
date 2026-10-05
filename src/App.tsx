@@ -4,6 +4,9 @@ import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import { MeasureTool } from "./components/measure/MeasureTool";
+import { createMeasureAuthority, isMeasureAction, MEASURE_ACTIVE_REASON } from "./measure/measureAuthority";
+import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
 import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
 import { ViewportNavigationHud } from "./components/viewportNavigation/ViewportNavigationHud";
 import { getViewportHudSafeInsets } from "./components/viewportNavigation/hudSafeArea";
@@ -424,6 +427,9 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 });
 
 export function App() {
+  const [measureAuthority] = useState(createMeasureAuthority);
+  const isMeasureActive = useSyncExternalStore(measureAuthority.subscribe, measureAuthority.getActive, measureAuthority.getActive);
+  const measureInvokerRef = useRef<HTMLElement | null>(null);
   const cameraTelemetry = useMemo(createCameraTelemetry, []);
   const effectiveThemeId = useEffectiveThemeId();
   const uiPreferencesStore = useUiPreferencesStore();
@@ -1974,18 +1980,21 @@ export function App() {
   );
 
   const clearSelection = useCallback(() => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection(createEmptyRuntimeSelection("command"));
-  }, []);
+  }, [measureAuthority]);
 
   const selectMachine = useCallback((instanceId: string | null, mode: SelectionMode = "replace") => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: instanceId ? createLegacyPlatformEntityId("machine", instanceId) : null,
       mode: !instanceId ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, []);
+  }, [measureAuthority]);
 
   const selectAnnotationForEditing = useCallback((annotationId: string | null) => {
+    if (measureAuthority.getActive()) return;
     if (!annotationId) {
       setRuntimeSelection((current) => current.ids.some((id) => id.startsWith("annotation:"))
         ? createEmptyRuntimeSelection("scene")
@@ -2000,17 +2009,19 @@ export function App() {
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [setPanelSectionExpansionPreservingVisibility]);
+  }, [measureAuthority, setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, []);
+  }, [measureAuthority]);
 
   const selectPlatformEntityForEditing = useCallback((entityId: EntityId, mode: SelectionMode = "replace") => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: entityId,
       mode,
@@ -2020,7 +2031,7 @@ export function App() {
       setAnnotationSelectionSignal((current) => current + 1);
       setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
-  }, [setPanelSectionExpansionPreservingVisibility]);
+  }, [measureAuthority, setPanelSectionExpansionPreservingVisibility]);
 
   const runtimeSelectionSignature = getInspectorSelectionSignature(runtimeSelection.ids);
   // Auto presentation reacts to canonical selection meaning, not a recreated selection object.
@@ -2281,7 +2292,7 @@ export function App() {
         ...current,
         ...overlayDisplayState
       }));
-      if (selectedObjectIds) {
+      if (selectedObjectIds && !measureAuthority.getActive()) {
         setRuntimeSelection(replaceRuntimeSelection(
           selectedObjectIds.map((id) => createLegacyPlatformEntityId("machine", id)),
           "command"
@@ -2292,7 +2303,7 @@ export function App() {
       }
     }
     setSelectedViewpointId(viewpoint.id);
-  }, [selectAnnotationForEditing, viewpoints]);
+  }, [measureAuthority, selectAnnotationForEditing, viewpoints]);
 
   const updateSelectedViewpointFromCurrentView = useCallback((viewpointId: string) => {
     const camera = sceneRef.current?.getCameraState();
@@ -3469,8 +3480,8 @@ export function App() {
   ]);
 
   useLayoutEffect(() => {
-    runtimeCommandBindingsRef.current = runtimeCommandBindings;
-  }, [runtimeCommandBindings]);
+    runtimeCommandBindingsRef.current = guardMeasureCommandBindings(runtimeCommandBindings, measureAuthority.getActive);
+  }, [runtimeCommandBindings, measureAuthority]);
 
   const restoreAutosavedLayout = useCallback(() => {
     if (!recoveryLayout) {
@@ -3599,6 +3610,41 @@ export function App() {
 
   const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
     ...projectRuntimeCommandBindings,
+    [RUNTIME_FEATURE_COMMAND_IDS.measure]: {
+      getEnableState: () => runtimeViewportBridge.getCameraSnapshot(RUNTIME_VIEWPORT_IDS.main)
+        ? { enabled: true }
+        : { enabled: false, reason: "Viewport camera is not ready." },
+      execute: (context) => {
+        const action = context.payload === undefined ? { type: "toggle" as const } : context.payload;
+        if (!isMeasureAction(action)) return createUnavailableRuntimeCommandResult("Invalid Measure action.");
+        const wasActive = measureAuthority.getActive();
+        if (!wasActive) {
+          const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          const menuTriggerId = activeElement?.closest('[role="menu"]')?.getAttribute("aria-labelledby");
+          measureInvokerRef.current = menuTriggerId ? document.getElementById(menuTriggerId) : activeElement;
+        }
+        measureAuthority.dispatch(action, {
+          selectionIds: runtimeSelectionRef.current.ids,
+          primaryId: runtimeSelectionRef.current.primaryId,
+          entities: platformEntitiesRef.current,
+          machines: placedMachinesRef.current,
+          level: getLevel(activeLevelIdRef.current, levelsRef.current)
+        });
+        if (wasActive && !measureAuthority.getActive()) {
+          const invoker = measureInvokerRef.current;
+          (invoker?.isConnected ? invoker : document.querySelector<HTMLCanvasElement>(".scene-canvas"))?.focus({ preventScroll: true });
+        } else if (!wasActive && measureAuthority.getActive()) {
+          // Menu/palette closure restores its own trigger during commit. Transfer
+          // ownership after that commit, without stealing focus from another modal.
+          window.requestAnimationFrame(() => {
+            if (measureAuthority.getActive() && !document.querySelector('[role="dialog"][aria-modal="true"],dialog[open]')) {
+              document.querySelector<HTMLCanvasElement>(".scene-canvas")?.focus({ preventScroll: true });
+            }
+          });
+        }
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.fitView]: {
       getEnableState: () => visiblePlacedMachines.length + visibleCivilReferences.length > 0
         ? { enabled: true }
@@ -4010,6 +4056,7 @@ export function App() {
     renameEnableState,
     measurementHelpersAvailable,
     measurementHelpersReason,
+    measureAuthority,
     requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,
@@ -4023,8 +4070,8 @@ export function App() {
   ]);
 
   useLayoutEffect(() => {
-    runtimeFeatureCommandBindingsRef.current = runtimeFeatureCommandBindings;
-  }, [runtimeFeatureCommandBindings]);
+    runtimeFeatureCommandBindingsRef.current = guardMeasureCommandBindings(runtimeFeatureCommandBindings, measureAuthority.getActive);
+  }, [runtimeFeatureCommandBindings, measureAuthority]);
 
   const assemblyCommandBindings = useMemo<AssemblyRuntimeCommandBindings>(() => ({
     [ASSEMBLY_COMMAND_IDS.createGroup]: {
@@ -4116,8 +4163,16 @@ export function App() {
   ]);
 
   useLayoutEffect(() => {
-    assemblyCommandBindingsRef.current = assemblyCommandBindings;
-  }, [assemblyCommandBindings]);
+    assemblyCommandBindingsRef.current = guardMeasureCommandBindings(assemblyCommandBindings, measureAuthority.getActive);
+  }, [assemblyCommandBindings, measureAuthority]);
+
+  useEffect(() => {
+    measureAuthority.dispatch({ type: "exit" }, { selectionIds: [], entities: [], machines: [] });
+  }, [currentProjectId, currentLayoutId, measureAuthority]);
+
+  useEffect(() => () => {
+    measureAuthority.dispatch({ type: "exit" }, { selectionIds: [], entities: [], machines: [] });
+  }, [measureAuthority]);
 
   const recordRuntimeCommandExecution = useCallback((
     commandId: string,
@@ -4560,6 +4615,7 @@ export function App() {
   }), []);
 
   const getCommandSurfacePressedState = useCallback((commandId: string) => {
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.measure) return measureAuthority.getActive();
     if (commandId === RUNTIME_FEATURE_COMMAND_IDS.toggleLabels) {
       return overlaySettingsRef.current.showLabels;
     }
@@ -4578,7 +4634,7 @@ export function App() {
       return runtimePanelStateRef.current.isAdvancedAlignmentOpen;
     }
     return undefined;
-  }, []);
+  }, [measureAuthority]);
 
   const commandSurfaceAdapter = useMemo(() => createCommandSurfaceAdapter({
     metadataRegistry: commandSurfaceMetadataRegistry,
@@ -4772,6 +4828,7 @@ export function App() {
         runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap);
         return;
       }
+      if (measureAuthority.getActive()) return;
       const action = resolveEditorShortcut({
         key: event.key,
         target: event.target,
@@ -4892,6 +4949,8 @@ export function App() {
         <>
           <BabylonScene
             ref={sceneRef}
+            measureAuthority={measureAuthority}
+            onMeasureAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }}
             placedMachines={visiblePlacedMachines}
             civilReferences={visibleCivilReferences}
             annotations={visibleAnnotations}
@@ -4930,9 +4989,10 @@ export function App() {
             source={cameraTelemetry.source}
             onPreset={(id) => runtimeViewportBridge.applyViewPreset(RUNTIME_VIEWPORT_IDS.main, id)}
           />
+          <MeasureTool authority={measureAuthority} safeInsets={hudSafeInsets} bottomSheetOpen={!isInspectorPresentationCollapsed && inspectorDockPresentation === "bottom-sheet"} onAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }} />
           <div className="workbench-viewport-context-layer" aria-live="polite">
             <ViewportArrangeBar
-              selectionCount={arrangeSelectedEntityIds.length}
+              selectionCount={isMeasureActive ? 0 : arrangeSelectedEntityIds.length}
               movementAllowed={runtimeSelectionMovementEvaluation.allowed && arrangeSelectedEntityIds.length >= 2}
               canDistribute={arrangeSelectedEntityIds.length >= 3}
               canGroup={!selectedGroup && selectedAlignableEntities.length >= 2}
@@ -4977,7 +5037,7 @@ export function App() {
             ) : null}
           </div>
           {!isProjectStorageLoading
-          && !hasAcceptedWorkingLayout ? (
+          && !hasAcceptedWorkingLayout && !isMeasureActive ? (
             <EmptyProjectWelcome
               recoveryAvailable={Boolean(recoveryLayout)}
               onResumeRecovery={() => {
@@ -5168,6 +5228,7 @@ export function App() {
               iconId: "layers" as const,
               badge: layers.length > 1 ? `${layers.length}` : undefined,
               content: (
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <LayersPanel
                   layers={layers}
                   placedMachines={placedMachines}
@@ -5183,6 +5244,7 @@ export function App() {
                   onIsolateLayer={isolateSelectedLayer}
                   onShowAllLayers={showAllLayoutLayers}
                 />
+                </fieldset>
               )
             },
             {
@@ -5191,6 +5253,7 @@ export function App() {
               iconId: "layers" as const,
               badge: levels.length > 1 ? `${levels.length}` : undefined,
               content: (
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <LevelsPanel
                   levels={levels}
                   activeLevelId={activeLevelId}
@@ -5200,6 +5263,7 @@ export function App() {
                   onDeleteLevel={(levelId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.deleteLevel, { levelId }); }}
                   onSetActiveLevel={(levelId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.setActiveLevel, { levelId }); }}
                 />
+                </fieldset>
               )
             },
             {
@@ -5208,6 +5272,7 @@ export function App() {
               iconId: "groups" as const,
               badge: groups.length > 0 ? `${groups.length}` : undefined,
               content: (
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <AssemblyTreePanel
                   groups={groups}
                   placedMachines={placedMachines}
@@ -5229,6 +5294,7 @@ export function App() {
                   onSelectGroup={selectObjectGroup}
                   onToggleGroupCollapsed={toggleGroupCollapsed}
                 />
+                </fieldset>
               )
             },
             {
@@ -5238,14 +5304,15 @@ export function App() {
               badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
               content: (
                 <ViewpointsPanel
+                  mutationUnavailableReason={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}
                   viewpoints={viewpoints}
                   selectedViewpointId={selectedViewpointId}
                   onSelectViewpoint={setSelectedViewpointId}
-                  onCaptureViewpoint={captureViewpoint}
+                  onCaptureViewpoint={(name) => { if (!measureAuthority.getActive()) captureViewpoint(name); }}
                   onApplyViewpoint={applyViewpoint}
-                  onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
-                  onRenameViewpoint={renameViewpoint}
-                  onDeleteViewpoint={removeViewpoint}
+                  onUpdateViewpoint={(id) => { if (!measureAuthority.getActive()) updateSelectedViewpointFromCurrentView(id); }}
+                  onRenameViewpoint={(id, name) => { if (!measureAuthority.getActive()) renameViewpoint(id, name); }}
+                  onDeleteViewpoint={(id) => { if (!measureAuthority.getActive()) removeViewpoint(id); }}
                   onStepViewpoint={stepViewpoint}
                 />
               )
@@ -5327,6 +5394,7 @@ export function App() {
               />
             </div>
           </header>
+          <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
           {showLegacyCompatibilityStack ? (
             <>
           {recoveryLayout ? (
@@ -5381,14 +5449,15 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.viewpoints)}
           >
             <ViewpointsPanel
+              mutationUnavailableReason={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}
               viewpoints={viewpoints}
               selectedViewpointId={selectedViewpointId}
               onSelectViewpoint={setSelectedViewpointId}
-              onCaptureViewpoint={captureViewpoint}
+              onCaptureViewpoint={(name) => { if (!measureAuthority.getActive()) captureViewpoint(name); }}
               onApplyViewpoint={applyViewpoint}
-              onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
-              onRenameViewpoint={renameViewpoint}
-              onDeleteViewpoint={removeViewpoint}
+              onUpdateViewpoint={(id) => { if (!measureAuthority.getActive()) updateSelectedViewpointFromCurrentView(id); }}
+              onRenameViewpoint={(id, name) => { if (!measureAuthority.getActive()) renameViewpoint(id, name); }}
+              onDeleteViewpoint={(id) => { if (!measureAuthority.getActive()) removeViewpoint(id); }}
               onStepViewpoint={stepViewpoint}
             />
           </PanelSection>
@@ -5864,6 +5933,7 @@ export function App() {
               )}
             </PanelSection>
           ) : null}
+          </fieldset>
         </aside>
       )}
       statusBar={(

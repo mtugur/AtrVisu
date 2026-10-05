@@ -6,6 +6,7 @@ import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
 import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection, dot3 } from "../src/components/viewportNavigation/navigationGeometry";
 import { measureMachinePixels } from "./navigationPixelEvidence";
 import { registerPanGridTests } from "./panGridEvidence";
+import { registerMeasureTests } from "./measureEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -1501,6 +1502,10 @@ test("runtime feature access complete gate is bound to observed visible command 
   };
 
   expect((await getRuntimeFeatureAccessGate(page, true)).passed).toBe(false);
+
+  await observe("view.measure", async () => (await getMenuCommand(page, "View", "view.measure")).click());
+  await expect(page.getByTestId("measure-tool")).toBeVisible();
+  await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
 
   await observe("library.importAsset", () => page.getByTestId("machine-library-panel").getByRole("button", { name: "Import 3D Asset", exact: true }).click());
   await page.getByRole("button", { name: "Close import", exact: true }).click();
@@ -8103,4 +8108,6 @@ registerPanGridTests({
   openCleanApp, expectExactHeadServer, openPrimaryDockPanel, addBuildPrimitive,
   createTwoMachineAssembly, getMenuCommand, openPreferenceBranch
 });
+
+registerMeasureTests({ openCleanApp, getMenuCommand, addCanonicalAtaraMachine, openPreferenceBranch });
 
