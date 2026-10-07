@@ -1,4 +1,6 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
+import type { MeasureAuthority, MeasureAction } from "../measure/measureAuthority";
+import { installMeasureViewportAdapter } from "./measure/measureViewportAdapter";
 import { fitViewCamera, getFitViewGeometry, createPresetCameraState } from "./viewportNavigation/navigationGeometry";
 import type { createCameraTelemetry } from "./viewportNavigation/cameraTelemetry";
 import { modelKeyFromPath } from "../nativeAssets/modelContract";
@@ -171,6 +173,8 @@ const applyOrthographicBounds = (
 };
 
 type BabylonSceneProps = {
+  measureAuthority: MeasureAuthority;
+  onMeasureAction: (action: MeasureAction) => void;
   placedMachines: PlacedMachine[];
   civilReferences: CivilReferenceItem[];
   annotations: AnnotationObject[];
@@ -1093,6 +1097,8 @@ const loadVisualModel = async (
 };
 
 export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(function BabylonScene({
+  measureAuthority,
+  onMeasureAction,
   placedMachines,
   civilReferences,
   annotations,
@@ -1127,6 +1133,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   onVisualDiagnosticsChange,
   onPerformanceMetricsChange
 }: BabylonSceneProps, ref) {
+  const measureActionRef = useRef(onMeasureAction);
+  useLayoutEffect(() => { measureActionRef.current = onMeasureAction; }, [onMeasureAction]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<Scene | null>(null);
   const cameraRef = useRef<ArcRotateCamera | null>(null);
@@ -1789,6 +1797,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     const camera = createBabylonCameraViewport(scene, canvas);
     cameraRef.current = camera;
+    const measureAdapter = installMeasureViewportAdapter({ scene, camera, canvas, authority: measureAuthority,
+      onAction: (action) => measureActionRef.current(action), diagnostics: () => enableE2EDiagnosticsRef.current });
     if (enableE2EDiagnosticsRef.current) {
       navigationRenderProbeRef.current = createNavigationRenderProbe(scene, camera, canvas,
         sceneLifecycleGenerationRef.current, () => panStateRef.current !== null);
@@ -2010,6 +2020,10 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     canvas.addEventListener("wheel", handleWheel, { capture: true, passive: false });
 
     const pointerObserver: Nullable<Observer<PointerInfo>> = scene.onPointerObservable.add((pointerInfo) => {
+      // Navigate leaves Babylon Orbit live; only the existing Pan branch may
+      // enter this domain observer while Measure owns the viewport.
+      if (measureAuthority.getActive() && !panStateRef.current
+        && !(pointerInfo.type === PointerEventTypes.POINTERDOWN && isPanPointer(pointerInfo.event as PointerEvent))) return;
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         const pick = pointerInfo.pickInfo;
         const { instanceId, civilReferenceId, annotationId } = getSelectionPickTarget(pick);
@@ -2476,6 +2490,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     });
 
     return () => {
+      measureAdapter.dispose();
       viewportResizeController.dispose();
       viewportResizeControllerRef.current = null;
       runtimeViewportStateRef.current = null;
@@ -2531,6 +2546,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     };
   }, [
     cameraTelemetry,
+    measureAuthority,
     readNavigationCameraSnapshot,
     canBeginObjectDrag,
     onSelectAnnotation,
@@ -2876,5 +2892,5 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     });
   }, [placedMachines]);
 
-  return <canvas className="scene-canvas" ref={canvasRef} aria-label="AtrVisu 3D workspace" />;
+  return <canvas className="scene-canvas" ref={canvasRef} tabIndex={0} aria-label="AtrVisu 3D workspace" />;
 });
