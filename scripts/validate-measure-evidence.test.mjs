@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateMeasureRecord } from "./validate-measure-evidence.mjs";
+import { validateMeasureRecord, validateMeasureScreenshot } from "./validate-measure-evidence.mjs";
 
 const head = "a".repeat(40);
 const valid = () => ({ name:"M03-distance-result", sourceHead:head, ciRun:"123", scenarios:["M03"], consoleErrors:[],
@@ -20,3 +20,17 @@ for (const [name, change, code] of [
   ["missing classifier",r=>{r.name="M08-classifier-dpr-1";r.observations=[];},"CLASSIFIER_INCOMPLETE"],
   ["missing dock geometry",r=>{r.name="M09-640-dark-docks-pinned";r.observations={};},"DOCK_PROJECTION"]
 ]) test(`rejects ${name}`,()=>{const r=valid();change(r);assert.throws(()=>validateMeasureRecord(r,head,"123"),new RegExp(code));});
+
+for (const dpr of [1, 2]) test(`page screenshot dimensions honor DPR ${dpr}`, () => {
+  const png = Buffer.alloc(1025);
+  Buffer.from("89504e470d0a1a0a", "hex").copy(png);
+  png.writeUInt32BE(1440 * dpr, 16);
+  png.writeUInt32BE(900 * dpr, 20);
+  const snapshot = { cssSize: [1440, 767], dpr };
+  assert.doesNotThrow(() => validateMeasureScreenshot(png, snapshot));
+  png.writeUInt32BE(1439 * dpr, 16);
+  assert.throws(() => validateMeasureScreenshot(png, snapshot), /MEASURE_SCREENSHOT_INVALID/);
+  png.writeUInt32BE(1440 * dpr, 16);
+  png.writeUInt32BE(766 * dpr, 20);
+  assert.throws(() => validateMeasureScreenshot(png, snapshot), /MEASURE_SCREENSHOT_INVALID/);
+});

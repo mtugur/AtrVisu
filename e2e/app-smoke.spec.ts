@@ -7,6 +7,7 @@ import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection
 import { measureMachinePixels } from "./navigationPixelEvidence";
 import { registerPanGridTests } from "./panGridEvidence";
 import { registerMeasureTests } from "./measureEvidence";
+import { COMMAND_BAR_COMMAND_IDS } from "../src/workbench/commandSurfaces/commandSurfaceConfig";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -7871,7 +7872,10 @@ test("PF-1 premium command information architecture is accessible and responsive
   ]);
 
   const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(9);
+  await expect(commandButtons).toHaveCount(COMMAND_BAR_COMMAND_IDS.length);
+  expect(await commandButtons.evaluateAll((buttons) => buttons.map(button =>
+    (button as HTMLElement).dataset.commandId
+  ))).toEqual([...COMMAND_BAR_COMMAND_IDS]);
   await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
   await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
   await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
@@ -7882,7 +7886,7 @@ test("PF-1 premium command information architecture is accessible and responsive
     expect(await button.getAttribute("title")).toBeTruthy();
   }
   expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
-    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Fit View", "Labels", "Connection Points", "Viewpoints"
+    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Fit View", "Measure", "Labels", "Connection Points", "Viewpoints"
   ]);
   await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
   await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);

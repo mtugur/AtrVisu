@@ -143,3 +143,15 @@ Final counts, run URL, exact head and artifact identity/digest belong in the
 Draft PR Validation section and delivery response. Artifact-validation PASS is
 not whole-CI PASS, Contract Verified or Product Accepted. Stage B is Draft and
 unmerged; C03/Phase-1 Exit is not closed and no manual acceptance is requested.
+
+The complete local checkpoint gate passed audit (zero vulnerabilities),
+dependency tree, 289-file token governance, interaction governance/policies,
+build and 179 unit files / 1539 tests. Chromium reported 209 passed, one failed
+and one conditional evidence skip: the existing PF-1 toolbar assertion still
+expected nine commands rather than the required Measure-inclusive ten. The
+bounded test correction uses the canonical command list and preserves ordered
+labels, icons, ARIA and responsive assertions; its focused Chromium rerun passed.
+All 14 Measure Chromium tests passed the complete checkpoint run. Evidence
+validation passed 31 observations / 31 PNGs, including DPR 2 device-pixel
+screenshots; 13 policy regressions protect provenance, invariants and DPI sizing.
+The corrected exact-head complete GitHub gate remains the delivery authority.

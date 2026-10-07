@@ -44,6 +44,13 @@ export const validateMeasureRecord = (record, head, run) => {
   return session;
 };
 
+export function validateMeasureScreenshot(png, snapshot) {
+  requireEvidence(png.length > 1024 && png.subarray(0,8).toString("hex") === "89504e470d0a1a0a", "MEASURE_SCREENSHOT_INVALID");
+  // Playwright page screenshots use device pixels, while the observed canvas size is CSS pixels.
+  requireEvidence(png.readUInt32BE(16) === snapshot.cssSize[0] * snapshot.dpr &&
+    png.readUInt32BE(20) >= snapshot.cssSize[1] * snapshot.dpr, "MEASURE_SCREENSHOT_INVALID");
+}
+
 export async function validateMeasureEvidence(directory, head, run) {
   const files = (await readdir(directory)).filter(name => name.endsWith(".json") && name !== "manifest.json").sort();
   const required = ["M01-empty-miss", "M01-distance-preview", "M02-native-glb", "M02-locked-visible-hidden-miss", "M02-signed-floor-bottom", "M03-distance-result", "M04-angle", "M05-geometry-area", "M05-level-area", "M05-invalid-area", "M06-dimensions", "M06-pair", "M06-floor-dimensions", "M06-machine-pair", "M07-navigation", "M08-classifier-dpr-1", "M08-classifier-dpr-2", "M10-clean-capture", "M10-migrated-preferences",
@@ -54,7 +61,7 @@ export async function validateMeasureEvidence(directory, head, run) {
     const bytes = await readFile(join(directory, filename)), record = JSON.parse(bytes);
     validateMeasureRecord(record, head, run);
     const pngName = filename.replace(/\.json$/, ".png"), png = await readFile(join(directory, pngName));
-    requireEvidence(png.subarray(0,8).toString("hex") === "89504e470d0a1a0a" && png.readUInt32BE(16) === record.after.cssSize[0] && png.byteLength > 1024, "MEASURE_SCREENSHOT_INVALID");
+    validateMeasureScreenshot(png, record.after);
     records.push({ name: record.name, scenarios: record.scenarios, json: filename, screenshot: pngName });
     for (const [name, buffer] of [[filename,bytes],[pngName,png]]) digests.push({ filename:name, sha256:createHash("sha256").update(buffer).digest("hex"), bytes:buffer.length });
   }
