@@ -5582,7 +5582,6 @@ export function App() {
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.viewpoints)}
           >
             <ViewpointsPanel
-              mutationUnavailableReason={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}
               viewpoints={viewpoints}
               selectedViewpointId={selectedViewpointId}
               onSelectViewpoint={setSelectedViewpointId}
