@@ -47,6 +47,7 @@ export const platformCommandSeedDefinitions = [
   createCommandSeed("assembly.ungroup", "edit", "Ungroup", "Remove the assembly while preserving its members.", true),
 
   createCommandSeed("view.fitView", "view", "Fit View", "Fit visible Machine and Civil geometry without changing orientation.", false, undefined, "fit-view"),
+  createCommandSeed("view.measure", "view", "Measure", "Measure viewport geometry without changing the layout.", false, undefined, "measurement"),
   createCommandSeed("view.displayOverlayControls", "view", "Display / Overlay Controls", "Open global display and overlay settings."),
   createCommandSeed("view.toggleLabels", "view", "Labels", "Show or hide layout labels.", false, undefined, "labels"),
   createCommandSeed("view.viewpoints", "view", "Viewpoints", "Open or manage saved viewpoint states.", false, undefined, "viewpoints"),
