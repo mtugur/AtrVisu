@@ -6069,7 +6069,6 @@ export function App() {
           ) : null}
           </fieldset>
           )
-          )
         </aside>
       )}
       statusBar={(
