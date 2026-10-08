@@ -43,6 +43,46 @@ Task similarity is prioritized over brand prestige. The primary benchmark family
 | Onshape 2026 - Measure | Measure exposes multiple result interpretations such as min/max/center distance and dynamically visualizes selected measurements. | **ADOPT** explicit measurement interpretation. Do not expose every CAD result in Phase 1; keep the C03 set bounded. |
 | Onshape 2026 - Mate Connector inference | Hovering wakes implicit inference points; nearest candidate highlights; faces/edges expose centroids, midpoints and corners; Shift can lock an intended inference. | **ADOPT** hover-magnetic anchors and candidate lock. **ADAPT** anchors to Machine/Civil canonical geometry and references. |
 
+
+## 2.2 Traceable evidence records
+
+The following are the **Official source** records used for the benchmark decisions. Review/access date for this package: 2026-10-08.
+
+| Benchmark | Product/version | Official source | Task similarity | Observed behavior | AtrVisu adoption |
+|---|---|---|---|---|---|
+| VC-MEASURE-01 | Visual Components Premium 5.1 | https://help.visualcomponents.com/5.1/Premium/en/English/3D%20Operations/Measuring_components.htm | High: industrial 3D factory/layout measurement | Measure task pane, point A/B workflow, live preview, 3D result, Esc/Close, display accuracy. | Adopt dedicated task-pane model, preview and viewport result. |
+| VC-LAYOUT-01 | Visual Components Premium 5.1 Layout View | https://help.visualcomponents.com/5.1/Premium/en/English/Getting%20Started/UI%20Overview/Tabs/Layout_View.htm | High: factory layout workspace | Measure has additional task-pane options and sits alongside other layout tools. | Adapt into AtrVisu right-dock Measure tab; keep Inspector separate. |
+| NW-MEASURE-01 | Autodesk Navisworks 2026 | https://help.autodesk.com/cloudhelp/2026/ENU/Navisworks-Freedom/files/GUID-E0E92E2A-E8F4-4FC1-AB2F-BFD0CCEA1012.htm | High: industrial/digital-twin model review | Dockable Measure Tools window; XYZ, difference, distance; saved measurements can be renamed/deleted/exported. | Adopt dock + saved-measurement management. |
+| NW-MODES-01 | Autodesk Navisworks 2026 | https://help.autodesk.com/cloudhelp/2026/ENU/Navisworks/files/GUID-5D5F37EC-5551-42E4-B279-3FE7F67DDD37.htm | High: 3D engineering measurement | Line thickness/color, In 3D, optional 2D over-geometry display, scene labels and XYZ differences. | Adopt depth-aware default; adapt explicit Overlay mode. |
+| NW-TOOLS-01 | Autodesk Navisworks 2026 | https://help.autodesk.com/cloudhelp/2026/ENU/Navisworks/files/GUID-F792FBD7-E753-45B2-99DD-51DFACFD23F7.htm | High: industrial model measurement | Point-to-point, angle, area, shortest distance and conversion to markup are distinct tools. | Adopt bounded measurement family and explicit result/markup distinction. |
+| NW-SNAP-01 | Autodesk Navisworks 2023 | https://help.autodesk.com/cloudhelp/2023/ENU/Navisworks/files/GUID-FA3E0D9E-9794-4FB8-906D-8E48F68C50A3.htm | High: 3D model picking during measurement | Measurement snapping with cursor feedback to vertex/edge/line/surface. | Adapt to AtrVisu semantic anchors and canonical entity references. |
+| SW-MEASURE-01 | SOLIDWORKS Design 2026 | https://help.solidworks.com/2026/english/SolidWorks/sldworks/HIDD_MEASURE.htm?id=3.10 | High: professional engineering/CAD measurement | Distance/angle/radius, XYZ, point-to-point, projected measurements, precision and measurement history. | Adopt rich result semantics; retain AtrVisu mm and Plan/3D distinctions. |
+| SW-EDRAWINGS-01 | SOLIDWORKS eDrawings 2026 | https://help.solidworks.com/2026/english/edrawings/c_Dimensions.htm | High: engineering review/markup | Measure results disappear on exit; saved dimensions are separate markup elements with editable text and extension-line handles. | Adopt transient-vs-persistent separation and editable reference presentation. |
+| REVIT-DIM-01 | Autodesk Revit 2025/2027 | https://help.autodesk.com/cloudhelp/2027/ENU/Revit-DocumentPresent/files/GUID-A7C5D9BD-BA91-4D94-9073-7C1C158A3910.htm | High: engineering/building documentation dimensions | Temporary dimensions disappear; permanent dimensions document the model; witness lines can be moved to new references. | Adopt transient/persistent distinction and editable references, adapted to 3D industrial annotations. |
+| REVIT-STYLE-01 | Autodesk Revit 2022/2025 | https://help.autodesk.com/cloudhelp/2022/ENU/Revit-DocumentPresent/files/GUID-50997817-F56B-4BBA-B5FD-644C364670B3.htm | High: professional dimension readability | Temporary dimension text size/background are configurable. | Adopt configurable text/background model; exact web defaults remain AtrVisu decisions. |
+| ACAD-ASSOC-01 | Autodesk AutoCAD 2026 | https://help.autodesk.com/cloudhelp/2026/ENU/AutoCAD-LT-DidYouKnow/files/GUID-7C7B6F58-2E17-4A77-9579-D42E205800BF.htm | High: associative engineering dimensions | Associative dimensions update with geometry; broken associations can be reassociated using object snaps. | Adopt entity-reference associativity and explicit Orphaned/Reassociate state. |
+| ACAD-ASSOC-02 | Autodesk AutoCAD 2026 | https://help.autodesk.com/view/ACD/2026/ENU/?caas=caas%2Fdocumentation%2FCIV3D%2F2014%2FENU%2FfilesACD%2FGUID-D77085A3-6E4C-4C18-AD70-21F54ED72492-htm.html | High: associative dimension behavior | Associative dimensions update location/orientation/value when association points move. | Adopt the update principle without copying AutoCAD's object model. |
+| FUSION-MEASURE-01 | Autodesk Fusion 2026 | https://help.autodesk.com/view/fusion360/ENU/?contextId=SIM-MEASURE-CMD | Medium-high: CAD model measurement | Selection filters, precision, snap points, Ctrl lock, XYZ delta and result visualization. | Adopt explicit selection/reference filters, precision and snap feedback. |
+| ONSHAPE-MEASURE-01 | Onshape current help | https://cad.onshape.com/help/Content/View/measure_tool.htm | Medium-high: cloud CAD model measurement | Measure tool displays dynamic results; measurement type can be filtered; selected measurements can remain visually indicated. | Adopt explicit measurement interpretation and result-to-canvas linkage. |
+| ONSHAPE-INFER-01 | Onshape current help | https://cad.onshape.com/help/Content/Assembly/assembly_mate_connector.htm | Medium-high: CAD reference-point inference | Hover wakes inference points; nearest candidate highlights; centroid/midpoint/corner references are available; Shift locks inference. | Adopt hover-magnetic semantic anchors and deliberate candidate lock. |
+
+These URLs are primary product documentation rather than marketing material. The benchmark record therefore satisfies the repository's requirement for traceable official evidence.
+
+## 2.3 Benchmark conflict notes
+
+The products do not agree on whether measurement should remain transient, be saved as a measurement record, or become a drawing/markup dimension. The relevant distinction is **workflow layer**, not contradiction:
+
+- Visual Components and SOLIDWORKS/eDrawings demonstrate a transient Measure workflow.
+- Navisworks demonstrates saved measurement records and conversion to markup.
+- Revit demonstrates temporary vs permanent dimensions.
+- AutoCAD demonstrates associative persistent dimensions.
+
+AtrVisu therefore does not claim a universal industry rule. It deliberately combines these precedents into two explicit layers: transient **Measure Session** and persistent **Reference Dimension**.
+
+The sources also differ in snap topology. Navisworks can snap directly to tessellated vertices/edges, while Onshape emphasizes semantic inference points such as centroids, midpoints and corners. AtrVisu chooses the latter as the professional reference model for Machine/Civil entities because its domain model has canonical dimensions/transforms; raw render topology remains a free geometry-hit source, not the semantic anchor authority.
+
+The sources likewise differ in annotation presentation. Navisworks explicitly supports both 3D depth-aware lines and 2D overlay lines. AtrVisu adopts the depth-aware mode as default and exposes Overlay as an explicit presentation choice.
+
 ## 3. What the benchmarks actually converge on
 
 The sources do not define one universal Measure implementation. They do converge on a product family:
