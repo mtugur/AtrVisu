@@ -22,7 +22,7 @@ export const platformPanelSeedDefinitions = [
   createPanelSeed("panel.machineLibrary", "Machine Library", "left", "library", true, false, true),
   createPanelSeed("panel.layoutExplorer", "Layout Explorer", "left", "explorer"),
   createPanelSeed("panel.inspector", "Properties Inspector", "right", "inspector", true, false, true),
-  createPanelSeed("panel.measure", "Measure", "right", "tool", true, true, true),
+  createPanelSeed("panel.measure", "Measure", "right", "inspector", true, true, true),
   createPanelSeed("panel.statusBar", "Status Bar", "bottom", "status", true, false, false),
 
   createPanelSeed("panel.annotations", "Annotations", "left", "tool"),

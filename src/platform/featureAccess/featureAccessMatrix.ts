@@ -113,8 +113,9 @@ export const platformFeatureAccessMatrix = [
     requiresSurfaceExecutionEvidence: true
   }),
 
-  feature("viewport.measure", "Measure", ["toolbar", "menu"], {
+  feature("viewport.measure", "Measure", ["toolbar", "menu", "panel"], {
     commandIds: ["view.measure"],
+    panelIds: ["panel.measure"],
     runtimeRequirements: ["viewport"],
     requiresSurfaceExecutionEvidence: true,
     notes: "Quick Toolbar, View and Command Palette enter one transient viewport Measure tool; Precision Placement Helpers remain separate."

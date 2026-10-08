@@ -222,6 +222,17 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
     ]
   },
   {
+    surfaceId: "surface.measure",
+    surfaceType: "panel",
+    label: "Measure Task Pane",
+    owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/measure/MeasureTool.tsx", "src/components/measure/referenceDimensionScene.ts"],
+    commandIds: ["view.measure"],
+    panelIds: ["panel.measure"],
+    featureIds: ["viewport.measure"],
+    notes: "Dedicated right-dock Measure task pane. Session controls remain transient; Keep/Save creates persistent Reference Dimensions in the existing Annotation entity family."
+  },
+  {
     surfaceId: "surface.projectSave",
     surfaceType: "persistence",
     label: "Project Save",
