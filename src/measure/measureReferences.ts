@@ -31,7 +31,7 @@ export const getEntityDimensionsMm = (entity: PlatformEntity) => {
     : null;
 };
 
-export const getSemanticAnchorPoints = (entity: PlatformEntity): Readonly<Record<MeasureAnchorKind, MeasurePoint>> => {
+export const getSemanticAnchorPoints = (entity: PlatformEntity): Partial<Record<MeasureAnchorKind, MeasurePoint>> => {
   const dimensions = getEntityDimensionsMm(entity);
   if (!dimensions) {
     return {};

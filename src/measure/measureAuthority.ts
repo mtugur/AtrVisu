@@ -72,6 +72,7 @@ export type MeasureSession = {
     kind: MeasureKind;
     source: MeasureSource;
     mode: "pick" | "navigate";
+    snapMode: "semantic" | "free";
     points: readonly MeasurePoint[];
     hover: MeasurePoint | null;
     level?: MeasureLevel;

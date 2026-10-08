@@ -1106,6 +1106,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   onMeasureAction,
   placedMachines,
   civilReferences,
+  platformEntities,
+  levels,
   annotations,
   selectedMachineIds,
   primarySelectedMachineId,

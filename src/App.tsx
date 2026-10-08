@@ -5,7 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { MeasureTool, MeasureViewportGraphics } from "./components/measure/MeasureTool";
-import { createMeasureAuthority, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference } from "./measure/measureAuthority";
+import { createMeasureAuthority, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
 import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
 import { cloneMeasureDimensionStyle, type MeasureDimensionStyle, type MeasureReference } from "./measure/referenceTypes";
 import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
@@ -5427,8 +5427,7 @@ export function App() {
               badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
               content: (
                 <ViewpointsPanel
-                  mutationUnavailableReason={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}
-                  viewpoints={viewpoints}
+                     viewpoints={viewpoints}
                   selectedViewpointId={selectedViewpointId}
                   onSelectViewpoint={setSelectedViewpointId}
                   onCaptureViewpoint={(name) => { if (!measureAuthority.getActive()) captureViewpoint(name); }}
