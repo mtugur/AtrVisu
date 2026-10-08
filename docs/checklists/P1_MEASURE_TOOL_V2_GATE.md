@@ -45,6 +45,10 @@ Do not start runtime implementation until the implementation package points to t
 - [ ] persistence/reload tests.
 - [ ] M20-M30 adversarial/runtime evidence plan.
 
+## PR governance declaration
+
+The PR body carries the mandatory Scope, Authority, Interaction declaration, Runtime/console, Validation and Stop-rule sections. The next exact-head Quality Gate run must validate this declaration against the frozen benchmark record.
+
 ## Product acceptance boundary
 
 Stage A is not Product Accepted for runtime behavior.
