@@ -6068,7 +6068,7 @@ export function App() {
             </PanelSection>
           ) : null}
           </fieldset>
-          )
+          )}
         </aside>
       )}
       statusBar={(
