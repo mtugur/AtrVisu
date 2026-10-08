@@ -286,25 +286,108 @@ No code for the changed interaction is merged before this procedure is satisfied
 
 ## 15. Professional Measure viewport tool (C03)
 
-Status: Stage A proposed contract delta; independent governance review/merge and separate Stage B runtime instruction required. Existing runtime is not certified by this section.
+Status: Stage A V2 contract. Runtime implementation is not certified by this section.
 
-Benchmark: official Visual Components Measuring Components, AutoCAD MEASUREGEOM and SOLIDWORKS Measure. Traceable facts/adoption/deviations: `docs/benchmarks/P1_MEASURE_TOOL_EVIDENCE.md`. Decision: `docs/adr/ADR-008-phase-1-professional-measure-tool.md`. Full frozen behavior/tolerances/evidence: `docs/product/P1_MEASURE_TOOL_CONTRACT.md`, sections 3-8; gate: `docs/checklists/P1_MEASURE_TOOL_GATE.md`.
+Benchmark authority:
+- `docs/benchmarks/P1_MEASURE_TOOL_V2_BENCHMARK_REVIEW.md`
+- `docs/product/P1_MEASURE_TOOL_V2_CONTRACT.md`
+- `docs/adr/ADR-009-c03-professional-measure-v2-architecture.md`
 
-### Required behavior
+The previous transient-only C03 contract is superseded for implementation by the V2 model below.
 
-- Measure is a transient viewport tool, not Precision Placement, Inspector visibility or a persistent dimension/annotation. It never mutates geometry, Runtime Selection, history, dirty state or persistence.
-- New registered `view.measure` / `viewport.measure` route owns Quick Toolbar and viewport controls. Existing `view.showMeasurements` retains Precision Placement Helpers semantics/compatibility; no Stage A runtime migration or dead toolbar UI.
-- Explicit Pick/Navigate arbitrates LMB: Pick confirms measurement operands, never selects/body-drags/orbits; Navigate suspends picking and uses unchanged LMB orbit. MMB Pan and wheel work in both through existing camera authority. No global binding redesign or hidden click/drag solver.
-- Pick confirmation has one Measure-local frozen boundary, not a claimed existing selection classifier: maximum radial pointer displacement from down <=4 CSS px (including up), DPR-independent, confirms once on same-pointer primary LMB up inside the viewport with a valid current candidate. Any >4 excursion cancels even after return; pointercancel/pre-up lost capture/focus loss/outside release/ownership reset or exit cancels. Post-up normal capture release does not retract confirmation. No time/velocity tuning; cancellation never chooses Orbit. Contract section 4.1/M08 owns event details and real-input/DPR oracle; ordinary selection/Plan Move is untouched.
-- Geometry and displayed active-Level FFL Plane are explicit point sources. Geometry misses do not become plane points; overlays/helpers are excluded; locked visible geometry is readable. Actual world-hit elevation and canonical mm/domain-axis mapping are preserved, with no Floor support inference or placement snap mutation.
-- Distance confirms A/B with live B preview, signed B-A XYZ, total 3D and named Plan distance. Angle confirms A-B-C with B vertex and live C preview. Plan XY polygon shows rubberband/closed preview; Enter/Finish completes a valid simple polygon, invalid/degenerate/self-intersecting input gives a reason rather than NaN/fake results.
-- Plan Area graphics use a fixed source-specific presentation plane: Geometry captures first confirmed A's world Z; explicit Level Plane uses its operation-start captured active-Level FFL. Camera or later Level-context changes cannot move either plane. Explicit operation reset discards/recaptures under the same rule. Original operand XYZ and Plan XY calculations never change; no inferred or fallback plane. Contract sections 5/6/M05 freeze capture timing and projected-versus-original evidence.
-- Canonical selected Machine/Civil local Width/Depth/Height and named entity-pair reference measurements appear in the viewport. Reuse existing dimensions/coordinate/diagnostic authority; no minimum-GLB-clearance/topology claim or competing selection source.
-- Escape/Exit/toggle deterministically clears all transient tool state/graphics and restores normal input ownership. Entry/exit never changes camera implicitly: no navigation means prior pose unchanged; intentional navigation is preserved, not rewound. Selection IDs/order/primary and domain/history/dirty stay unchanged.
-- Confirmed points/results remain fixed under orbit/pan/zoom; only graphics reproject. Both themes and narrow viewport use restrained readable safe-area callouts, no geometry/panel/camera compensation, remount or overflow. Clean commercial capture excludes tool artifacts through existing authority.
+### Benchmark-derived product model
 
-### Forbidden behavior and acceptance
+Professional engineering precedents converge on:
+- dedicated Measure task pane/dock;
+- transient active measurement with viewport preview;
+- separate persistent/reference dimension concept;
+- semantic snap/inference points;
+- configurable dimension style;
+- depth-aware 3D graphics with explicit overlay capability;
+- associative references with an explicit broken/orphan state.
 
-No implicit miss fallback, snap relocation, fake CAD topology, persistent measurements, dead UI, Inspector-only substitute, movement/camera redesign or console suppression. No C04/C05/C07/C09 scope expansion. Product UI Design Spec section 10 remains fully required.
+AtrVisu adopts these patterns with bounded Phase-1 scope.
 
-Contract M01-M10 freezes real pointer/keyboard routes, numeric fixtures/tolerances, camera/viewport states, lifecycle/selection/history/dirty invariants and exact-head evidence. Baseline CI does not satisfy new Measure acceptance. Stage A is docs-only; runtime Automation Green/Contract Verified/Product Accepted remain PENDING until separately implemented, independently reviewed and genuinely accepted. PR #120 Final Exit status is not changed.
+### AtrVisu behavior
+
+#### A. Measure Session
+- Measure is a transient viewport-owned tool.
+- It is controlled by the dedicated right-dock **Measure** tab; Properties Inspector remains context-only.
+- Runtime Selection remains authoritative and is never rewritten by measurement picking.
+- Pick/Navigate, the frozen 4 CSS px Measure click classifier, existing MMB Pan/wheel behavior, and existing camera authority remain unchanged from the C03 baseline contract.
+- Distance, Angle, Plan Area/Perimeter, selected Machine/Civil dimensions and Entity Pair Reference remain the bounded calculation family.
+- Geometry and explicit Level Plane remain distinct point sources with no miss fallback.
+- Confirmed transient results remain visible until explicit Restart, kind/source reset or Exit.
+
+#### B. Reference Dimension
+- A completed measurement becomes persistent only through explicit **Keep / Save**.
+- The persistent object is an Annotation-family dimension/reference entity, not a UI-only measurement record.
+- It survives project save/reload, has a stable identity/name, supports visibility, and is managed from the Measure panel.
+- Creation, deletion and persistent edits use the canonical command/history authority.
+- Hide/show never means delete.
+
+#### C. Semantic references
+- Persistent endpoints store entity ID + semantic anchor where possible.
+- Initial Machine/Civil anchors include canonical front-left-bottom/front-right-bottom/back-left-bottom/back-right-bottom, footprint center, footprint edge midpoints, supported top/bottom face centers and free geometry hits.
+- Anchors derive from canonical entity transform/dimensions, not arbitrary GLB tessellation.
+- Hover exposes relevant candidates; nearest candidate is highlighted; a deliberate modifier may lock a candidate.
+- Persistent entity anchors are associative. Entity movement/rotation/canonical dimension changes recompute the dimension.
+- Deleted/unresolvable references become **Orphaned** and remain explicitly repairable/deletable. Silent fallback to a stale world point is forbidden.
+- Entity Pair Reference A/B anchors are editable without recreating the measurement.
+
+#### D. Professional graphics
+- Linear dimensions use reference markers, extension/witness lines, dimension line, arrow/tick treatment and value.
+- Angular dimensions use reference arms, angle arc and value.
+- Area dimensions use projected boundary plus area/perimeter labels.
+- Text/leader placement is editable without changing measurement references.
+- Short dimensions use deterministic fit behavior; clipping/overlap is forbidden.
+
+#### E. Occlusion
+- Depth-aware 3D rendering is the default.
+- Geometry may occlude measurement graphics.
+- An explicit **Overlay** mode may render measurement graphics above geometry.
+- Overlay is never a hidden camera-angle fallback and is never silently enabled.
+
+#### F. Dimension Style
+- Font family, adaptive/fixed text sizing, min/max screen-space size, line weight, arrow/tick style and size, text offset, text background/halo, precision and unit presentation are style-controlled.
+- Adaptive sizing is bounded screen-space behavior.
+- A 6 CSS px maximum is not a benchmark requirement and is not hard-coded.
+- Exact default visual constants are subject to the dedicated visual acceptance of the new dimension renderer.
+
+#### G. Persistence and visibility
+- Measure panel lists saved dimensions with type, name and reference status.
+- Per-dimension and global Show/Hide are available.
+- Project save/reload preserves saved dimensions.
+- Transient Measure graphics are excluded from clean commercial capture; visible saved Annotation dimensions follow the explicit capture/export policy.
+
+### Forbidden behavior
+
+- Inspector-only Measure;
+- automatic persistence of every transient measurement;
+- raw GLB tessellation as the primary semantic anchor model;
+- always-on-top rendering as the hidden default;
+- silent loss of associativity;
+- reference editing that mutates Machine/Civil geometry;
+- a second selection/entity/coordinate authority;
+- panel resize/collapse changing scene/camera/selection;
+- dead Measure UI;
+- console suppression or benchmark claims without traceable evidence.
+
+### Acceptance
+
+The V2 gate must cover:
+- Measure right-dock surface and stable shell behavior;
+- transient session lifecycle;
+- professional dimension graphics;
+- font/style/adaptive sizing;
+- semantic corner/midpoint/center anchors;
+- editable A/B references;
+- Keep/Save and save/reload;
+- per-item/global visibility;
+- associative updates;
+- Orphaned/reassociate flow;
+- depth-aware default and explicit Overlay;
+- Runtime Selection/history/dirty invariants;
+- clean capture/export and no-red-console evidence.
+
+The authoritative detailed acceptance is `docs/product/P1_MEASURE_TOOL_V2_CONTRACT.md`.
