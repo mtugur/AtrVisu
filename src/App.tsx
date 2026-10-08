@@ -5351,23 +5351,7 @@ export function App() {
               iconId: "layers" as const,
               badge: layers.length > 1 ? `${layers.length}` : undefined,
               content: (
-                {rightDockTab === "measure" ? (
-            <MeasureTool
-              authority={measureAuthority}
-              onAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }}
-              annotations={annotations}
-              entities={platformEntities}
-              levels={levels}
-              onKeep={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "keep" }); }}
-              onRenameDimension={(annotationId, name) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "rename", annotationId, name }); }}
-              onSetDimensionVisibility={(annotationId, visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setVisibility", annotationId, visible }); }}
-              onSetAllDimensionVisibility={(visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setAllVisibility", visible }); }}
-              onDeleteDimension={(annotationId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "deleteDimension", annotationId }); }}
-              onUpdateDimensionStyle={(annotationId, style) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "style", annotationId, style }); }}
-              onUpdateDimensionReference={(annotationId, index, reference) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "reference", annotationId, index, reference }); }}
-            />
-          ) : (
-          <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <LayersPanel
                   layers={layers}
                   placedMachines={placedMachines}
@@ -5528,6 +5512,22 @@ export function App() {
               <WorkbenchDockCollapseButton side="right" collapsed={false} onToggle={closeInspectorPresentation} testId="right-dock-collapse-toggle" />
             </div>
           </header>
+          {rightDockTab === "measure" ? (
+            <MeasureTool
+              authority={measureAuthority}
+              onAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }}
+              annotations={annotations}
+              entities={platformEntities}
+              levels={levels}
+              onKeep={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "keep" }); }}
+              onRenameDimension={(annotationId, name) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "rename", annotationId, name }); }}
+              onSetDimensionVisibility={(annotationId, visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setVisibility", annotationId, visible }); }}
+              onSetAllDimensionVisibility={(visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setAllVisibility", visible }); }}
+              onDeleteDimension={(annotationId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "deleteDimension", annotationId }); }}
+              onUpdateDimensionStyle={(annotationId, style) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "style", annotationId, style }); }}
+              onUpdateDimensionReference={(annotationId, index, reference) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "reference", annotationId, index, reference }); }}
+            />
+          ) : (
           <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
           {showLegacyCompatibilityStack ? (
             <>
@@ -6068,6 +6068,7 @@ export function App() {
             </PanelSection>
           ) : null}
           </fieldset>
+          )
           )
         </aside>
       )}
