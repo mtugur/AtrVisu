@@ -43,5 +43,6 @@ describe("C03 V2 reference model", () => {
     expect(style.adaptiveMaxTextPx).toBe(21);
     expect(DEFAULT_MEASURE_DIMENSION_STYLE.precision).toBe(3);
     expect(style.displayMode).toBe("depth");
+    expect(style.textSizeMode).toBe("adaptive");
   });
 });
