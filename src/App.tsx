@@ -7,7 +7,6 @@ import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene
 import { MeasureTool, MeasureViewportGraphics } from "./components/measure/MeasureTool";
 import { createMeasureAuthority, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference } from "./measure/measureAuthority";
 import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
-import { getDimensionResult, getSemanticAnchorPoints, resolveDimensionReferences } from "./measure/measureReferences";
 import { cloneMeasureDimensionStyle, type MeasureDimensionStyle, type MeasureReference } from "./measure/referenceTypes";
 import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
 import { ViewportNavigationHud } from "./components/viewportNavigation/ViewportNavigationHud";
