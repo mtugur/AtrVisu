@@ -1,6 +1,7 @@
 import type { PlatformEntity } from "../platform/contracts";
 import type { PlacedMachine } from "../types/machine";
 import { angleArc, angleResult, areaResult, dimensionLines, dimensionsForEntity, distanceResult, entityReferencePoint, isFiniteMeasurePoint, pairResult, type MeasureKind, type MeasureLine, type MeasurePoint, type MeasureResult } from "./measureGeometry";
+import type { MeasureAnchorKind, MeasureReference } from "./referenceTypes";
 export const MEASURE_PICK_CLICK_TOLERANCE_CSS_PX = 4;
 export const MEASURE_ACTIVE_REASON = "Exit Measure before changing layout, selection or history.";
 export type MeasureSource = "geometry" | "level-plane";
@@ -27,6 +28,34 @@ export type MeasureAction = {
 } | {
     type: "mode";
     mode: "pick" | "navigate";
+} | {
+    type: "snapMode";
+    snapMode: "semantic" | "free";
+} | {
+    type: "keep";
+} | {
+    type: "rename";
+    annotationId: string;
+    name: string;
+} | {
+    type: "setVisibility";
+    annotationId: string;
+    visible: boolean;
+} | {
+    type: "setAllVisibility";
+    visible: boolean;
+} | {
+    type: "deleteDimension";
+    annotationId: string;
+} | {
+    type: "style";
+    annotationId: string;
+    style: Record<string, unknown>;
+} | {
+    type: "reference";
+    annotationId: string;
+    index: number;
+    reference: unknown;
 };
 export type PickPress = {
     pointerId: number;
@@ -49,6 +78,7 @@ export type MeasureSession = {
     presentationElevationMm?: number;
     completed: boolean;
     entry: MeasureContext;
+    entityCatalog: readonly PlatformEntity[];
     reason?: string;
     lastPress?: {
         maximum: number;
@@ -129,13 +159,20 @@ export const createMeasureAuthority = () => {
         }
         if (action.type === "toggle") {
             const entry = structuredClone({ ...context, entities: context.selectionIds.map(id => context.entities.find(e => e.id === id)).filter((e): e is PlatformEntity => Boolean(e)) });
-            publish(reset({ kind: "distance", source: "geometry", mode: "pick", points: [], hover: null, completed: false, entry }, context));
+            publish(reset({ kind: "distance", source: "geometry", mode: "pick", snapMode: "semantic", points: [], hover: null, completed: false, entry, entityCatalog: context.entities }, context));
             return;
         }
         if (!session)
             return;
         if (action.type === "mode") {
             publish({ ...session, mode: action.mode, hover: null });
+            return;
+        }
+        if (action.type === "snapMode") {
+            publish({ ...session, snapMode: action.snapMode, hover: null });
+            return;
+        }
+        if (["keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference"].includes(action.type)) {
             return;
         }
         if (action.type === "finish") {
@@ -204,5 +241,10 @@ export const isMeasureAction = (value: unknown): value is MeasureAction => {
     if (!value || typeof value !== "object")
         return false;
     const p = value as Record<string, unknown>;
-    return ["toggle", "exit", "restart", "finish"].includes(String(p.type)) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode)));
+    return ["toggle", "exit", "restart", "finish", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference"].includes(String(p.type)) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
 };
+
+export const measurePointToReference = (point: MeasurePoint): MeasureReference =>
+  point.entityId && point.anchorKind
+    ? { type: "entity-anchor", entityId: point.entityId, anchor: point.anchorKind as MeasureAnchorKind }
+    : { type: "world-point", xMm: point.xMm, yMm: point.yMm, zMm: point.zMm };

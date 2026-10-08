@@ -2,11 +2,13 @@ import type { PlatformEntity } from "../platform/contracts";
 import type { PlacedMachine } from "../types/machine";
 import { getFootprintCornersFromReferenceMm } from "../utils/coordinateReference";
 import { calculateReferencePointMeasurementBetweenMachines } from "../utils/placement";
+import type { MeasureAnchorKind } from "./referenceTypes";
 export type MeasurePoint = {
     xMm: number;
     yMm: number;
     zMm: number;
     entityId?: string;
+    anchorKind?: MeasureAnchorKind;
 };
 export type MeasureKind = "distance" | "angle" | "area" | "dimensions" | "pair";
 export type MeasureValue = {

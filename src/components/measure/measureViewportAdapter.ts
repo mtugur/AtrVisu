@@ -3,6 +3,8 @@ import type { MeasureAuthority, MeasureAction } from "../../measure/measureAutho
 import { getMeasureLines, getMeasureResult } from "../../measure/measureAuthority";
 import { entityReferencePoint, formatMeasureValue, type MeasurePoint } from "../../measure/measureGeometry";
 import { getSelectionPickTarget } from "../babylonScene/selectionPicking";
+import { getSemanticAnchorPoints } from "../../measure/measureReferences";
+import type { MeasureAnchorKind } from "../../measure/referenceTypes";
 import { intersectRayWithHorizontalDragPlane } from "../babylonScene/dragPlacement";
 export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics }: {
     scene: Scene;
@@ -40,7 +42,25 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         if (!hit?.hit || !hit.pickedPoint)
             return null;
         const target = getSelectionPickTarget(hit);
-        return pointFromVector(hit.pickedPoint, target.instanceId ? `machine:${target.instanceId}` : `civil:${target.civilReferenceId}`);
+        const entityId = target.instanceId ? `machine:${target.instanceId}` : `civil:${target.civilReferenceId}`;
+        const actual = pointFromVector(hit.pickedPoint, entityId);
+        if (state.snapMode !== "semantic") return actual;
+        const entity = state.entityCatalog.find((item) => item.id === entityId);
+        if (!entity) return actual;
+        const candidates = Object.entries(getSemanticAnchorPoints(entity)) as Array<[MeasureAnchorKind, MeasurePoint]>;
+        let best: { distance: number; point: MeasurePoint } | null = null;
+        const renderWidth = scene.getEngine().getRenderWidth();
+        const renderHeight = scene.getEngine().getRenderHeight();
+        const viewport = camera.viewport.toGlobal(renderWidth, renderHeight);
+        for (const [anchorKind, point] of candidates) {
+            const world = new Vector3(point.xMm / 1000, point.zMm / 1000, point.yMm / 1000);
+            const projected = Vector3.Project(world, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+            const px = projected.x * rect.width / renderWidth;
+            const py = projected.y * rect.height / renderHeight;
+            const distance = Math.hypot(px - x, py - y);
+            if (!best || distance < best.distance) best = { distance, point: { ...point, anchorKind } };
+        }
+        return best?.point ?? actual;
     };
     const release = () => { const id = captured; captured = null; if (id !== null && canvas.hasPointerCapture(id))
         canvas.releasePointerCapture(id); };

@@ -5741,3 +5741,173 @@ body.is-resizing-workbench-dock {
   .measure-controls label:first-child { width: 100%; }
   .measure-controls label:first-child select { flex: 1; }
 }
+
+.workbench-right-dock-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.workbench-right-dock-tabs button {
+  appearance: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--av-text-secondary);
+  padding: 7px 12px;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.workbench-right-dock-tabs button:hover {
+  color: var(--av-text-primary);
+  background: var(--av-surface-control-hover);
+}
+.workbench-right-dock-tabs button.is-active {
+  color: var(--av-text-primary);
+  border-bottom-color: var(--av-accent-primary);
+}
+
+.measure-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 10px;
+  color: var(--av-text-primary);
+  font-size: 12px;
+}
+.measure-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.measure-panel-header span,
+.measure-panel-section-title span,
+.measure-session-summary,
+.measure-panel-empty,
+.measure-reference-readonly {
+  color: var(--av-text-secondary);
+}
+.measure-panel-header h2 { margin: 2px 0 0; font-size: 16px; }
+.measure-session-card,
+.measure-saved-section,
+.measure-dimension-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--av-border-default);
+  border-radius: 4px;
+  background: var(--av-surface-panel);
+}
+.measure-panel-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.measure-panel-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.measure-panel-controls label,
+.measure-dimension-editor > label,
+.measure-style-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.measure-panel-controls select,
+.measure-dimension-editor input,
+.measure-dimension-editor select {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+.measure-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.measure-panel-actions button,
+.measure-segmented button {
+  padding: 5px 8px;
+  font: inherit;
+}
+.measure-keep-button { font-weight: 700; }
+.measure-session-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+.measure-dimension-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.measure-dimension-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border: 1px solid var(--av-border-default);
+  background: var(--av-surface-control);
+  color: var(--av-text-primary);
+  cursor: pointer;
+}
+.measure-dimension-list-item:hover,
+.measure-dimension-list-item.is-selected {
+  background: var(--av-surface-control-hover);
+}
+.measure-dimension-list-item span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.measure-dimension-list-item small {
+  color: var(--av-text-secondary);
+}
+.measure-reference-editor,
+.measure-style-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.measure-reference-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 5px;
+  align-items: center;
+}
+.measure-reference-row > span:first-child {
+  color: var(--av-text-secondary);
+  font-weight: 700;
+}
+.measure-style-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.measure-visibility-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.measure-panel .danger-action { margin-left: auto; }
+@media (max-width: 720px) {
+  .measure-panel-controls { grid-template-columns: 1fr; }
+  .measure-reference-row { grid-template-columns: 20px minmax(0, 1fr); }
+  .measure-reference-row select:last-child { grid-column: 2; }
+}

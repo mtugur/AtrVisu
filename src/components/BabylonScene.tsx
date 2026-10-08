@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import type { MeasureAuthority, MeasureAction } from "../measure/measureAuthority";
+import { createReferenceDimensionSceneManager } from "./measure/referenceDimensionScene";
 import { installMeasureViewportAdapter } from "./measure/measureViewportAdapter";
 import { fitViewCamera, getFitViewGeometry, createPresetCameraState } from "./viewportNavigation/navigationGeometry";
 import type { createCameraTelemetry } from "./viewportNavigation/cameraTelemetry";
@@ -29,12 +30,14 @@ import {
 import "@babylonjs/loaders/glTF";
 import type { CollisionCheckResult } from "../types/collision";
 import type { CivilReferenceItem } from "../types/civil";
+import type { LayoutLevel } from "../types/levels";
 import type { PlacedMachine } from "../types/machine";
 import type { PlacementSettings } from "../types/placement";
 import type { OverlaySettings, VisualModelDiagnostics } from "../types/overlays";
 import type { ScenePerformanceMetrics } from "../types/performance";
 import type { AnnotationObject } from "../types/annotations";
 import type { ViewpointCameraState } from "../types/viewpoints";
+import type { PlatformEntity } from "../platform/contracts";
 import { createLegacyPlatformEntityId } from "../platform/adapters/legacyEntityAdapter";
 import type { ViewportResizeRequest } from "../platform/contracts";
 import type {
@@ -177,6 +180,8 @@ type BabylonSceneProps = {
   onMeasureAction: (action: MeasureAction) => void;
   placedMachines: PlacedMachine[];
   civilReferences: CivilReferenceItem[];
+  platformEntities: readonly PlatformEntity[];
+  levels: readonly LayoutLevel[];
   annotations: AnnotationObject[];
   selectedMachineIds: string[];
   primarySelectedMachineId: string | null;
@@ -1144,11 +1149,14 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   const runtimeViewportStateRef = useRef<RuntimeViewportState | null>(null);
   const visualContextRef = useRef<SceneVisualContext | null>(null);
   const machineNodesRef = useRef<Map<string, PlacedMachineNode>>(new Map());
+  const referenceDimensionManagerRef = useRef<ReturnType<typeof createReferenceDimensionSceneManager> | null>(null);
   const civilReferenceNodesRef = useRef<Map<string, CivilReferenceNode>>(new Map());
   const annotationNodesRef = useRef<Map<string, AnnotationNode>>(new Map());
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
+  const platformEntitiesRef = useRef<readonly PlatformEntity[]>(platformEntities);
+  const levelsRef = useRef<readonly LayoutLevel[]>(levels);
   const selectedMachineIdsRef = useRef<string[]>(selectedMachineIds);
   const selectedCivilReferenceIdRef = useRef<string | null>(selectedCivilReferenceId);
   const selectedCivilReferenceIdsRef = useRef<string[]>(selectedCivilReferenceIds);
@@ -1221,7 +1229,18 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
   useEffect(() => {
     annotationsRef.current = annotations;
+    referenceDimensionManagerRef.current?.build();
   }, [annotations]);
+
+  useEffect(() => {
+    platformEntitiesRef.current = platformEntities;
+    referenceDimensionManagerRef.current?.build();
+  }, [platformEntities]);
+
+  useEffect(() => {
+    levelsRef.current = levels;
+    referenceDimensionManagerRef.current?.build();
+  }, [levels]);
 
   useEffect(() => {
     activeGroupEditMachineIdsRef.current = activeGroupEditMachineIds;
@@ -1799,6 +1818,16 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     cameraRef.current = camera;
     const measureAdapter = installMeasureViewportAdapter({ scene, camera, canvas, authority: measureAuthority,
       onAction: (action) => measureActionRef.current(action), diagnostics: () => enableE2EDiagnosticsRef.current });
+    const referenceDimensionManager = createReferenceDimensionSceneManager({
+      scene,
+      camera,
+      getAnnotations: () => annotationsRef.current,
+      getEntities: () => platformEntitiesRef.current,
+      getLevels: () => levelsRef.current
+    });
+    referenceDimensionManagerRef.current = referenceDimensionManager;
+    referenceDimensionManager.build();
+    const referenceDimensionRenderObserver = scene.onAfterRenderObservable.add(() => referenceDimensionManager.update());
     if (enableE2EDiagnosticsRef.current) {
       navigationRenderProbeRef.current = createNavigationRenderProbe(scene, camera, canvas,
         sceneLifecycleGenerationRef.current, () => panStateRef.current !== null);
@@ -2491,6 +2520,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
 
     return () => {
       measureAdapter.dispose();
+      referenceDimensionManager.dispose();
+      referenceDimensionManagerRef.current = null;
       viewportResizeController.dispose();
       viewportResizeControllerRef.current = null;
       runtimeViewportStateRef.current = null;
@@ -2503,6 +2534,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (pointerObserver) {
           scene.onPointerObservable.remove(pointerObserver);
         }
+        scene.onAfterRenderObservable.remove(referenceDimensionRenderObserver);
         machineNodesRef.current.forEach((node) => {
           node.labelTexture.dispose();
           node.material.dispose();
