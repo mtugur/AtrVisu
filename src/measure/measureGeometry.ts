@@ -9,6 +9,7 @@ export type MeasurePoint = {
     zMm: number;
     entityId?: string;
     anchorKind?: MeasureAnchorKind;
+    levelId?: string;
 };
 export type MeasureKind = "distance" | "angle" | "area" | "dimensions" | "pair";
 export type MeasureValue = {

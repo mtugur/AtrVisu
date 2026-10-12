@@ -8,6 +8,7 @@ import { MeasureTool, MeasureViewportGraphics } from "./components/measure/Measu
 import { createMeasureAuthority, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
 import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
 import { cloneMeasureDimensionStyle, type MeasureDimensionStyle, type MeasureReference } from "./measure/referenceTypes";
+import { getDimensionResult } from "./measure/measureReferences";
 import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
 import { ViewportNavigationHud } from "./components/viewportNavigation/ViewportNavigationHud";
 import { getViewportHudSafeInsets } from "./components/viewportNavigation/hudSafeArea";
@@ -473,7 +474,8 @@ export function App() {
   const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
   const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
   const responsivePrimaryDockPresentationRef = useRef(responsivePrimaryDockPresentation);
-  const isInspectorPresentationCollapsed = resolveInspectorPresentationCollapsed({
+  const isInspectorPresentationCollapsed = uiPreferences.panels.find((panel) => panel.panelId ===
+    (rightDockTab === "measure" ? RUNTIME_PANEL_IDS.measure : RUNTIME_PANEL_IDS.inspector))?.visible === false || resolveInspectorPresentationCollapsed({
     viewportWidth: workbenchViewportSize.width,
     persistedCollapsed: isPanelCollapsed,
     responsiveInspectorOpen: isResponsiveInspectorOpen
@@ -591,6 +593,7 @@ export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [civilReferences, setCivilReferences] = useState<CivilReferenceItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
+  const [measureDimensionStyle, setMeasureDimensionStyle] = useState(() => cloneMeasureDimensionStyle());
   const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
   const [levels, setLevels] = useState<LayoutLevel[]>(() => normalizeLevels([]));
   const [activeLevelId, setActiveLevelId] = useState(GROUND_LEVEL_ID);
@@ -671,6 +674,7 @@ export function App() {
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
+  const measureDimensionStyleRef = useRef(measureDimensionStyle);
   const layersRef = useRef<LayoutLayer[]>(layers);
   const levelsRef = useRef<LayoutLevel[]>(levels);
   const activeLevelIdRef = useRef(activeLevelId);
@@ -1004,6 +1008,9 @@ export function App() {
     layers,
     groups
   }), [civilReferences, currentLayout, currentProject, currentRevision, groups, layers, placedMachines]);
+  const canCapturePresentation = commercialOutputSnapshot.planFootprints.some(footprint => footprint.visible)
+    || (overlaySettings.showAnnotations && visibleAnnotations.some(annotation => annotation.dimension?.visible
+      && !getDimensionResult(annotation, platformEntities, levels).reason));
   const collisionResult = useMemo(
     () => checkAllObjectCollisions(visiblePlacedMachines, visibleCivilReferences, collisionSettings.enabled),
     [collisionSettings.enabled, visibleCivilReferences, visiblePlacedMachines]
@@ -1088,6 +1095,9 @@ export function App() {
   useLayoutEffect(() => {
     annotationsRef.current = annotations;
   }, [annotations]);
+  useLayoutEffect(() => {
+    measureDimensionStyleRef.current = measureDimensionStyle;
+  }, [measureDimensionStyle]);
 
   useLayoutEffect(() => {
     layersRef.current = layers;
@@ -1264,7 +1274,8 @@ export function App() {
         layerItems,
         groupItems,
         levelsRef.current,
-        activeLevelIdRef.current
+        activeLevelIdRef.current,
+        measureDimensionStyleRef.current
       )
     );
   }, []);
@@ -1294,13 +1305,15 @@ export function App() {
         layersRef.current,
         groupsRef.current,
         levelsRef.current,
-        activeLevelIdRef.current
+        activeLevelIdRef.current,
+        measureDimensionStyleRef.current
       );
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setMeasureDimensionStyle(cloneMeasureDimensionStyle(result.measureDimensionStyle));
       setCivilReferences(normalizeCivilReferences(result.civilReferences, result.layers));
       setLayers(normalizeLayers(result.layers));
       setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
@@ -1326,13 +1339,15 @@ export function App() {
         layersRef.current,
         groupsRef.current,
         levelsRef.current,
-        activeLevelIdRef.current
+        activeLevelIdRef.current,
+        measureDimensionStyleRef.current
       );
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setMeasureDimensionStyle(cloneMeasureDimensionStyle(result.measureDimensionStyle));
       setCivilReferences(normalizeCivilReferences(result.civilReferences, result.layers));
       setLayers(normalizeLayers(result.layers));
       setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
@@ -1422,14 +1437,16 @@ export function App() {
   }), [requestLibraryManagerClose, setPrimaryDockPresentationCollapsed]);
 
   const openMeasurePanel = useCallback(() => {
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.measure, { visible: true });
     setRightDockTab("measure");
     openInspectorPresentation();
-  }, [openInspectorPresentation]);
+  }, [openInspectorPresentation, uiPreferencesStore]);
 
   const openInspectorTab = useCallback(() => {
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.inspector, { visible: true });
     setRightDockTab("inspector");
     openInspectorPresentation();
-  }, [openInspectorPresentation]);
+  }, [openInspectorPresentation, uiPreferencesStore]);
 
   const runtimePanelBindings = useMemo<RuntimePanelBindings>(() => {
     const sectionBinding = (
@@ -1659,8 +1676,8 @@ export function App() {
       },
       [RUNTIME_PANEL_IDS.inspector]: {
         getState: () => ({
-          isVisible: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.rightDockTab === "inspector",
-          isOpen: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.rightDockTab === "inspector",
+          isVisible: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.inspector] !== false && runtimePanelStateRef.current.rightDockTab === "inspector",
+          isOpen: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.inspector] !== false && runtimePanelStateRef.current.rightDockTab === "inspector",
           available: true,
           context: runtimePanelStateRef.current.propertiesContext
         }),
@@ -1670,8 +1687,8 @@ export function App() {
       },
       [RUNTIME_PANEL_IDS.measure]: {
         getState: () => ({
-          isVisible: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.rightDockTab === "measure",
-          isOpen: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.rightDockTab === "measure",
+          isVisible: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.measure] !== false && runtimePanelStateRef.current.rightDockTab === "measure",
+          isOpen: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.measure] !== false && runtimePanelStateRef.current.rightDockTab === "measure",
           available: true,
           context: "measure-workspace"
         }),
@@ -2014,8 +2031,8 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences, levels, activeLevelId),
-    [activeLevelId, annotations, civilReferences, groups, layers, levels, placedMachines, viewpoints]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences, levels, activeLevelId, measureDimensionStyle),
+    [activeLevelId, annotations, civilReferences, groups, layers, levels, measureDimensionStyle, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
@@ -2279,6 +2296,7 @@ export function App() {
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle(layout.measureDimensionStyle));
     setViewpoints(importedViewpoints);
     setLevels(importedLevels);
     setActiveLevelId(activeLevelIdFromLayout(layout));
@@ -2612,6 +2630,7 @@ export function App() {
     setPlacedMachines(machines);
     setCivilReferences([]);
     setAnnotations([]);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle());
     setLayers([createDefaultLayer()]);
     setLevels(normalizeLevels([]));
     setActiveLevelId(GROUND_LEVEL_ID);
@@ -2635,6 +2654,7 @@ export function App() {
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle(snapshot.measureDimensionStyle));
     setLayers(importedLayers);
     setGroups(importedGroups);
     setActiveGroupEditId(null);
@@ -2653,6 +2673,7 @@ export function App() {
     setPlacedMachines([]);
     setCivilReferences([]);
     setAnnotations([]);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle());
     setLayers([createDefaultLayer()]);
     setLevels(normalizeLevels([]));
     setActiveLevelId(GROUND_LEVEL_ID);
@@ -2682,6 +2703,7 @@ export function App() {
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle(snapshot.measureDimensionStyle));
     setLayers(importedLayers);
     setGroups(importedGroups);
     setActiveGroupEditId(null);
@@ -3452,17 +3474,26 @@ export function App() {
       name: "Measure " + session.kind,
       visible: true,
       references,
-      style: cloneMeasureDimensionStyle(),
+      presentationElevationMm: session.presentationElevationMm,
+      style: cloneMeasureDimensionStyle(measureDimensionStyleRef.current),
       status: "healthy" as const
     };
     markLayoutChanged();
     setAnnotations((current) => [...current, { ...annotation, text, dimension, layerId: "default" }]);
+    measureAuthority.selectDimension(annotation.id);
     setRightDockTab("measure");
     return true;
   }, [markLayoutChanged, measureAuthority]);
 
   const applyMeasureDimensionAction = useCallback((action: MeasureAction) => {
     if (action.type === "keep") return keepMeasureDimension();
+    if (action.type === "textPlacement") {
+      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      if (!annotation?.dimension || ![action.point.xMm, action.point.yMm, action.point.zMm].every(Number.isFinite)) return false;
+      markLayoutChanged();
+      setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, textPlacementMm: action.point } }));
+      return true;
+    }
     if (action.type === "rename") {
       const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
       const name = action.name.trim();
@@ -3488,8 +3519,16 @@ export function App() {
       const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
       if (!annotation?.dimension) return false;
       markLayoutChanged();
-      const style = cloneMeasureDimensionStyle({ ...annotation.dimension.style, ...(action.style as Partial<MeasureDimensionStyle>) });
-      setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, style } }));
+      const patch = action.style as Partial<MeasureDimensionStyle>;
+      if (patch.displayMode !== undefined) {
+        const style = cloneMeasureDimensionStyle({ ...annotation.dimension.style, displayMode: patch.displayMode });
+        setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, style } }));
+      } else {
+        const style = cloneMeasureDimensionStyle({ ...measureDimensionStyleRef.current, ...patch });
+        setMeasureDimensionStyle(style);
+        setAnnotations(current => current.map(item => item.dimension
+          ? { ...item, dimension: { ...item.dimension, style: { ...style, displayMode: item.dimension.style.displayMode } } } : item));
+      }
       return true;
     }
     if (action.type === "reference") {
@@ -3733,7 +3772,7 @@ export function App() {
       execute: (context) => {
         const action = context.payload === undefined ? { type: "toggle" as const } : context.payload;
         if (!isMeasureAction(action)) return createUnavailableRuntimeCommandResult("Invalid Measure action.");
-        if (["keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference"].includes(action.type)) {
+        if (["keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(action.type)) {
           return applyMeasureDimensionAction(action)
             ? createExecutedRuntimeFeatureCommandResult()
             : createUnavailableRuntimeCommandResult("Measure dimension operation could not be completed.");
@@ -3823,7 +3862,7 @@ export function App() {
       }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.exportScenePng]: {
-      getEnableState: () => commercialOutputSnapshot.planFootprints.some((footprint) => footprint.visible)
+      getEnableState: () => canCapturePresentation
         ? { enabled: true }
         : { enabled: false, reason: "Add visible scene content before exporting a snapshot." },
       execute: async () => {
@@ -4167,6 +4206,7 @@ export function App() {
     connectionPointSnapContext.available,
     connectionPointSnapReason,
     commercialOutputSnapshot,
+    canCapturePresentation,
     exportCommercialBom,
     exportCommercialPlan,
     exportCommercialSnapshot,
@@ -5473,7 +5513,7 @@ export function App() {
           <WorkbenchDockCollapseButton
             side="right"
             collapsed
-            onToggle={openInspectorPresentation}
+            onToggle={rightDockTab === "measure" ? openMeasurePanel : openInspectorTab}
             testId="right-dock-collapse-toggle"
           />
         </div>
@@ -5502,6 +5542,7 @@ export function App() {
               <button type="button" className={rightDockTab === "measure" ? "is-active" : undefined} aria-pressed={rightDockTab === "measure"} onClick={openMeasurePanel}>Measure</button>
             </nav>
             <div className="workbench-inspector-header-actions">
+              {rightDockTab === "inspector" ? <span className="workbench-inspector-mode">{inspectorVisibilityMode === "manual" ? "Pinned" : "Auto"}</span> : null}
               {rightDockTab === "inspector" ? <WorkbenchActionButton
                 iconId={inspectorVisibilityMode === "manual" ? "unpin" : "pin"}
                 label={inspectorVisibilityMode === "manual" ? "Unpin Inspector" : "Pin Inspector"}
@@ -6170,7 +6211,7 @@ export function App() {
                 plan: commercialOutputSnapshot.extents
                   ? { enabled: true }
                   : { enabled: false, reason: "Add visible layout geometry before exporting a plan." },
-                snapshot: commercialOutputSnapshot.planFootprints.some((footprint) => footprint.visible)
+                snapshot: canCapturePresentation
                   ? { enabled: true }
                   : { enabled: false, reason: "Add visible scene content before exporting a snapshot." }
               }}

@@ -5,15 +5,25 @@ import { entityReferencePoint, formatMeasureValue, type MeasurePoint } from "../
 import { getSelectionPickTarget } from "../babylonScene/selectionPicking";
 import { getSemanticAnchorPoints } from "../../measure/measureReferences";
 import type { MeasureAnchorKind } from "../../measure/referenceTypes";
+import { measurePointToReference } from "../../measure/measureAuthority";
+import { MEASURE_ANCHOR_LABELS } from "../../measure/measureReferences";
+import type { createReferenceDimensionSceneManager, DimensionHit } from "./referenceDimensionScene";
 import { intersectRayWithHorizontalDragPlane } from "../babylonScene/dragPlacement";
-export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics }: {
+import { MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX } from "../../measure/measurePresentation";
+export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics, getDimensionManager }: {
     scene: Scene;
     camera: ArcRotateCamera;
     canvas: HTMLCanvasElement;
     authority: MeasureAuthority;
     onAction: (action: MeasureAction) => void;
     diagnostics: () => boolean;
+    getDimensionManager: () => ReturnType<typeof createReferenceDimensionSceneManager> | null;
 }) => {
+    let anchors: { point: MeasurePoint; x: number; y: number; distance: number }[] = [];
+    let highlighted: MeasurePoint | null = null, locked: MeasurePoint | null = null;
+    let cycleIndex: number | null = null;
+    const originalCursor = canvas.style.cursor;
+    let edit: { hit: DimensionHit; startX: number; startY: number; offsetX: number; offsetY: number; depth: number; point: MeasurePoint | null; moved: boolean } | null = null;
     let captured: number | null = null;
     let lastClient: {
         x: number;
@@ -27,12 +37,15 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const rect = canvas.getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
         if (x < 0 || y < 0 || x >= rect.width || y >= rect.height)
             return null;
+        if (locked) return locked;
+        anchors = [];
+        highlighted = null;
         if (state.source === "level-plane") {
             if (!state.level || !Number.isFinite(state.level.elevationMm))
                 return null;
             const ray = scene.createPickingRay(x, y, Matrix.Identity(), camera);
             const hit = intersectRayWithHorizontalDragPlane(ray.origin, ray.direction, state.level.elevationMm / 1000);
-            return hit ? pointFromVector(new Vector3(hit.x, hit.y, hit.z)) : null;
+            return hit ? { ...pointFromVector(new Vector3(hit.x, hit.y, hit.z)), levelId: state.level.id } : null;
         }
         const hit = scene.pick(x, y, mesh => {
             const target = getSelectionPickTarget({ pickedMesh: mesh });
@@ -48,7 +61,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const entity = state.entityCatalog.find((item) => item.id === entityId);
         if (!entity) return actual;
         const candidates = Object.entries(getSemanticAnchorPoints(entity)) as Array<[MeasureAnchorKind, MeasurePoint]>;
-        let best: { distance: number; point: MeasurePoint } | null = null;
+        anchors = [];
         const renderWidth = scene.getEngine().getRenderWidth();
         const renderHeight = scene.getEngine().getRenderHeight();
         const viewport = camera.viewport.toGlobal(renderWidth, renderHeight);
@@ -58,16 +71,20 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             const px = projected.x * rect.width / renderWidth;
             const py = projected.y * rect.height / renderHeight;
             const distance = Math.hypot(px - x, py - y);
-            if (!best || distance < best.distance) best = { distance, point: { ...point, anchorKind } };
+            anchors.push({ distance, point: { ...point, anchorKind }, x: px, y: py });
         }
-        return best?.point ?? actual;
+        anchors.sort((a, b) => a.distance - b.distance || String(a.point.anchorKind).localeCompare(String(b.point.anchorKind), "en"));
+        // The visible 7px candidate marker is its hit target. Outside it, preserve the actual surface hit.
+        highlighted = cycleIndex !== null ? anchors[cycleIndex % anchors.length]?.point ?? null : anchors[0]?.point ?? null;
+        return cycleIndex !== null || anchors[0]?.distance <= MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX ? highlighted ?? actual : actual;
     };
     const release = () => { const id = captured; captured = null; if (id !== null && canvas.hasPointerCapture(id))
         canvas.releasePointerCapture(id); };
-    const cancel = (reason: string) => { authority.cancelPress(reason); release(); };
+    const cancel = (reason: string) => { authority.cancelPress(reason); edit = null; locked = null; cycleIndex = null; getDimensionManager()?.previewText("", null); release(); };
     const observePreview = (x: number, y: number) => {
         lastClient = { x, y };
         const p = candidate(x, y);
+        canvas.style.cursor = authority.getSnapshot()?.mode === "pick" ? "crosshair" : originalCursor;
         authority.preview(p, p ? undefined : authority.getSnapshot()?.source === "level-plane" ? "Level Plane intersection unavailable." : "No eligible geometry surface.");
         return p;
     };
@@ -80,6 +97,17 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             return;
         block(e);
         canvas.focus({ preventScroll: true });
+        const dimensionHit = getDimensionManager()?.hitTest(e.clientX, e.clientY);
+        if (dimensionHit && e.isPrimary) {
+            authority.selectDimension(dimensionHit.annotationId);
+            const projected = Vector3.Project(new Vector3(dimensionHit.point.xMm / 1000, dimensionHit.point.zMm / 1000, dimensionHit.point.yMm / 1000), Matrix.Identity(), scene.getTransformMatrix(), camera.viewport.toGlobal(scene.getEngine().getRenderWidth(), scene.getEngine().getRenderHeight()));
+            const rect = canvas.getBoundingClientRect();
+            edit = { hit: dimensionHit, startX: e.clientX, startY: e.clientY,
+                offsetX: rect.left + projected.x * rect.width / scene.getEngine().getRenderWidth() - e.clientX,
+                offsetY: rect.top + projected.y * rect.height / scene.getEngine().getRenderHeight() - e.clientY,
+                depth: projected.z, point: null, moved: false };
+            captured = e.pointerId; canvas.setPointerCapture(e.pointerId); return;
+        }
         observePreview(e.clientX, e.clientY);
         if (e.isPrimary) {
             authority.beginPress(e.pointerId, e.clientX, e.clientY);
@@ -94,6 +122,17 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         if (!s || s.mode !== "pick" || (e.buttons !== 0 && (e.buttons & 1) === 0))
             return;
         block(e);
+        if (edit) {
+            edit.moved ||= Math.hypot(e.clientX - edit.startX, e.clientY - edit.startY) > 0;
+            if (edit.hit.index !== undefined) edit.point = candidate(e.clientX, e.clientY);
+            else {
+                const rect = canvas.getBoundingClientRect(), rw = scene.getEngine().getRenderWidth(), rh = scene.getEngine().getRenderHeight();
+                const p = Vector3.Unproject(new Vector3((e.clientX + edit.offsetX - rect.left) * rw / rect.width, (e.clientY + edit.offsetY - rect.top) * rh / rect.height, edit.depth), rw, rh, Matrix.Identity(), scene.getViewMatrix(), scene.getProjectionMatrix());
+                edit.point = pointFromVector(p); getDimensionManager()?.previewText(edit.hit.annotationId, edit.point);
+            }
+            return;
+        }
+        if (lastClient?.x !== e.clientX || lastClient?.y !== e.clientY) cycleIndex = null;
         authority.movePress(e.pointerId, e.clientX, e.clientY);
         observePreview(e.clientX, e.clientY);
     };
@@ -102,6 +141,17 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         if (!s || s.mode !== "pick" || e.button !== 0)
             return;
         block(e);
+        if (edit) {
+            const current = edit; edit = null;
+            getDimensionManager()?.previewText("", null);
+            const rect = canvas.getBoundingClientRect();
+            if (current.moved && current.point && canvas.hasPointerCapture(e.pointerId) && e.clientX >= rect.left && e.clientX < rect.right && e.clientY >= rect.top && e.clientY < rect.bottom) {
+                onAction(current.hit.index === undefined
+                    ? { type: "textPlacement", annotationId: current.hit.annotationId, point: current.point }
+                    : { type: "reference", annotationId: current.hit.annotationId, index: current.hit.index, reference: measurePointToReference(current.point) });
+            }
+            release(); return;
+        }
         // A pending native capture release can precede its lostpointercapture event.
         if (authority.getPress() && !canvas.hasPointerCapture(e.pointerId))
             cancel("pre-up capture loss");
@@ -114,6 +164,13 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         cancel(e.type); };
     const blur = () => cancel("focus loss");
     const key = (e: KeyboardEvent) => {
+        if (authority.getActive() && e.target === canvas && (e.key === "Shift" || e.key === "Tab")) {
+            e.preventDefault(); e.stopImmediatePropagation();
+            if (e.key === "Shift") locked = highlighted;
+            else if (anchors.length) { cycleIndex = ((cycleIndex ?? -1) + 1) % anchors.length; highlighted = anchors[cycleIndex].point; }
+            if (lastClient) observePreview(lastClient.x, lastClient.y);
+            return;
+        }
         if (!authority.getActive() || (e.key !== "Escape" && e.key !== "Enter"))
             return;
         const target = e.target as HTMLElement | null;
@@ -127,6 +184,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         e.stopImmediatePropagation();
         onAction({ type: e.key === "Escape" ? "exit" : "finish" });
     };
+    const keyUp = (e: KeyboardEvent) => { if (e.key === "Shift") { locked = null; if (lastClient) observePreview(lastClient.x, lastClient.y); } };
     canvas.addEventListener("pointerdown", down, true);
     canvas.addEventListener("pointermove", move, true);
     canvas.addEventListener("pointerup", up, true);
@@ -135,9 +193,19 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     canvas.addEventListener("blur", blur);
     window.addEventListener("blur", blur);
     window.addEventListener("keydown", key, true);
+    window.addEventListener("keyup", keyUp, true);
+    let previousState = authority.getSnapshot();
     const unsubscribe = authority.subscribe(() => {
         const state = authority.getSnapshot();
-        if (!state || state.mode !== "pick" || !authority.getPress())
+        const reset = !state || state.mode !== previousState?.mode || state.source !== previousState?.source
+            || state.kind !== previousState?.kind || state.snapMode !== previousState?.snapMode
+            || (state.points.length === 0 && state.points !== previousState?.points);
+        previousState = state;
+        if (reset) {
+            edit = null; locked = null; highlighted = null; cycleIndex = null; anchors = [];
+            getDimensionManager()?.previewText("", null);
+        }
+        if (!state || state.mode !== "pick" || (!authority.getPress() && !edit))
             release();
     });
     const observer = scene.onAfterRenderObservable.add(() => {
@@ -149,7 +217,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
                 delete canvas.dataset.measureSession;
             return;
         }
-        if (lastClient && state.mode === "pick" && !state.completed)
+        if (lastClient && state.mode === "pick" && !state.completed && !edit)
             observePreview(lastClient.x, lastClient.y);
         const current = authority.getSnapshot()!;
         const project = (p: MeasurePoint) => {
@@ -170,11 +238,14 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             const quantity = result.values.find(v => v.label === line.label || (line.label === "Angle" && v.unit === "deg") || (line.label === "Reference Point" && v.label === "3D Distance"));
             return { ...line, points: line.points.map(project), label: line.label ? `${line.label}${quantity ? ` ${formatMeasureValue(quantity)}` : ""}` : undefined };
         });
-        authority.project({ width: rect.width, height: rect.height, lines, markers: markers.map((p, i) => ({ ...project(p), label: String.fromCharCode(65 + i), preview: i >= current.points.length && !["pair", "dimensions"].includes(current.kind) })) });
+        authority.project({ width: rect.width, height: rect.height, lines,
+            candidates: anchors.map(a => ({ x: a.x, y: a.y, label: MEASURE_ANCHOR_LABELS[a.point.anchorKind!], selected: a.point.anchorKind === (locked ?? highlighted)?.anchorKind, locked: a.point.anchorKind === locked?.anchorKind })),
+            markers: markers.map((p, i) => ({ ...project(p), label: String.fromCharCode(65 + i), preview: i >= current.points.length && !["pair", "dimensions"].includes(current.kind) })) });
         if (diagnostics())
             canvas.dataset.measureSession = JSON.stringify({ ...current, entry: { selectionIds: current.entry.selectionIds, primaryId: current.entry.primaryId }, result: getMeasureResult(current), lines: getMeasureLines(current), press: authority.getPress() });
     });
     return { candidate, dispose: () => {
+            canvas.style.cursor = originalCursor;
             cancel("viewport disposed");
             unsubscribe();
             scene.onAfterRenderObservable.remove(observer);
@@ -186,5 +257,6 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             canvas.removeEventListener("blur", blur);
             window.removeEventListener("blur", blur);
             window.removeEventListener("keydown", key, true);
+            window.removeEventListener("keyup", keyUp, true);
         } };
 };

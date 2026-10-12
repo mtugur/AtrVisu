@@ -176,6 +176,8 @@ const normalizeMeasureDimension = (value: unknown): MeasureDimensionMetadata | u
   return {
     schemaVersion: 1,
     dimensionKind,
+    presentationElevationMm: typeof value.presentationElevationMm === "number" && Number.isFinite(value.presentationElevationMm)
+      ? value.presentationElevationMm : undefined,
     name: typeof value.name === "string" && value.name.trim() ? value.name : "Reference Dimension",
     visible: typeof value.visible === "boolean" ? value.visible : true,
     references,

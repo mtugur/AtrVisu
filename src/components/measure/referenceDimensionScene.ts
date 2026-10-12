@@ -1,155 +1,162 @@
-import { DynamicTexture, LinesMesh, Matrix, Mesh, MeshBuilder, StandardMaterial, Vector3, type ArcRotateCamera, type Scene } from "@babylonjs/core";
+import { Constants, DynamicTexture, Matrix, Mesh, StandardMaterial, Vector3, VertexData, type ArcRotateCamera, type Scene } from "@babylonjs/core";
 import type { AnnotationObject } from "../../types/annotations";
 import type { LayoutLevel } from "../../types/levels";
 import type { PlatformEntity } from "../../platform/contracts";
+import type { MeasureAuthority } from "../../measure/measureAuthority";
 import { getDimensionResult, resolveDimensionReferences } from "../../measure/measureReferences";
-import { angleArc, dimensionLines } from "../../measure/measureGeometry";
-import { formatMeasureValue } from "../../measure/measureGeometry";
-import type { MeasureDimensionMetadata, MeasureReference } from "../../measure/referenceTypes";
+import { angleArc, dimensionLines, type MeasurePoint } from "../../measure/measureGeometry";
+import { dimensionTextPx, formatDimensionValue, layoutLinearDimension, type DimensionScreenPoint as ScreenPoint, type DimensionSegment } from "../../measure/dimensionPresentation";
 import { createTechnicalColor3 } from "../../designSystem/technicalPaletteBabylon";
 import { TECHNICAL_CSS_COLORS } from "../../designSystem/technicalPalette";
+import { placeMeasureCallout } from "../../measure/measurePresentation";
 
-type ReferenceDimensionNode = {
-  meshes: LinesMesh[];
-  label: Mesh;
-  texture: DynamicTexture;
-  material: StandardMaterial;
-  text: string;
-  style: MeasureDimensionMetadata["style"];
-};
+type Node = { strokes: Mesh; grips: Mesh; label: Mesh; material: StandardMaterial; labelMaterial: StandardMaterial; texture: DynamicTexture; key: string; textAspect: number };
+export type DimensionHit = { annotationId: string; index?: number; point: MeasurePoint };
+const world = (p: MeasurePoint) => new Vector3(p.xMm / 1000, p.zMm / 1000, p.yMm / 1000);
 
-const toWorld = (point: { xMm: number; yMm: number; zMm: number }) => new Vector3(point.xMm / 1000, point.zMm / 1000, point.yMm / 1000);
-const safeDistance = (camera: ArcRotateCamera, point: Vector3) => Math.max(1, Vector3.Distance(camera.globalPosition, point));
-
-const formatDimensionText = (annotation: AnnotationObject, entities: readonly PlatformEntity[], levels: readonly LayoutLevel[]) => {
-  const result = getDimensionResult(annotation, entities, levels);
-  if (result.reason || result.values.length === 0) return result.reason ?? "—";
-  const precision = annotation.dimension?.style.precision ?? 3;
-  return result.values.map((value) => {
-    const number = value.value.toFixed(precision);
-    const normalized = Number(number) === 0 ? Number(0).toFixed(precision) : number;
-    return value.label + " " + normalized + " " + value.unit;
-  }).join(" | ");
-};
-
-const createTextNode = (scene: Scene, id: string, text: string, style: MeasureDimensionMetadata["style"]) => {
-  const texture = new DynamicTexture("measure-dimension-texture-" + id, { width: 1024, height: 256 }, scene);
-  texture.hasAlpha = true;
-  const context = texture.getContext() as unknown as CanvasRenderingContext2D;
-  context.clearRect(0, 0, 1024, 256);
-  context.font = "600 48px " + style.fontFamily;
-  context.textBaseline = "middle";
-  const measured = Math.min(960, Math.max(160, Math.ceil(context.measureText(text).width + 48)));
-  if (style.textBackground) {
-    context.fillStyle = TECHNICAL_CSS_COLORS.labelDarkBackground;
-    context.fillRect(16, 32, measured, 160);
-  }
-  context.fillStyle = TECHNICAL_CSS_COLORS.labelText;
-  context.fillText(text, 32, 112);
-  const material = new StandardMaterial("measure-dimension-label-material-" + id, scene);
-  material.diffuseTexture = texture;
-  material.opacityTexture = texture;
-  material.emissiveColor = createTechnicalColor3("white");
-  material.disableLighting = true;
-  material.backFaceCulling = false;
-  const label = MeshBuilder.CreatePlane("measure-dimension-label-" + id, { width: 2.4, height: 0.6 }, scene);
-  label.billboardMode = Mesh.BILLBOARDMODE_ALL;
-  label.isPickable = false;
-  label.material = material;
-  return { label, texture, material };
-};
-
-const createLine = (scene: Scene, id: string, points: Vector3[], color: ReturnType<typeof createTechnicalColor3>, lineWidth: number) => {
-  const mesh = MeshBuilder.CreateLines("measure-dimension-line-" + id + "-" + Math.random().toString(36).slice(2), { points }, scene);
-  mesh.color = color;
-  mesh.alpha = 1;
-  mesh.isPickable = false;
-  mesh.enableEdgesRendering();
-  mesh.edgesWidth = lineWidth;
-  return mesh;
-};
-
-const arrowPoints = (start: Vector3, end: Vector3, sizeMeters: number, camera: ArcRotateCamera) => {
-  const direction = end.subtract(start).normalize();
-  const view = camera.getForwardRay(1).direction.normalize();
-  let side = Vector3.Cross(direction, view);
-  if (side.lengthSquared() < 1e-8) side = Vector3.Cross(direction, Vector3.Up());
-  side.normalize();
-  const back = end.subtract(direction.scale(sizeMeters));
-  return [end, back.add(side.scale(sizeMeters * 0.55)), back.subtract(side.scale(sizeMeters * 0.55)), end];
-};
-
-export const createReferenceDimensionSceneManager = ({ scene, camera, getAnnotations, getEntities, getLevels }: { scene: Scene; camera: ArcRotateCamera; getAnnotations: () => readonly AnnotationObject[]; getEntities: () => readonly PlatformEntity[]; getLevels: () => readonly LayoutLevel[]; }) => {
-  const nodes = new Map<string, ReferenceDimensionNode>();
-  const color = createTechnicalColor3("selectionPrimary");
-  const disposeNode = (node: ReferenceDimensionNode) => { node.meshes.forEach((mesh) => mesh.dispose()); node.texture.dispose(); node.material.dispose(); node.label.dispose(); };
-  const clear = () => { nodes.forEach(disposeNode); nodes.clear(); };
-  const build = () => {
-    clear();
-    const annotations = getAnnotations();
-    const entities = getEntities();
-    const levels = getLevels();
-    annotations.filter((annotation) => annotation.dimension?.visible !== false).forEach((annotation) => {
-      const dimension = annotation.dimension;
-      if (!dimension || dimension.style.displayMode === "overlay") return;
-      const resolved = resolveDimensionReferences(dimension, entities, levels);
-      if (resolved.orphaned || resolved.points.length === 0) return;
-      const result = getDimensionResult(annotation, entities, levels);
-      const text = formatDimensionText(annotation, entities, levels);
-      const labelParts: Vector3[] = [];
-      const meshes: LinesMesh[] = [];
-      if (dimension.dimensionKind === "angle" && resolved.points.length >= 3) {
-        const arc = angleArc(resolved.points[0], resolved.points[1], resolved.points[2]).map(toWorld);
-        meshes.push(createLine(scene, annotation.id + "-angle", [toWorld(resolved.points[0]), toWorld(resolved.points[1]), toWorld(resolved.points[2])], color, dimension.style.lineWeightPx));
-        meshes.push(createLine(scene, annotation.id + "-arc", arc, color, dimension.style.lineWeightPx));
-        labelParts.push(toWorld(resolved.points[1]));
-      } else if (dimension.dimensionKind === "area") {
-        const polygon = resolved.points.map(toWorld);
-        if (polygon.length > 2) meshes.push(createLine(scene, annotation.id + "-area", polygon.concat([polygon[0]]), color, dimension.style.lineWeightPx));
-        labelParts.push(polygon.reduce((sum, point) => sum.add(point), Vector3.Zero()).scale(1 / polygon.length));
-      } else if (dimension.dimensionKind === "dimensions") {
-        const entityRef = dimension.references[0];
-        const entity = entityRef && entityRef.type === "entity-anchor" ? entities.find((item) => item.id === entityRef.entityId) : undefined;
-        if (entity) dimensionLines(entity).forEach((line, index) => { const points = line.points.map(toWorld); if (points.length > 1) { meshes.push(createLine(scene, annotation.id + "-dim-" + index, points, color, dimension.style.lineWeightPx)); labelParts.push(points[0].add(points[points.length - 1]).scale(0.5)); } });
-      } else if (resolved.points.length >= 2) {
-        const a = toWorld(resolved.points[0]);
-        const b = toWorld(resolved.points[1]);
-        const direction = b.subtract(a).normalize();
-        let side = Vector3.Cross(direction, camera.getForwardRay(1).direction);
-        if (side.lengthSquared() < 1e-8) side = Vector3.Cross(direction, Vector3.Up());
-        side.normalize();
-        const offset = side.scale(Math.max(0.12, Vector3.Distance(a, b) * 0.08));
-        const da = a.add(offset);
-        const db = b.add(offset);
-        if (dimension.style.showWitnessLines) meshes.push(createLine(scene, annotation.id + "-witness", [a, da, b, db], color, dimension.style.lineWeightPx));
-        meshes.push(createLine(scene, annotation.id + "-distance", [da, db], color, dimension.style.lineWeightPx));
-        const arrowSize = Math.max(0.03, dimension.style.arrowSizePx * 0.001);
-        if (dimension.style.arrowStyle === "arrow") meshes.push(createLine(scene, annotation.id + "-arrow-a", arrowPoints(da, db, arrowSize, camera), color, dimension.style.lineWeightPx), createLine(scene, annotation.id + "-arrow-b", arrowPoints(db, da, arrowSize, camera), color, dimension.style.lineWeightPx));
-        else meshes.push(createLine(scene, annotation.id + "-ticks", [da.subtract(side.scale(arrowSize)), da.add(side.scale(arrowSize)), db.subtract(side.scale(arrowSize)), db.add(side.scale(arrowSize))], color, dimension.style.lineWeightPx));
-        labelParts.push(da.add(db).scale(0.5));
-      }
-      const labelPosition = dimension.textPlacementMm ? toWorld(dimension.textPlacementMm) : (labelParts[0] ?? toWorld(resolved.points[0]));
-      const labelNode = createTextNode(scene, annotation.id, text, dimension.style);
-      nodes.set(annotation.id, { meshes, label: labelNode.label, texture: labelNode.texture, material: labelNode.material, text, style: dimension.style });
-      labelNode.label.position.copyFrom(labelPosition);
-    });
+export const createReferenceDimensionSceneManager = ({ scene, camera, canvas, authority, getAnnotations, getEntities, getLevels }: {
+  scene: Scene; camera: ArcRotateCamera; canvas: HTMLCanvasElement; authority: MeasureAuthority;
+  getAnnotations: () => readonly AnnotationObject[]; getEntities: () => readonly PlatformEntity[]; getLevels: () => readonly LayoutLevel[];
+}) => {
+  const nodes = new Map<string, Node>();
+  let previewText: { id: string; point: MeasurePoint } | null = null;
+  let hitTargets: { hit: DimensionHit; screen: ScreenPoint; width: number; height: number }[] = [];
+  const disposeNode = (node: Node) => {
+    node.strokes.dispose(); node.grips.dispose(); node.label.dispose(); node.material.dispose(); node.labelMaterial.dispose(); node.texture.dispose();
+  };
+  const clear = () => { nodes.forEach(disposeNode); nodes.clear(); hitTargets = []; };
+  scene.setRenderingAutoClearDepthStencil(3, false, false, false);
+  const material = (id: string, overlay: boolean) => {
+    const m = new StandardMaterial(id, scene);
+    m.disableLighting = true; m.emissiveColor = createTechnicalColor3("selectionPrimary"); m.backFaceCulling = false;
+    m.depthFunction = overlay ? Constants.ALWAYS : Constants.LEQUAL; m.disableDepthWrite = overlay;
+    return m;
   };
   const update = () => {
-    const entities = getEntities();
-    const levels = getLevels();
-    nodes.forEach((node, id) => {
-      const annotation = getAnnotations().find((item) => item.id === id);
-      if (!annotation?.dimension) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const rw = scene.getEngine().getRenderWidth(), rh = scene.getEngine().getRenderHeight();
+    const project = (p: MeasurePoint): ScreenPoint => {
+      const v = Vector3.Project(world(p), Matrix.Identity(), scene.getTransformMatrix(), camera.viewport.toGlobal(rw, rh));
+      return { x: v.x * rect.width / rw, y: v.y * rect.height / rh, z: v.z };
+    };
+    const unproject = (p: ScreenPoint) => Vector3.Unproject(new Vector3(p.x * rw / rect.width, p.y * rh / rect.height, p.z), rw, rh, Matrix.Identity(), scene.getViewMatrix(), scene.getProjectionMatrix());
+    const setQuads = (mesh: Mesh, quads: ScreenPoint[][], textured = false) => {
+      const positions: number[] = [], indices: number[] = [], uvs: number[] = [];
+      quads.forEach((quad, i) => {
+        quad.forEach(p => { const v = unproject(p); positions.push(v.x, v.y, v.z); });
+        const n = i * 4; indices.push(n, n + 1, n + 2, n, n + 2, n + 3);
+        if (textured) uvs.push(0, 1, 1, 1, 1, 0, 0, 0);
+      });
+      const data = new VertexData(); data.positions = positions; data.indices = indices;
+      if (textured) data.uvs = uvs;
+      data.applyToMesh(mesh, true);
+    };
+    const box = (p: ScreenPoint, w: number, h: number) => [
+      { ...p, x: p.x - w / 2, y: p.y - h / 2 }, { ...p, x: p.x + w / 2, y: p.y - h / 2 },
+      { ...p, x: p.x + w / 2, y: p.y + h / 2 }, { ...p, x: p.x - w / 2, y: p.y + h / 2 }
+    ];
+    const entities = getEntities(), levels = getLevels(), active = new Set<string>();
+    hitTargets = [];
+    getAnnotations().flatMap(annotation => annotation.dimension?.dimensionKind === "dimensions" && !annotation.dimension.dimensionAxis
+      ? (["width", "depth", "height"] as const).map(dimensionAxis => ({ ...annotation, dimension: { ...annotation.dimension!, dimensionAxis } }))
+      : [annotation]).forEach(annotation => {
       const dimension = annotation.dimension;
-      const points = resolveDimensionReferences(dimension, entities, levels).points;
-      const anchor = dimension.textPlacementMm ? toWorld(dimension.textPlacementMm) : points[0] ? toWorld(points[0]) : Vector3.Zero();
-      node.label.position.copyFrom(anchor);
-      const distance = safeDistance(camera, anchor);
-      const textPx = dimension.style.textSizeMode === "fixed" ? dimension.style.fixedTextPx : Math.min(dimension.style.adaptiveMaxTextPx, Math.max(dimension.style.adaptiveMinTextPx, 12 * Math.sqrt(distance / 12)));
-      const worldPerPixel = distance * 0.0012;
-      node.label.scaling.x = Math.max(0.12, textPx * worldPerPixel);
-      node.label.scaling.y = Math.max(0.04, textPx * worldPerPixel * 0.25);
+      if (!dimension || !dimension.visible) return;
+      const resolved = resolveDimensionReferences(dimension, entities, levels), result = getDimensionResult(annotation, entities, levels);
+      if (resolved.orphaned || result.reason || !resolved.points.length) return;
+      const style = dimension.style;
+      const renderId = dimension.dimensionAxis ? `${annotation.id}:${dimension.dimensionAxis}` : annotation.id;
+      const values = dimension.dimensionKind === "distance" || dimension.dimensionKind === "pair" ? result.values.filter(v => v.label === "3D Distance") : result.values;
+      const text = values.map(v => formatDimensionValue(v, style)).join(" | ");
+      const key = JSON.stringify([text, style.fontFamily, style.textBackground, style.displayMode]);
+      let node = nodes.get(renderId);
+      if (node?.key !== key) { if (node) disposeNode(node); nodes.delete(renderId); node = undefined; }
+      if (!node) {
+        const texture = new DynamicTexture(`dimension-text-${annotation.id}`, { width: 1, height: 1 }, scene); texture.hasAlpha = true;
+        let ctx = texture.getContext() as unknown as CanvasRenderingContext2D;
+        ctx.font = `600 48px ${style.fontFamily}`;
+        const width = Math.ceil(ctx.measureText(text).width) + 24, height = 72;
+        texture.scaleTo(width, height); ctx = texture.getContext() as unknown as CanvasRenderingContext2D;
+        ctx.font = `600 48px ${style.fontFamily}`; ctx.textBaseline = "middle"; ctx.clearRect(0, 0, width, height);
+        if (style.textBackground) { ctx.fillStyle = TECHNICAL_CSS_COLORS.labelDarkBackground; ctx.fillRect(0, 0, width, height); }
+        ctx.fillStyle = TECHNICAL_CSS_COLORS.labelText; ctx.fillText(text, 12, 36); texture.update();
+        const overlay = style.displayMode === "overlay", m = material(`dimension-stroke-${annotation.id}`, overlay), lm = material(`dimension-label-${annotation.id}`, overlay);
+        lm.emissiveColor = createTechnicalColor3("white"); lm.diffuseTexture = texture; lm.opacityTexture = texture; lm.transparencyMode = StandardMaterial.MATERIAL_ALPHATEST;
+        const strokes = new Mesh(`reference-dimension-${renderId}`, scene), label = new Mesh(`reference-dimension-label-${renderId}`, scene);
+        const grips = new Mesh(`reference-dimension-grips-${renderId}`, scene);
+        strokes.material = grips.material = m; label.material = lm; strokes.isPickable = grips.isPickable = label.isPickable = false;
+        strokes.renderingGroupId = grips.renderingGroupId = label.renderingGroupId = overlay ? 3 : 0;
+        node = { strokes, grips, label, material: m, labelMaterial: lm, texture, key, textAspect: width / 48 }; nodes.set(renderId, node);
+      }
+      active.add(renderId);
+      let points = resolved.points;
+      if (dimension.dimensionKind === "dimensions") {
+        const ref = dimension.references[0], entity = ref.type === "entity-anchor" ? entities.find(e => e.id === ref.entityId) : undefined;
+        const axis = dimension.dimensionAxis === "depth" ? 1 : dimension.dimensionAxis === "height" ? 2 : 0;
+        points = [...(entity ? dimensionLines(entity)[axis]?.points ?? points : points)];
+      }
+      if (dimension.dimensionKind === "area") points = points.map(p => ({ ...p, zMm: dimension.presentationElevationMm ?? points[0].zMm }));
+      const projected = points.map(project);
+      if (projected.some(p => ![p.x, p.y, p.z].every(Number.isFinite) || p.z < 0 || p.z > 1)) { node.strokes.setEnabled(false); node.grips.setEnabled(false); node.label.setEnabled(false); return; }
+      node.strokes.setEnabled(true); node.label.setEnabled(true);
+      const zoom = Math.max(1, Vector3.Distance(camera.globalPosition, world(points[0])));
+      const textPx = dimensionTextPx(style, 12 * Math.sqrt(12 / zoom)), textWidth = node.textAspect * textPx, textHeight = 1.5 * textPx;
+      const placement = previewText?.id === annotation.id ? previewText.point : dimension.textPlacementMm;
+      let labelPosition = placement ? project(placement) : projected.reduce((a, b) => ({ x: a.x + b.x / projected.length, y: a.y + b.y / projected.length, z: a.z + b.z / projected.length }), { x: 0, y: 0, z: 0 });
+      const segments: DimensionSegment[] = []; let fit = "inside";
+      if (["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && projected.length >= 2) {
+        const layout = layoutLinearDimension(projected[0], projected[1], style, textWidth, textHeight, placement ? labelPosition : undefined);
+        segments.push(...layout.segments); labelPosition = layout.text; fit = layout.outside ? "outside" : "inside";
+      } else {
+        for (let i = 1; i < projected.length; i++) segments.push([projected[i - 1], projected[i]]);
+        if (dimension.dimensionKind === "area") segments.push([projected[projected.length - 1], projected[0]]);
+        if (dimension.dimensionKind === "angle" && points.length >= 3) {
+          const arc = angleArc(points[0], points[1], points[2]).map(project);
+          for (let i = 1; i < arc.length; i++) segments.push([arc[i - 1], arc[i]]);
+          if (!placement && arc.length) labelPosition = { ...arc[Math.floor(arc.length / 2)], y: arc[Math.floor(arc.length / 2)].y - textHeight };
+        }
+        if (placement && style.showLeaders) segments.push([projected[0], labelPosition]);
+      }
+      if (!placement) {
+        const root = canvas.closest('[data-testid="app-root"]');
+        const css = root ? getComputedStyle(root) : null;
+        const inset = (name: string) => Number.parseFloat(css?.getPropertyValue(name) ?? "0") || 0;
+        const safe = placeMeasureCallout({ x: labelPosition.x - textWidth / 2, y: labelPosition.y }, rect.width, rect.height,
+          { left: inset("--av-viewport-hud-left-inset"), right: inset("--av-viewport-hud-right-inset"), bottom: inset("--av-viewport-hud-bottom-inset") }, textWidth);
+        if (safe.displaced) {
+          const previous = labelPosition;
+          labelPosition = { ...labelPosition, x: safe.x + textWidth / 2, y: safe.y };
+          const last = segments[segments.length - 1];
+          if (last?.[1] === previous) segments[segments.length - 1] = [last[0], labelPosition];
+          else if (style.showLeaders) segments.push([previous, labelPosition]);
+        }
+      }
+      const quads = segments.map(([a, b]) => {
+        const length = Math.hypot(b.x - a.x, b.y - a.y);
+        const dx = length ? -(b.y - a.y) / length * style.lineWeightPx / 2 : style.lineWeightPx / 2, dy = length ? (b.x - a.x) / length * style.lineWeightPx / 2 : 0;
+        return [{ ...a, x: a.x + dx, y: a.y + dy }, { ...b, x: b.x + dx, y: b.y + dy }, { ...b, x: b.x - dx, y: b.y - dy }, { ...a, x: a.x - dx, y: a.y - dy }];
+      });
+      const gripQuads: ScreenPoint[][] = [];
+      if (authority.getActive() && authority.getSelectedDimensionId() === annotation.id) resolved.points.forEach((point, index) => {
+        const screen = project(point); gripQuads.push(box(screen, 9, 9)); hitTargets.push({ hit: { annotationId: annotation.id, index, point }, screen, width: 14, height: 14 });
+      });
+      node.grips.setEnabled(gripQuads.length > 0);
+      if (gripQuads.length) setQuads(node.grips, gripQuads);
+      setQuads(node.strokes, quads); setQuads(node.label, [box(labelPosition, textWidth, textHeight)], true);
+      const labelWorld = unproject(labelPosition);
+      hitTargets.push({ hit: { annotationId: annotation.id, point: { xMm: labelWorld.x * 1000, yMm: labelWorld.z * 1000, zMm: labelWorld.y * 1000 } }, screen: labelPosition, width: textWidth, height: textHeight });
+      node.strokes.metadata = { referenceDimensionId: annotation.id, references: dimension.references, style, displayMode: style.displayMode, fit, witnessCount: ["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && style.showWitnessLines ? 2 : 0, lineWeightPx: style.lineWeightPx, textPx, text, labelPosition, endpoints: resolved.points, endpointScreens: resolved.points.map(project), segments };
     });
+    nodes.forEach((node, id) => { if (!active.has(id)) { disposeNode(node); nodes.delete(id); } });
   };
-  return { build, update, dispose: clear };
+  return { build: update, update, dispose: clear,
+    getEditorAffordances: () => [...nodes.values()].map(node => node.grips),
+    previewText: (id: string, point: MeasurePoint | null) => { previewText = point ? { id, point } : null; },
+    hitTest: (x: number, y: number): DimensionHit | null => {
+      const rect = canvas.getBoundingClientRect();
+      return hitTargets.find(t => Math.abs(x - rect.left - t.screen.x) <= t.width / 2 && Math.abs(y - rect.top - t.screen.y) <= t.height / 2)?.hit ?? null;
+    },
+    getEvidence: () => [...nodes].map(([id, node]) => ({ id, ...node.strokes.metadata }))
+  };
 };

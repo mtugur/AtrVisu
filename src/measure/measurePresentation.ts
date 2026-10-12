@@ -1,3 +1,4 @@
+export const MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX = 7;
 export type MeasureSafeArea = {
     left: number;
     right: number;

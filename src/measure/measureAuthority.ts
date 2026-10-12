@@ -56,6 +56,10 @@ export type MeasureAction = {
     annotationId: string;
     index: number;
     reference: unknown;
+} | {
+    type: "textPlacement";
+    annotationId: string;
+    point: MeasurePoint;
 };
 export type PickPress = {
     pointerId: number;
@@ -88,6 +92,7 @@ export type MeasureSession = {
     };
 };
 export type MeasureProjection = {
+    candidates?: readonly { x: number; y: number; label: string; selected: boolean; locked: boolean }[];
     width: number;
     height: number;
     lines: readonly {
@@ -143,6 +148,7 @@ export const getMeasureLines = (s: MeasureSession): MeasureLine[] => {
 };
 const emptyProjection: MeasureProjection = { width: 0, height: 0, lines: [], markers: [] };
 export const createMeasureAuthority = () => {
+    let selectedDimensionId: string | null = null;
     let session: MeasureSession | null = null, press: PickPress | null = null, projection = emptyProjection, projectionKey = "";
     const listeners = new Set<() => void>(), projectionListeners = new Set<() => void>();
     const publish = (next: MeasureSession | null) => { session = next; listeners.forEach(fn => fn()); };
@@ -173,7 +179,7 @@ export const createMeasureAuthority = () => {
             publish({ ...session, snapMode: action.snapMode, hover: null });
             return;
         }
-        if (["keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference"].includes(action.type)) {
+        if (["keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(action.type)) {
             return;
         }
         if (action.type === "finish") {
@@ -232,7 +238,10 @@ export const createMeasureAuthority = () => {
         publish({ ...session, reason, lastPress: { maximum: ended.maximum, confirmed: accepted, reason } });
         return accepted;
     };
-    return { getSnapshot: () => session, getActive: () => session !== null, subscribe: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); }, dispatch, preview, beginPress, movePress, endPress, cancelPress,
+    return { getSnapshot: () => session, getActive: () => session !== null,
+        getSelectedDimensionId: () => selectedDimensionId,
+        selectDimension: (id: string | null) => { if (id !== selectedDimensionId) { selectedDimensionId = id; listeners.forEach(fn => fn()); } },
+        subscribe: (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); }, dispatch, preview, beginPress, movePress, endPress, cancelPress,
         getPress: () => press, getProjection: () => projection, subscribeProjection: (fn: () => void) => { projectionListeners.add(fn); return () => projectionListeners.delete(fn); },
         project: (next: MeasureProjection) => { const key = JSON.stringify(next); if (key === projectionKey)
             return; projectionKey = key; projection = next; projectionListeners.forEach(fn => fn()); } };
@@ -242,10 +251,12 @@ export const isMeasureAction = (value: unknown): value is MeasureAction => {
     if (!value || typeof value !== "object")
         return false;
     const p = value as Record<string, unknown>;
-    return ["toggle", "exit", "restart", "finish", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference"].includes(String(p.type)) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
+    return ["toggle", "exit", "restart", "finish", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(String(p.type)) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
 };
 
 export const measurePointToReference = (point: MeasurePoint): MeasureReference =>
-  point.entityId && point.anchorKind
+  point.levelId
+    ? { type: "level-point", levelId: point.levelId, xMm: point.xMm, yMm: point.yMm }
+    : point.entityId && point.anchorKind
     ? { type: "entity-anchor", entityId: point.entityId, anchor: point.anchorKind as MeasureAnchorKind }
     : { type: "world-point", xMm: point.xMm, yMm: point.yMm, zMm: point.zMm };

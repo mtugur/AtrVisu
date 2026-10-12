@@ -56,6 +56,7 @@ export type MeasureDimensionMetadata = {
   visible: boolean;
   references: readonly MeasureReference[];
   dimensionAxis?: "width" | "depth" | "height";
+  presentationElevationMm?: number;
   style: MeasureDimensionStyle;
   textPlacementMm?: {
     xMm: number;
@@ -84,7 +85,17 @@ export const DEFAULT_MEASURE_DIMENSION_STYLE: MeasureDimensionStyle = {
   showLeaders: true
 };
 
-export const cloneMeasureDimensionStyle = (style?: Partial<MeasureDimensionStyle>): MeasureDimensionStyle => ({
-  ...DEFAULT_MEASURE_DIMENSION_STYLE,
-  ...style
-});
+export const cloneMeasureDimensionStyle = (style?: Partial<MeasureDimensionStyle>): MeasureDimensionStyle => {
+  const next = { ...DEFAULT_MEASURE_DIMENSION_STYLE, ...style };
+  for (const key of Object.keys(DEFAULT_MEASURE_DIMENSION_STYLE) as (keyof MeasureDimensionStyle)[]) {
+    if (next[key] === undefined) Object.assign(next, { [key]: DEFAULT_MEASURE_DIMENSION_STYLE[key] });
+  }
+  const positive = (value: number, fallback: number) => Number.isFinite(value) && value > 0 ? value : fallback;
+  next.adaptiveMinTextPx = positive(next.adaptiveMinTextPx, 10);
+  next.adaptiveMaxTextPx = Math.max(next.adaptiveMinTextPx, positive(next.adaptiveMaxTextPx, 18));
+  next.fixedTextPx = positive(next.fixedTextPx, 12);
+  next.lineWeightPx = positive(next.lineWeightPx, 1.5);
+  next.arrowSizePx = positive(next.arrowSizePx, 7);
+  next.textOffsetPx = Number.isFinite(next.textOffsetPx) ? next.textOffsetPx : 10;
+  return next;
+};

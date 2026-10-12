@@ -1417,7 +1417,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
       return;
     }
 
-    const activeIds = new Set(annotations.map((annotation) => annotation.id));
+    const activeIds = new Set(annotations.filter((annotation) => !annotation.dimension).map((annotation) => annotation.id));
     annotationNodesRef.current.forEach((node, annotationId) => {
       if (!activeIds.has(annotationId)) {
         disposeAnnotationNode(node);
@@ -1426,6 +1426,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     });
 
     annotations.forEach((annotation) => {
+      if (annotation.dimension) return;
       const isSelected = annotation.id === selectedAnnotationId;
       const existing = annotationNodesRef.current.get(annotation.id);
       if (existing) {
@@ -1623,6 +1624,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         throw new Error("The 3D scene is not ready for presentation capture.");
       }
       const editorAffordances = [
+        ...(referenceDimensionManagerRef.current?.getEditorAffordances() ?? []),
         ...[...machineNodesRef.current.values()].flatMap((node) => [
           node.selectionFrame,
           node.metadataFrame,
@@ -1819,17 +1821,23 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const camera = createBabylonCameraViewport(scene, canvas);
     cameraRef.current = camera;
     const measureAdapter = installMeasureViewportAdapter({ scene, camera, canvas, authority: measureAuthority,
+      getDimensionManager: () => referenceDimensionManagerRef.current,
       onAction: (action) => measureActionRef.current(action), diagnostics: () => enableE2EDiagnosticsRef.current });
     const referenceDimensionManager = createReferenceDimensionSceneManager({
       scene,
       camera,
-      getAnnotations: () => annotationsRef.current,
+      canvas,
+      authority: measureAuthority,
+      getAnnotations: () => overlaySettingsRef.current.showAnnotations ? annotationsRef.current : [],
       getEntities: () => platformEntitiesRef.current,
       getLevels: () => levelsRef.current
     });
     referenceDimensionManagerRef.current = referenceDimensionManager;
     referenceDimensionManager.build();
-    const referenceDimensionRenderObserver = scene.onAfterRenderObservable.add(() => referenceDimensionManager.update());
+    const referenceDimensionRenderObserver = scene.onBeforeRenderObservable.add(() => {
+      referenceDimensionManager.update();
+      if (enableE2EDiagnosticsRef.current) canvas.dataset.referenceDimensions = JSON.stringify(referenceDimensionManager.getEvidence());
+    });
     if (enableE2EDiagnosticsRef.current) {
       navigationRenderProbeRef.current = createNavigationRenderProbe(scene, camera, canvas,
         sceneLifecycleGenerationRef.current, () => panStateRef.current !== null);
@@ -2536,7 +2544,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
         if (pointerObserver) {
           scene.onPointerObservable.remove(pointerObserver);
         }
-        scene.onAfterRenderObservable.remove(referenceDimensionRenderObserver);
+        scene.onBeforeRenderObservable.remove(referenceDimensionRenderObserver);
         machineNodesRef.current.forEach((node) => {
           node.labelTexture.dispose();
           node.material.dispose();
