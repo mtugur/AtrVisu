@@ -1400,6 +1400,7 @@ body.is-resizing-workbench-dock {
   min-width: 0;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--av-spacing-sm);
   padding: 0 var(--av-spacing-sm);
   border-bottom: 1px solid var(--av-border-subtle);
@@ -5601,6 +5602,7 @@ body.is-resizing-workbench-dock {
   align-items: center;
   gap: var(--av-spacing-xs);
 }
+.workbench-inspector-header-actions { flex: none; }
 
 .workbench-inspector-heading small {
   color: var(--av-text-muted);
@@ -5747,7 +5749,7 @@ body.is-resizing-workbench-dock {
   align-items: stretch;
   gap: 2px;
   min-width: 0;
-  flex: 1;
+  flex: 1 0 auto;
 }
 .workbench-right-dock-tabs button {
   appearance: none;

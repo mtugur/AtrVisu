@@ -78,7 +78,11 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
     await expect(page.locator(".workbench-inspector-mode")).toHaveText("Auto");
     await page.getByRole("button", { name: "Pin Inspector", exact: true }).click();
     await expect(page.locator(".workbench-inspector-mode")).toHaveText("Pinned");
-    await page.getByTestId("right-panel").getByRole("button", { name: "Measure", exact: true }).click();
+    const measureTab = page.getByTestId("right-panel").getByRole("button", { name: "Measure", exact: true });
+    const tabBox = (await measureTab.boundingBox())!;
+    const actionsBox = (await page.locator(".workbench-inspector-header-actions").boundingBox())!;
+    expect(tabBox.x + tabBox.width <= actionsBox.x || tabBox.y + tabBox.height <= actionsBox.y).toBe(true);
+    await measureTab.click();
     await expect(page.getByRole("button", { name: "Keep / Save", exact: true })).toBeEnabled();
     await evidence(page, `m20-m29-m30-dock-${width}`, errors, { before, after: await snapshot(page), sameCanvas: await handle!.evaluate(el => el === document.querySelector("canvas.scene-canvas")) });
     await page.getByTestId("right-dock-collapse-toggle").click();
