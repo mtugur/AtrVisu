@@ -1,7 +1,7 @@
 import type { PlatformEntity } from "../platform/contracts";
 import type { PlacedMachine } from "../types/machine";
 import { angleArc, angleResult, areaResult, dimensionLines, dimensionsForEntity, distanceResult, entityReferencePoint, isFiniteMeasurePoint, pairResult, type MeasureKind, type MeasureLine, type MeasurePoint, type MeasureResult } from "./measureGeometry";
-import type { MeasureAnchorKind, MeasureReference } from "./referenceTypes";
+import type { MeasureAnchorKind, MeasureDimensionMetadata, MeasureReference } from "./referenceTypes";
 export const MEASURE_PICK_CLICK_TOLERANCE_CSS_PX = 4;
 export const MEASURE_ACTIVE_REASON = "Exit Measure before changing layout, selection or history.";
 export type MeasureSource = "geometry" | "level-plane";
@@ -92,6 +92,8 @@ export type MeasureSession = {
     };
 };
 export type MeasureProjection = {
+    representedByDimensionId?: string;
+    labels?: readonly { lines: readonly string[]; x: number; y: number; width: number; height: number; textPx: number; fontFamily: string; textBackground: boolean }[];
     candidates?: readonly { x: number; y: number; label: string; selected: boolean; locked: boolean }[];
     width: number;
     height: number;
@@ -100,8 +102,6 @@ export type MeasureProjection = {
             x: number;
             y: number;
         }[];
-        labelPoint?: { x: number; y: number };
-        label?: string;
         preview?: boolean;
     }[];
     markers: readonly {
@@ -261,3 +261,18 @@ export const measurePointToReference = (point: MeasurePoint): MeasureReference =
     : point.entityId && point.anchorKind
     ? { type: "entity-anchor", entityId: point.entityId, anchor: point.anchorKind as MeasureAnchorKind }
     : { type: "world-point", xMm: point.xMm, yMm: point.yMm, zMm: point.zMm };
+
+export const measureSessionMatchesDimension = (session: MeasureSession | null, dimension: MeasureDimensionMetadata) => {
+    if (!session?.completed || !dimension.visible || dimension.status === "orphaned" || dimension.dimensionKind !== session.kind) return false;
+    const references: MeasureReference[] = session.kind === "dimensions" || session.kind === "pair"
+        ? session.entry.entities.slice(0, session.kind === "dimensions" ? 1 : 2).map(entity => ({ type: "entity-anchor", entityId: entity.id, anchor: "front-left-bottom" }))
+        : session.points.map(measurePointToReference);
+    if (!references.length || references.length !== dimension.references.length) return false;
+    return (session.kind !== "area" || dimension.presentationElevationMm === session.presentationElevationMm)
+        && references.every((reference, index) => {
+            const saved = dimension.references[index];
+            if (reference.type === "entity-anchor") return saved.type === reference.type && saved.entityId === reference.entityId && saved.anchor === reference.anchor;
+            if (reference.type === "level-point") return saved.type === reference.type && saved.levelId === reference.levelId && saved.xMm === reference.xMm && saved.yMm === reference.yMm;
+            return saved.type === reference.type && saved.xMm === reference.xMm && saved.yMm === reference.yMm && saved.zMm === reference.zMm;
+        });
+};

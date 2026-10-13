@@ -128,5 +128,5 @@ PR #129 and its rejected exact head remain auditable and unchanged.
 | E | `measureAuthority.test.ts`, `referenceTypes.test.ts`, `dimensionPresentation.test.ts`, `MeasureTool.test.ts`, `measureV2Evidence.ts`; real pointer/key/UI/project/export paths at 640/1024/1440. |
 | F | Existing unfiltered console/pageerror collector; every new browser scenario asserts empty errors. Full-suite gate remains mandatory. |
 | G | One consolidated recovery candidate and separate superseding Draft; no normative tuning. Independent Contract Verification remains pending. |
-| H | PNG/JSON artifact exposes actual graphics, occlusion, dock and persistence states. Independent visual/contract inspection remains pending; no Product Accepted claim. |
-| I / J | Exact-head Automation Green recorded in PR Validation; Contract Verified PENDING; Product Accepted PENDING. No Product Owner test request before independent verification. |
+| H | PNG/JSON artifact exposes actual graphics, occlusion, dock and persistence states. Review 6155647277 is addressed by one bounded presentation correction with measured text/control geometry at 640/1024/1440; the artifact has 39 PNG/JSON pairs. No Product Accepted claim. |
+| I / J | Exact-head Automation Green recorded in PR Validation; Contract Verified BLOCKED until independent visual re-review; Product Accepted PENDING. No Product Owner test request before independent verification. |

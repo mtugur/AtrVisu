@@ -1,16 +1,18 @@
 import { Matrix, Ray, Vector3, type ArcRotateCamera, type Scene } from "@babylonjs/core";
-import type { MeasureAuthority, MeasureAction } from "../../measure/measureAuthority";
+import type { MeasureAuthority, MeasureAction, MeasureProjection } from "../../measure/measureAuthority";
 import { getMeasureLines, getMeasureResult } from "../../measure/measureAuthority";
-import { entityReferencePoint, formatMeasureValue, type MeasurePoint } from "../../measure/measureGeometry";
+import { entityReferencePoint, type MeasurePoint } from "../../measure/measureGeometry";
 import { getSelectionPickTarget } from "../babylonScene/selectionPicking";
 import { getSemanticAnchorPoints } from "../../measure/measureReferences";
-import type { MeasureAnchorKind } from "../../measure/referenceTypes";
+import type { MeasureAnchorKind, MeasureDimensionStyle } from "../../measure/referenceTypes";
 import { measurePointToReference } from "../../measure/measureAuthority";
 import { MEASURE_ANCHOR_LABELS } from "../../measure/measureReferences";
 import type { createReferenceDimensionSceneManager, DimensionHit } from "./referenceDimensionScene";
 import { intersectRayWithHorizontalDragPlane } from "../babylonScene/dragPlacement";
 import { MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX } from "../../measure/measurePresentation";
-export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics, getDimensionManager }: {
+import { dimensionLabelBounds, dimensionLabelLines, dimensionMarkerBounds, dimensionTextPx, fitDimensionLabel, layoutLinearDimension, measureDimensionLabel } from "../../measure/dimensionPresentation";
+import { createMeasureTextMeasurer, readMeasureLabelViewport } from "./measureLabelContext";
+export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics, getDimensionManager, getStyle }: {
     scene: Scene;
     camera: ArcRotateCamera;
     canvas: HTMLCanvasElement;
@@ -18,7 +20,9 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     onAction: (action: MeasureAction) => void;
     diagnostics: () => boolean;
     getDimensionManager: () => ReturnType<typeof createReferenceDimensionSceneManager> | null;
+    getStyle: () => MeasureDimensionStyle;
 }) => {
+    const textMeasurer = createMeasureTextMeasurer(canvas);
     let anchors: { point: MeasurePoint; x: number; y: number; distance: number }[] = [];
     let highlighted: MeasurePoint | null = null, locked: MeasurePoint | null = null, chosen: MeasurePoint | null = null;
     let cycleIndex: number | null = null;
@@ -211,7 +215,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     });
     const observer = scene.onAfterRenderObservable.add(() => {
         const state = authority.getSnapshot();
-        const rect = canvas.getBoundingClientRect();
+        const { viewport: rect, insets, maximumLabelWidth } = readMeasureLabelViewport(canvas);
         if (!state) {
             authority.project({ width: rect.width, height: rect.height, lines: [], markers: [] });
             if (diagnostics())
@@ -230,22 +234,39 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
                 const target = getSelectionPickTarget({ pickedMesh: mesh });
                 return mesh.isPickable && mesh.isEnabled() && mesh.isVisible && mesh.visibility > 0 && Boolean(target.instanceId || target.civilReferenceId);
             }) : null;
-            return { x, y, offscreen: !Number.isFinite(x) || !Number.isFinite(y) || v.z < 0 || v.z > 1 || x < 0 || x > rect.width || y < 0 || y > rect.height,
+            return { x, y, z: v.z, offscreen: !Number.isFinite(x) || !Number.isFinite(y) || v.z < 0 || v.z > 1 || x < 0 || x > rect.width || y < 0 || y > rect.height,
                 occluded: Boolean(hit?.hit && hit.distance < distance - .001) };
         };
         const markers = current.kind === "pair" ? current.entry.entities.map(entityReferencePoint) : current.kind === "dimensions" ? getMeasureLines(current).flatMap(line => line.points) : [...current.points, ...(current.hover && !current.completed ? [current.hover] : [])];
+        const projectedMarkers = markers.map((p, i) => ({ ...project(p), label: String.fromCharCode(65 + i), preview: i >= current.points.length && !["pair", "dimensions"].includes(current.kind) }));
         const result = getMeasureResult(current);
-        const lines = getMeasureLines(current).map(line => {
-            const quantity = result.values.find(v => v.label === line.label || (line.label === "Angle" && v.unit === "deg") || (line.label === "Reference Point" && v.label === "3D Distance"));
-            const firstArm = current.kind === "angle" && line.label === "Angle" && current.points.length === 3
-                ? [project(current.points[0]), project(current.points[1])] : null;
-            const labelPoint = firstArm ? { x: firstArm[0].x + (firstArm[1].x - firstArm[0].x) / 4,
-                y: firstArm[0].y + (firstArm[1].y - firstArm[0].y) / 4 } : undefined;
-            return { ...line, points: line.points.map(project), labelPoint, label: line.label ? `${line.label}${quantity ? ` ${formatMeasureValue(quantity)}` : ""}` : undefined };
+        const manager = getDimensionManager(), representedByDimensionId = manager?.getSessionRepresentationId();
+        const style = getStyle();
+        const reference = markers[0], zoom = reference ? Vector3.Distance(camera.globalPosition, new Vector3(reference.xMm / 1000, reference.zMm / 1000, reference.yMm / 1000)) : 12;
+        const textPx = dimensionTextPx(style, 12 * Math.sqrt(12 / Math.max(1, zoom)));
+        const measureText = textMeasurer(style.fontFamily, textPx);
+        const obstacles = [...projectedMarkers.filter(point => !point.offscreen).map(point => dimensionMarkerBounds(point)),
+            ...(manager?.getLabelBounds() ?? [])];
+        const labels: NonNullable<MeasureProjection["labels"]>[number][] = [];
+        const lines = representedByDimensionId ? [] : getMeasureLines(current).flatMap<MeasureProjection["lines"][number]>(line => {
+            const points = line.points.map(project);
+            if (!line.label || line.label === "XYZ" || !result.values.length) return [{ points, preview: line.preview }];
+            const values = current.kind === "dimensions" ? result.values.filter(value => value.label === line.label) : result.values;
+            const label = measureDimensionLabel(dimensionLabelLines(current.kind, values, style), textPx, measureText, maximumLabelWidth);
+            const linear = ["distance", "pair", "dimensions"].includes(current.kind) && points.length >= 2
+                ? layoutLinearDimension(points[0], points[points.length - 1], style, label.width, label.height) : null;
+            const centerPoints = current.kind === "area" && current.completed ? points.slice(0, -1) : points;
+            const preferred = linear?.text ?? centerPoints.reduce((sum, point) => ({ x: sum.x + point.x / centerPoints.length, y: sum.y + point.y / centerPoints.length }), { x: 0, y: 0 });
+            const position = fitDimensionLabel(preferred, label, rect, insets, obstacles);
+            labels.push({ ...label, x: position.x, y: position.y, textPx, fontFamily: style.fontFamily, textBackground: style.textBackground });
+            obstacles.push(dimensionLabelBounds(position, label.width, label.height));
+            const projectedLines: MeasureProjection["lines"][number][] = linear ? linear.segments.map(segment => ({ points: segment, preview: line.preview })) : [{ points, preview: line.preview }];
+            if (style.showLeaders && position.displaced) projectedLines.push({ points: [{ ...points[0], ...preferred }, { ...points[0], ...position }], preview: line.preview });
+            return projectedLines;
         });
-        authority.project({ width: rect.width, height: rect.height, lines,
+        authority.project({ width: rect.width, height: rect.height, lines, labels, representedByDimensionId,
             candidates: anchors.map(a => ({ x: a.x, y: a.y, label: MEASURE_ANCHOR_LABELS[a.point.anchorKind!], selected: a.point.anchorKind === (locked ?? highlighted)?.anchorKind, locked: a.point.anchorKind === locked?.anchorKind })),
-            markers: markers.map((p, i) => ({ ...project(p), label: String.fromCharCode(65 + i), preview: i >= current.points.length && !["pair", "dimensions"].includes(current.kind) })) });
+            markers: projectedMarkers });
         if (diagnostics())
             canvas.dataset.measureSession = JSON.stringify({ ...current, entry: { selectionIds: current.entry.selectionIds, primaryId: current.entry.primaryId }, result: getMeasureResult(current), lines: getMeasureLines(current), press: authority.getPress() });
     });

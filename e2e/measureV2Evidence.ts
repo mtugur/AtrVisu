@@ -8,20 +8,76 @@ type Helpers = {
   waitForRuntimeViewport: (page: Page) => Promise<unknown>;
 };
 type Graphic = { id: string; displayMode: string; text: string; textPx: number; witnessCount: number; lineWeightPx: number;
+  labelLines: string[];
   labelPosition: { x: number; y: number; z: number }; labelWidthPx: number; labelHeightPx: number; endpointScreens: { x: number; y: number }[];
   segments: [{ x: number; y: number }, { x: number; y: number }][];
   references: { type: string; levelId?: string; entityId?: string; anchor?: string }[];
   endpoints: { xMm: number; yMm: number; zMm: number }[] };
 const canvas = (page: Page) => page.getByLabel("AtrVisu 3D workspace");
 const graphics = async (page: Page): Promise<Graphic[]> => JSON.parse(await canvas(page).getAttribute("data-reference-dimensions") ?? "[]");
-const expectAngleLabelsSeparated = async (page: Page, rendered: Graphic) => {
-  const transient = (await page.getByTestId("measure-viewport-graphics").locator("svg text").filter({ hasText: /Angle/ }).boundingBox())!;
+const expectMeasureControlsFit = async (page: Page) => {
+  const controls = await page.locator(".measure-panel-controls select").evaluateAll(selects => selects.map(element => {
+    const select = element as HTMLSelectElement, css = getComputedStyle(select);
+    const context = document.createElement("canvas").getContext("2d")!; context.font = css.font;
+    return { label: select.selectedOptions[0].text, available: select.clientWidth,
+      required: context.measureText(select.selectedOptions[0].text).width + Number.parseFloat(css.paddingLeft) + Number.parseFloat(css.paddingRight) + 24 };
+  }));
+  for (const control of controls) expect(control.available, control.label).toBeGreaterThanOrEqual(control.required);
+  return controls;
+};
+const expectTransientLabelsFit = async (page: Page) => {
+  await expect(page.locator("[data-measure-value]")).toHaveCount(1);
+  const texts = await page.locator(".measure-graphics text").evaluateAll(elements => elements.map(element => {
+    const box = element.getBoundingClientRect(); return { text: element.textContent ?? "", x: box.x, y: box.y, width: box.width, height: box.height };
+  }));
+  for (const value of texts.filter(text => /mm|m2|deg/.test(text.text))) {
+    for (const other of texts.filter(text => text !== value)) expect(value.x + value.width <= other.x || other.x + other.width <= value.x
+      || value.y + value.height <= other.y || other.y + other.height <= value.y, `${value.text} overlaps ${other.text}`).toBe(true);
+  }
+  const bounds = await page.locator("[data-measure-value], [data-measure-marker]").evaluateAll(elements => elements.map(element => {
+    const box = element.getBoundingClientRect(); return { value: element.hasAttribute("data-measure-value"), x: box.x, y: box.y, width: box.width, height: box.height };
+  }));
+  const safe = await labelSafeArea(page);
+  for (const value of bounds.filter(box => box.value)) {
+    expect(value.x).toBeGreaterThanOrEqual(safe.left); expect(value.x + value.width).toBeLessThanOrEqual(safe.right);
+    expect(value.y).toBeGreaterThanOrEqual(safe.top); expect(value.y + value.height).toBeLessThanOrEqual(safe.bottom);
+    for (const marker of bounds.filter(box => !box.value)) expect(value.x + value.width <= marker.x || marker.x + marker.width <= value.x
+      || value.y + value.height <= marker.y || marker.y + marker.height <= value.y).toBe(true);
+  }
+  return texts;
+};
+const labelSafeArea = (page: Page) => canvas(page).evaluate(element => {
+  const canvasBox = element.getBoundingClientRect(), root = element.closest('[data-testid="app-root"]')!;
+  const css = getComputedStyle(root), inset = (name: string) => Number.parseFloat(css.getPropertyValue(name)) || 0;
+  return { left: canvasBox.x + inset("--av-viewport-hud-left-inset"), right: canvasBox.right - inset("--av-viewport-hud-right-inset"),
+    top: canvasBox.y, bottom: canvasBox.bottom - inset("--av-viewport-hud-bottom-inset") };
+});
+const expectSavedLabelFit = async (page: Page, rendered: Graphic) => {
+  await expect(page.locator(".measure-graphics text").filter({ hasText: /mm|m2|deg/ })).toHaveCount(0);
   const canvasBox = (await canvas(page).boundingBox())!;
   const saved = { x: canvasBox.x + rendered.labelPosition.x - rendered.labelWidthPx / 2,
     y: canvasBox.y + rendered.labelPosition.y - rendered.labelHeightPx / 2,
     width: rendered.labelWidthPx, height: rendered.labelHeightPx };
-  expect(saved.x + saved.width <= transient.x || transient.x + transient.width <= saved.x
-    || saved.y + saved.height <= transient.y || transient.y + transient.height <= saved.y).toBe(true);
+  const markers = await page.locator("[data-measure-marker]").evaluateAll(elements => elements.map(element => {
+    const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height };
+  }));
+  for (const marker of markers) expect(saved.x + saved.width <= marker.x || marker.x + marker.width <= saved.x
+    || saved.y + saved.height <= marker.y || marker.y + marker.height <= saved.y).toBe(true);
+  const safe = await labelSafeArea(page);
+  expect(saved.x).toBeGreaterThanOrEqual(safe.left); expect(saved.x + saved.width).toBeLessThanOrEqual(safe.right);
+  expect(saved.y).toBeGreaterThanOrEqual(safe.top); expect(saved.y + saved.height).toBeLessThanOrEqual(safe.bottom);
+  const png = (await page.screenshot()).toString("base64");
+  const textPixels = await page.evaluate(async ({ png, saved }) => {
+    const image = new Image(); image.src = `data:image/png;base64,${png}`; await image.decode();
+    const surface = document.createElement("canvas"); surface.width = image.width; surface.height = image.height;
+    const context = surface.getContext("2d")!; context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(Math.ceil(saved.x), Math.ceil(saved.y), Math.floor(saved.width), Math.floor(saved.height)).data;
+    let glyphs = 0;
+    for (let index = 0; index < pixels.length; index += 4) if (pixels[index] > 170 && pixels[index + 1] > 170 && pixels[index + 2] > 170) glyphs++;
+    return glyphs;
+  }, { png, saved });
+  expect(textPixels).toBeGreaterThan(20);
+  return { saved, markers, safe, textPixels };
 };
 const snapshot = (page: Page) => page.evaluate(() => ({ camera: window.__atrvisuRuntimeViewport!.getCameraSnapshot("viewport.main"), invariants: window.__atrvisuRuntimeViewport!.getInvariants() }));
 const dimensionPixels = async (page: Page) => {
@@ -78,15 +134,84 @@ const keep = async (page: Page) => {
 const evidence = async (page: Page, name: string, errors: string[], observed: Record<string, unknown> = {}) => {
   const dir = join(process.cwd(), "test-results/c03-measure-v2-recovery"); await mkdir(dir, { recursive: true });
   await page.screenshot({ path: join(dir, `${name}.png`) });
-  await writeFile(join(dir, `${name}.json`), JSON.stringify({ head: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, runtime: await snapshot(page), canvasGeneration: await canvas(page).getAttribute("data-scene-lifecycle-generation"), graphics: await graphics(page), errors, ...observed }, null, 2));
+  const presentation = await page.getByTestId("measure-viewport-graphics").evaluateAll(elements => elements.map(element => ({
+    representedByDimensionId: element.getAttribute("data-represented-dimension-id"),
+    text: [...element.querySelectorAll("text")].map(text => { const bounds = text.getBoundingClientRect(); return { text: text.textContent, lines: [...text.querySelectorAll("tspan")].map(line => line.textContent), x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }; })
+  })));
+  const session = JSON.parse(await canvas(page).getAttribute("data-measure-session") ?? "null");
+  await writeFile(join(dir, `${name}.json`), JSON.stringify({ head: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, runtime: await snapshot(page), canvasGeneration: await canvas(page).getAttribute("data-scene-lifecycle-generation"), graphics: await graphics(page), session, presentation, errors, ...observed }, null, 2));
 };
 
 export const registerMeasureV2Tests = (helpers: Helpers) => {
+  for (const width of [1440, 1024, 640]) {
+    test(`C03 V2 visual review selectors fit their complete selected text at ${width}`, async ({ page }) => {
+      const errors = await start(page, helpers, width);
+      for (const kind of ["area", "dimensions", "pair"]) {
+        await page.getByLabel("Measurement kind").selectOption(kind);
+        await expectMeasureControlsFit(page);
+      }
+      await page.getByLabel("Measurement kind").selectOption("area");
+      await evidence(page, `visual-controls-${width}`, errors, { controls: await expectMeasureControlsFit(page) });
+      expect(errors).toEqual([]);
+    });
+    for (const kind of ["angle", "area"]) test(`C03 V2 visual review ${kind} has one legible value presentation at ${width}`, async ({ page }) => {
+      const errors = await start(page, helpers, width);
+      await page.getByLabel("Measurement kind").selectOption(kind);
+      const bounds = (await canvas(page).boundingBox())!;
+      for (const [x, y] of [[.42, .3], [.57, .4], [.45, .45]]) await page.mouse.click(bounds.x + bounds.width * x, bounds.y + bounds.height * y);
+      if (kind === "area") await page.getByRole("button", { name: "Finish", exact: true }).click();
+      const transient = await expectTransientLabelsFit(page);
+      const before = JSON.parse(await canvas(page).getAttribute("data-measure-session") ?? "null");
+      await evidence(page, `visual-${kind}-${width}-transient`, errors, { transient, controls: await expectMeasureControlsFit(page) });
+      await page.getByRole("button", { name: "Keep / Save", exact: true }).click();
+      await expect.poll(async () => (await graphics(page)).length).toBe(1);
+      await expect(page.locator(".measure-graphics text").filter({ hasText: /mm|m2|deg/ })).toHaveCount(0);
+      const rendered = (await graphics(page))[0];
+      expect(rendered.displayMode).toBe("depth");
+      await expect(page.getByTestId("measure-viewport-graphics")).toHaveAttribute("data-represented-dimension-id", rendered.id);
+      const after = JSON.parse(await canvas(page).getAttribute("data-measure-session") ?? "null");
+      expect(after.points).toEqual(before.points); expect(after.result).toEqual(before.result); expect(after.completed).toBe(true);
+      if (kind === "area") {
+        expect(rendered.labelLines).toHaveLength(2);
+        expect(rendered.text).toContain("Plan Area"); expect(rendered.text).toContain("Plan Perimeter");
+        const editor = page.getByRole("region", { name: "Reference Dimension Editor" });
+        await editor.getByLabel("Units", { exact: true }).selectOption("mm-metric");
+        await expect.poll(async () => (await graphics(page))[0].text).toContain(" m2");
+        expect((await graphics(page))[0].text).not.toContain(" mm2");
+        expect((await graphics(page))[0].endpoints).toEqual(rendered.endpoints);
+        await editor.getByText("Captured Plane", { exact: true }).scrollIntoViewIfNeeded();
+      }
+      const fit = await expectSavedLabelFit(page, (await graphics(page))[0]);
+      await evidence(page, `visual-${kind}-${width}-saved`, errors, { fit, beforeSession: before, afterSession: after });
+      if (kind === "angle") {
+        const beforeCamera = await snapshot(page), generation = await canvas(page).getAttribute("data-scene-lifecycle-generation");
+        await page.getByRole("button", { name: "Navigate", exact: true }).click();
+        await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height * .3); await page.mouse.down();
+        await page.mouse.move(bounds.x + bounds.width / 2 + 90, bounds.y + bounds.height * .3 + 45, { steps: 6 }); await page.mouse.up();
+        await page.mouse.wheel(0, -240);
+        await expect.poll(async () => (await snapshot(page)).camera).not.toEqual(beforeCamera.camera);
+        await expect.poll(async () => (await graphics(page))[0].endpointScreens).not.toEqual(rendered.endpointScreens);
+        expect((await graphics(page))[0].endpoints).toEqual(rendered.endpoints);
+        await expect(canvas(page)).toHaveAttribute("data-scene-lifecycle-generation", generation!);
+        const orbitFit = await expectSavedLabelFit(page, (await graphics(page))[0]);
+        await evidence(page, `visual-angle-${width}-orbit-zoom`, errors, { fit: orbitFit, beforeCamera, afterCamera: await snapshot(page) });
+        if (width === 1440) {
+          const visible = page.getByLabel("Show dimension", { exact: true });
+          await visible.uncheck(); await expect.poll(async () => (await graphics(page)).length).toBe(0);
+          await expectTransientLabelsFit(page);
+          await visible.check(); await expect.poll(async () => (await graphics(page)).length).toBe(1);
+          await expect(page.locator("[data-measure-value]")).toHaveCount(0);
+        }
+      }
+      expect(errors).toEqual([]);
+    });
+  }
   for (const width of [1440, 1024, 640]) test(`C03 V2 M20 M29 M30 right Measure workspace preserves selection camera and lifecycle at ${width}`, async ({ page }) => {
     const errors = await start(page, helpers, width);
     const handle = await canvas(page).elementHandle(), generation = await canvas(page).getAttribute("data-scene-lifecycle-generation");
     const before = await snapshot(page);
     await complete(page);
+    await expectTransientLabelsFit(page);
     expect(await snapshot(page)).toEqual(before);
     if (width === 1440) {
       const handle = (await page.getByRole("button", { name: "Resize right panel", exact: true }).boundingBox())!;
@@ -408,14 +533,14 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
     await page.getByRole("button", { name: "Keep / Save", exact: true }).click();
     await expect.poll(async () => (await graphics(page)).length).toBe(1);
     const rendered = (await graphics(page))[0];
-    expect(rendered.text).toContain(kind === "angle" ? "deg" : "m2");
+    expect(rendered.text).toContain(kind === "angle" ? "deg" : "mm2");
     if (kind === "angle") {
       expect(rendered.segments.length).toBeGreaterThan(20);
       expect(rendered.segments[0][1]).toMatchObject(rendered.endpointScreens[1]);
       expect(rendered.segments[1][0]).toMatchObject(rendered.endpointScreens[1]);
       expect(rendered.labelPosition.x).toBeGreaterThan(0);
       expect(rendered.labelPosition.y).toBeGreaterThan(0);
-      await expectAngleLabelsSeparated(page, rendered);
+      await expectSavedLabelFit(page, rendered);
     } else {
       expect(rendered.text).toContain("Plan Perimeter");
       const editor = page.getByRole("region", { name: "Reference Dimension Editor" });
@@ -445,7 +570,7 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
       expect(reprojected.labelPosition.x).toBeLessThan(cameraBounds.width);
       expect(reprojected.labelPosition.y).toBeGreaterThan(0);
       expect(reprojected.labelPosition.y).toBeLessThan(cameraBounds.height);
-      await expectAngleLabelsSeparated(page, reprojected);
+      await expectSavedLabelFit(page, reprojected);
       expect(errors).toEqual([]);
       await evidence(page, "review-m22-angle-orbit-zoom", errors, { beforeCamera, afterCamera: await snapshot(page), before: rendered });
     }

@@ -39,8 +39,9 @@ instead of continuing its iterative patch history. C04/C05/C07/C09 are excluded.
 
 ## Current evidence state
 
-- Automation Green: PENDING (recovery not yet validated).
-- Contract Verified: PENDING independent review.
+- Automation Green: prior head `750e0fb` passed run `38412604769`; the visual
+  correction's final exact-head result is recorded in the PR Validation section.
+- Contract Verified: BLOCKED by visual review `6155647277`, pending re-review.
 - Product Accepted: NOT REQUESTED.
 
 Green automation will not be presented as independent Contract Verification.
@@ -71,7 +72,7 @@ Green automation will not be presented as independent Contract Verification.
 
 Focused validation is recorded in the recovery PR. The final complete local gate
 is run once on the stable implementation checkpoint; the Quality Gate checks the
-same exact head and uploads `c03-measure-v2-recovery` (21 PNG/JSON pairs).
+same exact head and uploads `c03-measure-v2-recovery` (39 PNG/JSON pairs).
 Contract Verification is an independent review gate, not an implementation-agent assertion.
 
 ## PR #130 independent verification response
@@ -86,6 +87,57 @@ M20-M30 matrix. The focused tests were added before the bounded fixes:
 | M22/M23 angle/area | Saved angle label overlapped the transient label; saved area omitted named perimeter in scene and captured-plane source in panel. | `m22-angle`, `review-m22-angle-orbit-zoom`: B-vertex arms/arc, separated labels and stable values under orbit/zoom. `m22-area`: both area and perimeter in scene/panel, captured Level Plane metadata in panel; unit coverage also checks Geometry-plane metadata and normalized persistence. |
 | M27 orphan/repair | Deleted Level remained orphaned and explicit repair already worked. | `review-m27-level-orphan` and `review-m27-level-orphan-repair`: unresolved reference stays listed, does not render falsely, both Level endpoints explicitly reassociate to Ground. |
 
-The artifact validator checks 21 exact-head PNG/JSON pairs. Automation Green
-requires the new exact-head Quality Gate; Contract Verified and Product Accepted
-remain pending external decisions.
+This follow-up produced 21 pairs on `750e0fb`. The visual correction below
+extends the validator to 39 pairs. Contract Verification remains an independent
+decision and is currently BLOCKED; Product Accepted remains pending.
+
+## Bounded visual correction plan - review 6155647277
+
+Baseline `750e0fbb0103c7c71e5c8e57a089da5d909d479a` was tested before runtime
+edits. Chromium reproduced clipped Kind/Reference controls at 1440/1024, area
+text overlapping A, duplicate angle values after Keep at all three widths, and
+the 640 distance/XYZ label collision. The unit regression also reproduced the
+ignored metric area style. Contract Verification is BLOCKED pending re-review.
+
+One consolidated presentation correction under frozen contract sections 3, 9
+and 11 will:
+
+1. Share dimension value formatting and measured label fit between transient
+   and saved graphics, with explicit marker/label exclusion and safe-area fit.
+2. Present a completed session through its equivalent visible saved dimension
+   once Keep succeeds, without clearing the session, hiding persistent
+   annotations, changing references, or changing Depth/Overlay policy. Hiding,
+   deleting, or editing the saved reference restores independent transient
+   presentation when it no longer represents that result.
+3. Present area/perimeter as separate style-controlled lines; canonical mm2
+   calculations stay unchanged. Use full-width selector rows in the Measure
+   panel so every complete option is readable.
+4. Assert actual text/control geometry and one value presentation at
+   640/1024/1440, including angle orbit/zoom, area and unchanged clean export.
+   Regenerate exact-head PNG/JSON evidence and run one final complete gate.
+
+No normative contract, picking/camera authority or other tool is changed.
+
+### Implementation and evidence
+
+- `dimensionPresentation.ts` owns shared unit formatting, multiline label
+  measurement and fit against marker/label rectangles. Metric area presentation
+  converts canonical mm2 to m2 without changing calculation or stored operands.
+- `measureSessionMatchesDimension` requires completed state and equivalent kind,
+  references and captured plane. The live scene manager only exposes a match for
+  a visible, resolved graphic; it does not clear the session or promote Overlay.
+- Transient values use the project style through a committed latest ref. Saved
+  values keep their annotation style, Depth/Overlay and editable world placement.
+  Neither style updates nor representation matching recreates the scene.
+- `visual-controls-{1440,1024,640}` records actual selected text widths.
+  `visual-{angle,area}-{width}-{transient,saved}` records actual text/marker
+  rectangles, canonical session result, saved references and display mode.
+  `visual-angle-{width}-orbit-zoom` records camera change, stable endpoints and
+  the single fitted label. Existing dock captures and clean export are regenerated.
+- The artifact validator requires all 39 PNG/JSON pairs from the current source
+  head and validates the visible-result match, no duplicate value, unit style,
+  controls, safe bounds and retained session data in addition to prior oracles.
+
+Automation results belong to the delivered exact-head Quality Gate in PR #130.
+Contract Verified remains BLOCKED pending independent re-review; no Product
+Owner acceptance has been requested or declared.

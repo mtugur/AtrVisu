@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import type { MeasureAuthority, MeasureAction } from "../measure/measureAuthority";
+import type { MeasureDimensionStyle } from "../measure/referenceTypes";
 import { createReferenceDimensionSceneManager } from "./measure/referenceDimensionScene";
 import { installMeasureViewportAdapter } from "./measure/measureViewportAdapter";
 import { fitViewCamera, getFitViewGeometry, createPresetCameraState } from "./viewportNavigation/navigationGeometry";
@@ -177,6 +178,7 @@ const applyOrthographicBounds = (
 
 type BabylonSceneProps = {
   measureAuthority: MeasureAuthority;
+  measureDimensionStyle: MeasureDimensionStyle;
   onMeasureAction: (action: MeasureAction) => void;
   placedMachines: PlacedMachine[];
   civilReferences: CivilReferenceItem[];
@@ -1103,6 +1105,7 @@ const loadVisualModel = async (
 
 export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(function BabylonScene({
   measureAuthority,
+  measureDimensionStyle,
   onMeasureAction,
   placedMachines,
   civilReferences,
@@ -1141,6 +1144,8 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
   onPerformanceMetricsChange
 }: BabylonSceneProps, ref) {
   const measureActionRef = useRef(onMeasureAction);
+  const measureDimensionStyleRef = useRef(measureDimensionStyle);
+  useLayoutEffect(() => { measureDimensionStyleRef.current = measureDimensionStyle; }, [measureDimensionStyle]);
   useLayoutEffect(() => { measureActionRef.current = onMeasureAction; }, [onMeasureAction]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const sceneRef = useRef<Scene | null>(null);
@@ -1821,6 +1826,7 @@ export const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(fu
     const camera = createBabylonCameraViewport(scene, canvas);
     cameraRef.current = camera;
     const measureAdapter = installMeasureViewportAdapter({ scene, camera, canvas, authority: measureAuthority,
+      getStyle: () => measureDimensionStyleRef.current,
       getDimensionManager: () => referenceDimensionManagerRef.current,
       onAction: (action) => measureActionRef.current(action), diagnostics: () => enableE2EDiagnosticsRef.current });
     const referenceDimensionManager = createReferenceDimensionSceneManager({

@@ -5689,6 +5689,7 @@ body.is-resizing-workbench-dock {
 .measure-graphics .is-preview polyline {
   stroke-dasharray: 4 3;
 }
+.measure-value-background { fill: var(--av-surface-overlay); }
 
 .measure-callout {
   width: 100%;
@@ -5814,7 +5815,7 @@ body.is-resizing-workbench-dock {
 }
 .measure-panel-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 .measure-panel-controls label,
@@ -5824,6 +5825,11 @@ body.is-resizing-workbench-dock {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+}
+.measure-panel-controls label {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  align-items: center;
 }
 .measure-panel-controls select,
 .measure-dimension-editor input,

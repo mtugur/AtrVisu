@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMeasureAuthority, getMeasureLines, measurePointToReference, type MeasureContext } from "./measureAuthority";
+import { createMeasureAuthority, getMeasureLines, measurePointToReference, measureSessionMatchesDimension, type MeasureContext } from "./measureAuthority";
 import { createLayoutSnapshotFromMachines, annotationsFromLayout } from "../utils/layoutSerialization";
 import { createAnnotation } from "../utils/annotations";
 import { cloneMeasureDimensionStyle } from "./referenceTypes";
@@ -51,6 +51,25 @@ describe("C03 V2 M21/M29 transient confirmation contract", () => {
 });
 
 describe("C03 V2 M26/M29 serializable presentation and history", () => {
+  it("shares only an equivalent visible saved result without clearing the transient session", () => {
+    const authority = begin();
+    for (const [i, p] of [point(), point(1000, 2000, 300)].entries()) {
+      authority.beginPress(i, 0, 0); authority.endPress(i, 0, 0, true, p);
+    }
+    const session = authority.getSnapshot()!;
+    const dimension = { schemaVersion: 1 as const, dimensionKind: "distance" as const, name: "Retained", visible: true,
+      references: session.points.map(measurePointToReference), style: cloneMeasureDimensionStyle(), status: "healthy" as const };
+    expect(measureSessionMatchesDimension(session, dimension)).toBe(true);
+    expect(measureSessionMatchesDimension(session, { ...dimension, textPlacementMm: point(999) })).toBe(true);
+    expect(measureSessionMatchesDimension(session, { ...dimension, visible: false })).toBe(false);
+    expect(measureSessionMatchesDimension(session, { ...dimension, status: "orphaned" })).toBe(false);
+    expect(measureSessionMatchesDimension(session, { ...dimension, references: [measurePointToReference(point(1)), dimension.references[1]] })).toBe(false);
+    expect(authority.getSnapshot()).toBe(session);
+    authority.dispatch({ type: "mode", mode: "navigate" }, context);
+    expect(measureSessionMatchesDimension(authority.getSnapshot(), dimension)).toBe(true);
+    authority.dispatch({ type: "restart" }, context);
+    expect(measureSessionMatchesDimension(authority.getSnapshot(), dimension)).toBe(false);
+  });
   it("round-trips project style, references, text placement and area plane without rounding", () => {
     const style = cloneMeasureDimensionStyle({ fixedTextPx: 23, precision: 1 });
     const annotation = { ...createAnnotation({ type: "dimension-note" }), dimension: {

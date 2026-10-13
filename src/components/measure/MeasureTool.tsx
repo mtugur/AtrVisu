@@ -9,6 +9,7 @@ import { cloneMeasureDimensionStyle, type MeasureAnchorKind, type MeasureDimensi
 import { formatMeasureValue, type MeasureKind } from "../../measure/measureGeometry";
 import { WorkbenchActionButton } from "../workbench/WorkbenchActionButton";
 import { MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX } from "../../measure/measurePresentation";
+import { formatDimensionValue } from "../../measure/dimensionPresentation";
 
 export type MeasureToolProps = {
   authority: MeasureAuthority;
@@ -109,7 +110,7 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
       <section className="measure-saved-section" aria-label="Reference Dimensions">
         <div className="measure-panel-section-title"><strong>Reference Dimensions</strong><span>{saved.length}</span></div>
         <div className="measure-panel-actions"><button type="button" disabled={!saved.length} onClick={() => onSetAllDimensionVisibility(true)}>Show All</button><button type="button" disabled={!saved.length} onClick={() => onSetAllDimensionVisibility(false)}>Hide All</button></div>
-<div className="measure-dimension-list">{saved.length === 0 ? <p className="measure-panel-empty">No saved dimensions.</p> : saved.map((annotation) => { const dimension = annotation.dimension!; const result = getDimensionResult(annotation, entities, levels); const orphaned = result.reason?.includes("reference") || dimension.status === "orphaned"; return <button key={annotation.id} type="button" className={"measure-dimension-list-item" + (selected?.id === annotation.id ? " is-selected" : "")} onClick={() => { if (!session) onAction({ type: "toggle" }); authority.selectDimension(annotation.id); }}><span><strong>{dimension.name}</strong><small>{kindLabels[dimension.dimensionKind]}</small></span><span>{orphaned ? "Orphaned" : dimension.visible === false ? "Hidden" : result.values[0] ? formatMeasureValue(result.values[0]) : "—"}</span></button>; })}</div>
+<div className="measure-dimension-list">{saved.length === 0 ? <p className="measure-panel-empty">No saved dimensions.</p> : saved.map((annotation) => { const dimension = annotation.dimension!; const result = getDimensionResult(annotation, entities, levels); const orphaned = result.reason?.includes("reference") || dimension.status === "orphaned"; return <button key={annotation.id} type="button" className={"measure-dimension-list-item" + (selected?.id === annotation.id ? " is-selected" : "")} onClick={() => { if (!session) onAction({ type: "toggle" }); authority.selectDimension(annotation.id); }}><span><strong>{dimension.name}</strong><small>{kindLabels[dimension.dimensionKind]}</small></span><span>{orphaned ? "Orphaned" : dimension.visible === false ? "Hidden" : result.values[0] ? formatDimensionValue(result.values[0], dimension.style) : "—"}</span></button>; })}</div>
       </section>
       {selected && selectedDimension ? (
         <section className="measure-dimension-editor" aria-label="Reference Dimension Editor">
@@ -137,5 +138,22 @@ export function MeasureViewportGraphics({ authority }: { authority: MeasureAutho
   const projection = useSyncExternalStore(authority.subscribeProjection, authority.getProjection, authority.getProjection);
   const session = useSyncExternalStore(authority.subscribe, authority.getSnapshot, authority.getSnapshot);
   if (!session) return null;
-  return <div className="measure-layer" data-editor-only="true" data-testid="measure-viewport-graphics"><svg className="measure-graphics" viewBox={"0 0 " + Math.max(1, projection.width) + " " + Math.max(1, projection.height)} aria-label="Measure viewport graphics">{projection.candidates?.map((candidate, index) => <g key={"candidate-" + index} data-anchor-kind={candidate.label} data-anchor-locked={candidate.locked} opacity={candidate.selected ? 1 : 0.5}><circle cx={candidate.x} cy={candidate.y} r={candidate.selected ? MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX : 4} /><title>{candidate.label}{candidate.locked ? " (locked)" : ""}</title>{candidate.selected ? <text x={candidate.x + 10} y={candidate.y - 10}>{candidate.label}{candidate.locked ? " (locked)" : ""}</text> : null}</g>)}{projection.lines.map((line, index) => <g key={index} className={line.preview ? "is-preview" : undefined}><polyline points={line.points.map((point) => point.x + "," + point.y).join(" ")} />{line.label ? <text x={line.labelPoint?.x ?? line.points[0]?.x ?? 0} y={(line.labelPoint?.y ?? line.points[0]?.y ?? 0) - 8}>{line.label}</text> : null}</g>)}{projection.markers.map((point, index) => <g key={index} className={point.preview ? "is-preview" : undefined}>{!point.offscreen ? <circle cx={point.x} cy={point.y} r="4" /> : null}<text x={point.x + 8} y={point.y - 8}>{point.label}</text></g>)}</svg></div>;
+  return <div className="measure-layer" data-editor-only="true" data-testid="measure-viewport-graphics" data-represented-dimension-id={projection.representedByDimensionId}>
+    <svg className="measure-graphics" viewBox={"0 0 " + Math.max(1, projection.width) + " " + Math.max(1, projection.height)} aria-label="Measure viewport graphics">
+      {projection.candidates?.map((candidate, index) => <g key={"candidate-" + index} data-anchor-kind={candidate.label} data-anchor-locked={candidate.locked} opacity={candidate.selected ? 1 : 0.5}>
+        <circle cx={candidate.x} cy={candidate.y} r={candidate.selected ? MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX : 4} /><title>{candidate.label}{candidate.locked ? " (locked)" : ""}</title>
+        {candidate.selected ? <text x={candidate.x + 10} y={candidate.y - 10}>{candidate.label}{candidate.locked ? " (locked)" : ""}</text> : null}
+      </g>)}
+      {projection.lines.map((line, index) => <g key={"line-" + index} className={line.preview ? "is-preview" : undefined}><polyline points={line.points.map(point => point.x + "," + point.y).join(" ")} /></g>)}
+      {projection.labels?.map((label, index) => <g key={"value-" + index} data-measure-value="true">
+        {label.textBackground ? <rect x={label.x - label.width / 2} y={label.y - label.height / 2} width={label.width} height={label.height} className="measure-value-background" /> : null}
+        <text textAnchor="middle" dominantBaseline="middle" style={{ fontFamily: label.fontFamily, fontSize: label.textPx, stroke: "none" }}>
+          {label.lines.map((line, lineIndex) => <tspan key={lineIndex} x={label.x} y={label.y + (lineIndex - (label.lines.length - 1) / 2) * label.textPx * 1.5}>{line}</tspan>)}
+        </text>
+      </g>)}
+      {projection.markers.map((point, index) => <g key={"marker-" + index} data-measure-marker={point.label} className={point.preview ? "is-preview" : undefined}>
+        {!point.offscreen ? <circle cx={point.x} cy={point.y} r="4" /> : null}<text x={point.x + 8} y={point.y - 8}>{point.label}</text>
+      </g>)}
+    </svg>
+  </div>;
 }

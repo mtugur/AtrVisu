@@ -87,10 +87,20 @@ the candidate-choice race, missing captured-plane presentation, and an angle
 label collision; the bounded corrections are in the same PR. Existing semantic
 grip and orphan behavior passed the new regression routes without changes.
 
-Evidence artifact: `c03-measure-v2-recovery`, 21 PNG/JSON pairs (42 files).
+Visual review `6155647277` reproduced duplicate transient/saved values,
+marker/value collisions, clipped selectors and ignored metric area styling on
+`750e0fb`. The bounded correction keeps transient data and saved annotations
+separate while using the equivalent visible saved graphic once. Hidden/deleted
+or changed saved references do not suppress independent transient results.
+Shared measured fit avoids marker/label extents; one style formatter governs
+area/perimeter units and two-line presentation. Full-text control geometry,
+actual text bounds, orbit/zoom and clean capture are asserted in Chromium at
+640/1024/1440.
+
+Evidence artifact: `c03-measure-v2-recovery`, 39 PNG/JSON pairs (78 files).
 `scripts/validate-measure-v2-evidence.mjs` rejects missing/stale evidence, console
 errors, failed dock invariants, failed real occlusion, failed clean capture, and
 missing reviewer-route behavior evidence.
 Automation Green is determined by the actual exact-head run, not these implementation checkboxes.
-Contract Verified remains PENDING independent review; Product Accepted remains
+Contract Verified remains BLOCKED until independent visual re-review; Product Accepted remains
 PENDING and is not inferred from automation.

@@ -5112,6 +5112,7 @@ export function App() {
           <BabylonScene
             ref={sceneRef}
             measureAuthority={measureAuthority}
+            measureDimensionStyle={measureDimensionStyle}
             onMeasureAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }}
             placedMachines={visiblePlacedMachines}
             civilReferences={visibleCivilReferences}
