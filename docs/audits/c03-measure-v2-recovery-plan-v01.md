@@ -41,7 +41,7 @@ instead of continuing its iterative patch history. C04/C05/C07/C09 are excluded.
 
 - Automation Green: prior head `750e0fb` passed run `38412604769`; the visual
   correction's final exact-head result is recorded in the PR Validation section.
-- Contract Verified: BLOCKED by visual review `6155647277`, pending re-review.
+- Contract Verified: FAIL (BLOCKED by visual review `6155647277`, pending re-review).
 - Product Accepted: NOT REQUESTED.
 
 Green automation will not be presented as independent Contract Verification.
@@ -141,3 +141,9 @@ No normative contract, picking/camera authority or other tool is changed.
 Automation results belong to the delivered exact-head Quality Gate in PR #130.
 Contract Verified remains BLOCKED pending independent re-review; no Product
 Owner acceptance has been requested or declared.
+
+The delivery declaration uses `Contract Verified: FAIL` with the review's
+BLOCKED explanation, matching the existing Quality Gate state vocabulary.
+Run `38478592184` stopped at this declaration check before build/unit/E2E;
+the corrected declaration is validated with a fresh PR event, without changing
+the governance checker or product implementation.

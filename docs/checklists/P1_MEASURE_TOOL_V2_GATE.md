@@ -102,5 +102,5 @@ Evidence artifact: `c03-measure-v2-recovery`, 39 PNG/JSON pairs (78 files).
 errors, failed dock invariants, failed real occlusion, failed clean capture, and
 missing reviewer-route behavior evidence.
 Automation Green is determined by the actual exact-head run, not these implementation checkboxes.
-Contract Verified remains BLOCKED until independent visual re-review; Product Accepted remains
+Contract Verified: FAIL (BLOCKED until independent visual re-review); Product Accepted remains
 PENDING and is not inferred from automation.

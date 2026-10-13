@@ -129,4 +129,4 @@ PR #129 and its rejected exact head remain auditable and unchanged.
 | F | Existing unfiltered console/pageerror collector; every new browser scenario asserts empty errors. Full-suite gate remains mandatory. |
 | G | One consolidated recovery candidate and separate superseding Draft; no normative tuning. Independent Contract Verification remains pending. |
 | H | PNG/JSON artifact exposes actual graphics, occlusion, dock and persistence states. Review 6155647277 is addressed by one bounded presentation correction with measured text/control geometry at 640/1024/1440; the artifact has 39 PNG/JSON pairs. No Product Accepted claim. |
-| I / J | Exact-head Automation Green recorded in PR Validation; Contract Verified BLOCKED until independent visual re-review; Product Accepted PENDING. No Product Owner test request before independent verification. |
+| I / J | Exact-head Automation Green recorded in PR Validation; Contract Verified FAIL (BLOCKED until independent visual re-review); Product Accepted PENDING. No Product Owner test request before independent verification. |
