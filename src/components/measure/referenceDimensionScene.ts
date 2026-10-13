@@ -68,7 +68,8 @@ export const createReferenceDimensionSceneManager = ({ scene, camera, canvas, au
       const style = dimension.style;
       const renderId = dimension.dimensionAxis ? `${annotation.id}:${dimension.dimensionAxis}` : annotation.id;
       const values = dimension.dimensionKind === "distance" || dimension.dimensionKind === "pair" ? result.values.filter(v => v.label === "3D Distance") : result.values;
-      const text = values.map(v => formatDimensionValue(v, style)).join(" | ");
+      const shownValues = dimension.dimensionKind === "area" ? values.filter(value => value.unit !== "mm2") : values;
+      const text = shownValues.map(v => dimension.dimensionKind === "area" ? `${v.label} ${formatDimensionValue(v, style)}` : formatDimensionValue(v, style)).join(" | ");
       const key = JSON.stringify([text, style.fontFamily, style.textBackground, style.displayMode]);
       let node = nodes.get(renderId);
       if (node?.key !== key) { if (node) disposeNode(node); nodes.delete(renderId); node = undefined; }
@@ -146,7 +147,7 @@ export const createReferenceDimensionSceneManager = ({ scene, camera, canvas, au
       setQuads(node.strokes, quads); setQuads(node.label, [box(labelPosition, textWidth, textHeight)], true);
       const labelWorld = unproject(labelPosition);
       hitTargets.push({ hit: { annotationId: annotation.id, point: { xMm: labelWorld.x * 1000, yMm: labelWorld.z * 1000, zMm: labelWorld.y * 1000 } }, screen: labelPosition, width: textWidth, height: textHeight });
-      node.strokes.metadata = { referenceDimensionId: annotation.id, references: dimension.references, style, displayMode: style.displayMode, fit, witnessCount: ["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && style.showWitnessLines ? 2 : 0, lineWeightPx: style.lineWeightPx, textPx, text, labelPosition, endpoints: resolved.points, endpointScreens: resolved.points.map(project), segments };
+      node.strokes.metadata = { referenceDimensionId: annotation.id, references: dimension.references, style, displayMode: style.displayMode, fit, witnessCount: ["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && style.showWitnessLines ? 2 : 0, lineWeightPx: style.lineWeightPx, textPx, text, labelPosition, labelWidthPx: textWidth, labelHeightPx: textHeight, endpoints: resolved.points, endpointScreens: resolved.points.map(project), segments };
     });
     nodes.forEach((node, id) => { if (!active.has(id)) { disposeNode(node); nodes.delete(id); } });
   };

@@ -20,7 +20,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     getDimensionManager: () => ReturnType<typeof createReferenceDimensionSceneManager> | null;
 }) => {
     let anchors: { point: MeasurePoint; x: number; y: number; distance: number }[] = [];
-    let highlighted: MeasurePoint | null = null, locked: MeasurePoint | null = null;
+    let highlighted: MeasurePoint | null = null, locked: MeasurePoint | null = null, chosen: MeasurePoint | null = null;
     let cycleIndex: number | null = null;
     const originalCursor = canvas.style.cursor;
     let edit: { hit: DimensionHit; startX: number; startY: number; offsetX: number; offsetY: number; depth: number; point: MeasurePoint | null; moved: boolean } | null = null;
@@ -37,7 +37,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const rect = canvas.getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
         if (x < 0 || y < 0 || x >= rect.width || y >= rect.height)
             return null;
-        if (locked) return locked;
+        if (locked || chosen) return locked ?? chosen;
         anchors = [];
         highlighted = null;
         if (state.source === "level-plane") {
@@ -80,7 +80,8 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     };
     const release = () => { const id = captured; captured = null; if (id !== null && canvas.hasPointerCapture(id))
         canvas.releasePointerCapture(id); };
-    const cancel = (reason: string) => { authority.cancelPress(reason); edit = null; locked = null; cycleIndex = null; getDimensionManager()?.previewText("", null); release(); };
+    const clearChoice = () => { locked = null; chosen = null; cycleIndex = null; };
+    const cancel = (reason: string) => { authority.cancelPress(reason); edit = null; clearChoice(); getDimensionManager()?.previewText("", null); release(); };
     const observePreview = (x: number, y: number) => {
         lastClient = { x, y };
         const p = candidate(x, y);
@@ -132,7 +133,6 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             }
             return;
         }
-        if (lastClient?.x !== e.clientX || lastClient?.y !== e.clientY) cycleIndex = null;
         authority.movePress(e.pointerId, e.clientX, e.clientY);
         observePreview(e.clientX, e.clientY);
     };
@@ -150,7 +150,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
                     ? { type: "textPlacement", annotationId: current.hit.annotationId, point: current.point }
                     : { type: "reference", annotationId: current.hit.annotationId, index: current.hit.index, reference: measurePointToReference(current.point) });
             }
-            release(); return;
+            clearChoice(); release(); return;
         }
         // A pending native capture release can precede its lostpointercapture event.
         if (authority.getPress() && !canvas.hasPointerCapture(e.pointerId))
@@ -158,6 +158,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const p = observePreview(e.clientX, e.clientY);
         const rect = canvas.getBoundingClientRect();
         authority.endPress(e.pointerId, e.clientX, e.clientY, e.clientX >= rect.left && e.clientX < rect.right && e.clientY >= rect.top && e.clientY < rect.bottom, p);
+        clearChoice();
         release();
     };
     const pointerCancel = (e: PointerEvent) => { if (captured === e.pointerId)
@@ -166,8 +167,8 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     const key = (e: KeyboardEvent) => {
         if (authority.getActive() && e.target === canvas && (e.key === "Shift" || e.key === "Tab")) {
             e.preventDefault(); e.stopImmediatePropagation();
-            if (e.key === "Shift") locked = highlighted;
-            else if (anchors.length) { cycleIndex = ((cycleIndex ?? -1) + 1) % anchors.length; highlighted = anchors[cycleIndex].point; }
+            if (e.key === "Shift") { locked = chosen ?? highlighted; chosen = locked; }
+            else if (anchors.length) { cycleIndex = ((cycleIndex ?? -1) + 1) % anchors.length; chosen = anchors[cycleIndex].point; highlighted = chosen; }
             if (lastClient) observePreview(lastClient.x, lastClient.y);
             return;
         }
@@ -202,7 +203,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             || (state.points.length === 0 && state.points !== previousState?.points);
         previousState = state;
         if (reset) {
-            edit = null; locked = null; highlighted = null; cycleIndex = null; anchors = [];
+            edit = null; clearChoice(); highlighted = null; anchors = [];
             getDimensionManager()?.previewText("", null);
         }
         if (!state || state.mode !== "pick" || (!authority.getPress() && !edit))
@@ -236,7 +237,11 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const result = getMeasureResult(current);
         const lines = getMeasureLines(current).map(line => {
             const quantity = result.values.find(v => v.label === line.label || (line.label === "Angle" && v.unit === "deg") || (line.label === "Reference Point" && v.label === "3D Distance"));
-            return { ...line, points: line.points.map(project), label: line.label ? `${line.label}${quantity ? ` ${formatMeasureValue(quantity)}` : ""}` : undefined };
+            const firstArm = current.kind === "angle" && line.label === "Angle" && current.points.length === 3
+                ? [project(current.points[0]), project(current.points[1])] : null;
+            const labelPoint = firstArm ? { x: firstArm[0].x + (firstArm[1].x - firstArm[0].x) / 4,
+                y: firstArm[0].y + (firstArm[1].y - firstArm[0].y) / 4 } : undefined;
+            return { ...line, points: line.points.map(project), labelPoint, label: line.label ? `${line.label}${quantity ? ` ${formatMeasureValue(quantity)}` : ""}` : undefined };
         });
         authority.project({ width: rect.width, height: rect.height, lines,
             candidates: anchors.map(a => ({ x: a.x, y: a.y, label: MEASURE_ANCHOR_LABELS[a.point.anchorKind!], selected: a.point.anchorKind === (locked ?? highlighted)?.anchorKind, locked: a.point.anchorKind === locked?.anchorKind })),

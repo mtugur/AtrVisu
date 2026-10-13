@@ -80,7 +80,17 @@ The pre-implementation correction matrix is
 - [ ] Independent Contract Verification against the frozen contract and exact-head artifact.
 - [ ] Product Owner acceptance (must not be requested before independent verification).
 
-Evidence artifact: `c03-measure-v2-recovery`, 14 PNG/JSON pairs (28 files).
+PR #130 independent review `6144077908` adds executable checks for semantic
+grip reassignment and Free Geometry Hit, retained Tab/Shift candidate choice,
+angle and area readability, and Level orphan/repair. These tests first exposed
+the candidate-choice race, missing captured-plane presentation, and an angle
+label collision; the bounded corrections are in the same PR. Existing semantic
+grip and orphan behavior passed the new regression routes without changes.
+
+Evidence artifact: `c03-measure-v2-recovery`, 21 PNG/JSON pairs (42 files).
 `scripts/validate-measure-v2-evidence.mjs` rejects missing/stale evidence, console
-errors, failed dock invariants, failed real occlusion or failed clean capture.
+errors, failed dock invariants, failed real occlusion, failed clean capture, and
+missing reviewer-route behavior evidence.
 Automation Green is determined by the actual exact-head run, not these implementation checkboxes.
+Contract Verified remains PENDING independent review; Product Accepted remains
+PENDING and is not inferred from automation.

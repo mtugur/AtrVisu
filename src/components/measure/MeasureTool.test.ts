@@ -29,4 +29,23 @@ describe("M20/M23/M26 Measure workspace presentation", () => {
     for (const label of ["Text Mode", "Display", "Units", "Reference A entity", "Reference A anchor", "Reference A type"]) expect(markup).toContain(`aria-label="${label}"`);
     for (const label of ["Font", "Min px", "Max px", "Fixed text px", "Line px", "Arrow px", "Text offset px", "Witness lines", "Leaders", "Halo"]) expect(markup).toContain(label);
   });
+  it("M22/M23 presents saved Plan Area, perimeter and its captured Geometry plane", () => {
+    const p = props();
+    const annotation = { ...createAnnotation({ type: "area-note" }), dimension: {
+      schemaVersion: 1 as const, dimensionKind: "area" as const, name: "Raised area", visible: true,
+      references: [
+        { type: "world-point" as const, xMm: 0, yMm: 0, zMm: 1500 },
+        { type: "world-point" as const, xMm: 2000, yMm: 0, zMm: 1600 },
+        { type: "world-point" as const, xMm: 0, yMm: 1000, zMm: 1700 }
+      ],
+      presentationElevationMm: 1500, style: cloneMeasureDimensionStyle(), status: "healthy" as const
+    } };
+    p.annotations = [annotation]; p.authority.selectDimension(annotation.id);
+    const markup = renderToStaticMarkup(createElement(MeasureTool, p));
+    expect(markup).toContain("Plan Area");
+    expect(markup).toContain("Plan Perimeter");
+    expect(markup).toContain("Captured Plane");
+    expect(markup).toContain("Geometry");
+    expect(markup).toContain("1500");
+  });
 });

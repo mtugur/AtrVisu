@@ -100,6 +100,7 @@ export type MeasureProjection = {
             x: number;
             y: number;
         }[];
+        labelPoint?: { x: number; y: number };
         label?: string;
         preview?: boolean;
     }[];

@@ -56,6 +56,7 @@ export type MeasureDimensionMetadata = {
   visible: boolean;
   references: readonly MeasureReference[];
   dimensionAxis?: "width" | "depth" | "height";
+  presentationSource?: "geometry" | "level-plane";
   presentationElevationMm?: number;
   style: MeasureDimensionStyle;
   textPlacementMm?: {

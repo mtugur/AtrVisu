@@ -3474,6 +3474,7 @@ export function App() {
       name: "Measure " + session.kind,
       visible: true,
       references,
+      presentationSource: session.kind === "area" ? session.source : undefined,
       presentationElevationMm: session.presentationElevationMm,
       style: cloneMeasureDimensionStyle(measureDimensionStyleRef.current),
       status: "healthy" as const

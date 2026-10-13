@@ -71,5 +71,21 @@ Green automation will not be presented as independent Contract Verification.
 
 Focused validation is recorded in the recovery PR. The final complete local gate
 is run once on the stable implementation checkpoint; the Quality Gate checks the
-same exact head and uploads `c03-measure-v2-recovery` (14 PNG/JSON pairs).
+same exact head and uploads `c03-measure-v2-recovery` (21 PNG/JSON pairs).
 Contract Verification is an independent review gate, not an implementation-agent assertion.
+
+## PR #130 independent verification response
+
+Review `6144077908` requires four concrete user routes, beyond the original
+M20-M30 matrix. The focused tests were added before the bounded fixes:
+
+| Route | Baseline observation | Corrected executable evidence |
+| --- | --- | --- |
+| M24/M25 semantic grip | Real machine-corner reassignment already worked. | `review-m24-m25-grip-preview` and `review-m24-m25-semantic-edit`: corner identity, other endpoint unchanged, move/rotate association, Undo/Redo, project save and hard reload. `review-m24-free-hit` proves non-associative world references after machine movement. |
+| M24 Tab/Shift choice | Releasing Shift after pointer movement changed the committed corner. | `review-m24-cycle-selection`: visible chosen candidate survives pointer movement and Shift release; commit uses that exact semantic anchor. |
+| M22/M23 angle/area | Saved angle label overlapped the transient label; saved area omitted named perimeter in scene and captured-plane source in panel. | `m22-angle`, `review-m22-angle-orbit-zoom`: B-vertex arms/arc, separated labels and stable values under orbit/zoom. `m22-area`: both area and perimeter in scene/panel, captured Level Plane metadata in panel; unit coverage also checks Geometry-plane metadata and normalized persistence. |
+| M27 orphan/repair | Deleted Level remained orphaned and explicit repair already worked. | `review-m27-level-orphan` and `review-m27-level-orphan-repair`: unresolved reference stays listed, does not render falsely, both Level endpoints explicitly reassociate to Ground. |
+
+The artifact validator checks 21 exact-head PNG/JSON pairs. Automation Green
+requires the new exact-head Quality Gate; Contract Verified and Product Accepted
+remain pending external decisions.

@@ -8,11 +8,21 @@ type Helpers = {
   waitForRuntimeViewport: (page: Page) => Promise<unknown>;
 };
 type Graphic = { id: string; displayMode: string; text: string; textPx: number; witnessCount: number; lineWeightPx: number;
-  labelPosition: { x: number; y: number; z: number }; endpointScreens: { x: number; y: number }[];
+  labelPosition: { x: number; y: number; z: number }; labelWidthPx: number; labelHeightPx: number; endpointScreens: { x: number; y: number }[];
+  segments: [{ x: number; y: number }, { x: number; y: number }][];
   references: { type: string; levelId?: string; entityId?: string; anchor?: string }[];
   endpoints: { xMm: number; yMm: number; zMm: number }[] };
 const canvas = (page: Page) => page.getByLabel("AtrVisu 3D workspace");
 const graphics = async (page: Page): Promise<Graphic[]> => JSON.parse(await canvas(page).getAttribute("data-reference-dimensions") ?? "[]");
+const expectAngleLabelsSeparated = async (page: Page, rendered: Graphic) => {
+  const transient = (await page.getByTestId("measure-viewport-graphics").locator("svg text").filter({ hasText: /Angle/ }).boundingBox())!;
+  const canvasBox = (await canvas(page).boundingBox())!;
+  const saved = { x: canvasBox.x + rendered.labelPosition.x - rendered.labelWidthPx / 2,
+    y: canvasBox.y + rendered.labelPosition.y - rendered.labelHeightPx / 2,
+    width: rendered.labelWidthPx, height: rendered.labelHeightPx };
+  expect(saved.x + saved.width <= transient.x || transient.x + transient.width <= saved.x
+    || saved.y + saved.height <= transient.y || transient.y + transient.height <= saved.y).toBe(true);
+};
 const snapshot = (page: Page) => page.evaluate(() => ({ camera: window.__atrvisuRuntimeViewport!.getCameraSnapshot("viewport.main"), invariants: window.__atrvisuRuntimeViewport!.getInvariants() }));
 const dimensionPixels = async (page: Page) => {
   const png = (await page.screenshot()).toString("base64");
@@ -29,16 +39,26 @@ const dimensionPixels = async (page: Page) => {
 };
 const command = (page: Page, id: string) => page.getByTestId("workbench-command-bar").locator(`[data-command-id="${id}"]`);
 const addMachine = async (page: Page, name = "Flow Pack Machine") => {
+  const before = Object.keys(JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}")).length;
   const library = page.getByTestId("machine-library-panel");
   await library.getByLabel("Search assets").fill(name);
   await library.getByRole("button", { name: `Add ${name} to layout`, exact: true }).click();
-  await expect.poll(async () => Object.keys(JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}")).length).toBeGreaterThan(0);
+  await expect.poll(async () => Object.keys(JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}")).length).toBeGreaterThan(before);
 };
-const start = async (page: Page, helpers: Helpers, width = 1440, machine = false) => {
+const start = async (page: Page, helpers: Helpers, width = 1440, machine: boolean | string[] = false, projectName?: string) => {
   await page.setViewportSize({ width, height: 900 });
   const errors = helpers.collectPageErrors(page);
   await helpers.openCleanApp(page); await helpers.waitForRuntimeViewport(page);
-  if (machine) await addMachine(page);
+  if (projectName) {
+    await page.getByRole("menuitem", { name: "File", exact: true }).click();
+    await page.locator('[role="menu"] [data-command-id="project.manager"]').click();
+    const manager = page.getByTestId("project-manager-modal");
+    await manager.getByTestId("new-project-name").fill(projectName);
+    await manager.getByTestId("new-customer-name").fill("Measure regression");
+    await manager.getByTestId("create-project").click();
+    await manager.getByTestId("close-project-manager").click();
+  }
+  for (const name of Array.isArray(machine) ? machine : machine ? ["Flow Pack Machine"] : []) await addMachine(page, name);
   if (width <= 720) await page.getByRole("button", { name: "More commands", exact: true }).click();
   await command(page, "view.measure").click();
   await expect(page.getByTestId("measure-panel")).toBeVisible();
@@ -170,11 +190,13 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
     const locked = await selected.getAttribute("data-anchor-kind");
     await page.mouse.move(bounds.x + point.x + 15, bounds.y + point.y + 10);
     await expect(selected).toHaveAttribute("data-anchor-kind", locked!);
+    await page.keyboard.up("Shift");
+    await expect(selected).toHaveAttribute("data-anchor-kind", locked!);
+    await evidence(page, "review-m24-cycle-selection", errors, { chosenAnchor: locked });
     await page.mouse.click(bounds.x + point.x + 15, bounds.y + point.y + 10);
     const session = JSON.parse(await canvas(page).getAttribute("data-measure-session") ?? "null");
-    expect(session.points[0].anchorKind).toBeTruthy();
+    expect(session.points[0].anchorKind).toBe(locked!.toLowerCase().replaceAll(" ", "-"));
     expect(session.points[0].entityId).toMatch(/^machine:/);
-    await page.keyboard.up("Shift");
     expect(errors).toEqual([]); await evidence(page, "m24-semantic-lock", errors);
   });
 
@@ -240,6 +262,120 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
     expect(errors).toEqual([]); await evidence(page, "m27-associative-repair", errors);
   });
 
+  test("C03 V2 review M24 M25 endpoint grip commits another machine semantic corner through history and reload", async ({ page }) => {
+    const errors = await start(page, helpers, 1440, ["Flow Pack Machine", "Belt Conveyor"], "C03 V2 semantic edit");
+    const machinePoints = JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}") as Record<string, { x: number; y: number }>;
+    const [instanceId, target] = Object.entries(machinePoints)[0];
+    await keep(page);
+    await page.getByLabel("Measurement point source").selectOption("geometry");
+    const original = (await graphics(page))[0];
+    const bounds = (await canvas(page).boundingBox())!;
+    const grip = original.endpointScreens[0];
+    await page.mouse.move(bounds.x + grip.x, bounds.y + grip.y);
+    await page.mouse.down();
+    await page.mouse.move(bounds.x + target.x, bounds.y + target.y, { steps: 5 });
+    const corner = page.getByTestId("measure-viewport-graphics").locator('[data-anchor-kind="Front Right Bottom"] circle');
+    await expect(corner).toBeVisible();
+    const marker = (await corner.boundingBox())!;
+    await page.mouse.move(marker.x + marker.width / 2, marker.y + marker.height / 2);
+    await expect(page.locator('[data-anchor-kind="Front Right Bottom"][opacity="1"]')).toHaveCount(1);
+    await evidence(page, "review-m24-m25-grip-preview", errors, { targetEntityId: `machine:${instanceId}` });
+    await page.mouse.up();
+    await expect.poll(async () => (await graphics(page))[0]?.references[0].type).toBe("entity-anchor");
+    const edited = (await graphics(page))[0];
+    expect(edited.references[0]).toMatchObject({ entityId: `machine:${instanceId}`, anchor: "front-right-bottom" });
+    expect(edited.references[1]).toEqual(original.references[1]);
+    await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
+    await command(page, "edit.undo").click();
+    await expect.poll(async () => (await graphics(page))[0]?.references[0].type).toBe("level-point");
+    await command(page, "edit.redo").click();
+    await expect.poll(async () => (await graphics(page))[0]?.references[0].type).toBe("entity-anchor");
+    await page.getByTestId("primary-dock-tab-panel.layoutExplorer").click();
+    await page.getByTestId(`layout-explorer-entity-machine:${instanceId}`).click();
+    await page.getByTestId("right-panel").getByRole("button", { name: "Inspector", exact: true }).click();
+    const planX = page.getByRole("textbox", { name: "Plan X", exact: true });
+    const initialX = Number(await planX.inputValue());
+    await planX.fill(String(initialX + 500)); await planX.press("Tab");
+    const rotation = page.getByRole("spinbutton", { name: /^Rotation Angle/ });
+    await rotation.fill("30"); await rotation.press("Tab");
+    await expect.poll(async () => (await graphics(page))[0]?.endpoints[0].xMm).not.toBeCloseTo(edited.endpoints[0].xMm, 3);
+    const moved = (await graphics(page))[0];
+    page.on("dialog", dialog => dialog.accept("Measure review"));
+    await command(page, "project.save").click();
+    await expect.poll(() => page.evaluate(() => window.__atrvisuProjectCommands?.getActiveContext().hasUnsavedChanges)).toBe(false);
+    await page.reload();
+    await page.getByTestId("empty-project-welcome").getByRole("button", { name: "Open Project", exact: true }).click();
+    const manager = page.getByTestId("project-manager-modal");
+    await manager.getByTestId("project-manager-project-option").filter({ hasText: "C03 V2 semantic edit" }).click();
+    await manager.getByRole("button", { name: "Load Revision", exact: true }).click();
+    await manager.getByTestId("close-project-manager").click();
+    await expect.poll(async () => (await graphics(page))[0]?.references[0].type).toBe("entity-anchor");
+    expect((await graphics(page))[0].references[0]).toEqual(edited.references[0]);
+    expect((await graphics(page))[0].endpoints[0]).toEqual(moved.endpoints[0]);
+    expect(errors).toEqual([]);
+    await evidence(page, "review-m24-m25-semantic-edit", errors, { original, edited, moved });
+  });
+
+  test("C03 V2 review M24 explicit Free Geometry Hit stays a non-associative world reference", async ({ page }) => {
+    const errors = await start(page, helpers, 1440, true);
+    await page.getByLabel("Measurement point source").selectOption("geometry");
+    await page.getByLabel("Measurement reference mode").selectOption("free");
+    const bounds = (await canvas(page).boundingBox())!;
+    const points = JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}") as Record<string, { x: number; y: number }>;
+    const [instanceId, point] = Object.entries(points)[0];
+    await page.mouse.click(bounds.x + point.x - 8, bounds.y + point.y);
+    await page.mouse.click(bounds.x + point.x + 8, bounds.y + point.y);
+    await page.getByRole("button", { name: "Keep / Save", exact: true }).click();
+    await expect.poll(async () => (await graphics(page)).length).toBe(1);
+    const before = (await graphics(page))[0];
+    expect(before.references.map(ref => ref.type)).toEqual(["world-point", "world-point"]);
+    await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
+    await page.getByTestId("primary-dock-tab-panel.layoutExplorer").click();
+    await page.getByTestId(`layout-explorer-entity-machine:${instanceId}`).click();
+    await page.getByTestId("right-panel").getByRole("button", { name: "Inspector", exact: true }).click();
+    const planX = page.getByRole("textbox", { name: "Plan X", exact: true });
+    await planX.fill(String(Number(await planX.inputValue()) + 1000)); await planX.press("Tab");
+    expect((await graphics(page))[0].references).toEqual(before.references);
+    expect((await graphics(page))[0].endpoints).toEqual(before.endpoints);
+    expect(errors).toEqual([]);
+    await evidence(page, "review-m24-free-hit", errors, { before });
+  });
+
+  test("C03 V2 review M27 deleted Level reference stays Orphaned until explicit reassociation", async ({ page }) => {
+    const errors = await start(page, helpers);
+    await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
+    await page.getByTestId("primary-dock-tab-panel.levels").click();
+    const answers = ["Measure Level", "6000"];
+    const answer = (dialog: import("@playwright/test").Dialog) => dialog.accept(answers.shift() ?? "");
+    page.on("dialog", answer);
+    await page.getByTestId("add-level").click();
+    page.off("dialog", answer);
+    const level = page.getByTestId(/level-row-level-/).filter({ hasText: "Measure Level" });
+    await level.locator(".layer-main-button").click();
+    await command(page, "view.measure").click();
+    await page.getByLabel("Measurement point source").selectOption("level-plane");
+    await keep(page);
+    const before = (await graphics(page))[0];
+    expect(before.references.every(ref => ref.type === "level-point")).toBe(true);
+    await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
+    await level.getByRole("button", { name: "Delete Measure Level" }).click();
+    await expect(level).toHaveCount(0);
+    await command(page, "view.measure").click();
+    const editor = page.getByRole("region", { name: "Reference Dimension Editor" });
+    await expect(editor).toContainText("Orphaned");
+    await expect(page.getByRole("button").filter({ hasText: "Measure distance" })).toContainText("Orphaned");
+    expect((await graphics(page)).length).toBe(0);
+    await evidence(page, "review-m27-level-orphan", errors, { before });
+    await editor.getByLabel("Reference A Level").selectOption("ground");
+    await expect(editor).toContainText("Orphaned");
+    await editor.getByLabel("Reference B Level").selectOption("ground");
+    await expect(editor).toContainText("Healthy");
+    await expect.poll(async () => (await graphics(page)).length).toBe(1);
+    expect((await graphics(page))[0].references.every(ref => ref.type === "level-point" && ref.levelId === "ground")).toBe(true);
+    expect(errors).toEqual([]);
+    await evidence(page, "review-m27-level-orphan-repair", errors, { before });
+  });
+
   test("C03 V2 M28 real machine depth occludes a dimension while explicit Overlay renders the same references", async ({ page }) => {
     const errors = await start(page, helpers, 1440, true);
     const top = page.getByTestId("viewcube").locator('[data-preset-id="z+"]');
@@ -271,8 +407,48 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
     if (kind === "area") await page.getByRole("button", { name: "Finish", exact: true }).click();
     await page.getByRole("button", { name: "Keep / Save", exact: true }).click();
     await expect.poll(async () => (await graphics(page)).length).toBe(1);
-    expect((await graphics(page))[0].text).toContain(kind === "angle" ? "deg" : "mm2");
+    const rendered = (await graphics(page))[0];
+    expect(rendered.text).toContain(kind === "angle" ? "deg" : "m2");
+    if (kind === "angle") {
+      expect(rendered.segments.length).toBeGreaterThan(20);
+      expect(rendered.segments[0][1]).toMatchObject(rendered.endpointScreens[1]);
+      expect(rendered.segments[1][0]).toMatchObject(rendered.endpointScreens[1]);
+      expect(rendered.labelPosition.x).toBeGreaterThan(0);
+      expect(rendered.labelPosition.y).toBeGreaterThan(0);
+      await expectAngleLabelsSeparated(page, rendered);
+    } else {
+      expect(rendered.text).toContain("Plan Perimeter");
+      const editor = page.getByRole("region", { name: "Reference Dimension Editor" });
+      await expect(editor).toContainText("mm2");
+      await expect(editor).toContainText("Plan Perimeter");
+      await expect(editor).toContainText("Captured Plane");
+      await expect(editor).toContainText("Level Plane");
+      await expect(editor).toContainText("0.000 mm");
+    }
     expect(errors).toEqual([]); await evidence(page, `m22-${kind}`, errors);
+    if (kind === "angle") {
+      const beforeCamera = await snapshot(page);
+      await page.getByRole("button", { name: "Navigate", exact: true }).click();
+      const cameraBounds = (await canvas(page).boundingBox())!;
+      const cx = cameraBounds.x + cameraBounds.width / 2, cy = cameraBounds.y + cameraBounds.height / 2;
+      await page.mouse.move(cx, cy); await page.mouse.down();
+      await page.mouse.move(cx + 90, cy + 45, { steps: 6 }); await page.mouse.up();
+      await page.mouse.wheel(0, -240);
+      await expect.poll(async () => (await snapshot(page)).camera).not.toEqual(beforeCamera.camera);
+      const reprojected = (await graphics(page))[0];
+      expect(reprojected.endpoints).toEqual(rendered.endpoints);
+      expect(reprojected.endpointScreens).not.toEqual(rendered.endpointScreens);
+      expect(reprojected.segments.length).toBeGreaterThan(20);
+      expect(reprojected.text).toContain("deg");
+      expect(reprojected.textPx).toBeGreaterThanOrEqual(10);
+      expect(reprojected.labelPosition.x).toBeGreaterThan(0);
+      expect(reprojected.labelPosition.x).toBeLessThan(cameraBounds.width);
+      expect(reprojected.labelPosition.y).toBeGreaterThan(0);
+      expect(reprojected.labelPosition.y).toBeLessThan(cameraBounds.height);
+      await expectAngleLabelsSeparated(page, reprojected);
+      expect(errors).toEqual([]);
+      await evidence(page, "review-m22-angle-orbit-zoom", errors, { beforeCamera, afterCamera: await snapshot(page), before: rendered });
+    }
   });
 
   test("C03 V2 M30 clean PNG includes saved dimensions but excludes session and edit affordances", async ({ page }) => {

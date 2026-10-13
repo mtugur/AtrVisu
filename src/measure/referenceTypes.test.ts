@@ -34,6 +34,22 @@ describe("C03 V2 reference model", () => {
     expect(resolveMeasureReference(restored.references[0], [], [{ id: "level-2", name: "Level 2", elevationMm: 6500, systemLevel: false, createdAt: "2026-01-01", updatedAt: "2026-01-01" }])?.zMm).toBe(6500);
     expect(resolveDimensionReferences(restored, [], []).orphaned).toBe(true);
   });
+  it("M22/M23 keeps the captured area source and plane through annotation normalization", () => {
+    const annotation = { ...createAnnotation({ type: "area-note" }), dimension: {
+      schemaVersion: 1 as const, dimensionKind: "area" as const, name: "Upper plan", visible: true,
+      references: [
+        { type: "level-point" as const, levelId: "level-2", xMm: 0, yMm: 0 },
+        { type: "level-point" as const, levelId: "level-2", xMm: 2000, yMm: 0 },
+        { type: "level-point" as const, levelId: "level-2", xMm: 0, yMm: 1000 }
+      ],
+      presentationSource: "level-plane" as const, presentationElevationMm: 6000,
+      style: cloneMeasureDimensionStyle(), status: "healthy" as const
+    } };
+    const restored = normalizeAnnotations(JSON.parse(JSON.stringify([annotation])))[0].dimension!;
+    expect(restored.presentationSource).toBe("level-plane");
+    expect(restored.presentationElevationMm).toBe(6000);
+    expect(restored.references).toEqual(annotation.dimension.references);
+  });
   it("M27 re-resolves anchors after translation, rotation and dimension changes without a stale fallback", () => {
     const ref = { type: "entity-anchor" as const, entityId: machine.id, anchor: "front-right-bottom" as const };
     const moved = { ...machine, transform: { ...machine.transform, planX: 2000, rotationDeg: 90 } };
