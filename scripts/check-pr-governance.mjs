@@ -79,17 +79,48 @@ if (!isConcrete(rationale) || /^If\b/i.test(rationale)) fail("Interaction impact
 const baseSha = event.pull_request?.base?.sha;
 const headSha = event.pull_request?.head?.sha;
 let changedFiles = [];
+let verifiedChanges = null;
 if (baseSha && headSha) {
-  const diff = spawnSync("git", ["diff", "--name-only", baseSha, headSha], {
-    cwd: root,
-    encoding: "utf8"
-  });
-  if (diff.status === 0) {
-    changedFiles = diff.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+  const validSha = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value);
+  if (!validSha(baseSha) || !validSha(headSha)) {
+    fail("invalid PR diff provenance");
   } else {
-    fail(`unable to inspect PR changed files: ${diff.stderr || diff.stdout}`);
+    const diff = spawnSync("git", ["diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=none", "--raw", "-z", baseSha, headSha, "--"], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024
+    });
+    if (diff.status === 0) {
+      const tokens = diff.stdout.split("\0");
+      const records = [];
+      let valid = tokens.at(-1) === "";
+      for (let index = 0; index < tokens.length - 1; index += 2) {
+        const header = tokens[index].match(/^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ ([AMDT])$/i);
+        const file = tokens[index + 1];
+        if (!header || !file) {
+          valid = false;
+          break;
+        }
+        records.push({ file, oldMode: header[1], newMode: header[2] });
+      }
+      if (valid) {
+        verifiedChanges = records;
+        changedFiles = records.map(({ file }) => file);
+      } else {
+        fail("unable to inspect PR changed files: invalid raw diff");
+      }
+    } else {
+      fail(`unable to inspect PR changed files: ${diff.stderr || diff.stdout}`);
+    }
   }
 }
+
+// This is a filesystem-scope proof, not a classification supplied by the PR body.
+const governanceDocument = /^docs\/(?:product|standards|adr|checklists|benchmarks|governance|protocols)\/[A-Za-z0-9_][A-Za-z0-9_.-]*\.md$/;
+const governanceOnly = verifiedChanges !== null && verifiedChanges.length > 0 && verifiedChanges.every(
+  ({ file, oldMode, newMode }) => governanceDocument.test(file)
+    && [oldMode, newMode].every((mode) => mode === "100644" || mode === "000000")
+);
 
 const contractSensitiveChange = changedFiles.some((file) =>
   file === "docs/standards/ATRVISU_INTERACTION_STANDARD.md" ||
@@ -148,10 +179,30 @@ if (yesChecked) {
 }
 
 const runtime = section("## Runtime / console", "## Validation");
-for (const phrase of [
+const evidencePattern = /^- Runtime evidence:[ \t]*([^\r\n]*)$/gmi;
+const evidenceDeclarations = [...body.matchAll(evidencePattern)];
+const runtimeEvidenceDeclarations = [...runtime.matchAll(evidencePattern)];
+if (evidenceDeclarations.length > 1 || evidenceDeclarations.length !== runtimeEvidenceDeclarations.length) {
+  fail("ambiguous Runtime evidence declaration");
+}
+const runtimeEvidence = runtimeEvidenceDeclarations[0]?.[1]?.trim();
+const governanceNA = "N/A — governance-only / not executed";
+if (runtimeEvidence !== undefined && runtimeEvidence !== governanceNA && runtimeEvidence !== "PASS") {
+  fail("invalid Runtime evidence declaration");
+}
+if (governanceOnly) {
+  if (runtimeEvidence !== governanceNA) fail("governance-only requires explicit Runtime evidence N/A — governance-only / not executed");
+  if (checkboxChecked(runtime, "No blocker console errors in realistic runtime path.")) {
+    fail("governance-only cannot claim runtime console PASS");
+  }
+} else if (runtimeEvidence === governanceNA) {
+  fail("Runtime evidence N/A requires a verified governance-only diff");
+}
+const requiredRuntimeClaims = governanceOnly ? ["Known blocker text is not suppressed/filtered."] : [
   "No blocker console errors in realistic runtime path.",
   "Known blocker text is not suppressed/filtered."
-]) {
+];
+for (const phrase of requiredRuntimeClaims) {
   if (!checkboxChecked(runtime, phrase)) fail(`required runtime checkbox is not checked: ${phrase}`);
 }
 
@@ -168,5 +219,5 @@ if (stopCheckboxes.length < 5) fail("Stop-rule section does not contain the expe
 if (stopCheckboxes.some((match) => match[1] === " ")) fail("All stop-rule checks must be explicitly checked before CI can pass");
 
 if (!process.exitCode) {
-  console.log(`pr-governance: PASS — declaration complete; interaction=${yesChecked ? "yes" : "no"}; files=${changedFiles.length}`);
+  console.log(`pr-governance: PASS — declaration complete; interaction=${yesChecked ? "yes" : "no"}; files=${changedFiles.length}; runtime-evidence=${governanceOnly ? "governance-only-na" : "checked"}`);
 }
