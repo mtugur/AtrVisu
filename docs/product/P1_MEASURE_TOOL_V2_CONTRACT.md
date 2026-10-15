@@ -56,6 +56,22 @@ The right dock may contain the normal Properties Inspector and the Measure tool 
 
 The scene remains the primary workspace.
 
+### 3.1.1 Shared header and application chrome boundary
+
+The shared right-dock header owns the Inspector/Measure tabs, Inspector
+Auto/Pinned indicator, pin/unpin and collapse/reopen access. When these cannot
+fit on one row, it uses a controlled two-row composition: tabs and actions have
+separate rows. Header height accommodates both rows. No control may overlap,
+be clipped/hidden, lose its accessible name or function, or shrink its existing
+click target to make the row fit. Existing responsive presentations, panel
+visibility/persistence and Auto/Pinned semantics remain unchanged.
+
+All Measure viewport graphics, including candidate dots/text and explicit
+Overlay dimensions, belong below application dock/header/modal chrome.
+Viewport graphics must not paint over that chrome or intercept its controls.
+Shell compositing/clipping owns this boundary; camera compensation, arbitrary
+global z-index escalation and blanket candidate hiding are forbidden.
+
 ### 3.2 Measure panel content
 
 The Measure panel exposes:
@@ -218,6 +234,10 @@ For Machine/Civil entities, the initial semantic anchor vocabulary is:
 - Front Right Bottom;
 - Back Left Bottom;
 - Back Right Bottom;
+- Front Left Top (`front-left-top`);
+- Front Right Top (`front-right-top`);
+- Back Left Top (`back-left-top`);
+- Back Right Top (`back-right-top`);
 - Footprint Center;
 - Front Edge Midpoint;
 - Back Edge Midpoint;
@@ -227,6 +247,29 @@ For Machine/Civil entities, the initial semantic anchor vocabulary is:
 - Actual Geometry Hit as a free point.
 
 The anchor point is derived from the canonical entity transform and dimensions. It is not derived from a GLB render bounding box.
+
+The four top corners are first-class associative semantic anchors, not free
+geometry hits. Their canonical local coordinates are:
+
+| Stable anchor identity | Local Plan X | Local Plan Y | Local Z |
+| --- | --- | --- | --- |
+| `front-left-top` | 0 | 0 | heightMm |
+| `front-right-top` | widthMm | 0 | heightMm |
+| `back-left-top` | 0 | depthMm | heightMm |
+| `back-right-top` | widthMm | depthMm | heightMm |
+
+Apply the existing canonical Plan rotation and translation. World Z is the
+canonical bottom elevation plus heightMm; this does not change Floor Area's
+canonical bottom or FFL rules. Positive finite canonical dimensions are
+required. No GLB bounds, topology, support-height inference or new coordinate
+authority is introduced. Existing anchor identities/coordinates stay unchanged;
+top-edge midpoints and other anchor families are not added by this delta.
+
+Top corners use the existing EntityAnchorRef model and sections 7.3-7.5 / 8.2:
+persist entity ID and semantic identity, resolve against current canonical
+transforms/dimensions, support reference editing and Undo/Redo, and retain
+Orphaned/reassociation behavior. Never replace an unresolved top anchor with a
+world point. Existing saved references remain compatible.
 
 ### 6.2 Magnetic inference
 
@@ -239,6 +282,46 @@ When Measure is picking an entity anchor:
 - candidate cycling is deterministic if multiple candidates occupy the same screen region.
 
 The implementation must not create a hidden tolerance that changes the engineering meaning of the chosen anchor.
+
+### 6.2.1 Visible candidate discovery
+
+Normal hover/highlight/cycling offers only currently visible, resolvable
+candidates: finite projection in the open viewport, not covered by application
+chrome and not occluded by intervening scene geometry. Hidden entities/layers
+are not normal discovery sources. Visible silhouette/top corners remain
+eligible; a projected visible corner must not disappear merely because its
+exact marker center has no interior surface hit. Raw mesh vertices are not
+promoted to semantic anchors.
+
+Visibility applies to discovery, not anchor identity or saved engineering data.
+Candidate dots and text must not show hidden back-face points through geometry.
+Use the same eligible set for rendering, nearest highlight and deterministic
+cycling; keep the existing visible-marker hit contract. No new camera-specific
+tolerance, density workaround, fallback plane or geometry mutation is allowed.
+
+### 6.2.2 Locked reference becoming invisible
+
+A deliberately locked anchor retains its entity ID and anchor identity when
+orbit, occlusion, offscreen projection or dock presentation makes it invisible.
+It must not silently unlock, switch candidate, or become a world point. Do not
+draw its marker through geometry or application chrome.
+
+The Measure panel must explicitly show the locked entity, anchor name, resolved
+world coordinates and current visibility/unavailability reason. When the
+locked anchor is invisible, ordinary viewport clicks and generic completion
+keys must not confirm it. A separately named, accessible **Confirm Locked
+Anchor** action allows deliberate confirmation after reviewing that reference.
+It uses the existing Measure command/session or reference-edit authority, not
+a second selection source or direct mutation route. It confirms exactly the
+displayed locked identity once; transient confirmation does not create history,
+while a persistent reference replacement uses its existing Undo transaction.
+
+An unresolved/deleted reference is not confirmable and remains explicitly
+identified; there is no substitute anchor. Once the same locked anchor becomes
+visible again, ordinary visible-anchor confirmation retains the existing 4 CSS
+px classifier and cancellation rules. Restart/reset/exit retain their existing
+lock-clearing semantics. This exception does not permit discovery of hidden
+unlocked points or change Navigate/MMB/wheel behavior.
 
 ### 6.3 Entity Pair Reference
 
@@ -427,6 +510,13 @@ Overlay is:
 
 No special renderer may silently switch from Depth to Overlay to keep a label visible.
 
+### 10.3 Scene overlay is not application overlay
+
+Depth and explicit Overlay differ only in scene-geometry occlusion. Both obey
+section 3.1.1's application chrome boundary, including responsive side panels
+and bottom sheets. Neither mode authorizes candidate discovery through hidden
+geometry; discovery and invisible-lock confirmation follow section 6.2.
+
 ## 11. Dimension Style
 
 The project has one canonical Measure Dimension Style for V2.
@@ -501,6 +591,11 @@ Opening, closing, collapsing or resizing the Measure panel must not:
 Orbit/Pan/Zoom reproject measurement graphics without mutating confirmed world references.
 
 A panel resize is a shell/layout event, not an engineering operation.
+
+The compositing boundary and header reflow must preserve the same camera,
+canvas/scene lifecycle, canonical selection, entity transforms/dimensions,
+confirmed operands, history and dirty state. Safe-area presentation does not
+move engineering points or fit/zoom the scene.
 
 ## 14. Selection invariants
 
@@ -658,3 +753,19 @@ Stage B must include the corresponding:
 No C04/C05/C07/C09 work may be folded into the implementation.
 
 No runtime implementation from the rejected #126 product state is accepted merely because it is already green.
+
+## 20. Post-stop-rule Stage A delta (T03/T04/T05)
+
+Decision provenance: PR #130 manual review `6188819499`, independent governance
+review `6189493355`, and the Product Owner's subsequent explicit acceptance of
+four top semantic corners, visible-only discovery, deliberate invisible-lock
+confirmation, controlled two-row header and viewport/chrome isolation.
+
+This is a governance-only amendment, not certification of PR #130. The detailed
+future runtime oracles and preservation routes are in
+`docs/checklists/P1_MEASURE_TOOL_V2_GATE.md` under Post-stop-rule acceptance.
+Benchmark mapping is recorded in the existing V2 benchmark review; ADR-009
+records the decisions and forbidden alternatives. Stage B remains stopped until
+independent governance review and an explicitly authorized implementation
+package from the approved exact baseline. PR #129/#130 remain auditable Draft
+baselines; this amendment does not merge or edit them.

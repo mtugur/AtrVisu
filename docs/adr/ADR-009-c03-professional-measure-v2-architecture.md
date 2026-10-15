@@ -164,3 +164,62 @@ Stage B runtime implementation may begin only after:
 4. the implementation package remains C03-only.
 
 Automation Green will not imply Product Accepted.
+
+## Post-stop-rule governance amendment - T03/T04/T05
+
+Date: 2026-10-15. Scope: Stage A only; no runtime implementation.
+Provenance: PR #130 manual review `6188819499` and independent stop-rule review
+`6189493355`, followed by explicit Product Owner approval of the bounded
+decisions below. The earlier absent top-corner vocabulary is not retrospectively
+classified as a literal enumeration bug; the vocabulary is now deliberately
+extended before any further implementation.
+
+### Decisions
+
+1. Four top corners are stable associative EntityAnchorRefs. V2 contract section
+   6.1 specifies their IDs and local coordinates; canonical bottom plus height,
+   Plan rotation and translation remain the only geometry authority. Existing
+   reference identities, editing, full-precision serialization and orphan repair
+   remain unchanged. No top-edge family or schema migration is authorized here.
+2. Normal discovery/render/highlight/cycling shares a visible eligible set.
+   Occluded or chrome-covered candidates are not discovered. Visible silhouette
+   corners remain accessible without requiring an exact interior surface hit.
+3. Explicit lock preserves identity through invisibility. The panel exposes the
+   locked reference and reason; ordinary viewport clicks cannot silently confirm
+   it. Explicit Confirm Locked Anchor is the deliberate path through the existing
+   Measure authority, disabled when unresolved. This corrects the earlier review
+   proposal that ordinary clicks could confirm invisible locks; that proposal is
+   not the approved contract. No through-geometry marker or world-point fallback.
+4. Measure viewport graphics remain below application chrome in both Depth and
+   Overlay. Repair ownership/compositing at the shell boundary, not camera math
+   or a global stacking escalation. Overlay remains opt-in over scene geometry.
+5. The shared right-dock header owns tabs/actions and may use two controlled rows
+   with accommodating height. Auto/Pinned/persistence, accessible controls and
+   click targets remain intact; no tab removal or responsive-shell redesign.
+
+### Benchmark rationale and risk
+
+The existing V2 benchmark records ONSHAPE-INFER-01 and NW-SNAP-01 support
+corner/center inference and deliberate reference choice; ACAD-ASSOC-01/02 support
+associative update and repair. VC-LAYOUT-01/NW-MEASURE-01 support a separate dock;
+NW-MODES-01 distinguishes scene Depth/Overlay. The exact four IDs, invisible-lock
+confirmation safeguard, chrome isolation and two-row web layout are AtrVisu
+product decisions, not claims that those vendors implement identical controls.
+See the benchmark review's post-stop-rule traceability section.
+
+The primary risks are accidentally confirming an invisible reference, revealing
+hidden geometry, breaking old reference identities, and allowing dock layout to
+mutate camera/domain state. The acceptance matrix explicitly tests these risks
+and preserves T01/T02/T06. Tuning camera tolerances, raw GLB vertex identity,
+hidden fallback, duplicate stores and unrelated C04/C05/C07/C09 work are rejected.
+
+### Delivery gate
+
+The implementation stop remains in force. Submit this governance-only package
+for independent review; do not continue patching PR #130 under this amendment.
+Only after the accepted contract is synchronized and a Stage B package is
+explicitly authorized may a new bounded implementation branch be created from
+an approved exact baseline. Preserve PR #129/#130 and their histories. Runtime
+Contract Verified remains pending re-review and Product Accepted remains FAIL
+for the reported PR #130 state. Stage A CI validates repository compatibility,
+not the future T03/T04/T05 runtime oracles.
