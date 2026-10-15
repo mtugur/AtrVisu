@@ -291,8 +291,53 @@ expectPrFail("Runtime evidence in wrong section rejected",
   "ambiguous Runtime evidence declaration", docsDiff);
 const runtimeDiff = diffFixture([{ file: "src/runtime.ts" }]);
 const mixedRuntimeDiff = diffFixture([{ file: "src/runtime.ts" }, { file: "docs/product/contract.md" }]);
-expectPrPass("governance document deletion remains verified docs-only", governanceBody,
+expectPrFail("governance document deletion cannot use N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff",
   diffFixture([{ file: removedDocument, remove: true }]));
+expectPrPass("governance document modification permits honest N/A", governanceBody,
+  diffFixture([{ file: removedDocument }]));
+expectPrFail("governance addition plus deletion cannot use N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff",
+  diffFixture([{ file: removedDocument, remove: true }, { file: "docs/product/added.md" }]));
+expectPrPass("governance deletion retains normal checked-console route", yesInteraction,
+  diffFixture([{ file: removedDocument, remove: true }]));
+const noFilterClaim = "- [x] Known blocker text is not suppressed/filtered.";
+for (const fence of ["```", "~~~", "````", "   ~~~~"]) {
+  const fenced = (text) => `${fence}markdown\n${text}\n${fence}`;
+  expectPrFail(`fenced-only N/A rejected: ${JSON.stringify(fence)}`,
+    governanceBody.replace(naDeclaration, fenced(naDeclaration)),
+    "governance-only requires explicit Runtime evidence N/A", docsDiff);
+  expectPrPass(`active N/A plus fenced example accepted: ${JSON.stringify(fence)}`,
+    governanceBody.replace(naDeclaration, `${naDeclaration}\n${fenced(naDeclaration)}`), docsDiff);
+  expectPrPass(`fenced declarations outside runtime ignored: ${JSON.stringify(fence)}`,
+    `${fenced(`${naDeclaration}\n- Runtime evidence: PASS`)}\n${governanceBody}`, docsDiff);
+  expectPrFail(`fenced-only no-filter rejected: ${JSON.stringify(fence)}`,
+    governanceBody.replace(noFilterClaim, fenced(noFilterClaim)),
+    "required runtime checkbox is not checked", docsDiff);
+  expectPrFail(`runtime fenced-only console rejected: ${JSON.stringify(fence)}`,
+    yesInteraction.replace("- [x] No blocker console errors in realistic runtime path.",
+      fenced("- [x] No blocker console errors in realistic runtime path.")),
+    "required runtime checkbox is not checked", runtimeDiff);
+  expectPrFail(`runtime fenced-only no-filter rejected: ${JSON.stringify(fence)}`,
+    yesInteraction.replace(noFilterClaim, fenced(noFilterClaim)),
+    "required runtime checkbox is not checked", runtimeDiff);
+}
+expectPrFail("second active declaration inside runtime rejected",
+  governanceBody.replace(naDeclaration, `${naDeclaration}\n${naDeclaration}`),
+  "ambiguous Runtime evidence declaration", docsDiff);
+expectPrPass("fenced runtime section headers do not relocate active declaration",
+  governanceBody.replace(naDeclaration, `\`\`\`markdown\n## Validation\n\`\`\`\n${naDeclaration}`), docsDiff);
+expectPrPass("fenced runtime PASS checkbox is not an active acceptance claim",
+  governanceBody.replace(noConsoleClaim, "```markdown\n- [x] No blocker console errors in realistic runtime path.\n```"), docsDiff);
+expectPrFail("shorter or different delimiter does not close a fence",
+  governanceBody.replace(naDeclaration, `\`\`\`\`markdown\n~~~\n\`\`\`\n${naDeclaration}\n\`\`\`\``),
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
+expectPrFail("unclosed fence cannot grant runtime evidence",
+  governanceBody.replace(naDeclaration, `~~~markdown\n${naDeclaration}`),
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
+expectPrFail("closing fence with trailing text does not expose declaration",
+  governanceBody.replace(naDeclaration, `~~~markdown\n~~~ not a closer\n${naDeclaration}\n~~~`),
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
 expectPrPass("governance-only explicit unchecked console claim is optional",
   governanceBody.replace(noConsoleClaim, ""), docsDiff);
 expectPrPass("mixed-content preserves legacy checked-console path", yesInteraction, mixedRuntimeDiff);

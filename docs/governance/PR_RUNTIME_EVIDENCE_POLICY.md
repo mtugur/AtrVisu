@@ -3,6 +3,7 @@
 Status: Separate policy proposal for independent review; no runtime product change.
 Authority: Product Constitution sections 7-8; Interaction Delivery Protocol;
 independent decision https://github.com/mtugur/AtrVisu/pull/131#issuecomment-6192146759.
+Bounded correction: https://github.com/mtugur/AtrVisu/pull/132#issuecomment-6194590795.
 
 ## Machine-verified scope
 
@@ -25,8 +26,11 @@ inside one of these exact directories:
 
 The basename must match `[A-Za-z0-9_][A-Za-z0-9_.-]*.md` (the final dot is
 literal). Nested paths, other extensions/directories, unusual path characters,
-symlinks, executable modes and gitlinks do not qualify. Addition/deletion modes
-are allowed only alongside ordinary `100644` file mode. Empty, missing or
+symlinks, executable modes and gitlinks do not qualify. Only additions
+(`A`, `000000` -> `100644`) and modifications (`M`, `100644` -> `100644`)
+qualify. Any deletion, including an allowlisted normative document deletion
+combined with additions/modifications, disqualifies the entire diff from N/A
+and requires the normal checked-console declaration route. Empty, missing or
 unreadable diff provenance cannot establish the exception. Unsupported paths
 use the normal declaration path, never a broader inferred docs-only category.
 
@@ -49,6 +53,16 @@ It cannot be combined with N/A to imply unexecuted runtime acceptance. Duplicate
 misplaced or malformed Runtime evidence fields fail closed. A verified
 governance-only diff cannot substitute `PASS` for the exact N/A declaration.
 
+The example above must be supplied as active Markdown, not inside a code fence.
+A minimal active-line scanner excludes backtick/tilde fenced blocks from runtime
+declarations, Runtime/Validation section boundaries and console/no-filter
+checkbox checks. Fenced-only N/A or no-filter claims cannot satisfy the gate.
+Active N/A alongside fenced examples inside or outside the Runtime section is
+valid; duplicate active declarations or active out-of-section declarations fail.
+Closing fences must use the opening delimiter with at least its length and no
+trailing content; unclosed fences do not expose their contents as declarations.
+Other section checks retain their existing requirements.
+
 Runtime/mixed-content PRs retain both existing required checked console/no-filter
 claims; they cannot use governance-only N/A, even alongside checked PASS claims.
 The optional `Runtime evidence: PASS` field does not replace either checkbox.
@@ -60,10 +74,16 @@ or Product Accepted for an unimplemented contract delta.
 
 Focused policy tests use real isolated Git commits rather than caller-provided
 changed-file arrays. Positive cases cover each allowlisted directory and the
-normal runtime/mixed/policy paths. Negative cases cover missing/invalid/empty
-provenance, outside paths, rename/deletion hiding, non-regular modes, false PASS,
+normal runtime/mixed/policy paths, additions and modifications. Negative cases
+cover missing/invalid/empty provenance, outside paths, rename/deletion hiding,
+non-regular modes, false PASS,
 incorrect/duplicate/misplaced N/A, and attempted removal of interaction,
-benchmark, no-filter and stop-rule requirements. Existing stress tests remain.
+benchmark, no-filter and stop-rule requirements. Fence cases cover active versus
+example declarations/checkboxes, both delimiters, indentation, longer fences,
+wrong/short/trailing-content closers and unclosed blocks. Document deletion is
+rejected for N/A and tested through the normal checked-console route. Existing
+stress coverage remains; the former deletion-positive expectation is corrected
+to rejection under this narrower policy.
 
 PR #131/#130/#129 are not edited or merged by this proposal. Stage B remains
 NO-GO. Only after independent policy review and integration under the existing

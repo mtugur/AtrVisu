@@ -18,12 +18,27 @@ const fail = (message) => {
   process.exitCode = 1;
 };
 
-const section = (heading, nextHeading) => {
-  const start = body.indexOf(heading);
+// Fenced examples are not declarations, section boundaries or console assertions.
+const activeMarkdownLines = (text) => {
+  let closingFence = null;
+  return text.split(/\r?\n/).map((line) => {
+    if (closingFence) {
+      if (closingFence.test(line)) closingFence = null;
+      return "";
+    }
+    const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (!opening || (opening[1][0] === "`" && opening[2].includes("`"))) return line;
+    closingFence = new RegExp(`^ {0,3}${opening[1][0]}{${opening[1].length},}[ \\t]*$`);
+    return "";
+  }).join("\n");
+};
+
+const section = (heading, nextHeading, text = body) => {
+  const start = text.indexOf(heading);
   if (start < 0) return "";
   const from = start + heading.length;
-  const end = nextHeading ? body.indexOf(nextHeading, from) : -1;
-  return body.slice(from, end >= 0 ? end : body.length);
+  const end = nextHeading ? text.indexOf(nextHeading, from) : -1;
+  return text.slice(from, end >= 0 ? end : text.length);
 };
 
 const fieldValue = (text, label) => {
@@ -101,7 +116,7 @@ if (baseSha && headSha) {
           valid = false;
           break;
         }
-        records.push({ file, oldMode: header[1], newMode: header[2] });
+        records.push({ file, oldMode: header[1], newMode: header[2], status: header[3] });
       }
       if (valid) {
         verifiedChanges = records;
@@ -118,8 +133,9 @@ if (baseSha && headSha) {
 // This is a filesystem-scope proof, not a classification supplied by the PR body.
 const governanceDocument = /^docs\/(?:product|standards|adr|checklists|benchmarks|governance|protocols)\/[A-Za-z0-9_][A-Za-z0-9_.-]*\.md$/;
 const governanceOnly = verifiedChanges !== null && verifiedChanges.length > 0 && verifiedChanges.every(
-  ({ file, oldMode, newMode }) => governanceDocument.test(file)
-    && [oldMode, newMode].every((mode) => mode === "100644" || mode === "000000")
+  ({ file, oldMode, newMode, status }) => governanceDocument.test(file)
+    && newMode === "100644"
+    && ((status === "A" && oldMode === "000000") || (status === "M" && oldMode === "100644"))
 );
 
 const contractSensitiveChange = changedFiles.some((file) =>
@@ -178,9 +194,10 @@ if (yesChecked) {
   }
 }
 
-const runtime = section("## Runtime / console", "## Validation");
+const activeBody = activeMarkdownLines(body);
+const runtime = section("## Runtime / console", "## Validation", activeBody);
 const evidencePattern = /^- Runtime evidence:[ \t]*([^\r\n]*)$/gmi;
-const evidenceDeclarations = [...body.matchAll(evidencePattern)];
+const evidenceDeclarations = [...activeBody.matchAll(evidencePattern)];
 const runtimeEvidenceDeclarations = [...runtime.matchAll(evidencePattern)];
 if (evidenceDeclarations.length > 1 || evidenceDeclarations.length !== runtimeEvidenceDeclarations.length) {
   fail("ambiguous Runtime evidence declaration");
