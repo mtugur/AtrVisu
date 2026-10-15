@@ -249,7 +249,9 @@ For Machine/Civil entities, the initial semantic anchor vocabulary is:
 The anchor point is derived from the canonical entity transform and dimensions. It is not derived from a GLB render bounding box.
 
 The four top corners are first-class associative semantic anchors, not free
-geometry hits. Their canonical local coordinates are:
+geometry hits. The following table illustrates the pre-transform offsets used
+by the existing front-left-bottom coordinateReference authority; it does not
+define an independent local/world coordinate model:
 
 | Stable anchor identity | Local Plan X | Local Plan Y | Local Z |
 | --- | --- | --- | --- |
@@ -258,9 +260,17 @@ geometry hits. Their canonical local coordinates are:
 | `back-left-top` | 0 | depthMm | heightMm |
 | `back-right-top` | widthMm | depthMm | heightMm |
 
-Apply the existing canonical Plan rotation and translation. World Z is the
-canonical bottom elevation plus heightMm; this does not change Floor Area's
-canonical bottom or FFL rules. Positive finite canonical dimensions are
+The authoritative mapping is the existing bottom semantic corner mapping in
+`getSemanticAnchorPoints`, through `getFootprintCornersFromReferenceMm` in
+`src/utils/coordinateReference.ts`. Preserve the established placement reference
+(`front-left-bottom-v1`), rotation direction, translation and corner ordering:
+front-left index 0, front-right index 1, back-right index 2, back-left index 3.
+For each matching name, top.xy equals bottom.xy exactly and top.z equals
+bottom.z + canonical heightMm. Derive top corners from those resolved bottom
+corners, not by implementing a second transform, re-centering the footprint or
+shifting the user placement reference. World Z is the canonical bottom
+elevation plus heightMm; this does not change Floor Area's canonical bottom or
+FFL rules. Positive finite canonical dimensions are
 required. No GLB bounds, topology, support-height inference or new coordinate
 authority is introduced. Existing anchor identities/coordinates stay unchanged;
 top-edge midpoints and other anchor families are not added by this delta.
@@ -307,10 +317,32 @@ It must not silently unlock, switch candidate, or become a world point. Do not
 draw its marker through geometry or application chrome.
 
 The Measure panel must explicitly show the locked entity, anchor name, resolved
-world coordinates and current visibility/unavailability reason. When the
-locked anchor is invisible, ordinary viewport clicks and generic completion
+world coordinates and current visibility/unavailability reason. Resolution and
+semantic eligibility come from the existing Entity/semantic-reference authority,
+not viewport visibility, Runtime Selection or a new panel-owned reference store.
+The explicit confirmation action is enabled if and only if the locked entity
+resolves and its semantic identity is eligible with finite resolved coordinates.
+Being offscreen, covered by dock chrome or occluded by scene geometry does not
+disable that action or require the user to expose the point. Deleted/unresolved
+entities, unsupported anchors or invalid canonical dimensions disable it with
+an explicit reason; hidden/unlocked points remain excluded from discovery.
+
+The reason uses the same read-only current presentation observations that govern
+candidate visibility: projection/viewport bounds for **Not in viewport**, actual
+shell panel/chrome coverage for **Covered by chrome**, and scene-geometry
+occlusion for **Scene-occluded**. These are presentation explanations, not new
+reference eligibility or camera thresholds. If categories overlap, report the
+first applicable one in that order. If an exact category cannot be determined,
+show the truthful **Not currently visible** instead of guessing a specific
+cause. Reference resolution/eligibility failures are separately labelled
+unavailable, never inferred merely from these visibility categories.
+
+When the locked anchor is invisible, ordinary viewport clicks and generic completion
 keys must not confirm it. A separately named, accessible **Confirm Locked
 Anchor** action allows deliberate confirmation after reviewing that reference.
+Only activation of that named panel control (pointer, or keyboard while that
+control is focused) invokes explicit confirmation; the viewport pointer path
+and generic keyboard completion path cannot invoke it indirectly.
 It uses the existing Measure command/session or reference-edit authority, not
 a second selection source or direct mutation route. It confirms exactly the
 displayed locked identity once; transient confirmation does not create history,

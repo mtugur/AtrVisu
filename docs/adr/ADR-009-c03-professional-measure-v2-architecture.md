@@ -177,8 +177,13 @@ extended before any further implementation.
 ### Decisions
 
 1. Four top corners are stable associative EntityAnchorRefs. V2 contract section
-   6.1 specifies their IDs and local coordinates; canonical bottom plus height,
-   Plan rotation and translation remain the only geometry authority. Existing
+   6.1 specifies their IDs and illustrative offsets. Each top corner derives
+   from the matching existing bottom semantic corner resolved through
+   getFootprintCornersFromReferenceMm/coordinateReference: identical XY and
+   bottom Z + heightMm, including non-origin placement and nonzero rotation.
+   Preserve the front-left-bottom-v1 convention; no second transform or footprint
+   re-centering. Canonical bottom plus height and the existing Plan mapping
+   remain the only geometry authority. Existing
    reference identities, editing, full-precision serialization and orphan repair
    remain unchanged. No top-edge family or schema migration is authorized here.
 2. Normal discovery/render/highlight/cycling shares a visible eligible set.
@@ -187,7 +192,14 @@ extended before any further implementation.
 3. Explicit lock preserves identity through invisibility. The panel exposes the
    locked reference and reason; ordinary viewport clicks cannot silently confirm
    it. Explicit Confirm Locked Anchor is the deliberate path through the existing
-   Measure authority, disabled when unresolved. This corrects the earlier review
+   Measure authority. It is enabled exactly for a resolved entity and eligible
+   finite semantic reference, irrespective of offscreen/chrome/scene occlusion;
+   it is disabled only for unresolved/ineligible references. Only activation of
+   the named panel control invokes it, never viewport clicks/generic completion.
+   Visibility reason comes from read-only projection, shell coverage and scene
+   occlusion observations, in that order if multiple apply; use Not currently
+   visible when a precise category is unavailable, not a guessed cause or a new
+   selection authority. This corrects the earlier review
    proposal that ordinary clicks could confirm invisible locks; that proposal is
    not the approved contract. No through-geometry marker or world-point fallback.
 4. Measure viewport graphics remain below application chrome in both Depth and
@@ -223,3 +235,8 @@ an approved exact baseline. Preserve PR #129/#130 and their histories. Runtime
 Contract Verified remains pending re-review and Product Accepted remains FAIL
 for the reported PR #130 state. Stage A CI validates repository compatibility,
 not the future T03/T04/T05 runtime oracles.
+
+Independent Stage A review `6191963586` requested these coordinate-mapping and
+explicit-confirmation clarifications. They preserve the original canonical
+placement authority and approved product decisions; no runtime change or new
+coordinate model is authorized. Delta runtime reproduction remains NOT EXECUTED.
