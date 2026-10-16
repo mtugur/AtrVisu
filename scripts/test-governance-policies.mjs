@@ -8,19 +8,23 @@ const prChecker = path.join(root, "scripts/check-pr-governance.mjs");
 const staticChecker = path.join(root, "scripts/check-interaction-governance.mjs");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "atrvisu-governance-"));
 let failures = 0;
+let passes = 0;
 
 const reportFailure = (name, detail) => {
   failures += 1;
   console.error(`governance-policy-test: FAIL — ${name}: ${detail}`);
 };
 
-const reportPass = (name) => console.log(`governance-policy-test: PASS — ${name}`);
+const reportPass = (name) => {
+  passes += 1;
+  console.log(`governance-policy-test: PASS — ${name}`);
+};
 
-const runPrChecker = (body) => {
+const runPrChecker = (body, { cwd = root, baseSha, headSha } = {}) => {
   const eventPath = path.join(tempRoot, `event-${Math.random().toString(36).slice(2)}.json`);
-  fs.writeFileSync(eventPath, JSON.stringify({ pull_request: { body } }), "utf8");
+  fs.writeFileSync(eventPath, JSON.stringify({ pull_request: { body, base: { sha: baseSha }, head: { sha: headSha } } }), "utf8");
   return spawnSync(process.execPath, [prChecker], {
-    cwd: root,
+    cwd,
     encoding: "utf8",
     env: {
       ...process.env,
@@ -30,8 +34,8 @@ const runPrChecker = (body) => {
   });
 };
 
-const expectPrPass = (name, body) => {
-  const result = runPrChecker(body);
+const expectPrPass = (name, body, options) => {
+  const result = runPrChecker(body, options);
   if (result.status !== 0) {
     reportFailure(name, `${result.stdout}\n${result.stderr}`.trim());
   } else {
@@ -39,8 +43,8 @@ const expectPrPass = (name, body) => {
   }
 };
 
-const expectPrFail = (name, body, expectedText) => {
-  const result = runPrChecker(body);
+const expectPrFail = (name, body, expectedText, options) => {
+  const result = runPrChecker(body, options);
   const output = `${result.stdout}\n${result.stderr}`;
   if (result.status === 0) {
     reportFailure(name, "checker unexpectedly passed");
@@ -176,6 +180,193 @@ expectPrFail(
   yesInteraction.replace("This fixture exercises the frozen Plan Move governance contract.", ""),
   "Interaction impact rationale is required"
 );
+
+// Real Git commits exercise classification, including names/modes that a body cannot prove.
+const diffRoot = path.join(tempRoot, "diff-root");
+fs.mkdirSync(diffRoot);
+const gitEnv = {
+  ...process.env,
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
+  GIT_INDEX_FILE: path.join(diffRoot, "fixture-index"),
+  GIT_AUTHOR_NAME: "Governance test",
+  GIT_AUTHOR_EMAIL: "governance@example.invalid",
+  GIT_COMMITTER_NAME: "Governance test",
+  GIT_COMMITTER_EMAIL: "governance@example.invalid",
+  GIT_AUTHOR_DATE: "2026-10-15T00:00:00Z",
+  GIT_COMMITTER_DATE: "2026-10-15T00:00:00Z"
+};
+const git = (args, input) => {
+  const result = spawnSync("git", args, { cwd: diffRoot, env: gitEnv, input, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(`Git fixture failed: ${args.join(" ")}\n${result.stderr}`);
+  return result.stdout.trim();
+};
+git(["init", "--quiet"]);
+// Plumbing-only objects are never checked out; permit adversarial names on Windows too.
+git(["config", "core.protectNTFS", "false"]);
+const baselineBlob = git(["hash-object", "-w", "--stdin"], "baseline\n");
+const changedBlob = git(["hash-object", "-w", "--stdin"], "changed\n");
+const removedRuntime = "src/removed-runtime.ts";
+git(["update-index", "--add", "--cacheinfo", "100644", baselineBlob, removedRuntime]);
+const removedDocument = "docs/product/removed.md";
+git(["update-index", "--add", "--cacheinfo", "100644", baselineBlob, removedDocument]);
+const baseSha = git(["commit-tree", git(["write-tree"]), "-m", "baseline"]);
+const diffFixture = (changes) => {
+  git(["read-tree", baseSha]);
+  for (const { file, mode = "100644", blob = changedBlob, remove = false } of changes) {
+    git(remove ? ["update-index", "--force-remove", file] : ["update-index", "--add", "--cacheinfo", mode, blob, file]);
+  }
+  const headSha = git(["commit-tree", git(["write-tree"]), "-p", baseSha, "-m", "fixture"]);
+  return { cwd: diffRoot, baseSha, headSha };
+};
+const fixtureBenchmark = path.join(diffRoot, "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md");
+fs.mkdirSync(path.dirname(fixtureBenchmark), { recursive: true });
+fs.copyFileSync(path.join(root, "docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md"), fixtureBenchmark);
+const naDeclaration = "- Runtime evidence: N/A — governance-only / not executed";
+const noConsoleClaim = "- [ ] No blocker console errors in realistic runtime path.";
+const governanceBody = yesInteraction.replace(
+  "- [x] No blocker console errors in realistic runtime path.", `${noConsoleClaim}\n${naDeclaration}`
+);
+const docsDiff = diffFixture([{ file: "docs/product/contract.md" }]);
+for (const directory of ["product", "standards", "adr", "checklists", "benchmarks", "governance", "protocols"]) {
+  expectPrPass(`verified governance-only ${directory} permits honest N/A`, governanceBody,
+    diffFixture([{ file: `docs/${directory}/contract.md` }]));
+}
+expectPrPass("verified governance-only non-interaction permits honest N/A",
+  noInteraction.replace("- [x] No blocker console errors in realistic runtime path.", `${noConsoleClaim}\n${naDeclaration}`), docsDiff);
+expectPrFail("governance-only cannot claim unexecuted runtime PASS", yesInteraction,
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
+expectPrFail("governance-only N/A cannot also check runtime PASS",
+  governanceBody.replace(noConsoleClaim, "- [x] No blocker console errors in realistic runtime path."),
+  "governance-only cannot claim runtime console PASS", docsDiff);
+expectPrFail("governance-only retains no-filter requirement",
+  governanceBody.replace("- [x] Known blocker text is not suppressed/filtered.", "- [ ] Known blocker text is not suppressed/filtered."),
+  "required runtime checkbox is not checked", docsDiff);
+expectPrFail("governance-only retains interaction declaration",
+  governanceBody.replace("- [ ] No\n- [x] Yes", "- [x] No\n- [ ] Yes"),
+  "interaction/benchmark contract files changed but Interaction declaration is not Yes",
+  diffFixture([{ file: "docs/standards/ATRVISU_INTERACTION_STANDARD.md" }]));
+expectPrFail("governance-only retains benchmark requirements",
+  governanceBody.replace("- Benchmark evidence record path: docs/benchmarks/INTERACTION_BENCHMARK_BASELINE_V1.md", "- Benchmark evidence record path: PENDING"),
+  "Interaction field must be concrete", docsDiff);
+expectPrFail("governance-only retains stop-rule requirements",
+  governanceBody.replace("- [x] The PR has not silently expanded into a different product/architecture objective.", "- [ ] The PR has not silently expanded into a different product/architecture objective."),
+  "All stop-rule checks must be explicitly checked", docsDiff);
+expectPrFail("body-only governance claim cannot establish N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff");
+expectPrFail("empty diff cannot establish governance-only N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff", diffFixture([]));
+expectPrFail("missing head provenance cannot establish N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff", { cwd: diffRoot, baseSha });
+expectPrFail("unknown revision fails closed", governanceBody, "unable to inspect PR changed files",
+  { ...docsDiff, headSha: "0".repeat(40) });
+expectPrFail("invalid revision fails closed", governanceBody, "invalid PR diff provenance",
+  { ...docsDiff, headSha: "--all" });
+for (const file of ["src/App.tsx", "src/styles.css", "e2e/app-smoke.spec.ts", "src/example.test.ts",
+  ".github/workflows/quality-gate.yml", "package.json", "package-lock.json", "public/library/asset.json",
+  "scripts/check-pr-governance.mjs", "docs/audits/report.md", "docs/README.md", "README.md",
+  "docs/product/runtime.ts", "docs/product/contract.md.ts", "docs/product/nested/contract.md",
+  "docs/product/odd\nname.md"]) {
+  const mixedDiff = diffFixture([{ file: "docs/product/contract.md" }, { file }]);
+  expectPrFail(`mixed/out-of-scope N/A rejected: ${JSON.stringify(file)}`, governanceBody,
+    "Runtime evidence N/A requires a verified governance-only diff", mixedDiff);
+}
+expectPrFail("renaming runtime into docs cannot hide the deleted source", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff",
+  diffFixture([{ file: removedRuntime, remove: true }, { file: "docs/product/renamed.md", blob: baselineBlob }]));
+for (const mode of ["120000", "100755"]) {
+  expectPrFail(`non-regular governance document mode ${mode} rejected`, governanceBody,
+    "Runtime evidence N/A requires a verified governance-only diff",
+    diffFixture([{ file: "docs/product/contract.md", mode }]));
+}
+for (const value of ["N/A", "PASS", "N/A — governance-only", "N/A — governance-only / executed"]) {
+  expectPrFail(`incorrect governance Runtime evidence rejected: ${value}`,
+    governanceBody.replace(naDeclaration, `- Runtime evidence: ${value}`),
+    "governance-only requires explicit Runtime evidence N/A", docsDiff);
+}
+expectPrFail("duplicate Runtime evidence rejected", `${governanceBody}\n${naDeclaration}`,
+  "ambiguous Runtime evidence declaration", docsDiff);
+expectPrFail("Runtime evidence in wrong section rejected",
+  governanceBody.replace(naDeclaration, "").replace("## Scope", `## Scope\n${naDeclaration}`),
+  "ambiguous Runtime evidence declaration", docsDiff);
+const runtimeDiff = diffFixture([{ file: "src/runtime.ts" }]);
+const mixedRuntimeDiff = diffFixture([{ file: "src/runtime.ts" }, { file: "docs/product/contract.md" }]);
+expectPrFail("governance document deletion cannot use N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff",
+  diffFixture([{ file: removedDocument, remove: true }]));
+expectPrPass("governance document modification permits honest N/A", governanceBody,
+  diffFixture([{ file: removedDocument }]));
+expectPrFail("governance addition plus deletion cannot use N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff",
+  diffFixture([{ file: removedDocument, remove: true }, { file: "docs/product/added.md" }]));
+expectPrPass("governance deletion retains normal checked-console route", yesInteraction,
+  diffFixture([{ file: removedDocument, remove: true }]));
+const noFilterClaim = "- [x] Known blocker text is not suppressed/filtered.";
+for (const fence of ["```", "~~~", "````", "   ~~~~"]) {
+  const fenced = (text) => `${fence}markdown\n${text}\n${fence}`;
+  expectPrFail(`fenced-only N/A rejected: ${JSON.stringify(fence)}`,
+    governanceBody.replace(naDeclaration, fenced(naDeclaration)),
+    "governance-only requires explicit Runtime evidence N/A", docsDiff);
+  expectPrPass(`active N/A plus fenced example accepted: ${JSON.stringify(fence)}`,
+    governanceBody.replace(naDeclaration, `${naDeclaration}\n${fenced(naDeclaration)}`), docsDiff);
+  expectPrPass(`fenced declarations outside runtime ignored: ${JSON.stringify(fence)}`,
+    `${fenced(`${naDeclaration}\n- Runtime evidence: PASS`)}\n${governanceBody}`, docsDiff);
+  expectPrFail(`fenced-only no-filter rejected: ${JSON.stringify(fence)}`,
+    governanceBody.replace(noFilterClaim, fenced(noFilterClaim)),
+    "required runtime checkbox is not checked", docsDiff);
+  expectPrFail(`runtime fenced-only console rejected: ${JSON.stringify(fence)}`,
+    yesInteraction.replace("- [x] No blocker console errors in realistic runtime path.",
+      fenced("- [x] No blocker console errors in realistic runtime path.")),
+    "required runtime checkbox is not checked", runtimeDiff);
+  expectPrFail(`runtime fenced-only no-filter rejected: ${JSON.stringify(fence)}`,
+    yesInteraction.replace(noFilterClaim, fenced(noFilterClaim)),
+    "required runtime checkbox is not checked", runtimeDiff);
+}
+expectPrFail("second active declaration inside runtime rejected",
+  governanceBody.replace(naDeclaration, `${naDeclaration}\n${naDeclaration}`),
+  "ambiguous Runtime evidence declaration", docsDiff);
+expectPrPass("fenced runtime section headers do not relocate active declaration",
+  governanceBody.replace(naDeclaration, `\`\`\`markdown\n## Validation\n\`\`\`\n${naDeclaration}`), docsDiff);
+expectPrPass("fenced runtime PASS checkbox is not an active acceptance claim",
+  governanceBody.replace(noConsoleClaim, "```markdown\n- [x] No blocker console errors in realistic runtime path.\n```"), docsDiff);
+expectPrFail("shorter or different delimiter does not close a fence",
+  governanceBody.replace(naDeclaration, `\`\`\`\`markdown\n~~~\n\`\`\`\n${naDeclaration}\n\`\`\`\``),
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
+expectPrFail("unclosed fence cannot grant runtime evidence",
+  governanceBody.replace(naDeclaration, `~~~markdown\n${naDeclaration}`),
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
+expectPrFail("closing fence with trailing text does not expose declaration",
+  governanceBody.replace(naDeclaration, `~~~markdown\n~~~ not a closer\n${naDeclaration}\n~~~`),
+  "governance-only requires explicit Runtime evidence N/A", docsDiff);
+expectPrPass("governance-only explicit unchecked console claim is optional",
+  governanceBody.replace(noConsoleClaim, ""), docsDiff);
+expectPrPass("mixed-content preserves legacy checked-console path", yesInteraction, mixedRuntimeDiff);
+expectPrFail("mixed-content still requires console checkbox",
+  yesInteraction.replace("- [x] No blocker console errors in realistic runtime path.", noConsoleClaim),
+  "required runtime checkbox is not checked", mixedRuntimeDiff);
+expectPrFail("mixed-content still requires no-filter checkbox",
+  yesInteraction.replace("- [x] Known blocker text is not suppressed/filtered.", "- [ ] Known blocker text is not suppressed/filtered."),
+  "required runtime checkbox is not checked", mixedRuntimeDiff);
+const policyDiff = diffFixture([{ file: "scripts/check-pr-governance.mjs" }, { file: "scripts/test-governance-policies.mjs" }, { file: "docs/governance/policy.md" }]);
+expectPrPass("policy changes use normal checked-console path without self-exemption", noInteraction, policyDiff);
+expectPrFail("policy changes cannot grant themselves governance-only N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff", policyDiff);
+expectPrFail("Markdown-named gitlink cannot establish governance-only N/A", governanceBody,
+  "Runtime evidence N/A requires a verified governance-only diff",
+  diffFixture([{ file: "docs/product/linked.md", mode: "160000", blob: baseSha }]));
+expectPrPass("runtime diff preserves legacy checked-console path", yesInteraction, runtimeDiff);
+expectPrFail("runtime diff cannot use N/A even alongside checked PASS",
+  yesInteraction.replace("## Runtime / console", `## Runtime / console\n${naDeclaration}`),
+  "Runtime evidence N/A requires a verified governance-only diff", runtimeDiff);
+expectPrFail("runtime diff still requires console checkbox",
+  yesInteraction.replace("- [x] No blocker console errors in realistic runtime path.", noConsoleClaim),
+  "required runtime checkbox is not checked", runtimeDiff);
+expectPrFail("runtime diff still requires no-filter checkbox",
+  yesInteraction.replace("- [x] Known blocker text is not suppressed/filtered.", "- [ ] Known blocker text is not suppressed/filtered."),
+  "required runtime checkbox is not checked", runtimeDiff);
+expectPrFail("runtime diff cannot use malformed N/A instead of console proof",
+  yesInteraction.replace("## Runtime / console", "## Runtime / console\n- Runtime evidence: N/A"),
+  "invalid Runtime evidence declaration", runtimeDiff);
 
 const staticFiles = [
   "docs/product/ATRVISU_PRODUCT_CONSTITUTION.md",
@@ -315,4 +506,4 @@ if (failures > 0) {
   process.exit(1);
 }
 
-console.log("governance-policy-test: PASS — adversarial policy scenarios are fail-closed");
+console.log(`governance-policy-test: PASS — ${passes} adversarial policy scenarios are fail-closed`);
