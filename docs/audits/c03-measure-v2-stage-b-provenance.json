@@ -1,0 +1,224 @@
+{
+  "baseline": "55e9e58d4761c765c16c834e3b0a322e5dc67bd6",
+  "sourceHead": "e9afacba48467ec9caac8a9f74c2772e444d22d5",
+  "authorization": "https://github.com/mtugur/AtrVisu/pull/130#issuecomment-6214355719",
+  "transfer": "File-level exact blob reuse, not historical merge or cherry-pick.",
+  "excluded": [
+    ".github/workflows/quality-gate.yml",
+    "docs/audits/c03-measure-v2-recovery-plan-v01.md",
+    "docs/checklists/INTERACTION_CHANGE_GATE.md",
+    "docs/checklists/P1_MEASURE_TOOL_V2_GATE.md"
+  ],
+  "files": [
+    {
+      "path": "e2e/app-smoke.spec.ts",
+      "sourceBlob": "eb2742ab1b3981393b335d7ee31a2965cf8a0c4d",
+      "transferredBlob": "eb2742ab1b3981393b335d7ee31a2965cf8a0c4d",
+      "review": "Existing 39-case Chromium PNG/JSON coverage and validator; retain and extend for Stage B."
+    },
+    {
+      "path": "e2e/measureV2Evidence.ts",
+      "sourceBlob": "84e342782243947d8f702e68d11dff1cac92422c",
+      "transferredBlob": "84e342782243947d8f702e68d11dff1cac92422c",
+      "review": "Existing 39-case Chromium PNG/JSON coverage and validator; retain and extend for Stage B."
+    },
+    {
+      "path": "scripts/validate-measure-v2-evidence.mjs",
+      "sourceBlob": "b590402db8a486c9dbeb2a9fb1aa7463aff3fef4",
+      "transferredBlob": "b590402db8a486c9dbeb2a9fb1aa7463aff3fef4",
+      "review": "Existing 39-case Chromium PNG/JSON coverage and validator; retain and extend for Stage B."
+    },
+    {
+      "path": "src/App.tsx",
+      "sourceBlob": "1d7f33172f6a8f678706e54cbe0ac908a7a72455",
+      "transferredBlob": "1d7f33172f6a8f678706e54cbe0ac908a7a72455",
+      "review": "C03 command/panel orchestration, session ownership and persistent annotation/history integration."
+    },
+    {
+      "path": "src/components/BabylonScene.tsx",
+      "sourceBlob": "f71bde257027b1ed53f0bf811288ea340328efe8",
+      "transferredBlob": "f71bde257027b1ed53f0bf811288ea340328efe8",
+      "review": "C03 lifecycle installation, committed callbacks and one saved-dimension render authority."
+    },
+    {
+      "path": "src/components/measure/MeasureTool.test.ts",
+      "sourceBlob": "48ff45f5541b2b2d147ed0fe005840b26130b348",
+      "transferredBlob": "48ff45f5541b2b2d147ed0fe005840b26130b348",
+      "review": "C03 Measure workspace, viewport adapter, label layout and saved-dimension renderer."
+    },
+    {
+      "path": "src/components/measure/MeasureTool.tsx",
+      "sourceBlob": "f7ba437dc4c05ded7e4995d0f4e1dc2d54cd13f0",
+      "transferredBlob": "f7ba437dc4c05ded7e4995d0f4e1dc2d54cd13f0",
+      "review": "C03 Measure workspace, viewport adapter, label layout and saved-dimension renderer."
+    },
+    {
+      "path": "src/components/measure/measureLabelContext.ts",
+      "sourceBlob": "2d56c56029487ce80b75127b375e95dd4c60681f",
+      "transferredBlob": "2d56c56029487ce80b75127b375e95dd4c60681f",
+      "review": "C03 Measure workspace, viewport adapter, label layout and saved-dimension renderer."
+    },
+    {
+      "path": "src/components/measure/measureViewportAdapter.ts",
+      "sourceBlob": "3353305fa71e963101a5ab61fb5745fba00ded5e",
+      "transferredBlob": "3353305fa71e963101a5ab61fb5745fba00ded5e",
+      "review": "C03 Measure workspace, viewport adapter, label layout and saved-dimension renderer."
+    },
+    {
+      "path": "src/components/measure/referenceDimensionScene.ts",
+      "sourceBlob": "82b108151d590fff91eea4ca18b8adc526356c9a",
+      "transferredBlob": "82b108151d590fff91eea4ca18b8adc526356c9a",
+      "review": "C03 Measure workspace, viewport adapter, label layout and saved-dimension renderer."
+    },
+    {
+      "path": "src/measure/dimensionPresentation.test.ts",
+      "sourceBlob": "e98d2bc5d03f9a6ecea3b314db747b8b49a56d73",
+      "transferredBlob": "e98d2bc5d03f9a6ecea3b314db747b8b49a56d73",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/dimensionPresentation.ts",
+      "sourceBlob": "978f283709a84aaa241d405889aa31a640c44e80",
+      "transferredBlob": "978f283709a84aaa241d405889aa31a640c44e80",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/measureAuthority.test.ts",
+      "sourceBlob": "ff266e9917c757af0e3bdc4cd0c8deb51efe5239",
+      "transferredBlob": "ff266e9917c757af0e3bdc4cd0c8deb51efe5239",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/measureAuthority.ts",
+      "sourceBlob": "bf53b60a4949ec32eec16e3bf65f8e3723a2417b",
+      "transferredBlob": "bf53b60a4949ec32eec16e3bf65f8e3723a2417b",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/measureCommandGate.ts",
+      "sourceBlob": "6161ae10fae88defa206edae87e02ff9cff92c4e",
+      "transferredBlob": "6161ae10fae88defa206edae87e02ff9cff92c4e",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/measureGeometry.ts",
+      "sourceBlob": "594c59a582cdd92860f5fb6cef426a0c28be9972",
+      "transferredBlob": "594c59a582cdd92860f5fb6cef426a0c28be9972",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/measurePresentation.ts",
+      "sourceBlob": "6bdd02bf00a94760fd6afe0a93f952cb0d330ac7",
+      "transferredBlob": "6bdd02bf00a94760fd6afe0a93f952cb0d330ac7",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/measureReferences.ts",
+      "sourceBlob": "fcc7697e8e56cd0a393575bdba46aefe1424e7f3",
+      "transferredBlob": "fcc7697e8e56cd0a393575bdba46aefe1424e7f3",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/referenceTypes.test.ts",
+      "sourceBlob": "8bd2ed7c101963a2224a8c395af678ab28bf4a30",
+      "transferredBlob": "8bd2ed7c101963a2224a8c395af678ab28bf4a30",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/measure/referenceTypes.ts",
+      "sourceBlob": "c22d484044c9fc337cf78de469588b884066b520",
+      "transferredBlob": "c22d484044c9fc337cf78de469588b884066b520",
+      "review": "C03 semantic/reference/session or dimension presentation implementation and regression coverage."
+    },
+    {
+      "path": "src/platform/featureAccess/featureAccessMatrix.ts",
+      "sourceBlob": "1ce70aa5f7abded5996f1e72f841c6255e669cc1",
+      "transferredBlob": "1ce70aa5f7abded5996f1e72f841c6255e669cc1",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/platform/registrySeeds/commandSeedDefinitions.ts",
+      "sourceBlob": "caede754e55bb669e9da747870e261d9dc26e96b",
+      "transferredBlob": "caede754e55bb669e9da747870e261d9dc26e96b",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/platform/registrySeeds/panelSeedDefinitions.ts",
+      "sourceBlob": "3341613534f77829ac20b1d53a54b8ee3a0b73ad",
+      "transferredBlob": "3341613534f77829ac20b1d53a54b8ee3a0b73ad",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/platform/runtimeCommands/runtimeFeatureCommands.ts",
+      "sourceBlob": "2de4712ddc742f217356ca4383e1f831580610f3",
+      "transferredBlob": "2de4712ddc742f217356ca4383e1f831580610f3",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/platform/runtimePanels/runtimePanelRegistryBridge.ts",
+      "sourceBlob": "69ed33fdd7ed47b8506a9b1ad294b2c2b46a4468",
+      "transferredBlob": "69ed33fdd7ed47b8506a9b1ad294b2c2b46a4468",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/platform/surfaceInventory/currentSurfaceInventory.ts",
+      "sourceBlob": "a57badc19d6b3fc079e4af9507872754b9548ccc",
+      "transferredBlob": "a57badc19d6b3fc079e4af9507872754b9548ccc",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/styles.css",
+      "sourceBlob": "48845f0324177803a2e375599e70678c89b2ef9d",
+      "transferredBlob": "48845f0324177803a2e375599e70678c89b2ef9d",
+      "review": "C03 Measure styles and shared dock tabs; refine only T04/T05 presentation boundary."
+    },
+    {
+      "path": "src/types/annotations.ts",
+      "sourceBlob": "9cb7409b805af0aa755954c0aeadedd21549dbef",
+      "transferredBlob": "9cb7409b805af0aa755954c0aeadedd21549dbef",
+      "review": "C03 Annotation-family reference serialization, layout/history style preservation; no version migration."
+    },
+    {
+      "path": "src/types/history.ts",
+      "sourceBlob": "4d7a947e1ece08d782dee3d41facf3be60431224",
+      "transferredBlob": "4d7a947e1ece08d782dee3d41facf3be60431224",
+      "review": "C03 Annotation-family reference serialization, layout/history style preservation; no version migration."
+    },
+    {
+      "path": "src/types/machine.ts",
+      "sourceBlob": "596a82b6d6913b78cfe1364c6af764265519420c",
+      "transferredBlob": "596a82b6d6913b78cfe1364c6af764265519420c",
+      "review": "C03 Annotation-family reference serialization, layout/history style preservation; no version migration."
+    },
+    {
+      "path": "src/utils/annotations.ts",
+      "sourceBlob": "16fd5dcb4bd44fce92fd52b9fb7d621a869147b5",
+      "transferredBlob": "16fd5dcb4bd44fce92fd52b9fb7d621a869147b5",
+      "review": "C03 Annotation-family reference serialization, layout/history style preservation; no version migration."
+    },
+    {
+      "path": "src/utils/layoutHistory.ts",
+      "sourceBlob": "aa9dac9bb23fd9181cbd0fdd532c9a2dc261a6dc",
+      "transferredBlob": "aa9dac9bb23fd9181cbd0fdd532c9a2dc261a6dc",
+      "review": "C03 Annotation-family reference serialization, layout/history style preservation; no version migration."
+    },
+    {
+      "path": "src/utils/layoutSerialization.ts",
+      "sourceBlob": "63bf5b1c0d23974088d9d24df715aa18078e60ab",
+      "transferredBlob": "63bf5b1c0d23974088d9d24df715aa18078e60ab",
+      "review": "C03 Annotation-family reference serialization, layout/history style preservation; no version migration."
+    },
+    {
+      "path": "src/workbench/commandSurfaces/commandSurfaceConfig.ts",
+      "sourceBlob": "b7d50291b8d5a2742049d6bc9c58ff96a0a4ef31",
+      "transferredBlob": "b7d50291b8d5a2742049d6bc9c58ff96a0a4ef31",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    },
+    {
+      "path": "src/workbench/uiPreferences/uiPreferencesDefaults.ts",
+      "sourceBlob": "b3598dd3205e9a4043d0335faecb2d740c2cabfa",
+      "transferredBlob": "b3598dd3205e9a4043d0335faecb2d740c2cabfa",
+      "review": "Canonical Measure command/panel/feature/surface access and UI preference registration."
+    }
+  ]
+}
