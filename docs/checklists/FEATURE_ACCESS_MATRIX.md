@@ -10,6 +10,10 @@ The runtime evaluator is:
 
 - `src/platform/runtimeFeatureAccess/`
 
+This prose file is a reviewer summary. If it ever disagrees with the
+machine-readable source, the source plus runtime complete-gate evidence wins
+and this file must be corrected.
+
 ## Classification rules
 
 | Classification | Closure rule |
@@ -22,27 +26,39 @@ The runtime evaluator is:
 
 | Area | Canonical feature coverage | Runtime evidence |
 |---|---|---|
-| Project | save, export/import JSON, autosave restore | Runtime Feature Command + Project Manager modal |
-| Core edit | undo, redo, delete, duplicate | Core Runtime Command + Runtime Selection + Entity snapshot |
-| View | labels, viewpoints, connection points, measurements | Runtime Feature Command + panels + viewport where required |
-| Library | add machine, Library Manager, Taxonomy Manager | Runtime Feature Command + live panels/modals |
-| Selection | single-select, multi-select | Explicit live Runtime Selection capabilities + validated current selection + Entity snapshot |
+| Project / outputs | save, export/import JSON, autosave restore, Project Manager, Commercial Outputs, XLSX/PDF/PNG | Runtime Feature Command + live modals + viewport where required |
+| Core edit | undo, redo, delete, duplicate, rename selected entity | Core/Runtime Feature Commands + Runtime Selection + Entity snapshot |
+| View | display/overlay controls, labels, viewpoints, connection points, measurements | Runtime Feature Command + live panels/modals + viewport |
+| Library | add machine, import GLB, custom variant, Library Manager, Taxonomy Manager | Runtime Feature Command + Machine Library + live manager modals |
+| Selection | single-select, ordered multi-select / primary selection | Explicit live Runtime Selection capabilities + validated current selection + Entity snapshot |
 | Object editing | plan move, vertical rotation, properties | Inspector + Runtime Selection + Entity snapshot |
-| Engineering | annotations, collision, rotation snap, connection snap, alignment | Runtime Feature Command + contextual panels |
-| Civil | floor, wall, column, walkway, restricted zone, reference zone | Runtime Feature Command + Civil panel + Entity snapshot |
+| Engineering | annotations, collision, rotation snap, connection snap, alignment / arrange | Runtime Feature Command + contextual panels |
+| Civil / Build | Floor Area, Wall, Column, Beam, Door/Opening, Walkway, Restricted Area, Reference Zone | `civil.addPrimitive` + Machine Library Build projection + Entity snapshot |
+| Levels | add, rename, set datum, set active, delete | Runtime Feature Commands + Levels panel + Entity snapshot |
 | Assembly | create, add/remove selected, edit/exit edit, ungroup | Assembly Runtime Command + Groups panel + reciprocal Selection/Entity relationships |
-| Platform panels | shell, library, inspector, tools, managers | Runtime Panel Registry reachability |
+| Platform panels | Machine Library, Layout Explorer, Inspector, Status Bar, Layers, Levels, Groups, Viewpoints, tool/manager modals | Runtime Panel Registry reachability |
 | Viewport | main scene viewport | Runtime Viewport Bridge `viewport.main` |
 | Performance | benchmark | Runtime Feature Command + launcher/modal |
+| Help | quick start, keyboard shortcuts, about | Runtime Feature Command + Help modal |
 
-## Explicitly planned
+## Explicitly planned / unbound
 
 | Feature | Current status | Rule |
 |---|---|---|
-| `view.fitView` | `planned-unbound` | No current user-facing control |
-| `panel.layoutExplorer` | `planned-unbound` | Assembly Tree is not relabeled as Layout Explorer |
-| `panel.statusBar` | `planned-unbound` | No current Status Bar surface |
-| `panel.diagnostics` | `planned-unbound` | No single production Diagnostics panel |
+| `view.fitView` | `planned-unbound` | Command seed exists, but no current user-facing Fit View action exists. Phase 1 final exit audit requires explicit reconciliation with the Master Plan before formal closeout. |
+| `panel.civilReferences` | `planned-unbound` | Build creation moved to Library; legacy Civil panel is not a live user surface. |
+| `panel.diagnostics` | `planned-unbound` | No single production Diagnostics panel exists. |
+
+Layout Explorer and Status Bar are **not** planned-unbound. Both are current
+required-runtime/live surfaces. Entity rename is likewise current required
+runtime through `edit.renameSelected`.
+
+## Compatibility-only surfaces
+
+Legacy per-type Civil commands remain bound as programmatic compatibility
+routes, but are excluded from duplicate visible Insert/Command Palette
+discovery. User-facing Build creation uses the Library + `civil.addPrimitive`
+authority.
 
 ## Quality signals
 
