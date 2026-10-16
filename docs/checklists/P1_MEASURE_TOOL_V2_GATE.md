@@ -56,3 +56,51 @@ Stage A is not Product Accepted for runtime behavior.
 PR #126 remains a rejected runtime prototype/baseline and must not be merged as the V2 implementation.
 
 The next bounded package is C03 Stage B V2 runtime implementation. It must be implemented against the frozen V2 contract rather than incrementally tuned from PR #126.
+
+## Consolidated recovery candidate (PR #129 preserved)
+
+The recovery is prepared on `feat/c03-measure-v2-recovery-v01` from exact
+`c8d69bceee1f0307e07ad6299f77ae64dd7cdee9`. PR #129 remains an unchanged Draft.
+The pre-implementation correction matrix is
+`docs/audits/c03-measure-v2-recovery-plan-v01.md`, committed before runtime edits.
+
+- [x] Registered command/panel/Feature Access route exercised from real UI.
+- [x] Inspector registered visibility and Auto/Pinned presentation restored.
+- [x] One saved-dimension renderer; legacy labels/leaders exclude dimension annotations.
+- [x] Default Depth and explicit Overlay, including actual machine occlusion pixel comparison.
+- [x] Selected endpoint grips and independent text drag commit through registered Measure/history.
+- [x] Semantic hover, visible marker hit region, Shift lock and deterministic Tab cycling.
+- [x] Separate witness segments, arrow/tick fit, label/leader placement and style controls.
+- [x] Canonical project style serialized and included in Undo; per-item display mode remains explicit.
+- [x] Level identity, captured area plane, full-precision references and text placement serialized.
+- [x] Associative move/rotate/dimension changes, orphan visibility and explicit reassociation covered.
+- [x] Real project save/hard reload; clean PNG includes saved dimensions and excludes session/grips.
+- [x] M20-M30 targeted unit/component/Chromium evidence implemented.
+- [ ] Complete local gate and exact-head CI successful (recorded in the recovery PR Validation section).
+- [ ] Independent Contract Verification against the frozen contract and exact-head artifact.
+- [ ] Product Owner acceptance (must not be requested before independent verification).
+
+PR #130 independent review `6144077908` adds executable checks for semantic
+grip reassignment and Free Geometry Hit, retained Tab/Shift candidate choice,
+angle and area readability, and Level orphan/repair. These tests first exposed
+the candidate-choice race, missing captured-plane presentation, and an angle
+label collision; the bounded corrections are in the same PR. Existing semantic
+grip and orphan behavior passed the new regression routes without changes.
+
+Visual review `6155647277` reproduced duplicate transient/saved values,
+marker/value collisions, clipped selectors and ignored metric area styling on
+`750e0fb`. The bounded correction keeps transient data and saved annotations
+separate while using the equivalent visible saved graphic once. Hidden/deleted
+or changed saved references do not suppress independent transient results.
+Shared measured fit avoids marker/label extents; one style formatter governs
+area/perimeter units and two-line presentation. Full-text control geometry,
+actual text bounds, orbit/zoom and clean capture are asserted in Chromium at
+640/1024/1440.
+
+Evidence artifact: `c03-measure-v2-recovery`, 39 PNG/JSON pairs (78 files).
+`scripts/validate-measure-v2-evidence.mjs` rejects missing/stale evidence, console
+errors, failed dock invariants, failed real occlusion, failed clean capture, and
+missing reviewer-route behavior evidence.
+Automation Green is determined by the actual exact-head run, not these implementation checkboxes.
+Contract Verified: FAIL (BLOCKED until independent visual re-review); Product Accepted remains
+PENDING and is not inferred from automation.

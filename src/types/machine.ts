@@ -163,6 +163,7 @@ export type AtrVisuLayout = {
   groups?: ObjectGroup[];
   civilReferences?: CivilReferenceItem[];
   annotations?: AnnotationObject[];
+  measureDimensionStyle?: import("../measure/referenceTypes").MeasureDimensionStyle;
   viewpoints?: LayoutViewpoint[];
   levels?: LayoutLevel[];
   activeLevelId?: string;

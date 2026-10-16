@@ -71,6 +71,21 @@ jobs:
           ATRVISU_CAPTURE_P1_BLD2_EVIDENCE: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/phase-1-level-datum-v01' && '1' || '0' }}
           ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
+      - name: Validate exact-head C03 V2 recovery evidence
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/c03-measure-v2-recovery-v01' }}
+        run: node scripts/validate-measure-v2-evidence.mjs
+        env:
+          ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+
+      - name: Upload C03 V2 recovery evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'feat/c03-measure-v2-recovery-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: c03-measure-v2-recovery
+          path: test-results/c03-measure-v2-recovery
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Validate exact-head Pan and grid evidence
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/p1-viewport-pan-grid-runtime-v01' }}
         run: node scripts/validate-pan-grid-evidence.mjs

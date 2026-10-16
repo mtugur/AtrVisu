@@ -113,3 +113,20 @@ Stop implementation and return to benchmark/contract review immediately if any o
 - the contract is being rewritten after implementation to bless the current code.
 
 When a stop condition fires, another local tuning pass is prohibited until the interaction contract and benchmark precedent are re-reviewed.
+
+## C03 V2 recovery evidence record
+
+This package uses the pre-existing V2 benchmark, frozen contract and ADR-009;
+none of those normative sources is edited to bless runtime code. The consolidated
+plan was committed as `5e5e95ccfd4448654282f49f8c123ca014c41ab5` before runtime edits.
+PR #129 and its rejected exact head remain auditable and unchanged.
+
+| Gate | Package evidence |
+| --- | --- |
+| A / B | Product Constitution; Interaction Standard section 15; `P1_MEASURE_TOOL_V2_BENCHMARK_REVIEW.md`; frozen V2 contract; recovery plan A1-A4/B5-B11 matrix. C03 only, no C04/C05/C07/C09. |
+| C / D | Existing Measure/Command/Panel/Feature Access/Annotation/Runtime Selection authorities; fixed 4 CSS-px confirmation; grips/text are one persistent transaction; no camera or movement solver changes. |
+| E | `measureAuthority.test.ts`, `referenceTypes.test.ts`, `dimensionPresentation.test.ts`, `MeasureTool.test.ts`, `measureV2Evidence.ts`; real pointer/key/UI/project/export paths at 640/1024/1440. |
+| F | Existing unfiltered console/pageerror collector; every new browser scenario asserts empty errors. Full-suite gate remains mandatory. |
+| G | One consolidated recovery candidate and separate superseding Draft; no normative tuning. Independent Contract Verification remains pending. |
+| H | PNG/JSON artifact exposes actual graphics, occlusion, dock and persistence states. Review 6155647277 is addressed by one bounded presentation correction with measured text/control geometry at 640/1024/1440; the artifact has 39 PNG/JSON pairs. No Product Accepted claim. |
+| I / J | Exact-head Automation Green recorded in PR Validation; Contract Verified FAIL (BLOCKED until independent visual re-review); Product Accepted PENDING. No Product Owner test request before independent verification. |

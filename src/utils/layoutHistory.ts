@@ -8,6 +8,8 @@ import type { LayoutViewpoint } from "../types/viewpoints";
 import type { LayoutLevel } from "../types/levels";
 import { GROUND_LEVEL_ID, normalizeLevels } from "./levels";
 
+import { cloneMeasureDimensionStyle, type MeasureDimensionStyle } from "../measure/referenceTypes";
+
 export const DEFAULT_HISTORY_LIMIT = 50;
 
 export const clonePlacedMachines = (machines: PlacedMachine[]): PlacedMachine[] => {
@@ -71,7 +73,8 @@ const toHistorySnapshot = (
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = [],
   levels: LayoutLevel[] = [],
-  activeLevelId = GROUND_LEVEL_ID
+  activeLevelId = GROUND_LEVEL_ID,
+  measureDimensionStyle?: MeasureDimensionStyle
 ): LayoutHistorySnapshot =>
   Array.isArray(snapshot)
     ? {
@@ -82,7 +85,8 @@ const toHistorySnapshot = (
         groups: cloneGroups(groups),
         viewpoints: cloneViewpoints(viewpoints),
         levels: cloneLevels(normalizeLevels(levels)),
-        activeLevelId
+        activeLevelId,
+        measureDimensionStyle: cloneMeasureDimensionStyle(measureDimensionStyle)
       }
     : {
         machines: clonePlacedMachines(snapshot.machines),
@@ -92,7 +96,8 @@ const toHistorySnapshot = (
         groups: cloneGroups(snapshot.groups ?? []),
         viewpoints: cloneViewpoints(snapshot.viewpoints ?? []),
         levels: cloneLevels(normalizeLevels(snapshot.levels)),
-        activeLevelId: snapshot.activeLevelId ?? GROUND_LEVEL_ID
+        activeLevelId: snapshot.activeLevelId ?? GROUND_LEVEL_ID,
+        measureDimensionStyle: cloneMeasureDimensionStyle(snapshot.measureDimensionStyle)
       };
 
 export const createLayoutHistory = (limit = DEFAULT_HISTORY_LIMIT): LayoutHistoryState => ({
@@ -110,10 +115,11 @@ export const pushHistorySnapshot = (
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = [],
   levels: LayoutLevel[] = [],
-  activeLevelId = GROUND_LEVEL_ID
+  activeLevelId = GROUND_LEVEL_ID,
+  measureDimensionStyle?: MeasureDimensionStyle
 ): LayoutHistoryState => ({
   ...history,
-  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId)].slice(-history.limit),
+  undoStack: [...history.undoStack, toHistorySnapshot(snapshot, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId, measureDimensionStyle)].slice(-history.limit),
   redoStack: []
 });
 
@@ -126,7 +132,8 @@ export const undoHistory = (
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = [],
   levels: LayoutLevel[] = [],
-  activeLevelId = GROUND_LEVEL_ID
+  activeLevelId = GROUND_LEVEL_ID,
+  measureDimensionStyle?: MeasureDimensionStyle
 ): {
   history: LayoutHistoryState;
   machines: PlacedMachine[];
@@ -137,6 +144,7 @@ export const undoHistory = (
   viewpoints: LayoutViewpoint[];
   levels: LayoutLevel[];
   activeLevelId: string;
+  measureDimensionStyle: MeasureDimensionStyle;
 } | null => {
   const previous = history.undoStack[history.undoStack.length - 1];
   if (!previous) {
@@ -147,7 +155,7 @@ export const undoHistory = (
     history: {
       ...history,
       undoStack: history.undoStack.slice(0, -1),
-      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId)].slice(-history.limit)
+      redoStack: [...history.redoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId, measureDimensionStyle)].slice(-history.limit)
     },
     machines: clonePlacedMachines(previous.machines),
     annotations: cloneAnnotations(previous.annotations),
@@ -156,7 +164,8 @@ export const undoHistory = (
     groups: cloneGroups(previous.groups ?? []),
     viewpoints: cloneViewpoints(previous.viewpoints ?? []),
     levels: cloneLevels(normalizeLevels(previous.levels)),
-    activeLevelId: previous.activeLevelId ?? GROUND_LEVEL_ID
+    activeLevelId: previous.activeLevelId ?? GROUND_LEVEL_ID,
+    measureDimensionStyle: cloneMeasureDimensionStyle(previous.measureDimensionStyle)
   };
 };
 
@@ -169,7 +178,8 @@ export const redoHistory = (
   layers: LayoutLayer[] = [],
   groups: ObjectGroup[] = [],
   levels: LayoutLevel[] = [],
-  activeLevelId = GROUND_LEVEL_ID
+  activeLevelId = GROUND_LEVEL_ID,
+  measureDimensionStyle?: MeasureDimensionStyle
 ): {
   history: LayoutHistoryState;
   machines: PlacedMachine[];
@@ -180,6 +190,7 @@ export const redoHistory = (
   viewpoints: LayoutViewpoint[];
   levels: LayoutLevel[];
   activeLevelId: string;
+  measureDimensionStyle: MeasureDimensionStyle;
 } | null => {
   const next = history.redoStack[history.redoStack.length - 1];
   if (!next) {
@@ -189,7 +200,7 @@ export const redoHistory = (
   return {
     history: {
       ...history,
-      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId)].slice(-history.limit),
+      undoStack: [...history.undoStack, toHistorySnapshot(current, annotations, civilReferences, viewpoints, layers, groups, levels, activeLevelId, measureDimensionStyle)].slice(-history.limit),
       redoStack: history.redoStack.slice(0, -1)
     },
     machines: clonePlacedMachines(next.machines),
@@ -199,6 +210,7 @@ export const redoHistory = (
     groups: cloneGroups(next.groups ?? []),
     viewpoints: cloneViewpoints(next.viewpoints ?? []),
     levels: cloneLevels(normalizeLevels(next.levels)),
-    activeLevelId: next.activeLevelId ?? GROUND_LEVEL_ID
+    activeLevelId: next.activeLevelId ?? GROUND_LEVEL_ID,
+    measureDimensionStyle: cloneMeasureDimensionStyle(next.measureDimensionStyle)
   };
 };
