@@ -606,7 +606,7 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
     expect(activePixels).toBeGreaterThan(50);
     expect(Math.abs(activePixels - inactivePixels)).toBeLessThanOrEqual(10);
     expect(await snapshot(page)).toEqual(initial);
-    const dir = join(process.cwd(), "test-results/c03-measure-v2-recovery"); await mkdir(dir, { recursive: true });
+    const dir = join(process.cwd(), "test-results/c03-measure-v2-stage-b"); await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "m30-clean-presentation.png"), inactive);
     await writeFile(join(dir, "m30-clean-presentation.json"), JSON.stringify({ head: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD, activePixels, inactivePixels, runtime: await snapshot(page), errors }, null, 2));
     expect(errors).toEqual([]);
