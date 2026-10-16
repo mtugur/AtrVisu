@@ -369,3 +369,28 @@ Stage B implementation may begin only after:
 5. the implementation package remains bounded to C03 V2.
 
 No runtime code in PR #126 is considered a substitute for this review.
+
+## 9. Post-stop-rule decision traceability - T03/T04/T05
+
+Review date: 2026-10-15 (repository evidence reconciliation, not a new vendor
+observation/access claim). Original Official source records and their
+2026-10-08 access date remain in section 2.2. Product Owner approval follows
+PR #130 manual review `6188819499` and governance review `6189493355`.
+
+| Approved decision | Existing evidence / task similarity | Fact versus AtrVisu adoption |
+| --- | --- | --- |
+| T03 four associative top corners | ONSHAPE-INFER-01 (corner/center inference), NW-SNAP-01 (measurement snapping), ACAD-ASSOC-01/02 (association and repair) | The recorded facts support meaningful corners and associative references. Four named canonical top corners and bottom-plus-height coordinates are an AtrVisu extension, not a vendor enum or a GLB vertex model. |
+| Visible-only discovery / retained invisible lock | ONSHAPE-INFER-01 (nearest inference and deliberate lock), NW-SNAP-01 (cursor feedback) | Retain deliberate semantic identity. Exact occlusion eligibility and the panel's explicit Confirm Locked Anchor safeguard are approved AtrVisu decisions; no claim that the sources prescribe this exact hidden-lock UI. |
+| T04 viewport/chrome isolation | VC-LAYOUT-01, NW-MEASURE-01 (separate tool dock), NW-MODES-01 (3D vs scene overlay) | Sources support separate tool/scene surfaces and over-geometry mode. Application chrome isolation is the AtrVisu shell boundary; Overlay is not permission to paint over docks. No vendor CSS/z-index claim. |
+| T05 accessible shared header / two rows | VC-LAYOUT-01, NW-MEASURE-01 | Dedicated task-pane ownership is source-derived. Controlled two-row layout, preserved Auto/Pinned and non-overlapping click targets are AtrVisu responsive presentation decisions, not copied vendor dimensions. |
+
+The AutoCAD 3D Object Snap summary in section 2.1 does not have a separate
+direct source record in section 2.2. It is not an independent decisive source
+for this delta; use the already traceable Onshape/Navisworks inference records
+and AutoCAD association records above. No new post-hoc benchmark shopping,
+runtime proof or visual acceptance is claimed by this mapping.
+
+The normative rules are in V2 contract sections 3.1.1, 6.1-6.2.2, 10.3 and 13;
+ADR-009 records the bounded adaptation. Future acceptance is in
+`docs/checklists/P1_MEASURE_TOOL_V2_GATE.md`. This Stage A package does not
+authorize or claim implementation of those rules.

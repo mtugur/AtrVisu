@@ -328,9 +328,13 @@ AtrVisu adopts these patterns with bounded Phase-1 scope.
 
 #### C. Semantic references
 - Persistent endpoints store entity ID + semantic anchor where possible.
-- Initial Machine/Civil anchors include canonical front-left-bottom/front-right-bottom/back-left-bottom/back-right-bottom, footprint center, footprint edge midpoints, supported top/bottom face centers and free geometry hits.
+- Machine/Civil anchors include canonical four bottom corners and four top corners (`front-left-top`, `front-right-top`, `back-left-top`, `back-right-top`), footprint center, footprint edge midpoints, supported top/bottom face centers and free geometry hits. Top corners are associative EntityAnchorRefs derived from canonical bottom plus height, not render bounds or free points.
 - Anchors derive from canonical entity transform/dimensions, not arbitrary GLB tessellation.
+- Each top corner is the corresponding existing bottom semantic corner with identical Plan X/Y and Z + canonical height. Preserve the existing coordinateReference front-left-bottom placement, rotation and corner mapping; the V2 offset table is illustrative, not a second transform convention.
 - Hover exposes relevant candidates; nearest candidate is highlighted; a deliberate modifier may lock a candidate.
+- Normal discovery/highlight/cycling offers only visible, resolvable candidates in the open viewport, not occluded geometry or application chrome. Visible silhouette corners remain accessible without raw-mesh topology authority or a required interior hit at the exact marker center.
+- A locked anchor retains its identity when invisible; no through-geometry/chrome marker or silent substitute is allowed. The panel exposes its identity, resolved coordinates and visibility reason. Ordinary viewport clicks/generic completion keys cannot confirm an invisible lock; explicit accessible Confirm Locked Anchor uses the existing Measure authority. Deleted/unresolved references cannot be confirmed. Detailed rules are V2 contract sections 6.2.1-6.2.2.
+- Explicit confirmation is enabled exactly when the entity/reference resolves and the semantic identity is eligible, irrespective of offscreen/chrome/scene occlusion; only the named focused panel control invokes it. Visibility reasons use existing read-only projection, shell coverage and scene-occlusion observations (in that order), with truthful Not currently visible fallback when the precise category is unavailable. No new selection authority or camera threshold is introduced.
 - Persistent entity anchors are associative. Entity movement/rotation/canonical dimension changes recompute the dimension.
 - Deleted/unresolvable references become **Orphaned** and remain explicitly repairable/deletable. Silent fallback to a stale world point is forbidden.
 - Entity Pair Reference A/B anchors are editable without recreating the measurement.
@@ -347,6 +351,8 @@ AtrVisu adopts these patterns with bounded Phase-1 scope.
 - Geometry may occlude measurement graphics.
 - An explicit **Overlay** mode may render measurement graphics above geometry.
 - Overlay is never a hidden camera-angle fallback and is never silently enabled.
+- Depth and Overlay both remain below application dock/header/modal chrome. Shell compositing owns that isolation; no camera compensation, arbitrary global z-index patch or blanket candidate hiding.
+- The shared Inspector/Measure header uses controlled two-row layout when needed, preserving every tab, Auto/Pinned, pin/unpin and collapse/reopen control without overlap, clipping, smaller click targets or changed panel semantics.
 
 #### F. Dimension Style
 - Font family, adaptive/fixed text sizing, min/max screen-space size, line weight, arrow/tick style and size, text offset, text background/halo, precision and unit presentation are style-controlled.
@@ -391,3 +397,10 @@ The V2 gate must cover:
 - clean capture/export and no-red-console evidence.
 
 The authoritative detailed acceptance is `docs/product/P1_MEASURE_TOOL_V2_CONTRACT.md`.
+
+The post-stop-rule T03/T04/T05 delta is a separately authorized Stage A
+governance change, not an implementation-agent relaxation or runtime acceptance.
+Its benchmark mapping and future runtime oracles are in the V2 benchmark review
+and `docs/checklists/P1_MEASURE_TOOL_V2_GATE.md`. Stage B requires independent
+review and separate explicit authorization; existing PR #129/#130 are not
+certified by this amendment.

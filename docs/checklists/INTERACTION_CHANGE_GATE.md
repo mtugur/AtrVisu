@@ -113,3 +113,19 @@ Stop implementation and return to benchmark/contract review immediately if any o
 - the contract is being rewritten after implementation to bless the current code.
 
 When a stop condition fires, another local tuning pass is prohibited until the interaction contract and benchmark precedent are re-reviewed.
+
+## C03 V2 post-stop-rule Stage A evidence
+
+This is a governance-only contract delta after PR #130 reviews `6188819499`
+and `6189493355`, with explicit Product Owner authorization of the decisions.
+It does not reset the runtime correction budget, approve PR #130, or start
+another tuning round. Product Constitution/protocol authority is unchanged.
+
+| Gate | Stage A evidence / boundary |
+| --- | --- |
+| A | Interaction Standard section 15, V2 contract sections 3.1.1/6/10.3/13, ADR-009 and the existing V2 benchmark review's post-stop-rule mapping. Vendor facts are separate from approved AtrVisu decisions. |
+| B | Only top semantic corners, visible discovery/invisible lock safeguards, application chrome isolation and shared header acceptance. No runtime, C04/C05/C07/C09, package, schema or workflow changes. |
+| C / D | Existing command/panel/entity/selection/history/coordinate authorities and frozen click/camera behavior retained in the contract. Invisible reference requires explicit confirmation, never an accidental viewport click. |
+| E / F / H | Future runtime matrix in P1_MEASURE_TOOL_V2_GATE.md; T01/T02/T06 preservation and unfiltered no-red-console evidence required. Runtime conformance for the delta is NOT EXECUTED/N/A in this docs-only package, not PASS. |
+| G / J | Stop honored. Submit governance for independent review, synchronize the accepted contract, then require explicit authorization and exact baseline for a new bounded implementation branch. PR #129/#130 stay unchanged Draft baselines. |
+| I | Stage A Automation Green belongs to the exact-head Quality Gate in PR Validation. Contract Verified PENDING independent review; Product Accepted N/A for docs. PR #130 runtime acceptance remains FAIL/REOPENED, not upgraded by Stage A CI. |
