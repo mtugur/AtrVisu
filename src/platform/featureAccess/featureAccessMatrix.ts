@@ -113,6 +113,13 @@ export const platformFeatureAccessMatrix = [
     requiresSurfaceExecutionEvidence: true
   }),
 
+  feature("viewport.measure", "Measure", ["toolbar", "menu", "panel"], {
+    commandIds: ["view.measure"],
+    panelIds: ["panel.measure"],
+    runtimeRequirements: ["viewport"],
+    requiresSurfaceExecutionEvidence: true,
+    notes: "Quick Toolbar, View and Command Palette enter one right-dock Measure workspace; transient picking and explicit persistent Annotation reference dimensions use the same command authority. Precision Placement Helpers remain separate."
+  }),
   feature("view.fitView", "Fit view", ["toolbar", "menu"], {
     commandIds: ["view.fitView"],
     runtimeRequirements: ["viewport"],
