@@ -394,3 +394,25 @@ The normative rules are in V2 contract sections 3.1.1, 6.1-6.2.2, 10.3 and 13;
 ADR-009 records the bounded adaptation. Future acceptance is in
 `docs/checklists/P1_MEASURE_TOOL_V2_GATE.md`. This Stage A package does not
 authorize or claim implementation of those rules.
+
+## 10. Renewed whole-task decision traceability - PR #133
+
+Review/access date: 2026-10-19. Re-read existing official VC-MEASURE-01,
+NW-MEASURE-01 and NW-SNAP-01 URLs in section 2.2 before any implementation of
+this delta. Product decision source:
+[manual acceptance / independent stop-rule review 6267144838](https://github.com/mtugur/AtrVisu/pull/133#issuecomment-6267144838).
+This is a task-design revision, not a claim that PR #133 satisfied a benchmark.
+
+| Existing source | Verified source fact | Bounded AtrVisu adaptation / limit |
+| --- | --- | --- |
+| VC-MEASURE-01, Visual Components Premium 5.1 | A dedicated task pane controls picking A/B; pointer movement previews a measurement before confirmation in the 3D world. | Expose name/ID, semantic anchor and world XYZ before A/B confirmation. Top/oblique views never silently reinterpret an operand. The source does not specify AtrVisu anchor enums or exact preview fields. |
+| NW-MEASURE-01, Navisworks 2026 Measure Tools Window | Docked results include start/end XYZ, their difference and distance. | Make 3D Distance, horizontal Plan Distance and signed Delta Z explicit. Full-precision canonical data remains authoritative; displayed rounding is not calculation input. |
+| NW-SNAP-01, Navisworks 2023 Snapping | Measure uses cursor feedback distinguishing surface hits from snapped points/vertices/edges; picking tolerance is configurable in that product. | A shown AtrVisu semantic corner must remain reachable during actual body-to-corner motion. Use one visible active pool for draw/cycle/hit and deterministic overlap handoff. No vendor claim for this pool lifetime or a new tolerance; keep AtrVisu's existing marker hit area and separate 4 CSS px press-cancel rule. Raw tessellation remains rejected as canonical identity. |
+| VC-MEASURE-01 / NW-MEASURE-01 task/result separation | Tool controls and result inspection are separate from model editing. Neither record prescribes per-entity W/D/H multi-selection cards. | One or more entry-selected Machine/Civil objects yield name-grouped canonical local W/D/H and one active visual group. This is the explicit AtrVisu product decision, not vendor equivalence or aggregate bounds/clearance. Keep only the active entity through existing associative Annotation/history authority; no implicit multi-save. |
+
+No new vendor-equivalence claim, pixel tolerance, timer, hidden candidate or
+automatic group inference is justified by this record. Canonical bottom/top
+coordinates, Level references, invisible-lock confirmation, selection and saved
+dimension ownership remain frozen. Read-only source diagnosis and the single
+complete user-journey card are V2 section 21; task-level PNG/JSON oracles are in
+the existing V2 gate. New runtime proof is NOT EXECUTED by this Stage A package.

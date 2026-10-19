@@ -137,6 +137,13 @@ The existing frozen Pick confirmation classifier remains authoritative:
 
 Runtime Selection is snapshotted read-only at entry for entity-dimension and pair-reference submodes.
 
+The snapshot is taken when Measure becomes active, not when the Kind selector
+later changes. Preserve its ordered entity identities and primary identity
+through kind changes and Restart. Exit and re-enter to capture a different
+normal selection. Results resolve those identities through the existing entity
+authority; a result-row activation is transient Measure presentation, never a
+Runtime Selection change.
+
 Measure operands are a separate transient tool state.
 
 Measurement picking never clears, toggles or rewrites Runtime Selection.
@@ -163,6 +170,21 @@ The previous numerical definitions, coordinate mapping and Level Plane semantics
 - Plan distance = XY norm and explicitly named.
 - A=B is valid zero.
 - Full precision is retained internally.
+
+Before confirming either operand, the user must be able to inspect its entity
+name and canonical ID, semantic anchor name/ID (or explicitly Free Geometry
+Hit / Level reference), and resolved world X/Y/Z in domain mm. Confirmed A and
+the prospective B remain separately identifiable. Coordinate display precision
+does not replace full-precision operands; evidence records the unrounded data.
+An unlocked preview needs this information too, not only a deliberate lock.
+
+Show **3D Distance**, **Plan Distance** and signed **Delta Z (B-A)** together
+when A and B are available. A viewport distance label must identify its 3D or
+Plan interpretation, rather than presenting an ambiguous bare length. Z+ is a
+view direction, not a point source or flattening operation. Orbit, projection
+mode, Depth/Overlay and dock changes may reproject graphics but cannot change
+A/B identity, world coordinates or the numerical interpretation. A sloping line
+revealed after orbit is not itself evidence of an incorrect 3D calculation.
 
 Viewport presentation contains the two reference markers, measurement line, dimension label and optional axis deltas.
 
@@ -193,6 +215,37 @@ Presentation-plane semantics from the previous contract remain:
 - Level Plane source: capture the active Level FFL at operation start.
 - Navigation and later Level-context changes do not move the captured presentation plane.
 - Reset is the only recapture path.
+
+### 4.7 Selected Entity Dimensions: per-entity results
+
+This subsection explicitly supersedes the inherited exactly-one restriction in
+`P1_MEASURE_TOOL_CONTRACT.md` (Selected entity dimensions / M06); it does not
+change the local dimension or Entity Pair Reference formulas.
+
+- One or more eligible Machine/Civil identities in the entry snapshot produce
+  separate name-and-ID-grouped canonical local Width/Depth/Height results.
+  Rotation, view direction and GLB bounds do not redefine those dimensions.
+  Floor Area retains Plan Depth and Floor Thickness terminology.
+- Keep entry selection ordering. The eligible primary entry is initially active;
+  otherwise the first eligible entry in that ordering is active. Activating
+  another named result changes only the active Measure visual group.
+- Show all eligible named result groups in the panel, but only one active
+  entity's transient W/D/H graphic group in the viewport. No automatic combined
+  bounds, Group expansion, shortest gap or clearance interpretation.
+- Missing/invalid dimensions and unsupported entries have explicit named
+  reasons, not invented zeros or a silent empty list. With no eligible entry,
+  explain that Machine/Civil objects must be selected before entering Measure.
+  No automatic entity selection or hidden reseeding on Kind/Restart.
+- Entity Pair Reference remains an explicitly chosen, exactly-two-reference
+  mode (section 6.3), not a substitute for multi-entity local dimensions.
+- Keep / Save explicitly saves **only the named active entity's W/D/H result**
+  as one existing Annotation Reference Dimension, with its entity reference and
+  canonical dimension interpretation, in one normal command/history transaction.
+  Choosing another result alone saves nothing. Bulk/multi-save is out of scope;
+  it cannot be inferred from the number of result rows.
+- Saved dimensions re-resolve from current entity geometry, survive serialization,
+  and retain existing orphan/reassociation, visibility, style and Undo/Redo
+  authorities. No new dimension store, schema or selection authority is implied.
 
 ## 5. Point sources
 
@@ -308,6 +361,33 @@ Candidate dots and text must not show hidden back-face points through geometry.
 Use the same eligible set for rendering, nearest highlight and deterministic
 cycling; keep the existing visible-marker hit contract. No new camera-specific
 tolerance, density workaround, fallback plane or geometry mutation is allowed.
+
+#### Candidate continuity and target handoff
+
+Offering a visible semantic marker promises that it is reachable, not just that
+it can be drawn on one frame. Establish a transient active entity context on
+eligible body hover. Retain its visibility-tested candidate pool while the
+pointer moves from that body towards its offered corners, including silhouette
+gaps with no raw mesh hit. Re-evaluate visibility, not semantic identity, on
+render frames. A mesh miss alone must not empty that context.
+
+For deterministic overlapping bodies, the active context owns approach inside
+the screen projection of its canonical volume and its visible marker hit
+regions. A different body's raw hit there does not silently steal it. An offered
+visible marker hit wins over an underlying body hit. Outside that context's
+projected envelope/marker regions, an eligible body hover can hand off to the
+new entity; a miss clears the offered context. Pointer leave, operand
+confirmation, Restart, source/kind change and Exit also release that context.
+This is a presentation-only ownership rule, not a new world bounds/coordinate
+authority, timed grace period, enlarged pick tolerance or hidden lock.
+
+Rendering, nearest highlight, cycling and pointer confirmation use the same
+stable `(entity ID, anchor ID)` eligible set and deterministic existing tie
+ordering. If overlap makes an anchor genuinely occluded, remove its normal
+marker/hit/cycle eligibility together and explain any deliberate lock through
+section 6.2.2. Never retain a through-geometry/chrome hit target to rescue a
+path. The existing visible-marker hit region and the **4 CSS px press-cancel**
+classifier are separate contracts; neither may be tuned to mask pool loss.
 
 ### 6.2.2 Locked reference becoming invisible
 
@@ -801,3 +881,70 @@ records the decisions and forbidden alternatives. Stage B remains stopped until
 independent governance review and an explicitly authorized implementation
 package from the approved exact baseline. PR #129/#130 remain auditable Draft
 baselines; this amendment does not merge or edit them.
+
+## 21. Renewed Stage A: complete measurement task
+
+Decision: [PR #133 manual acceptance / stop rule 6267144838](https://github.com/mtugur/AtrVisu/pull/133#issuecomment-6267144838).
+Source inspected read-only at `17763309b532813a7e004d608992073a97c08bb0`;
+this documentation branch starts from main
+`55e9e58d4761c765c16c834e3b0a322e5dc67bd6`, not the rejected runtime branch.
+This bounded delta changes only preview clarity, candidate continuity and
+per-entity multi-selection dimensions. It does not certify or patch PR #133.
+
+### Read-only findings (source facts, not a new runtime reproduction)
+
+- [Coordinate adapter / picking](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/components/measure/measureViewportAdapter.ts#L38)
+  converts Babylon `(x,y,z)` metres to domain `(x,z,y)` mm. Semantic points use
+  [canonical footprint, rotation, bottom and height](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/measure/measureReferences.ts#L35),
+  not camera Z+. [Result dispatch](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/measure/measureAuthority.ts#L128)
+  sends confirmed/preview points to
+  [distanceResult](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/measure/measureGeometry.ts#L40):
+  signed B-A XYZ, Euclidean XYZ length and XY Plan length. No camera flattening
+  occurs in that calculation. The reported 8628.777 mm screenshot does not
+  supply exact A/B IDs/XYZ; its numerical correctness or the actual picked
+  top/bottom/free identities cannot be reconstructed from projection alone.
+  The normal unlocked panel shows only source/snap kind, not the full identity
+  and coordinates available for a lock
+  ([MeasureTool](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/components/measure/MeasureTool.tsx#L107)).
+- [candidate()](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/components/measure/measureViewportAdapter.ts#L66)
+  clears anchors/observations/highlight before deriving entity from current
+  mesh hit. A miss outside the visible 7 CSS px marker region yields no entity;
+  an adjacent body hit switches entity without that fallback. Invalid/hidden
+  entities, offscreen/chrome coverage and per-anchor depth occlusion also remove
+  eligibility. A chosen candidate is discarded if absent from the new pool.
+  Pointer leave/mode/source/kind reset clears it; frame preview repeats the
+  same discovery. Thus drawing a distant corner does not guarantee a stable
+  body-to-corner path. These are verified loss conditions, not a claim that
+  every manual failure had an identical pointer trace. Visibility loss remains
+  legitimate; loss solely from raw-hit context churn is the design gap.
+- [Entry snapshot / result gate](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/measure/measureAuthority.ts#L174)
+  clones selection on activation; kind/Restart do not recapture it. Result
+  requires exactly one selection ID and one resolved entity (lines 128-144).
+  App supplies current canonical Runtime Selection/primary and entities at
+  [command entry](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/App.tsx#L3800).
+  The inherited V1 Selected entity dimensions rule explicitly rejects multiple
+  selection. The session result's unavailable reason is not rendered by the
+  values-only result list, explaining misleading emptiness rather than bad W/D/H
+  math. [Keep](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/App.tsx#L3454)
+  creates one Annotation with one entity-anchor reference for dimensions;
+  [saved resolution](https://github.com/mtugur/AtrVisu/blob/17763309b532813a7e004d608992073a97c08bb0/src/measure/measureReferences.ts#L145)
+  re-reads canonical dimensions. Preserve those identities, normalizer,
+  serialization and annotation history cloning, not a panel-owned result store.
+
+### Single user-journey / design card
+
+| User task | Required observable experience | Proof in future Stage B |
+| --- | --- | --- |
+| Select a real 3D reference while viewing Z+ | Hover a named entity, approach an offered top corner, inspect entity/anchor ID and XYZ before clicking. A stays identified while B previews. Read separately labelled 3D Distance, Plan Distance and Delta Z. | Two different-height entities with independently known world A/B and differing 3D/Plan lengths; PNG plus full-precision operand/result JSON. |
+| Reach the corner already offered | Follow a continuous face-to-corner path, including silhouette/overlap, without the visible target being replaced by a raw pick miss/adjacent body. Lock/cycle operate on the same eligible pool. | Path samples record offered IDs, active context, visibility, highlight and confirmed ID; no final-point teleport substituted for the path. |
+| Check several selected objects' sizes | Select one or more Machine/Civil objects before opening Measure; choose Selected Entity Dimensions; inspect named local W/D/H groups and activate one graphic group. Use explicit Pair Reference only for reference distance. | Entry selection/primary/order recorded before activation; one/two/mixed fixtures, unavailable reasons and no Runtime Selection mutation. |
+| Keep a useful reference, then review another view | Keep the named result; orbit top/plan/oblique, switch Inspector/Measure, resize, save/reload. Association and meaning stay unchanged. | A/B/reference identity and exact values before/after, one Undo per Keep, no transient history/dirty change, stable canvas/lifecycle and no console errors. |
+
+Sections 4.4, 4.7 and 6.2.1 are the normative deltas; all other C03 authorities
+remain. No C04/C05/C07/C09, camera/navigation redesign, alternate coordinate
+model, clearance solver or new save schema. Existing T01/T02/T06 must still pass.
+Future task acceptance and evidence are specified in the existing V2 gate.
+Stage A Contract Verified is PENDING independent review; PR #133 task-level
+Contract Verified is REOPENED and Product Accepted is FAIL. A green repository
+gate cannot change either result. No Stage B or manual re-acceptance request
+until independent governance review and explicit implementation authorization.

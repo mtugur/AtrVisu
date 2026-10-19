@@ -240,3 +240,38 @@ Independent Stage A review `6191963586` requested these coordinate-mapping and
 explicit-confirmation clarifications. They preserve the original canonical
 placement authority and approved product decisions; no runtime change or new
 coordinate model is authorized. Delta runtime reproduction remains NOT EXECUTED.
+
+## Renewed task-level Stage A decision - PR #133 manual acceptance
+
+Authority: [independent review / product decisions 6267144838](https://github.com/mtugur/AtrVisu/pull/133#issuecomment-6267144838),
+read-only runtime baseline `17763309b532813a7e004d608992073a97c08bb0`,
+governance base main `55e9e58d4761c765c16c834e3b0a322e5dc67bd6`.
+The owner/green-CI disagreement reopens task-level Contract Verification;
+Product Accepted is FAIL. Do not spend another correction round on PR #133.
+
+Decisions before any new runtime work:
+
+1. Make real 3D reference identity/XYZ reviewable before confirmation, including
+   unlocked preview. Keep 3D/Plan/Delta Z explicit across Z+, orbit and saved
+   references. Do not infer bad math from a sloping projected line or flatten it.
+2. Candidate display implies continuous pointer reachability. V2 section 6.2.1
+   defines active-context ownership, visible-set reuse and deterministic body
+   handoff. This replaces per-frame raw-hit-only context, not visibility rules,
+   semantic coordinates, marker radius or the 4 CSS px press classifier.
+3. Replace the inherited exactly-one dimensions restriction with per-entity
+   named local W/D/H groups for eligible entry-selected identities. One active
+   visual group and one explicitly named active-entity Keep use the existing
+   Annotation reference/history model. No aggregate bounds, automatic clearance,
+   bulk-save schema, duplicate selection state or selection mutation.
+
+The previous VC-MEASURE-01 / NW-MEASURE-01 / NW-SNAP-01 records support task-pane
+preview, coordinate/distance inspection and observable snap feedback. They do
+not prescribe AtrVisu's pool lifetime, per-entity result cards or save policy;
+those are bounded AtrVisu adaptations, explicitly traceable in the existing
+benchmark review. Existing invisible-lock safeguards, T01/T02/T06, chrome
+isolation and header/Inspector Auto/Pinned remain mandatory.
+
+The single user-journey design card and source findings are V2 section 21;
+new task oracles are in the existing V2 gate. New Stage A independent review
+is PENDING. Repository CI is not future-runtime acceptance. No Stage B branch
+or implementation is authorized here; PR #129/#130/#133 remain untouched.

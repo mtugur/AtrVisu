@@ -106,3 +106,41 @@ The PR declaration must state **N/A for new delta; unchanged-main regression CI
 successful** for the prior completed run, never check a new-delta runtime console
 acceptance claim. New exact-head CI and any declaration-policy incompatibility
 are reported separately in PR Validation; runtime/CSS/tests stay unchanged.
+
+## Renewed Stage A task-design gate - PR #133 acceptance failure
+
+Authority: [review/product decisions 6267144838](https://github.com/mtugur/AtrVisu/pull/133#issuecomment-6267144838).
+Read-only source head: `17763309b532813a7e004d608992073a97c08bb0`.
+Governance base: main `55e9e58d4761c765c16c834e3b0a322e5dc67bd6`.
+Earlier sections record earlier packages, not acceptance of this delta.
+
+- [x] Read-only coordinate/calculation, candidate-loss and entry-selection findings linked to exact source in V2 section 21; unknown manual A/B data explicitly identified, not labelled a proven calculation defect.
+- [x] One complete user-journey card in V2 section 21; preview identity/height, continuous corner approach, per-entity dimensions and Keep/review task defined before code.
+- [x] Existing official VC/Navisworks facts rechecked and separated from AtrVisu adaptations in benchmark section 10.
+- [x] §15, V2 contract and ADR-009 agree on the bounded delta; inherited exactly-one restriction explicitly superseded without changing local dimension math.
+- [x] Canonical Entity/Runtime Selection/coordinates/Annotation/Level/history preserved; no bulk-save/schema or unrelated feature work.
+- [ ] Independent review accepts this exact Stage A design delta.
+- [ ] A separate bounded Stage B implementation package is explicitly authorized.
+
+Stage A Automation Green: exact-head repository Quality Gate result belongs in
+the new governance PR Validation section. Runtime evidence: N/A - governance-only
+/ not executed. Stage A Contract Verified: PENDING independent review.
+Stage A Product Accepted: N/A. PR #133 task-level Contract Verified: REOPENED;
+Product Accepted: FAIL. PR #129/#130/#133 remain unchanged Draft baselines.
+Do not solicit another owner exploratory test or infer acceptance from CI.
+
+### Task acceptance matrix (future Stage B, NOT EXECUTED here)
+
+| Task / mapping | User route and independent oracle | Required evidence |
+| --- | --- | --- |
+| A - real 3D references (M21/M24/M26/M27) | Start with two differently elevated/height Machine/Civil fixtures with independently calculable canonical top/bottom anchors. In Z+ hover and inspect A and B name/ID, anchor/source and XYZ before each confirmation. Compare signed B-A XYZ, 3D norm and Plan XY norm; use a fixture where Delta Z is nonzero. Switch top/plan/oblique and perspective/orthographic, Depth/Overlay, then Keep/save/hard reload. Same references/XYZ/values persist when only view changes; no flattening or anonymous bare length. Move/rotate/resize geometry separately and verify associative recomputation/history, not invariance to real geometry change. | Exact source SHA; entry fixture dimensions/transforms/Level; unrounded A/B entity+anchor IDs/XYZ and result tuple before preview, confirmation, orbit and reload; paired PNGs showing readable identities/3D/Plan/Delta Z. Do not substitute a sloping screenshot for an arithmetic oracle. |
+| B - offered-corner continuity (M21/M24/M25) | Real interpolated pointer paths from body to each of the four offered visible top corners, including silhouette and overlapping-neighbour fixtures. An intermediate mesh miss or adjacent body hit inside active context cannot erase/replace the still-visible offered target. Test intentional outside-context body handoff, pointer leave/reset release, nearest highlight, Tab cycle and Shift lock. Same draw/cycle/hit set; each visible target clicks exactly once. Occluded/chrome-covered/hidden-layer points remain unavailable; invisible deliberate locks retain only the explicit panel confirmation route. | Per-path samples with pointer CSS coordinates, active entity, offered stable IDs, screen/world positions, visibility reasons, highlighted/locked/confirmed IDs; PNG sequence and JSON. Test 4 CSS px press cancellation separately; no enlarged hit radius, timeout/grace/hysteresis tuning, final-position teleport or suppressed missed click. |
+| C - per-entity dimensions (M20/M26/M27/M29) | Select one, then two Machines before Measure activation; repeat with Civil and mixed eligible/unsupported entries. Record ordered Runtime Selection/primary at entry, choose Selected Entity Dimensions, inspect all named local W/D/H groups; primary eligible group initially active, otherwise first eligible entry. Activate each group: only its transient viewport graphics change. Verify canonical rotated dimensions, Floor Plan Depth/Thickness, unsupported/missing-data reasons and explicit zero-eligible guidance. Switching Kind/Restart does not reseed. Explicit Pair Reference still requires exactly two and labels reference distance, not clearance. | Before-entry selection/primary, grouped entity IDs/names/dimensions/reasons, active visual-group ID and unchanged Runtime Selection. Real panel/keyboard interaction and PNG/JSON, not fabricated panel-local selection. Two eligible objects cannot yield an unexplained empty result. |
+| D - explicit Keep and saved authority (M25-M27/M29) | From two result groups, Keep the named active entity only: exactly one existing associative dimensions Annotation and one Undo transaction. Activating another row creates no entity/history/dirty change. Undo/Redo and save/reload preserve the saved entity identity, style/visibility and full-precision authority. Change geometry, delete/orphan and reassociate through current routes; no world-point fallback or bulk save. Repeat distance and Plan Area T01/T02/T06 routes unchanged. | Annotation/reference identities and transaction/history/dirty counts before/after each operation, reload and geometry change; existing LevelPointRef behavior retained. PNG+JSON prove actual saved reference, not an independent numeric snapshot. |
+| E - integration invariants (M20/M28-M30; T04/T05) | Run tasks A-D at 1440x900, 1024x768 and 640x800 with Inspector Auto/Pinned, Measure switching and panel resize/collapse. Depth/Overlay remain below application chrome; shared header remains usable. Presentation-only actions retain entity transforms/dimensions, Level, selection/primary, history/dirty, camera and same canvas/scene lifecycle. Explicit navigation may change camera only, never confirmed A/B. | Before/after invariant snapshots; screenshots with controls and real offered points; matched pointer/focus/DOM conditions for chrome pixel tests. Unfiltered console/page errors and WebGL context/lifecycle observations. No test-only mutation, arbitrary sleeps or renderer bypass masquerading as normal product acceptance. |
+
+New task outcomes are PENDING runtime implementation/reviewer verification, not
+PASS from the existing T01-T06 matrix. Keep the earlier T01/T02/T06 protection
+and T04/T05 oracles alongside this matrix. Exact-head PNG/JSON and realistic
+user routes precede independent Contract Verification; only then may final
+Product Owner acceptance be requested. No Stage B work is part of this PR.
