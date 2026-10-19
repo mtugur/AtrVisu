@@ -89,6 +89,30 @@ for (const name of names) {
   if (name.startsWith("stage-b-t04")) {
     assert.equal(data.changedChromePixels, 0);
     assert.equal(data.changedLiveChromePixels, 0);
+    assert.deepEqual(data.positiveControl.shownChrome, data.positiveControl.hiddenChrome);
+    assert.ok(data.positiveControl.comparison.changedPixels > 0, "A visible saved label must actually change pixels");
+    assert.deepEqual(data.hoverControl.graphicsBefore, data.hoverControl.graphicsAfter);
+    assert.deepEqual(data.hoverControl.runtimeBefore, data.hoverControl.runtimeAfter);
+    assert.ok(data.hoverControl.comparison.changedPixels > 0, "Hover-only negative control must reproduce header repaint");
+    const tab = data.hoverControl.hoverChrome.controls.find(control => control.name === "Measure");
+    assert.equal(tab.hover, true);
+    const changed = data.hoverControl.comparison.bounds;
+    assert.ok(changed.x >= tab.box.x && changed.y >= tab.box.y
+      && changed.x + changed.width <= tab.box.x + tab.box.width && changed.y + changed.height <= tab.box.y + tab.box.height);
+    assert.equal(data.mismatchedComparison.changedPixels, data.hoverControl.comparison.changedPixels);
+    assert.deepEqual(data.mismatchedComparison.bounds, changed);
+    for (const control of [data.matchedControl, data.liveControl]) {
+      assert.deepEqual(control.shownChrome, control.hiddenChrome, "Pointer/focus/DOM/scroll/geometry must match");
+      assert.equal(control.shownChrome.activeAnimations, 0);
+      assert.equal(control.shownChrome.focused.tag, "CANVAS");
+      assert.ok(control.shownChrome.controls.every(element => !element.hover));
+      assert.equal(control.comparison.changedPixels, 0);
+      assert.equal(control.comparison.bounds, null);
+    }
+    for (const comparison of [data.positiveControl.comparison, data.hoverControl.comparison, data.mismatchedComparison, data.matchedControl.comparison, data.liveControl.comparison]) {
+      for (const png of [comparison.shownPngBase64, comparison.hiddenPngBase64])
+        assert.deepEqual([...Buffer.from(png, "base64").subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    }
     assert.equal(data.isolation, "isolate");
     assert.equal(data.rendered.displayMode, data.mode);
     assert.deepEqual(data.liveState.camera, data.after.camera);

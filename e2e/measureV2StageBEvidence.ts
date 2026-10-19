@@ -53,13 +53,53 @@ const expectHeader = async (page: Page) => {
   }
   return observed;
 };
-const pixelDifference = (page: Page, shown: string, hidden: string, rectangle: { x: number; y: number; width: number; height: number }) =>
+const pixelComparison = (page: Page, shown: string, hidden: string, rectangle: { x: number; y: number; width: number; height: number }) =>
   page.evaluate(async ({ shown, hidden, rectangle }) => {
-    const read = async (png: string) => { const image = new Image(); image.src = `data:image/png;base64,${png}`; await image.decode(); const c = document.createElement("canvas"); c.width = image.width; c.height = image.height; const ctx = c.getContext("2d")!; ctx.drawImage(image, 0, 0); return ctx.getImageData(Math.ceil(rectangle.x + 2), Math.ceil(rectangle.y + 2), Math.floor(rectangle.width - 4), Math.floor(rectangle.height - 4)).data; };
-    const a = await read(shown), b = await read(hidden); let changed = 0;
-    for (let i = 0; i < a.length; i += 4) if (Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2])) > 3) changed++;
-    return changed;
+    const crop = { x: Math.ceil(rectangle.x + 2), y: Math.ceil(rectangle.y + 2), width: Math.floor(rectangle.width - 4), height: Math.floor(rectangle.height - 4) };
+    const read = async (png: string) => {
+      const image = new Image(); image.src = `data:image/png;base64,${png}`; await image.decode();
+      const c = document.createElement("canvas"); c.width = crop.width; c.height = crop.height;
+      const ctx = c.getContext("2d")!; ctx.drawImage(image, -crop.x, -crop.y);
+      return { pixels: ctx.getImageData(0, 0, c.width, c.height).data, png: c.toDataURL("image/png").split(",")[1] };
+    };
+    const a = await read(shown), b = await read(hidden);
+    let changedPixels = 0, left = crop.width, top = crop.height, right = -1, bottom = -1;
+    for (let i = 0; i < a.pixels.length; i += 4) if (Math.max(Math.abs(a.pixels[i] - b.pixels[i]), Math.abs(a.pixels[i + 1] - b.pixels[i + 1]), Math.abs(a.pixels[i + 2] - b.pixels[i + 2])) > 3) {
+      changedPixels++; const x = (i / 4) % crop.width, y = Math.floor(i / 4 / crop.width);
+      left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x); bottom = Math.max(bottom, y);
+    }
+    return { changedPixels, bounds: changedPixels ? { x: crop.x + left, y: crop.y + top, width: right - left + 1, height: bottom - top + 1 } : null,
+      crop, shownPngBase64: a.png, hiddenPngBase64: b.png };
   }, { shown, hidden, rectangle });
+const chromeState = (page: Page, target: { x: number; y: number }) => page.locator(".workbench-inspector-header").evaluate((header, target) => {
+  const elementState = (element: Element | null) => {
+    if (!element) return null;
+    const b = element.getBoundingClientRect(), css = getComputedStyle(element);
+    return { tag: element.tagName, name: element.getAttribute("aria-label") ?? element.textContent?.trim(), classes: element.className,
+      box: { x: b.x, y: b.y, width: b.width, height: b.height }, hover: element.matches(":hover"), focus: element === document.activeElement,
+      background: css.backgroundColor, color: css.color, outline: css.outline };
+  };
+  return { header: elementState(header), controls: [...header.querySelectorAll("button,.workbench-inspector-mode")].map(elementState),
+    targetHit: elementState(document.elementFromPoint(target.x, target.y)), focused: elementState(document.activeElement),
+    scroll: { x: scrollX, y: scrollY, containers: [...document.querySelectorAll('[data-testid="right-panel"],.measure-panel')].map(element => ({ top: element.scrollTop, left: element.scrollLeft })) },
+    html: header.innerHTML, activeAnimations: header.getAnimations({ subtree: true }).filter(animation => animation.playState === "running").length };
+}, target);
+const neutralChromeCapture = async (page: Page, target: { x: number; y: number }) => {
+  await canvas(page).focus(); await page.mouse.move(1, 1);
+  // Checkbox activation scrolls its dock into view; compare the same scroll pose.
+  await page.locator('[data-testid="right-panel"],.measure-panel').evaluateAll(elements => {
+    for (const element of elements) { element.scrollTop = 0; element.scrollLeft = 0; }
+  });
+  await page.locator(".workbench-inspector-header").evaluate(async header => {
+    await Promise.all(header.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => undefined)));
+  });
+  await frame(page);
+  const state = await chromeState(page, target);
+  expect(state.activeAnimations).toBe(0);
+  const png = await page.screenshot({ animations: "disabled", scale: "css" });
+  expect(await chromeState(page, target)).toEqual(state);
+  return { state, png };
+};
 
 export const registerMeasureV2StageBTests = (helpers: Helpers) => {
   for (const [width, height] of [[1440, 900], [1024, 768], [640, 800]]) {
@@ -103,15 +143,50 @@ export const registerMeasureV2StageBTests = (helpers: Helpers) => {
       const before = await snapshot(page), rendered = (await graphics(page))[0], bounds = (await canvas(page).boundingBox())!;
       const header = (await page.locator(".workbench-inspector-header").boundingBox())!;
       const target = { x: header.x + header.width / 2, y: header.y + header.height / 2 };
+      // Positive control: a real saved label must change visible viewport pixels,
+      // not just disappear from diagnostics or from a completely covered region.
+      const labelRectangle = { x: bounds.x + rendered.labelPosition.x - rendered.labelWidthPx / 2,
+        y: bounds.y + rendered.labelPosition.y - rendered.labelHeightPx / 2, width: rendered.labelWidthPx, height: rendered.labelHeightPx };
+      const panel = (await page.getByTestId("right-panel").boundingBox())!;
+      expect(labelRectangle.x + labelRectangle.width <= panel.x || panel.x + panel.width <= labelRectangle.x
+        || labelRectangle.y + labelRectangle.height <= panel.y || panel.y + panel.height <= labelRectangle.y).toBe(true);
+      const positiveShown = await neutralChromeCapture(page, target);
+      await editor.getByLabel("Show dimension", { exact: true }).uncheck();
+      await expect.poll(async () => (await graphics(page)).length).toBe(0);
+      const positiveHidden = await neutralChromeCapture(page, target);
+      expect(positiveHidden.state).toEqual(positiveShown.state);
+      const positiveComparison = await pixelComparison(page, positiveShown.png.toString("base64"), positiveHidden.png.toString("base64"), labelRectangle);
+      expect(positiveComparison.changedPixels).toBeGreaterThan(0);
+      await editor.getByLabel("Show dimension", { exact: true }).check();
+      await expect.poll(async () => (await graphics(page)).length).toBe(1);
       await page.mouse.move(bounds.x + rendered.labelPosition.x, bounds.y + rendered.labelPosition.y);
       await page.mouse.down(); await page.mouse.move(target.x, target.y, { steps: 8 }); await page.mouse.up();
       await expect.poll(async () => (await graphics(page))[0]?.labelPosition.x).toBeCloseTo(target.x - bounds.x, 0);
       const savedUnderHeader = (await graphics(page))[0];
-      const shown = (await page.screenshot()).toString("base64");
+      const stableGraphics = await graphics(page), stableSnapshot = await snapshot(page);
+      const neutralShown = await neutralChromeCapture(page, target);
+      await page.getByTestId("right-panel").getByRole("button", { name: "Measure", exact: true }).hover(); await frame(page);
+      const hoverState = await chromeState(page, target), hoverPng = (await page.screenshot({ animations: "disabled", scale: "css" })).toString("base64");
+      const hoverControl = await pixelComparison(page, hoverPng, neutralShown.png.toString("base64"), header);
+      expect(hoverControl.changedPixels).toBeGreaterThan(0);
+      const measureTab = hoverState.controls.find(control => control?.name === "Measure")!;
+      expect(measureTab.hover).toBe(true);
+      expect(hoverControl.bounds!.x).toBeGreaterThanOrEqual(measureTab.box.x);
+      expect(hoverControl.bounds!.y).toBeGreaterThanOrEqual(measureTab.box.y);
+      expect(hoverControl.bounds!.x + hoverControl.bounds!.width).toBeLessThanOrEqual(measureTab.box.x + measureTab.box.width);
+      expect(hoverControl.bounds!.y + hoverControl.bounds!.height).toBeLessThanOrEqual(measureTab.box.y + measureTab.box.height);
+      expect(await graphics(page)).toEqual(stableGraphics); expect(await snapshot(page)).toEqual(stableSnapshot);
+      const afterHoverGraphics = await graphics(page), afterHoverSnapshot = await snapshot(page);
       await editor.getByLabel("Show dimension", { exact: true }).uncheck();
       await expect.poll(async () => (await graphics(page)).length).toBe(0);
-      const hidden = (await page.screenshot()).toString("base64");
-      const changedChromePixels = await pixelDifference(page, shown, hidden, header);
+      const mismatchedHidden = (await page.screenshot({ animations: "disabled", scale: "css" })).toString("base64");
+      const mismatchedComparison = await pixelComparison(page, hoverPng, mismatchedHidden, header);
+      expect(mismatchedComparison.changedPixels).toBe(hoverControl.changedPixels);
+      expect(mismatchedComparison.bounds).toEqual(hoverControl.bounds);
+      const neutralHidden = await neutralChromeCapture(page, target);
+      expect(neutralHidden.state).toEqual(neutralShown.state);
+      const matchedComparison = await pixelComparison(page, neutralShown.png.toString("base64"), neutralHidden.png.toString("base64"), header);
+      const changedChromePixels = matchedComparison.changedPixels;
       expect(changedChromePixels).toBe(0);
       await page.getByRole("button", { name: "Navigate", exact: true }).click();
       const firstPoint = await page.locator(".measure-graphics polyline").first().evaluate(element => {
@@ -123,10 +198,12 @@ export const registerMeasureV2StageBTests = (helpers: Helpers) => {
       });
       expect(livePolyline.x).toBeGreaterThan(header.x); expect(livePolyline.x).toBeLessThan(header.x + header.width);
       expect(livePolyline.y).toBeGreaterThan(header.y); expect(livePolyline.y).toBeLessThan(header.y + header.height);
-      const liveState = await snapshot(page), liveSession = await session(page), livePng = await page.screenshot();
+      const liveState = await snapshot(page), liveSession = await session(page), liveCapture = await neutralChromeCapture(page, target), livePng = liveCapture.png;
       await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
-      const withoutLive = (await page.screenshot()).toString("base64");
-      const changedLiveChromePixels = await pixelDifference(page, livePng.toString("base64"), withoutLive, header);
+      const withoutLive = await neutralChromeCapture(page, target);
+      expect(withoutLive.state).toEqual(liveCapture.state);
+      const liveComparison = await pixelComparison(page, livePng.toString("base64"), withoutLive.png.toString("base64"), header);
+      const changedLiveChromePixels = liveComparison.changedPixels;
       expect(changedLiveChromePixels).toBe(0);
       expect((await snapshot(page)).camera).toEqual(liveState.camera);
       expect((await snapshot(page)).invariants).toEqual(liveState.invariants);
@@ -139,7 +216,11 @@ export const registerMeasureV2StageBTests = (helpers: Helpers) => {
       const after = await snapshot(page);
       expect(after.invariants.selectionIds).toEqual(before.invariants.selectionIds);
       expect(errors).toEqual([]);
-      await evidence(page, `stage-b-t04-${mode}-${width}`, errors, { mode, target, header, canvasBounds: bounds, savedUnderHeader, rendered: (await graphics(page))[0], changedChromePixels, changedLiveChromePixels, livePolyline, liveState, liveSession, isolation, before, after }, livePng);
+      await evidence(page, `stage-b-t04-${mode}-${width}`, errors, { mode, target, header, canvasBounds: bounds, savedUnderHeader, rendered: (await graphics(page))[0], changedChromePixels, changedLiveChromePixels, livePolyline, liveState, liveSession, isolation, before, after,
+        positiveControl: { labelRectangle, shownChrome: positiveShown.state, hiddenChrome: positiveHidden.state, comparison: positiveComparison },
+        hoverControl: { neutralChrome: neutralShown.state, hoverChrome: hoverState, comparison: hoverControl, graphicsBefore: stableGraphics, graphicsAfter: afterHoverGraphics, runtimeBefore: stableSnapshot, runtimeAfter: afterHoverSnapshot },
+        mismatchedComparison, matchedControl: { shownChrome: neutralShown.state, hiddenChrome: neutralHidden.state, comparison: matchedComparison },
+        liveControl: { shownChrome: liveCapture.state, hiddenChrome: withoutLive.state, comparison: liveComparison } }, livePng);
     });
   }
   for (const reason of ["Not in viewport", "Covered by chrome", "Scene-occluded"]) for (const activation of ["pointer", "keyboard"]) {

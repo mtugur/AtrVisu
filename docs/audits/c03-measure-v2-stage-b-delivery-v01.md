@@ -122,3 +122,51 @@ Only explicit new-branch C03 evidence validation/upload is added to the workflow
 
 PR #129/#130 remain unchanged Draft baselines. No C04/C05/C07/C09 work,
 normative contract edits or manual acceptance request belongs to this package.
+
+## Consolidated T04 correction - review 6261495259
+
+The original exact-head run 38908193890 remains auditable: 236 Chromium PASS,
+4 T04 FAIL, 1 branch-scoped skip. Each wide-screen failure compared a header
+with the pointer over a tab against a header after checkbox activation moved
+the pointer/focus into the dock. The incomplete 61-pair CI artifact is not
+accepted as complete evidence.
+
+Controlled local experiment, before correcting the comparison:
+
+- Keep the saved dimension, references, position and runtime snapshot unchanged.
+  Focus stays on the canvas. Only hover the Measure tab versus a neutral pointer.
+- This produces 2262 changed pixels in the Windows renderer, exactly the same
+  count and rectangle as the deliberately mismatched shown/hidden comparison:
+  x=1182, y=122, width=74, height=32, entirely within the Measure tab.
+- The tab background alone changes from transparent to
+  rgba(168, 201, 120, 0.16). No saved-dimension state change is needed. The old
+  Linux CI count was 2588; the new exact-head JSON records the actual count and
+  bounds in that environment rather than hardcoding a platform's font metrics.
+- Two initial normal workstation attempts lost/restored WebGL context before
+  reaching this experiment. Focused diagnosis used an external, uncommitted
+  software-renderer configuration; collectors were not filtered or suppressed.
+  Repository Playwright configuration and normal CI remain unchanged.
+
+The correction changes only test controls, evidence validation and this audit:
+
+- Compare saved shown/hidden with the same neutral pointer, canvas focus,
+  header DOM/geometry, dock scroll pose and settled animations. Checkbox actions
+  can scroll the dock; normalize that presentation-only scroll before capture.
+- Retain the exact original RGB-difference rule and zero changed-header-pixel
+  assertions. Capture a positive control outside application chrome proving the
+  saved label really changes pixels when shown/hidden; reject a blank-frame or
+  always-zero oracle.
+- Retain a no-dimension-change hover control and reproduce the mismatched
+  comparison in every width/mode fixture. Require identical counts/bounds and
+  localization to the actual Measure tab. Matched saved/live comparisons require
+  identical chrome state and zero changed pixels in Depth and Overlay at all
+  three sizes.
+- Existing T04 JSON pairs include exact hovered/focused/hit elements, computed
+  styles, rectangles, scroll/DOM state, difference counts/bounds and PNG crops
+  for each control. The artifact manifest stays 65 PNG + 65 JSON plus the
+  validator-derived acceptance matrix; no old evidence is silently dropped.
+
+No runtime, CSS, normative contract, authority or workflow change is made in
+this correction. T01/T02/T03/T05/T06 remain regression requirements. Final
+exact-head gate/artifact results are recorded in PR #133 Validation, separately
+from pending independent Contract Verification and unrequested Product Acceptance.
