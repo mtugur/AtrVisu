@@ -170,3 +170,12 @@ No runtime, CSS, normative contract, authority or workflow change is made in
 this correction. T01/T02/T03/T05/T06 remain regression requirements. Final
 exact-head gate/artifact results are recorded in PR #133 Validation, separately
 from pending independent Contract Verification and unrequested Product Acceptance.
+
+Correction run 39216113957 exposed a defect in the added hover-control bounds
+assertion: Linux's fractional tab edge x=1193.390625 paints the integer pixel
+cell x=1193. The test compared these different coordinate domains directly and
+failed before its matched-state oracle. The hover-only localization check now
+uses the exact raster coverage of the CSS rectangle (floor minima, ceil maxima)
+in both E2E and validator. This is pixel-cell coverage, not a new noise budget
+or a changed Measure/chrome criterion; saved/live changed-pixel counts still
+must equal zero. That failed run remains auditable. No runtime change follows.

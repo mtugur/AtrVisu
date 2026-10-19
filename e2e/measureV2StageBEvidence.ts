@@ -171,10 +171,11 @@ export const registerMeasureV2StageBTests = (helpers: Helpers) => {
       expect(hoverControl.changedPixels).toBeGreaterThan(0);
       const measureTab = hoverState.controls.find(control => control?.name === "Measure")!;
       expect(measureTab.hover).toBe(true);
-      expect(hoverControl.bounds!.x).toBeGreaterThanOrEqual(measureTab.box.x);
-      expect(hoverControl.bounds!.y).toBeGreaterThanOrEqual(measureTab.box.y);
-      expect(hoverControl.bounds!.x + hoverControl.bounds!.width).toBeLessThanOrEqual(measureTab.box.x + measureTab.box.width);
-      expect(hoverControl.bounds!.y + hoverControl.bounds!.height).toBeLessThanOrEqual(measureTab.box.y + measureTab.box.height);
+      // A fractional CSS edge paints the intersecting integer pixel cell.
+      expect(hoverControl.bounds!.x).toBeGreaterThanOrEqual(Math.floor(measureTab.box.x));
+      expect(hoverControl.bounds!.y).toBeGreaterThanOrEqual(Math.floor(measureTab.box.y));
+      expect(hoverControl.bounds!.x + hoverControl.bounds!.width).toBeLessThanOrEqual(Math.ceil(measureTab.box.x + measureTab.box.width));
+      expect(hoverControl.bounds!.y + hoverControl.bounds!.height).toBeLessThanOrEqual(Math.ceil(measureTab.box.y + measureTab.box.height));
       expect(await graphics(page)).toEqual(stableGraphics); expect(await snapshot(page)).toEqual(stableSnapshot);
       const afterHoverGraphics = await graphics(page), afterHoverSnapshot = await snapshot(page);
       await editor.getByLabel("Show dimension", { exact: true }).uncheck();

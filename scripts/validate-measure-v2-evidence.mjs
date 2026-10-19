@@ -97,8 +97,8 @@ for (const name of names) {
     const tab = data.hoverControl.hoverChrome.controls.find(control => control.name === "Measure");
     assert.equal(tab.hover, true);
     const changed = data.hoverControl.comparison.bounds;
-    assert.ok(changed.x >= tab.box.x && changed.y >= tab.box.y
-      && changed.x + changed.width <= tab.box.x + tab.box.width && changed.y + changed.height <= tab.box.y + tab.box.height);
+    assert.ok(changed.x >= Math.floor(tab.box.x) && changed.y >= Math.floor(tab.box.y)
+      && changed.x + changed.width <= Math.ceil(tab.box.x + tab.box.width) && changed.y + changed.height <= Math.ceil(tab.box.y + tab.box.height));
     assert.equal(data.mismatchedComparison.changedPixels, data.hoverControl.comparison.changedPixels);
     assert.deepEqual(data.mismatchedComparison.bounds, changed);
     for (const control of [data.matchedControl, data.liveControl]) {
