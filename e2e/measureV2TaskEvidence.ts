@@ -20,14 +20,15 @@ export const taskHoverBody = async (page: Page, id?: string) => {
   await expect.poll(async () => (await taskSession(page)).candidateObservations?.length ?? 0).toBeGreaterThan(0);
   return { x: box.x + point.x, y: box.y + point.y };
 };
-const baselineEvidence = async (page: Page, name: string, errors: string[], observations: Record<string, unknown>) => {
+const baselineEvidence = async (page: Page, name: string, errors: string[], observations: Record<string, unknown>, png?: Uint8Array) => {
   const dir = join(process.cwd(), "test-results/c03-measure-v2-task/baseline"); await mkdir(dir, { recursive: true });
-  await page.screenshot({ path: join(dir, `${name}.png`) });
+  if (png) await writeFile(join(dir, `${name}.png`), png);
+  else await page.screenshot({ path: join(dir, `${name}.png`) });
   await writeFile(join(dir, `${name}.json`), JSON.stringify({
     servedHead: process.env.ATRVISU_E2E_EXPECTED_SOURCE_HEAD,
     deliveryHead: process.env.ATRVISU_C03_DELIVERY_HEAD ?? null,
     historicalSource: "17763309b532813a7e004d608992073a97c08bb0",
-    classification: "Historical owner-task failure reproduced; not a passing product task",
+    classification: observations.taskResult === "FAIL" ? "Historical owner-task failure reproduced; not a passing product task" : "Owner-task failure not reproduced",
     errors, runtime: await snapshot(page), session: await taskSession(page), ...observations
   }, null, 2));
 };
@@ -65,12 +66,28 @@ export const registerMeasureV2TaskTests = (helpers: Helpers) => {
   test("C03 renewed baseline B continuous approach loses an offered visible corner", async ({ page }) => {
     test.setTimeout(90_000);
     const errors = await start(page, helpers, 1440, true);
+    const machine = (await taskSession(page)).entityCatalog.find(e => e.type === "machine")!;
+    const size = (key: string) => machine.properties.find(p => p.key === key)!.value as number;
+    await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
+    await page.getByTestId("primary-dock-tab-panel.machineLibrary").click();
+    await page.getByRole("searchbox", { name: "Search assets", exact: true }).fill("");
+    const structure = page.getByTestId("build-group-structure").getByRole("button", { name: "Structure", exact: true });
+    if (await structure.getAttribute("aria-expanded") !== "true") await structure.click();
+    await page.getByTestId("asset-card-build::column").getByRole("button", { name: "Add Column to layout", exact: true }).click();
+    await page.getByTestId("right-panel").getByRole("button", { name: "Inspector", exact: true }).click();
+    for (const [label, value] of [["Civil Plan X", machine.transform.planX + size("widthMm") / 4 - 200],
+      ["Civil Plan Y", machine.transform.planY + size("depthMm") / 4 - 200], ["Civil Elevation above Level", 1800]] as const) {
+      const input = page.getByRole("textbox", { name: label, exact: true }); await input.fill(String(value)); await input.press("Tab");
+    }
+    await taskOpenMeasure(page);
     await page.getByLabel("Measurement point source").selectOption("geometry");
     await command(page, "view.fitView").click();
+    await page.getByTestId("viewcube").getByRole("button", { name: "Top view (+Z)", exact: true }).click();
     const body = await taskHoverBody(page), initial = await taskSession(page), box = (await canvas(page).boundingBox())!;
     const corners = initial.candidateObservations.filter(p => p.visible && p.anchorKind.endsWith("-top"));
     expect(corners).toHaveLength(4);
     const paths: { target: typeof corners[number]; samples: { x: number; y: number; offered: string[]; hover: TaskPoint | null }[] }[] = [];
+    let firstDrop: { png: Uint8Array; session: TaskSession; x: number; y: number } | undefined;
     for (const target of corners) {
       await taskHoverBody(page);
       const samples = [];
@@ -79,11 +96,14 @@ export const registerMeasureV2TaskTests = (helpers: Helpers) => {
         await page.mouse.move(x, y); await taskFrame(page);
         const state = await taskSession(page);
         samples.push({ x, y, offered: state.candidateObservations.filter(p => p.visible).map(p => `${p.entityId}/${p.anchorKind}`), hover: state.hover });
+        if (!firstDrop && !samples[samples.length - 1].offered.includes(`${target.entityId}/${target.anchorKind}`))
+          firstDrop = { png: await page.screenshot(), session: state, x, y };
       }
       paths.push({ target, samples });
     }
     const drops = paths.flatMap(path => path.samples.filter(sample => !sample.offered.includes(`${path.target.entityId}/${path.target.anchorKind}`)));
-    await baselineEvidence(page, "B-candidate-approach", errors, { taskResult: drops.length ? "FAIL" : "NOT REPRODUCED", paths, drops: drops.length });
+    await baselineEvidence(page, "B-candidate-approach", errors, { taskResult: drops.length ? "FAIL" : "NOT REPRODUCED", paths, drops: drops.length,
+      initial, failurePointer: firstDrop ? { x: firstDrop.x, y: firstDrop.y } : null, session: firstDrop?.session ?? await taskSession(page) }, firstDrop?.png);
     expect(errors).toEqual([]); expect(drops.length).toBeGreaterThan(0);
   });
   test("C03 renewed baseline C two preselected machines yield no named local dimensions", async ({ page }) => {
