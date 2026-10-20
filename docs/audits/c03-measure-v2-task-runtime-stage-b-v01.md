@@ -117,3 +117,14 @@ visibility authority or measurement behavior.
 
 PR #129/#130/#133 remain untouched Draft baselines. #133 historical Product
 Accepted FAIL is not upgraded by these tests. This PR remains Draft/unmerged.
+
+## Delivery security blocker
+
+The 2026-10-21 delivery audit reports one high-severity Vite finding covering
+GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm. Approved main
+and the implementation checkpoint have the identical lockfile blob
+`481642f8e9480e73da826135957961b39237cdd9`, resolving Vite `8.0.16` and Vitest
+`4.1.11`. This finding was not introduced by the Measure port. No package change,
+audit exception or weakened CI policy is included. Automation Green remains
+FAIL until security remediation and a successful exact-head gate; passing local
+runtime evidence cannot substitute for that gate or its CI artifact.
