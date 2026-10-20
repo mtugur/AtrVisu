@@ -25,6 +25,7 @@ import { normalizeGroups } from "./groups";
 import { getLayerId, normalizeLayers } from "./layers";
 import { normalizeViewpoints } from "./viewpoints";
 import { getLevelId, normalizeLevels, GROUND_LEVEL_ID } from "./levels";
+import { cloneMeasureDimensionStyle, type MeasureDimensionStyle } from "../measure/referenceTypes";
 
 const DEFAULT_CLEARANCE = { front: 0, back: 0, left: 0, right: 0 };
 
@@ -37,7 +38,8 @@ export const createLayoutSnapshotFromMachines = (
   groups: ObjectGroup[] = [],
   civilReferences: CivilReferenceItem[] = [],
   levels: LayoutLevel[] = [],
-  activeLevelId = GROUND_LEVEL_ID
+  activeLevelId = GROUND_LEVEL_ID,
+  measureDimensionStyle?: MeasureDimensionStyle
 ): AtrVisuLayout => {
   const normalizedLayers = normalizeLayers(layers);
   const normalizedLevels = normalizeLevels(levels);
@@ -61,6 +63,7 @@ export const createLayoutSnapshotFromMachines = (
     civilReferences: normalizedCivilReferences,
     levels: normalizedLevels,
     activeLevelId: getLevelId(activeLevelId, normalizedLevels),
+    measureDimensionStyle: cloneMeasureDimensionStyle(measureDimensionStyle),
     objects: placedMachines.map((machine) => {
     const definition = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definition));
     const snapshot = normalizeMachineVisualModel(normalizeMachineDefinitionDimensions(machine.definitionSnapshot));
