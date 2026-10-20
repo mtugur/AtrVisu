@@ -318,6 +318,17 @@ AtrVisu adopts these patterns with bounded Phase-1 scope.
 - Distance, Angle, Plan Area/Perimeter, selected Machine/Civil dimensions and Entity Pair Reference remain the bounded calculation family.
 - Geometry and explicit Level Plane remain distinct point sources with no miss fallback.
 - Confirmed transient results remain visible until explicit Restart, kind/source reset or Exit.
+- Before A/B confirmation, expose entity name/ID, semantic anchor (or explicit
+  free/Level source) and world XYZ in mm for unlocked previews as well as locks.
+  Label 3D Distance, Plan Distance and signed Delta Z distinctly; Z+ never
+  flattens operands. Orbit/Depth/Overlay do not reinterpret confirmed references.
+- Entry Runtime Selection seeds one or more name-grouped local Machine/Civil
+  W/D/H results with one active transient visual group. Primary/order remain
+  canonical; row activation never changes Runtime Selection. Keep saves only
+  the named active entity as one associative Annotation/history transaction;
+  no implicit bulk save or aggregate bounds. Pair Reference remains explicit
+  and exactly two. Detailed eligibility/empty-state rules are V2 section 4.7,
+  superseding the inherited single-entity restriction, not dimension formulas.
 
 #### B. Reference Dimension
 - A completed measurement becomes persistent only through explicit **Keep / Save**.
@@ -333,6 +344,13 @@ AtrVisu adopts these patterns with bounded Phase-1 scope.
 - Each top corner is the corresponding existing bottom semantic corner with identical Plan X/Y and Z + canonical height. Preserve the existing coordinateReference front-left-bottom placement, rotation and corner mapping; the V2 offset table is illustrative, not a second transform convention.
 - Hover exposes relevant candidates; nearest candidate is highlighted; a deliberate modifier may lock a candidate.
 - Normal discovery/highlight/cycling offers only visible, resolvable candidates in the open viewport, not occluded geometry or application chrome. Visible silhouette corners remain accessible without raw-mesh topology authority or a required interior hit at the exact marker center.
+- An offered visible corner remains reachable during continuous body-to-corner
+  approach. A transient active entity pool survives raw mesh misses inside its
+  projected canonical envelope/visible marker regions. Marker hits precede
+  underlying bodies; different-body handoff occurs outside that context.
+  Visibility remains live, with one stable draw/highlight/cycle/hit set. V2
+  section 6.2.1 freezes handoff/release, without timed hysteresis, new pick
+  tolerance or changes to the separate 4 CSS px confirmation classifier.
 - A locked anchor retains its identity when invisible; no through-geometry/chrome marker or silent substitute is allowed. The panel exposes its identity, resolved coordinates and visibility reason. Ordinary viewport clicks/generic completion keys cannot confirm an invisible lock; explicit accessible Confirm Locked Anchor uses the existing Measure authority. Deleted/unresolved references cannot be confirmed. Detailed rules are V2 contract sections 6.2.1-6.2.2.
 - Explicit confirmation is enabled exactly when the entity/reference resolves and the semantic identity is eligible, irrespective of offscreen/chrome/scene occlusion; only the named focused panel control invokes it. Visibility reasons use existing read-only projection, shell coverage and scene-occlusion observations (in that order), with truthful Not currently visible fallback when the precise category is unavailable. No new selection authority or camera threshold is introduced.
 - Persistent entity anchors are associative. Entity movement/rotation/canonical dimension changes recompute the dimension.
