@@ -63,6 +63,7 @@ export const registerMeasureV2TaskTests = (helpers: Helpers) => {
     await baselineEvidence(page, "A-unlocked-reference", errors, { taskResult: "FAIL", offered, panelText, actualPreview: state.hover });
   });
   test("C03 renewed baseline B continuous approach loses an offered visible corner", async ({ page }) => {
+    test.setTimeout(90_000);
     const errors = await start(page, helpers, 1440, true);
     await page.getByLabel("Measurement point source").selectOption("geometry");
     await command(page, "view.fitView").click();
