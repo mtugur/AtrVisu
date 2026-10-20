@@ -17,7 +17,7 @@ export const formatDimensionValue = (value: MeasureValue, style: MeasureDimensio
 export const dimensionLabelLines = (kind: MeasureDimensionKind, values: readonly MeasureValue[], style: MeasureDimensionStyle) => {
   const shown = kind === "area" ? values.filter(value => value.unit !== "m2")
     : kind === "distance" || kind === "pair" ? values.filter(value => value.label === "3D Distance") : values;
-  return shown.map(value => `${kind === "area" ? value.label + " " : kind === "angle" ? "Angle " : ""}${formatDimensionValue(value, style)}`);
+  return shown.map(value => `${kind === "area" || kind === "distance" || kind === "pair" ? value.label + " " : kind === "angle" ? "Angle " : ""}${formatDimensionValue(value, style)}`);
 };
 
 export type DimensionLabelBounds = { x: number; y: number; width: number; height: number };

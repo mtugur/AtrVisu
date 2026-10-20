@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PlatformEntity } from "../platform/contracts";
 import { MeasureTool, type MeasureToolProps } from "../components/measure/MeasureTool";
-import { createMeasureAuthority, getMeasureLines, getMeasureResult, isMeasureAction, measureSessionMatchesDimension, type MeasureContext } from "./measureAuthority";
+import { createMeasureAuthority, getMeasureDimensionGroups, getMeasureLines, getMeasureResult, isMeasureAction, measureSessionMatchesDimension, type MeasureContext } from "./measureAuthority";
 import { cloneMeasureDimensionStyle } from "./referenceTypes";
 
 const entity = (id: string, name: string, size: number[], planX = 0): PlatformEntity => ({
@@ -53,6 +53,27 @@ describe("Renewed C03 A - reviewable real-world references", () => {
 });
 
 describe("Renewed C03 C/D - entry-selected per-entity dimensions", () => {
+  it("retains single-entity and rotated Civil local dimensions rather than aggregate world bounds", () => {
+    const floor = { ...entity("civil:floor", "Floor Area", [12000, 7000, 350]), transform: { ...a.transform, elevation: -350, rotationDeg: 37 },
+      properties: [...entity("civil:floor", "Floor Area", [12000, 7000, 350]).properties, { key: "sourceSubtype", label: "Type", value: "floor-area", unit: "unknown" as const }] };
+    const authority = open({ ...context, selectionIds: [floor.id], primaryId: floor.id, entities: [floor] });
+    authority.dispatch({ type: "kind", kind: "dimensions" }, context);
+    expect(getMeasureResult(authority.getSnapshot()!).values.map(value => [value.label, value.value])).toEqual([["Local Width", 12000], ["Plan Depth", 7000], ["Floor Thickness", 350]]);
+    expect(getMeasureLines(authority.getSnapshot()!)).toHaveLength(3);
+    expect(markup(authority)).toContain("Floor Area");
+  });
+  it("names unsupported/missing entries and never silently substitutes a different active entity", () => {
+    const unsupported = { ...a, id: "annotation:text", name: "Text note", type: "annotation" as const };
+    const authority = open({ ...context, selectionIds: [a.id, unsupported.id, "civil:missing"], primaryId: unsupported.id, entities: [a, unsupported] });
+    authority.dispatch({ type: "kind", kind: "dimensions" }, context);
+    expect(authority.getSnapshot()!.activeDimensionEntityId).toBe(a.id);
+    expect(getMeasureDimensionGroups(authority.getSnapshot()!).map(group => [group.id, group.eligible])).toEqual([[a.id, true], [unsupported.id, false], ["civil:missing", false]]);
+    authority.updateEntities([]);
+    expect(authority.getSnapshot()!.activeDimensionEntityId).toBe(a.id);
+    expect(getMeasureResult(authority.getSnapshot()!).reason).toBeTruthy();
+    authority.dispatch({ type: "activeDimensionEntity", entityId: b.id }, context);
+    expect(authority.getSnapshot()!.activeDimensionEntityId).toBe(a.id);
+  });
   it("defaults to the eligible primary, not the first entry, without resnapshotting on Kind/Restart", () => {
     const authority = open();
     const other = { ...context, selectionIds: [a.id], primaryId: a.id };

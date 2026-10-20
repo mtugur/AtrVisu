@@ -3,10 +3,10 @@ import type { AnnotationObject } from "../../types/annotations";
 import type { LayoutLevel } from "../../types/levels";
 import type { PlatformEntity } from "../../platform/contracts";
 import type { MeasureAction, MeasureAuthority } from "../../measure/measureAuthority";
-import { getMeasureResult } from "../../measure/measureAuthority";
+import { getActiveMeasureDimensionGroup, getMeasureDimensionGroups, getMeasureResult } from "../../measure/measureAuthority";
 import { getDimensionResult, resolveDimensionReferences, resolveMeasureReference, MEASURE_ANCHOR_LABELS } from "../../measure/measureReferences";
 import { cloneMeasureDimensionStyle, type MeasureAnchorKind, type MeasureDimensionStyle, type MeasureReference } from "../../measure/referenceTypes";
-import { formatMeasureValue, type MeasureKind } from "../../measure/measureGeometry";
+import { formatMeasureValue, type MeasureKind, type MeasurePoint } from "../../measure/measureGeometry";
 import { WorkbenchActionButton } from "../workbench/WorkbenchActionButton";
 import { MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX } from "../../measure/measurePresentation";
 import { formatDimensionValue } from "../../measure/dimensionPresentation";
@@ -35,6 +35,21 @@ const referenceLabel = (reference: MeasureReference) => {
   return "World (" + reference.xMm.toFixed(0) + ", " + reference.yMm.toFixed(0) + ", " + reference.zMm.toFixed(0) + ")";
 };
 
+function PointReference({ point, index, confirmed, entities, saved = false }: { point: MeasurePoint; index: number; confirmed: boolean; entities: readonly PlatformEntity[]; saved?: boolean }) {
+  const name = entities.find(entity => entity.id === point.entityId)?.name;
+  const source = point.anchorKind ? `${MEASURE_ANCHOR_LABELS[point.anchorKind]} (${point.anchorKind})`
+    : point.levelId ? `Level ${point.levelId}` : "Free Geometry Hit";
+  return <section className="measure-point-reference" aria-label={`${saved ? "Saved " : ""}Reference ${String.fromCharCode(65 + index)} ${confirmed ? "confirmed" : "preview"}`}>
+    <strong>{String.fromCharCode(65 + index)} · {confirmed ? "Confirmed" : "Preview"}</strong>
+    {point.entityId ? <span>{name ?? "Unavailable entity"} <small>{point.entityId}</small></span> : null}
+    <span>{source}</span>
+    <dl>{(["X", "Y", "Z"] as const).map((axis, i) => {
+      const value = [point.xMm, point.yMm, point.zMm][i];
+      return <div key={axis}><dt>World {axis}</dt><dd><data value={value}>{value.toFixed(3)} mm</data></dd></div>;
+    })}</dl>
+  </section>;
+}
+
 function ReferenceEditor({ reference, index, entities, levels, onChange }: {
   reference: MeasureReference; index: number; entities: readonly PlatformEntity[]; levels: readonly LayoutLevel[];
   onChange: (reference: MeasureReference) => void;
@@ -42,7 +57,7 @@ function ReferenceEditor({ reference, index, entities, levels, onChange }: {
   const label = `Reference ${String.fromCharCode(65 + index)}`;
   const eligible = entities.filter(entity => entity.type === "machine" || entity.type === "civil");
   const point = resolveMeasureReference(reference, entities, levels);
-  return <div className="measure-reference-row">
+  return <div><div className="measure-reference-row">
     <span>{String.fromCharCode(65 + index)}</span>
     <select aria-label={`${label} type`} value={reference.type} onChange={event => {
       if (event.target.value === "entity-anchor" && eligible[0]) onChange({ type: "entity-anchor", entityId: eligible[0].id, anchor: "front-left-bottom" });
@@ -65,7 +80,7 @@ function ReferenceEditor({ reference, index, entities, levels, onChange }: {
       {!levels.some(level => level.id === reference.levelId) ? <option value={reference.levelId}>Unavailable: {reference.levelId}</option> : null}
       {levels.map(level => <option key={level.id} value={level.id}>{level.name}</option>)}
     </select> : <span className="measure-reference-readonly">{referenceLabel(reference)}</span>}
-  </div>;
+  </div>{point ? <PointReference point={{ ...point, ...(reference.type === "entity-anchor" ? { entityId: reference.entityId, anchorKind: reference.anchor } : {}) }} index={index} confirmed entities={entities} saved /> : null}</div>;
 }
 
 export function MeasureTool({ authority, onAction, annotations, entities, levels, onKeep, onRenameDimension, onSetDimensionVisibility, onSetAllDimensionVisibility, onDeleteDimension, onUpdateDimensionStyle, onUpdateDimensionReference }: MeasureToolProps) {
@@ -77,6 +92,7 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
   const selected = saved.find((annotation) => annotation.id === selectedDimensionId);
   const selectedDimension = selected?.dimension;
   const sessionResult = session ? getMeasureResult(session) : null;
+  const activeGroup = session ? getActiveMeasureDimensionGroup(session) : undefined;
   const canKeep = Boolean(session?.completed && sessionResult && !sessionResult.reason && sessionResult.values.length > 0);
   const resolved = selectedDimension ? resolveDimensionReferences(selectedDimension, entities, levels) : null;
   const selectedResult = selected ? getDimensionResult(selected, entities, levels) : null;
@@ -95,6 +111,8 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
         <div className="measure-panel-section-title"><strong>Measure Session</strong><span>{session ? (session.completed ? "Completed" : "Active") : "Inactive"}</span></div>
         {session ? (
           <>
+            <div className="measure-session-layout" data-kind={session.kind} data-source={session.source}>
+            <div className="measure-session-inputs">
             <div className="measure-panel-controls">
               <label>Kind<select aria-label="Measurement kind" value={session.kind} onChange={(event) => onAction({ type: "kind", kind: event.target.value as MeasureKind })}>
                 <option value="distance">Distance</option><option value="angle">Angle</option><option value="area">Plan Area / Perimeter</option><option value="dimensions">Selected Entity Dimensions</option><option value="pair">Entity Pair Reference</option>
@@ -103,8 +121,21 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
               <label>Reference<select aria-label="Measurement reference mode" value={session.snapMode} disabled={session.kind === "dimensions" || session.kind === "pair"} onChange={(event) => onAction({ type: "snapMode", snapMode: event.target.value as "semantic" | "free" })}><option value="semantic">Semantic Anchors</option><option value="free">Free Geometry Hit</option></select></label>
             </div>
             <div className="measure-segmented" role="group" aria-label="Measure input mode"><button type="button" aria-pressed={session.mode === "pick"} onClick={() => onAction({ type: "mode", mode: "pick" })}>Pick</button><button type="button" aria-pressed={session.mode === "navigate"} onClick={() => onAction({ type: "mode", mode: "navigate" })}>Navigate</button></div>
-            <div className="measure-panel-actions"><button type="button" onClick={() => onAction({ type: "restart" })}>Restart</button>{session.kind === "area" ? <button type="button" onClick={() => onAction({ type: "finish" })}>Finish</button> : null}<button type="button" className="measure-keep-button" disabled={!canKeep} onClick={onKeep}>Keep / Save</button></div>
+            <div className="measure-panel-actions"><button type="button" onClick={() => onAction({ type: "restart" })}>Restart</button>{session.kind === "area" ? <button type="button" onClick={() => onAction({ type: "finish" })}>Finish</button> : null}<button type="button" className="measure-keep-button" disabled={!canKeep} aria-describedby={session.kind === "dimensions" && activeGroup ? "measure-keep-active-entity" : undefined} onClick={onKeep}>Keep / Save</button>{session.kind === "dimensions" && activeGroup ? <span id="measure-keep-active-entity">Active: {activeGroup.name}</span> : null}</div>
             <div className="measure-session-summary"><span>{session.source === "level-plane" ? (session.level ? session.level.name + " | FFL " + session.level.elevationMm.toFixed(3) + " mm" : "Level Plane unavailable") : "Geometry / semantic surface reference"}</span>{session.hover?.anchorKind ? <span>Snap: {MEASURE_ANCHOR_LABELS[session.hover.anchorKind]}</span> : null}{session.reason ? <span>{session.reason}</span> : null}</div>
+            </div>
+            <div className="measure-session-readout">
+            {!["dimensions", "pair"].includes(session.kind) ? <div className="measure-point-references">
+              {session.points.map((point, index) => <PointReference key={index} point={point} index={index} confirmed entities={session.entityCatalog} />)}
+              {!session.completed && session.hover ? <PointReference point={session.hover} index={session.points.length} confirmed={false} entities={session.entityCatalog} /> : null}
+            </div> : null}
+            {session.kind === "dimensions" ? <div className="measure-entity-results" aria-label="Selected entity dimensions">
+              {getMeasureDimensionGroups(session).map(group => <section key={group.id} aria-label={`Dimensions ${group.name}`}>
+                <button type="button" aria-pressed={group.id === activeGroup?.id} disabled={!group.eligible} onClick={() => onAction({ type: "activeDimensionEntity", entityId: group.id })}>{group.name}</button>
+                <small>{group.id}</small>
+                {group.result.reason ? <p role="status">{group.result.reason}</p> : <dl className="measure-values">{group.result.values.map(value => <div key={value.label}><dt>{value.label}</dt><dd>{formatMeasureValue(value)}</dd></div>)}</dl>}
+              </section>)}
+            </div> : null}
             {session.lockedReference ? <section className="measure-locked-reference" aria-label="Locked Anchor">
               <strong>{lockedAnchor?.entityName ?? session.lockedReference.entityId}</strong>
               <span>{MEASURE_ANCHOR_LABELS[session.lockedReference.anchor] ?? session.lockedReference.anchor}</span>
@@ -112,7 +143,10 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
               <span role="status">{lockedAnchor?.reason ?? "Not currently visible"}</span>
               <button type="button" disabled={!lockedAnchor?.confirmable} onClick={() => onAction({ type: "confirmLockedAnchor" })}>Confirm Locked Anchor</button>
             </section> : null}
-            {sessionResult ? <dl className="measure-values">{sessionResult.values.map((value, index) => <div key={value.label + "-" + index}><dt>{value.label}</dt><dd>{formatMeasureValue(value)}</dd></div>)}</dl> : null}
+            {sessionResult?.reason ? <p role="status">{sessionResult.reason}</p> : null}
+            {sessionResult && session.kind !== "dimensions" ? <dl className="measure-values">{sessionResult.values.map((value, index) => <div key={value.label + "-" + index}><dt>{value.label}</dt><dd>{formatMeasureValue(value)}</dd></div>)}</dl> : null}
+            </div>
+            </div>
           </>
         ) : <p className="measure-panel-empty">Start Measure from the View command, Quick Toolbar or Command Palette.</p>}
       </section>

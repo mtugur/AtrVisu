@@ -33,6 +33,9 @@ export type MeasureAction = {
     type: "snapMode";
     snapMode: "semantic" | "free";
 } | {
+    type: "activeDimensionEntity";
+    entityId: string;
+} | {
     type: "keep";
 } | {
     type: "rename";
@@ -74,6 +77,7 @@ export const updatePickPress = (press: PickPress, x: number, y: number): PickPre
     return { ...press, maximum, cancelled: press.cancelled || !Number.isFinite(maximum) || maximum > MEASURE_PICK_CLICK_TOLERANCE_CSS_PX };
 };
 export type MeasureSession = {
+    activeDimensionEntityId?: string;
     lockedReference?: Extract<MeasureReference, { type: "entity-anchor" }>;
     referenceEdit?: { annotationId: string; index: number };
     kind: MeasureKind;
@@ -103,7 +107,7 @@ export type MeasureProjection = {
         confirmable: boolean;
         reason: string;
     };
-    candidateObservations?: readonly { entityId: string; anchorKind: MeasureAnchorKind; x: number; y: number; visible: boolean; reason: string }[];
+    candidateObservations?: readonly { entityId: string; anchorKind: MeasureAnchorKind; x: number; y: number; visible: boolean; reason: string; worldPoint?: MeasurePoint }[];
     representedByDimensionId?: string;
     labels?: readonly { lines: readonly string[]; x: number; y: number; width: number; height: number; textPx: number; fontFamily: string; textBackground: boolean }[];
     candidates?: readonly { x: number; y: number; label: string; selected: boolean; locked: boolean }[];
@@ -125,9 +129,17 @@ export type MeasureProjection = {
         occluded?: boolean;
     }[];
 };
+export const getMeasureDimensionGroups = (s: MeasureSession) => s.entry.selectionIds.map(id => {
+    const entity = s.entityCatalog.find(item => item.id === id);
+    const result = !entity ? { values: [], reason: "Selected entity is unavailable. Exit Measure to reselect." }
+        : !["machine", "civil"].includes(entity.type) ? { values: [], reason: "Local dimensions are unavailable for this entity type." }
+        : dimensionsForEntity(entity);
+    return { id, name: entity?.name ?? s.entry.entities.find(item => item.id === id)?.name ?? id, entity, result, eligible: !result.reason };
+});
+export const getActiveMeasureDimensionGroup = (s: MeasureSession) => getMeasureDimensionGroups(s).find(group => group.id === s.activeDimensionEntityId);
 export const getMeasureResult = (s: MeasureSession): MeasureResult => {
     if (s.kind === "dimensions")
-        return dimensionsForEntity(s.entry.selectionIds.length === 1 && s.entry.entities.length === 1 ? s.entry.entities[0] : undefined);
+        return getActiveMeasureDimensionGroup(s)?.result ?? { values: [], reason: "Select eligible Machine/Civil entities before entering Measure. Exit Measure to reselect." };
     if (s.kind === "pair")
         return pairResult(s.entry.selectionIds.length === 2 ? s.entry.entities : [], s.entry.machines);
     const p = s.completed ? s.points : s.hover ? [...s.points, s.hover] : s.points;
@@ -141,7 +153,7 @@ export const getMeasureResult = (s: MeasureSession): MeasureResult => {
 };
 export const getMeasureLines = (s: MeasureSession): MeasureLine[] => {
     if (s.kind === "dimensions")
-        return !getMeasureResult(s).reason ? dimensionLines(s.entry.entities[0]) : [];
+        return !getMeasureResult(s).reason ? dimensionLines(getActiveMeasureDimensionGroup(s)!.entity!) : [];
     if (s.kind === "pair")
         return getMeasureResult(s).reason ? [] : [{ points: s.entry.entities.map(entityReferencePoint), label: "Reference Point" }];
     const p = s.completed ? s.points : s.hover ? [...s.points, s.hover] : s.points;
@@ -179,11 +191,19 @@ export const createMeasureAuthority = () => {
         }
         if (action.type === "toggle") {
             const entry = structuredClone({ ...context, entities: context.selectionIds.map(id => context.entities.find(e => e.id === id)).filter((e): e is PlatformEntity => Boolean(e)) });
-            publish(reset({ kind: "distance", source: "geometry", mode: "pick", snapMode: "semantic", points: [], hover: null, completed: false, entry, entityCatalog: context.entities }, context));
+            const initial = reset({ kind: "distance", source: "geometry", mode: "pick", snapMode: "semantic", points: [], hover: null, completed: false, entry, entityCatalog: context.entities }, context);
+            const eligible = getMeasureDimensionGroups(initial).filter(group => group.eligible);
+            initial.activeDimensionEntityId = (eligible.find(group => group.id === entry.primaryId) ?? eligible[0])?.id;
+            publish(initial);
             return;
         }
         if (!session)
             return;
+        if (action.type === "activeDimensionEntity") {
+            const group = getMeasureDimensionGroups(session).find(item => item.id === action.entityId && item.eligible);
+            if (group) publish({ ...session, activeDimensionEntityId: group.id, completed: session.kind === "dimensions" || session.completed });
+            return;
+        }
         if (action.type === "confirmLockedAnchor") {
             const point = resolveLockedAnchor(context.entities);
             return Boolean(point && !session.referenceEdit && confirmPoint(point, true));
@@ -301,7 +321,7 @@ export const isMeasureAction = (value: unknown): value is MeasureAction => {
     if (!value || typeof value !== "object")
         return false;
     const p = value as Record<string, unknown>;
-    return ["toggle", "exit", "restart", "finish", "confirmLockedAnchor", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(String(p.type)) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
+    return ["toggle", "exit", "restart", "finish", "confirmLockedAnchor", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(String(p.type)) || (p.type === "activeDimensionEntity" && typeof p.entityId === "string" && p.entityId.length > 0) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
 };
 
 export const measurePointToReference = (point: MeasurePoint): MeasureReference =>
@@ -313,8 +333,9 @@ export const measurePointToReference = (point: MeasurePoint): MeasureReference =
 
 export const measureSessionMatchesDimension = (session: MeasureSession | null, dimension: MeasureDimensionMetadata) => {
     if (!session?.completed || !dimension.visible || dimension.status === "orphaned" || dimension.dimensionKind !== session.kind) return false;
+    const entities = session.kind === "dimensions" ? [getActiveMeasureDimensionGroup(session)?.entity].filter((entity): entity is PlatformEntity => Boolean(entity)) : session.entry.entities.slice(0, 2);
     const references: MeasureReference[] = session.kind === "dimensions" || session.kind === "pair"
-        ? session.entry.entities.slice(0, session.kind === "dimensions" ? 1 : 2).map(entity => ({ type: "entity-anchor", entityId: entity.id, anchor: "front-left-bottom" }))
+        ? entities.map(entity => ({ type: "entity-anchor", entityId: entity.id, anchor: "front-left-bottom" }))
         : session.points.map(measurePointToReference);
     if (!references.length || references.length !== dimension.references.length) return false;
     return (session.kind !== "area" || dimension.presentationElevationMm === session.presentationElevationMm)

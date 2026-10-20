@@ -97,6 +97,12 @@ export const command = (page: Page, id: string) => page.getByTestId("workbench-c
 const addMachine = async (page: Page, name = "Flow Pack Machine") => {
   const before = Object.keys(JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}")).length;
   const library = page.getByTestId("machine-library-panel");
+  if (!await library.isVisible()) {
+    const tab = page.getByTestId("primary-dock-tab-panel.machineLibrary");
+    if (!await tab.isVisible()) await page.getByTestId("primary-dock-collapse-toggle").click();
+    await tab.click();
+  }
+  await expect(library).toBeVisible();
   await library.getByLabel("Search assets").fill(name);
   await library.getByRole("button", { name: `Add ${name} to layout`, exact: true }).click();
   await expect.poll(async () => Object.keys(JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}")).length).toBeGreaterThan(before);
@@ -115,6 +121,8 @@ export const start = async (page: Page, helpers: Helpers, width = 1440, machine:
     await manager.getByTestId("close-project-manager").click();
   }
   for (const name of Array.isArray(machine) ? machine : machine ? ["Flow Pack Machine"] : []) await addMachine(page, name);
+  if (width <= 720 && await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).isVisible())
+    await page.getByRole("button", { name: "Collapse Primary Dock", exact: true }).click();
   if (width <= 720) await page.getByRole("button", { name: "More commands", exact: true }).click();
   await command(page, "view.measure").click();
   await expect(page.getByTestId("measure-panel")).toBeVisible();
@@ -389,6 +397,9 @@ export const registerMeasureV2Tests = (helpers: Helpers) => {
   });
 
   test("C03 V2 review M24 M25 endpoint grip commits another machine semantic corner through history and reload", async ({ page }) => {
+    // One route includes reference drag, geometry edits, history, persistence
+    // and a real project reload; keep every assertion within one transaction story.
+    test.setTimeout(60_000);
     const errors = await start(page, helpers, 1440, ["Flow Pack Machine", "Belt Conveyor"], "C03 V2 semantic edit");
     const machinePoints = JSON.parse(await canvas(page).getAttribute("data-machine-screen-points") ?? "{}") as Record<string, { x: number; y: number }>;
     const [instanceId, target] = Object.entries(machinePoints)[0];

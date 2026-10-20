@@ -13,6 +13,7 @@ import { MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX } from "../../measure/measurePresen
 import { dimensionLabelBounds, dimensionLabelLines, dimensionMarkerBounds, dimensionTextPx, fitDimensionLabel, layoutLinearDimension, measureDimensionLabel } from "../../measure/dimensionPresentation";
 import { createMeasureTextMeasurer, readMeasureLabelViewport } from "./measureLabelContext";
 import { getCandidateVisibility } from "../../measure/candidateVisibility";
+import { insideCandidateContext, projectedVolumeEnvelope } from "../../measure/candidateContext";
 export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics, getDimensionManager, getStyle }: {
     scene: Scene;
     camera: ArcRotateCamera;
@@ -28,6 +29,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     let highlighted: MeasurePoint | null = null, chosen: MeasurePoint | null = null;
     let observations: NonNullable<MeasureProjection["candidateObservations"]> = [];
     let cycleIndex: number | null = null;
+    let activeEntityId: string | undefined;
     const originalCursor = canvas.style.cursor;
     let edit: { hit: DimensionHit; startX: number; startY: number; offsetX: number; offsetY: number; depth: number; point: MeasurePoint | null; moved: boolean } | null = null;
     let captured: number | null = null;
@@ -86,6 +88,14 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         let entityId = target.instanceId ? `machine:${target.instanceId}` : target.civilReferenceId ? `civil:${target.civilReferenceId}` : undefined;
         const actual = hit?.hit && hit.pickedPoint ? pointFromVector(hit.pickedPoint, entityId) : null;
         if (state.snapMode !== "semantic") return actual;
+        const active = state.entityCatalog.find(entity => entity.id === activeEntityId && entity.visible);
+        if (active && !state.lockedReference) {
+            const canonical = Object.entries(getSemanticAnchorPoints(active));
+            const corners = canonical.filter(([kind]) => kind.endsWith("-top") || kind.endsWith("-bottom")).map(([, point]) => screenPoint(point));
+            const envelope = corners.length === 8 && corners.every(point => point.z >= 0 && point.z <= 1) ? projectedVolumeEnvelope(corners) : [];
+            const visibleMarkers = canonical.map(([, point]) => project(point)).filter(point => point.visible);
+            if (insideCandidateContext({ x, y }, envelope, visibleMarkers)) entityId = active.id;
+        }
         // A visible marker remains reachable at a silhouette even without an interior mesh hit.
         if (!entityId) {
             const nearby = state.entityCatalog.filter(entity => entity.visible && ["machine", "civil"].includes(entity.type)).flatMap(entity =>
@@ -99,13 +109,15 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         }
         if (state.lockedReference) entityId = state.lockedReference.entityId;
         const entity = state.entityCatalog.find((item) => item.id === entityId);
-        if (!entity || !entity.visible) return state.lockedReference ? null : actual;
+        if (!entity || !entity.visible) { activeEntityId = undefined; chosen = null; cycleIndex = null; return state.lockedReference ? null : actual; }
+        if (activeEntityId !== entity.id) { chosen = null; cycleIndex = null; }
+        activeEntityId = entity.id;
         const candidates = Object.entries(getSemanticAnchorPoints(entity)) as Array<[MeasureAnchorKind, MeasurePoint]>;
         anchors = [];
         const observed: NonNullable<MeasureProjection["candidateObservations"]>[number][] = [];
         for (const [anchorKind, point] of candidates) {
             const p = project(point), px = p.x, py = p.y;
-            observed.push({ entityId: entity.id, anchorKind, x: px, y: py, visible: p.visible, reason: p.reason });
+            observed.push({ entityId: entity.id, anchorKind, x: px, y: py, visible: p.visible, reason: p.reason, worldPoint: { ...point, anchorKind } });
             if (!p.visible) continue;
             const distance = Math.hypot(px - x, py - y);
             anchors.push({ distance, point: { ...point, anchorKind }, x: px, y: py });
@@ -213,7 +225,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     const blur = () => cancel("focus loss");
     const leave = () => {
         if (captured !== null || edit) return;
-        lastClient = null; anchors = []; observations = []; highlighted = null; clearChoice(); authority.preview(null);
+        lastClient = null; activeEntityId = undefined; anchors = []; observations = []; highlighted = null; clearChoice(); authority.preview(null);
     };
     const key = (e: KeyboardEvent) => {
         if (authority.getActive() && e.target === canvas && (e.key === "Shift" || e.key === "Tab")) {
@@ -250,10 +262,10 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const state = authority.getSnapshot();
         const reset = !state || state.mode !== previousState?.mode || state.source !== previousState?.source
             || state.kind !== previousState?.kind || state.snapMode !== previousState?.snapMode
-            || (state.points.length === 0 && state.points !== previousState?.points);
+            || state.points !== previousState?.points;
         previousState = state;
         if (reset) {
-            edit = null; clearChoice(); highlighted = null; anchors = [];
+            edit = null; clearChoice(); highlighted = null; anchors = []; observations = []; activeEntityId = undefined;
             getDimensionManager()?.previewText("", null);
         }
         if (!state || state.mode !== "pick" || (!authority.getPress() && !edit))
@@ -275,7 +287,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             const entity = current.entityCatalog.find(item => item.id === observation.entityId);
             const point = entity && getSemanticAnchorPoints(entity)[observation.anchorKind];
             const p = point ? project(point) : null;
-            return { ...observation, x: p?.x ?? observation.x, y: p?.y ?? observation.y,
+            return { ...observation, worldPoint: point ? { ...point, anchorKind: observation.anchorKind } : undefined, x: p?.x ?? observation.x, y: p?.y ?? observation.y,
                 visible: Boolean(entity?.visible && p?.visible), reason: !point ? "Reference unavailable" : !entity?.visible ? "Not currently visible" : p!.reason };
         });
         anchors = anchors.flatMap(anchor => {
@@ -327,7 +339,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             candidates: anchors.map(a => ({ x: a.x, y: a.y, label: MEASURE_ANCHOR_LABELS[a.point.anchorKind!], selected: sameAnchor(a.point, locked ?? highlighted), locked: sameAnchor(a.point, locked) })),
             markers: projectedMarkers });
         if (diagnostics())
-            canvas.dataset.measureSession = JSON.stringify({ ...current, entry: { selectionIds: current.entry.selectionIds, primaryId: current.entry.primaryId }, result: getMeasureResult(current), lines: getMeasureLines(current), press: authority.getPress(), lockedAnchor, candidateObservations: observations });
+            canvas.dataset.measureSession = JSON.stringify({ ...current, entry: { selectionIds: current.entry.selectionIds, primaryId: current.entry.primaryId }, result: getMeasureResult(current), lines: getMeasureLines(current), press: authority.getPress(), lockedAnchor, candidateObservations: observations, activeCandidateEntityId: activeEntityId, highlightedAnchor: highlighted });
     });
     return { candidate, dispose: () => {
             canvas.style.cursor = originalCursor;

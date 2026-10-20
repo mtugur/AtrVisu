@@ -5,7 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { MeasureTool, MeasureViewportGraphics } from "./components/measure/MeasureTool";
-import { createMeasureAuthority, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
+import { createMeasureAuthority, getActiveMeasureDimensionGroup, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
 import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
 import { cloneMeasureDimensionStyle, type MeasureDimensionStyle, type MeasureReference } from "./measure/referenceTypes";
 import { getDimensionResult } from "./measure/measureReferences";
@@ -3455,8 +3455,9 @@ export function App() {
     if (!session || !session.completed) return false;
     const result = getMeasureResult(session);
     if (result.reason || result.values.length === 0) return false;
+    const activeEntity = getActiveMeasureDimensionGroup(session)?.entity;
     const references: MeasureReference[] = session.kind === "dimensions"
-      ? (session.entry.entities[0] ? [{ type: "entity-anchor", entityId: session.entry.entities[0].id, anchor: "front-left-bottom" }] : [])
+      ? (activeEntity ? [{ type: "entity-anchor", entityId: activeEntity.id, anchor: "front-left-bottom" }] : [])
       : session.kind === "pair"
         ? session.entry.entities.slice(0, 2).map((entity) => ({ type: "entity-anchor" as const, entityId: entity.id, anchor: "front-left-bottom" as const }))
         : session.points.map(measurePointToReference);
@@ -3464,7 +3465,7 @@ export function App() {
       || (session.kind === "pair" && references.length !== 2)
       || (session.kind !== "dimensions" && session.kind !== "pair" && references.length === 0)) return false;
     const firstPoint = session.kind === "dimensions" || session.kind === "pair"
-      ? (() => { const entity = session.entry.entities[0]; return entity ? { xMm: entity.transform.planX, yMm: entity.transform.planY, zMm: entity.transform.elevation } : null; })()
+      ? (() => { const entity = session.kind === "dimensions" ? activeEntity : session.entry.entities[0]; return entity ? { xMm: entity.transform.planX, yMm: entity.transform.planY, zMm: entity.transform.elevation } : null; })()
       : session.points[0] ? { xMm: session.points[0].xMm, yMm: session.points[0].yMm, zMm: session.points[0].zMm } : null;
     if (!firstPoint) return false;
     const annotation = createAnnotation({ type: session.kind === "area" ? "area-note" : "dimension-note", positionMm: firstPoint });
@@ -3472,7 +3473,7 @@ export function App() {
     const dimension = {
       schemaVersion: 1 as const,
       dimensionKind: session.kind,
-      name: "Measure " + session.kind,
+      name: session.kind === "dimensions" ? activeEntity!.name + " dimensions" : "Measure " + session.kind,
       visible: true,
       references,
       presentationSource: session.kind === "area" ? session.source : undefined,
