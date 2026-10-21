@@ -252,7 +252,9 @@ function registerCorrectedTaskTests(helpers: Helpers) {
     const entities = (await taskSession(page)).entityCatalog;
     const unsupported = entities.find(entity => entity.type === "group")!;
     const eligible = entities.find(entity => entity.type === "machine" && entity.id !== mixedIds[0])!;
-    const ids = [eligible.id, unsupported.id], entry = await taskSelectEntries(page, ids);
+    const ids = [unsupported.id, eligible.id], entry = await taskSelectEntries(page, ids);
+    expect(entry.invariants.primarySelectionId).toBe(unsupported.id);
+    expect((await taskSession(page)).entry.primaryId).toBe(unsupported.id);
     await page.getByLabel("Measurement kind").selectOption("dimensions");
     const before = await snapshot(page);
     await expect(page.getByRole("region", { name: `Dimensions ${unsupported.name}`, exact: true }).getByRole("button")).toBeDisabled();

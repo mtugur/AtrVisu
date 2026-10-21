@@ -139,3 +139,10 @@ keeps observation open through the real download, then checks the same exact
 attempt/execution increments and handled result. No runtime binding, assertion,
 timeout, retry, worker or export behavior is changed. Final focused results and
 the still-required exact-head CI result are recorded in PR Validation.
+
+The strict artifact validator also caught that the mixed unsupported-Group
+fixture had selected the eligible Machine first, leaving it primary under the
+existing first-selected primary policy. The fixture now selects Group first
+through the real Explorer and asserts both Runtime Selection and the Measure
+entry primary before checking first-eligible fallback. The validator and
+production selection/Measure authorities are unchanged.
