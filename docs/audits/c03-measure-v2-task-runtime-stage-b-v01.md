@@ -128,3 +128,14 @@ and the implementation checkpoint have the identical lockfile blob
 audit exception or weakened CI policy is included. Automation Green remains
 FAIL until security remediation and a successful exact-head gate; passing local
 runtime evidence cannot substitute for that gate or its CI artifact.
+
+The complete local Chromium run passed its 249 parallel cases (one unrelated,
+branch-conditional PF-3B case was skipped), then exposed an export-observation
+ordering race in the isolated Feature Access test. Its failure snapshot showed
+PNG still Preparing, while the five-second receipt assertion was already
+running. `executeRuntimeFeatureCommand` records receipts only after the awaited
+export returns. An unchanged focused rerun passed. The bounded test correction
+keeps observation open through the real download, then checks the same exact
+attempt/execution increments and handled result. No runtime binding, assertion,
+timeout, retry, worker or export behavior is changed. Final focused results and
+the still-required exact-head CI result are recorded in PR Validation.

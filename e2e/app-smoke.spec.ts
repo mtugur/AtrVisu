@@ -1676,18 +1676,25 @@ test("runtime feature access complete gate is bound to observed visible command 
     fileMenu.locator('[data-command-id="project.commercialOutputs"]').click()
   );
   await expect(page.getByTestId("commercial-outputs-modal")).toBeVisible();
-  await Promise.all([
-    page.waitForEvent("download"),
-    observe("commercial.exportBomExcel", () => page.getByTestId("export-commercial-bom").click())
-  ]);
-  await Promise.all([
-    page.waitForEvent("download"),
-    observe("commercial.exportLayoutPdf", () => page.getByTestId("export-commercial-plan").click())
-  ]);
-  await Promise.all([
-    page.waitForEvent("download"),
-    observe("commercial.exportScenePng", () => page.getByTestId("export-commercial-snapshot").click())
-  ]);
+  // Runtime command receipts are recorded after the asynchronous export completes.
+  await observe("commercial.exportBomExcel", async () => {
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.getByTestId("export-commercial-bom").click()
+    ]);
+  });
+  await observe("commercial.exportLayoutPdf", async () => {
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.getByTestId("export-commercial-plan").click()
+    ]);
+  });
+  await observe("commercial.exportScenePng", async () => {
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.getByTestId("export-commercial-snapshot").click()
+    ]);
+  });
   await page.getByTestId("close-commercial-outputs").click();
   await expect(page.getByTestId("commercial-outputs-modal")).toHaveCount(0);
 
