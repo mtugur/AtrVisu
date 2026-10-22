@@ -15,6 +15,7 @@ export type LayoutHistorySnapshot = {
   viewpoints: LayoutViewpoint[];
   levels: LayoutLevel[];
   activeLevelId: string;
+  measureDimensionStyle?: import("../measure/referenceTypes").MeasureDimensionStyle;
 };
 
 export type LayoutHistoryState = {
