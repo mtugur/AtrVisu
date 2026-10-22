@@ -4977,7 +4977,7 @@ body.is-resizing-workbench-dock {
     align-items: flex-start;
     gap: 8px;
   }
-  .measure-panel .measure-session-inputs { flex: 1 1 210px; }
+  .measure-panel .measure-session-inputs { flex: 1 1 180px; }
   .measure-panel .measure-session-readout { flex: 1.5 1 310px; }
   .measure-panel .measure-session-inputs,
   .measure-panel .measure-session-readout { gap: 6px; }
@@ -5911,13 +5911,13 @@ body.is-resizing-workbench-dock {
 .measure-point-reference dt { white-space: nowrap; }
 .measure-point-reference dd { margin: 0; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .measure-session-readout .measure-values {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 2px 6px;
   margin-block: 2px;
   line-height: 1.15;
 }
-.measure-session-readout .measure-values > div { min-width: 0; flex-wrap: wrap; }
+.measure-session-readout .measure-values > div { min-width: 0; flex-wrap: nowrap; }
 .measure-point-reference small,
 .measure-entity-results small { color: var(--av-text-secondary); }
 .measure-entity-results button { text-align: left; font: inherit; }
