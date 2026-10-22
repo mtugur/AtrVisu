@@ -1,4 +1,5 @@
 import type { AnnotationObject, AnnotationType } from "../types/annotations";
+import { cloneMeasureDimensionStyle, type MeasureAnchorKind, type MeasureDimensionKind, type MeasureDimensionMetadata, type MeasureReference } from "../measure/referenceTypes";
 import type { PlacedMachine } from "../types/machine";
 import { ANNOTATION_TECHNICAL_STYLES } from "../designSystem";
 import { getMachinePlanPositionMm } from "./placement";
@@ -116,6 +117,100 @@ const optionalFiniteNumber = (value: unknown) =>
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+
+const normalizeMeasureReference = (value: unknown): MeasureReference | null => {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return null;
+  }
+  if (
+    value.type === "entity-anchor"
+    && typeof value.entityId === "string"
+    && typeof value.anchor === "string"
+  ) {
+    return {
+      type: "entity-anchor",
+      entityId: value.entityId,
+      anchor: value.anchor as MeasureAnchorKind
+    };
+  }
+  if (
+    value.type === "world-point"
+    && typeof value.xMm === "number"
+    && Number.isFinite(value.xMm)
+    && typeof value.yMm === "number"
+    && Number.isFinite(value.yMm)
+    && typeof value.zMm === "number"
+    && Number.isFinite(value.zMm)
+  ) {
+    return { type: "world-point", xMm: value.xMm, yMm: value.yMm, zMm: value.zMm };
+  }
+  if (
+    value.type === "level-point"
+    && typeof value.levelId === "string"
+    && typeof value.xMm === "number"
+    && Number.isFinite(value.xMm)
+    && typeof value.yMm === "number"
+    && Number.isFinite(value.yMm)
+  ) {
+    return { type: "level-point", levelId: value.levelId, xMm: value.xMm, yMm: value.yMm };
+  }
+  return null;
+};
+
+const normalizeMeasureDimension = (value: unknown): MeasureDimensionMetadata | undefined => {
+  if (!isRecord(value) || value.schemaVersion !== 1 || typeof value.dimensionKind !== "string") {
+    return undefined;
+  }
+  const references = Array.isArray(value.references)
+    ? value.references.map(normalizeMeasureReference).filter((reference): reference is MeasureReference => Boolean(reference))
+    : [];
+  if (references.length === 0) {
+    return undefined;
+  }
+  const dimensionKind = value.dimensionKind as MeasureDimensionKind;
+  if (!["distance", "angle", "area", "dimensions", "pair"].includes(dimensionKind)) {
+    return undefined;
+  }
+  const rawStyle = isRecord(value.style) ? value.style : {};
+  const textPlacement = isRecord(value.textPlacementMm) ? value.textPlacementMm : undefined;
+  return {
+    schemaVersion: 1,
+    dimensionKind,
+    name: typeof value.name === "string" && value.name.trim() ? value.name : "Reference Dimension",
+    visible: typeof value.visible === "boolean" ? value.visible : true,
+    references,
+    dimensionAxis: value.dimensionAxis === "width" || value.dimensionAxis === "depth" || value.dimensionAxis === "height"
+      ? value.dimensionAxis
+      : undefined,
+    style: cloneMeasureDimensionStyle({
+      fontFamily: typeof rawStyle.fontFamily === "string" ? rawStyle.fontFamily : undefined,
+      textSizeMode: rawStyle.textSizeMode === "fixed" ? "fixed" : "adaptive",
+      adaptiveMinTextPx: finiteNumberOr(rawStyle.adaptiveMinTextPx, 10),
+      adaptiveMaxTextPx: finiteNumberOr(rawStyle.adaptiveMaxTextPx, 18),
+      fixedTextPx: finiteNumberOr(rawStyle.fixedTextPx, 12),
+      lineWeightPx: finiteNumberOr(rawStyle.lineWeightPx, 1.5),
+      arrowStyle: rawStyle.arrowStyle === "tick" ? "tick" : "arrow",
+      arrowSizePx: finiteNumberOr(rawStyle.arrowSizePx, 7),
+      textOffsetPx: finiteNumberOr(rawStyle.textOffsetPx, 10),
+      textBackground: typeof rawStyle.textBackground === "boolean" ? rawStyle.textBackground : true,
+      precision: rawStyle.precision === 0 || rawStyle.precision === 1 || rawStyle.precision === 2 || rawStyle.precision === 3
+        ? rawStyle.precision
+        : 3,
+      unitPresentation: rawStyle.unitPresentation === "mm-metric" ? "mm-metric" : "mm",
+      displayMode: rawStyle.displayMode === "overlay" ? "overlay" : "depth",
+      showWitnessLines: typeof rawStyle.showWitnessLines === "boolean" ? rawStyle.showWitnessLines : true,
+      showLeaders: typeof rawStyle.showLeaders === "boolean" ? rawStyle.showLeaders : true
+    }),
+    textPlacementMm: textPlacement
+      && typeof textPlacement.xMm === "number"
+      && typeof textPlacement.yMm === "number"
+      && typeof textPlacement.zMm === "number"
+      ? { xMm: textPlacement.xMm, yMm: textPlacement.yMm, zMm: textPlacement.zMm }
+      : undefined,
+    status: value.status === "orphaned" ? "orphaned" : "healthy",
+    orphanReason: typeof value.orphanReason === "string" ? value.orphanReason : undefined
+  };
+};
 
 export const normalizeAnnotationSizeScale = (style: unknown, fallback = 4) => {
   if (!isRecord(style)) {
@@ -316,7 +411,8 @@ export const normalizeAnnotation = (value: unknown): AnnotationObject | null => 
       background: typeof style.background === "boolean" ? style.background : true
     },
     createdAt: typeof value.createdAt === "string" ? value.createdAt : undefined,
-    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : undefined
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : undefined,
+    dimension: normalizeMeasureDimension(value.dimension)
   };
 };
 
