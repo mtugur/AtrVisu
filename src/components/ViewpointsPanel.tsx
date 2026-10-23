@@ -3,6 +3,7 @@ import type { LayoutViewpoint } from "../types/viewpoints";
 import { WorkbenchActionButton } from "./workbench/WorkbenchActionButton";
 
 type ViewpointsPanelProps = {
+  mutationUnavailableReason?: string;
   viewpoints: LayoutViewpoint[];
   selectedViewpointId: string | null;
   onSelectViewpoint: (viewpointId: string | null) => void;
@@ -27,6 +28,7 @@ const initialStripNavigationState: StripNavigationState = {
 };
 
 export function ViewpointsPanel({
+  mutationUnavailableReason,
   viewpoints,
   selectedViewpointId,
   onSelectViewpoint,
@@ -161,6 +163,7 @@ export function ViewpointsPanel({
             aria-label="Viewpoint Name"
             placeholder="Genel Gorunum"
             value={name}
+            disabled={Boolean(mutationUnavailableReason)}
             onChange={(event) => setName(event.target.value)}
           />
         </label>
@@ -169,7 +172,7 @@ export function ViewpointsPanel({
           iconId="capture"
           label="Capture Current View"
           data-testid="capture-viewpoint"
-          disabled={!name.trim()}
+          disabled={Boolean(mutationUnavailableReason) || !name.trim()}
           onClick={() => {
             onCaptureViewpoint(name);
             setName("");
@@ -265,11 +268,13 @@ export function ViewpointsPanel({
               <WorkbenchActionButton
                 iconId="update"
                 label="Update From Current View"
+                disabled={Boolean(mutationUnavailableReason)}
                 onClick={() => onUpdateViewpoint(selectedViewpoint.id)}
               />
               <WorkbenchActionButton
                 iconId="rename"
                 label={`Rename ${selectedViewpoint.name}`}
+                disabled={Boolean(mutationUnavailableReason)}
                 onClick={() => {
                   const nextName = window.prompt("Viewpoint name", selectedViewpoint.name);
                   if (nextName?.trim()) {
@@ -277,10 +282,11 @@ export function ViewpointsPanel({
                   }
                 }}
               />
-              <WorkbenchActionButton iconId="delete" label={`Delete ${selectedViewpoint.name}`} tone="danger" onClick={() => onDeleteViewpoint(selectedViewpoint.id)} />
+              <WorkbenchActionButton iconId="delete" label={`Delete ${selectedViewpoint.name}`} tone="danger" disabled={Boolean(mutationUnavailableReason)} onClick={() => onDeleteViewpoint(selectedViewpoint.id)} />
           </div>
         ) : null}
       </div>
+      {mutationUnavailableReason ? <p role="status">{mutationUnavailableReason}</p> : null}
     </section>
   );
 }

@@ -1,6 +1,6 @@
 # C03 Professional Measure Tool Gate
 
-Status: Stage A benchmark/contract only. Stage B runtime PENDING.
+Status: Stage A merged. Stage B bounded runtime implemented; exact-head Automation Green is established only by the final PR Quality Gate and validated artifact. Independent Contract Verified and Product Accepted remain PENDING.
 
 ## Stage A source and contract preparation
 
@@ -49,3 +49,23 @@ Stage A exact-head local/CI results belong in the Draft PR Validation section. N
 ## Stop and exclusion checks
 
 No C04 alignment, C05 mixed property editing, C07 Inspector priority, C09 simulation redesign, persistent CAD dimensions, analytic GLB topology, support/contact inference, new Level semantics, camera remapping or body-drag change. Do not mutate existing authorities to make a new tool test pass. Interaction Delivery Protocol correction budget/stop rules apply; further tuning beyond the frozen contract requires review, not another local heuristic.
+
+## Stage B executable delivery record
+
+Baseline: `64032007691f32b8d7feb8fe54765bef8d2e96d3`; branch `feat/p1-close-measure-runtime-v01`.
+The unchecked historical Stage B acceptance list above is not an independent acceptance claim. This implementation supplies the following executable coverage; the exact head, complete-gate counts and CI run are recorded in the same PR Validation section and the artifact manifest, avoiding a self-referential source SHA or later documentation-only PASS commit.
+
+- [x] One App-local transient Measure authority; `view.measure` / `viewport.measure`; Quick Toolbar, View menu, Command Palette and typed controls share the registered binding.
+- [x] Pure calculation, ordered entry selection, canonical adapters, explicit captured FFL and fixed inclusive four-CSS-pixel classifier covered by `src/measure/*.test.ts`.
+- [x] Real pointer/keyboard M01-M10 coverage in `e2e/measureEvidence.ts`; imported layout fixtures/native GLB use public input controls, diagnostics only observe/project.
+- [x] Capture-loss/pointercancel/focus/late-up and modal/text ownership covered by `measureViewportAdapter.test.ts` plus real DPR1/2 presses.
+- [x] Existing Precision Placement Helpers settings and current/migrated preferences are preserved; transient session clears on reload/unload.
+- [x] Canonical command enablement rejects domain/history mutations while active; Inspector/Layer/Level/Group editing and persisted Viewpoint mutation controls are unavailable, navigation/read-only export remains live.
+- [x] `HelpModal` Measurements guidance describes the actual tool rather than claiming it is unavailable.
+- [x] Responsive neutral DOM/SVG graphics reproject after actual scene render; commercial render-target PNG excludes the DOM tool without a second capture authority.
+- [x] CI captures and validates `p1-close-measure-tool`: exact head/run, required M01-M10 records, screenshots, CSS/render dimensions, DPR, operands/results, selection/domain/history/dirty, lifecycle, cancelled trajectories, dock projection and per-file SHA256.
+- [ ] Automation Green: PASS only when the complete exact-head Quality Gate succeeds, including Measure artifact validation. See same-PR Validation for actual head/run/result.
+- [ ] Contract Verified: PENDING independent realistic runtime/contract review.
+- [ ] Product Accepted: PENDING; no exploratory Product Owner test requested.
+
+Interaction Change Gate A-J evidence and the implementation/acceptance distinction are recorded in `docs/audits/p1-close-measure-runtime-v01.md`. No C03 Final Exit PASS or PR #120 update is made.
