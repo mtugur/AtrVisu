@@ -9,6 +9,7 @@ import { registerPanGridTests } from "./panGridEvidence";
 import { registerMeasureV2Tests } from "./measureV2Evidence";
 import { registerMeasureV2StageBTests } from "./measureV2StageBEvidence";
 import { registerMeasureV2TaskTests } from "./measureV2TaskEvidence";
+import { registerMeasureRecoveryTests } from "./measureRecoveryEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -8122,4 +8123,5 @@ registerPanGridTests({
 registerMeasureV2Tests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
 registerMeasureV2StageBTests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
 registerMeasureV2TaskTests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
+registerMeasureRecoveryTests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
 

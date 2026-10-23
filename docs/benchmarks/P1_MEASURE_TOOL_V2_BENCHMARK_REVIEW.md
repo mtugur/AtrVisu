@@ -416,3 +416,23 @@ coordinates, Level references, invisible-lock confirmation, selection and saved
 dimension ownership remain frozen. Read-only source diagnosis and the single
 complete user-journey card are V2 section 21; task-level PNG/JSON oracles are in
 the existing V2 gate. New runtime proof is NOT EXECUTED by this Stage A package.
+
+## 11. Issue #139 official task evidence - before recovery code
+
+Access/review: 2026-10-23. Owner decision: https://github.com/mtugur/AtrVisu/issues/139.
+
+| Official source | Verified fact | Required adoption / honest distinction |
+| --- | --- | --- |
+| [VC 5.1 Layout](https://help.visualcomponents.com/5.1/Premium/en/English/Getting%20Started/UI%20Overview/Tabs/Layout_View.htm) | Properties reads/writes selected components alongside Cell Graph/eCatalog. | Selected-object Inspector must populate even through persisted-workspace entry. |
+| [VC 5.1 Measure](https://help.visualcomponents.com/5.1/Premium/en/English/3D%20Operations/Measuring_components.htm) | Configure first/second points in task pane, pick/preview in 3D, Esc/Close exits. | Deliberate A/B, clear source/result and usable edit/resume, not dead controls. |
+| [Navisworks tools](https://help.autodesk.com/cloudhelp/2026/ENU/Navisworks/files/GUID-F792FBD7-E753-45B2-99DD-51DFACFD23F7.htm) | Point to Point, Multiple Points, Point Line, Accumulate and Shortest Distance are different tasks. | Separate manual/fan-out/chain/diagnostic origins and no false surface-clearance claim. |
+| [Navisworks distances](https://help.autodesk.com/cloudhelp/2027/ENU/Navisworks/files/GUID-03FA0BC9-5561-4DE3-BA33-A237268F577F.htm) | Multiple Points retains A; Point Line totals route distance; markup conversion is separate. | Reusable references, transient chain total and explicit individual associative Keep. |
+| [Navisworks axis lock](https://help.autodesk.com/cloudhelp/2026/ENU/Navisworks-Freedom/files/GUID-56B494F7-C8BF-47C9-B319-A1FD81A39C4A.htm) | X/Y/Z constrain measuring and have visible scene feedback. | Explicit canonical-axis/plane interpretation; actual/projected points distinct, never camera-derived. |
+| [Fusion Measure](https://help.autodesk.com/cloudhelp/ENU/Fusion-Model/files/SLD-MEASURE.htm) | Selection 1/2, results, XYZ interpretation and reset are separate. | Actual reference identity and XYZ, deliberate replacement and reset. |
+| [Factory Properties](https://help.autodesk.com/cloudhelp/2023/ENU/FDU/files/Inventor-Factory-Help/About-Placing-Factory-Assets/FDU_Inventor_Factory_Help_About_Placing_Factory_Assets_Factory_Properties_Browser_Reference_html.html) | Selected assets populate instance parameters; grayed fields indicate unavailable writes. | Visible selected values, truthful lock/picking reason and normal editing route. |
+
+V2 section 22 / ADR-009 freeze the exact approved AtrVisu adaptation before
+code: explicit A-anchored planes/axes, reusable points and per-relationship Keep,
+pause cancelling unsaved work only, and NOT READY surface clearance/Accumulate.
+These sources do not prescribe AtrVisu CSS/enums or its exact transition names.
+Seven whole operator tasks, not a narrower benchmark subset, determine delivery.

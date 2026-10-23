@@ -144,3 +144,27 @@ PASS from the existing T01-T06 matrix. Keep the earlier T01/T02/T06 protection
 and T04/T05 oracles alongside this matrix. Exact-head PNG/JSON and realistic
 user routes precede independent Contract Verification; only then may final
 Product Owner acceptance be requested. No Stage B work is part of this PR.
+
+## Issue #139 integrated recovery - independent oracle before code
+
+Baseline #136: `dc1ac534eff517410f41ebe390ec513b494ebd8b`, Product Accepted FAIL.
+Authority: V2 section 22 / ADR-009 / benchmark section 11 / Issue #139.
+
+| Task | Independent required user oracle |
+| --- | --- |
+| R1 | Saved nonempty Sales Layout and clean entry; actual selection, persisted collapsed/Measure-tab and Auto/Pinned; visible identity/elevation, genuine edit to 1400, lock reason. Old-head literal empty state must be isolated, not assumed. |
+| R2 | Real interpolated pointer picks different-height semantic A/B, previews identities/XYZ and deltas; Z+ to Y+ to oblique and camera projection do not reinterpret them. |
+| R3 | A=(0,0,0), B=(3000,4000,1200): 3D sqrt(26440000), XY 5000, XZ sqrt(10440000), YZ sqrt(17440000), X 3000, Y 4000, Z 1200. Actual/projected XYZ, scene treatment, keyboard and serialization. |
+| R4 | Two selected objects, manual desired A/B, replace either before/after Keep, associative recompute; diagnostic origins distinct, NOT READY clearance never returns fake length. |
+| R5 | Same A to B1/B2, individually Keep, reuse old corner in new Point to Point; chain retains preceding B and totals route. No consumed point, auto persistence or duplicate Keep. |
+| R6 | Readable Inspector while picking; explicit pause/edit, actual elevation change, resume, saved recompute, one Undo per action, save/reopen and orphan/reassociation. |
+| R7 | All at 1440/1024/640, persisted preferences, overlap/occlusion, saved label near corner, Auto/Pinned, keyboard, locked layers, clean console and stable canvas/chrome. Old A-E/T01-T06 preserved. |
+
+- [ ] Genuine old-head input/PNG/JSON failure evidence, with truthful Inspector reproduction conditions.
+- [ ] New exact-head seven-task input/video/PNG/JSON and fail-closed validator.
+- [ ] Full previous suite and both Chromium phases / old validators.
+- [ ] Independent non-author normal Windows Chrome check (NOT VERIFIED if unavailable).
+- [ ] Independent Contract Verification.
+- [ ] Owner Product Acceptance.
+
+No assertion, behavior or feature may be silently weakened to claim completion.
