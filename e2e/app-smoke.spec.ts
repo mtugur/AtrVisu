@@ -1560,7 +1560,9 @@ test("runtime feature access complete gate is bound to observed visible command 
   );
   await observe("view.measure", () => getCommandBarCommand(page, "view.measure").click());
   await expect(page.getByTestId("measure-panel")).toBeVisible();
-  await expect(page.getByTestId("right-panel")).toContainText("Measure Session");
+  const measureSession = page.getByTestId("right-panel").getByRole("region", { name: "Measure Session", exact: true });
+  await expect(measureSession).toBeVisible();
+  await expect(measureSession.getByRole("combobox", { name: "Measurement kind", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   const viewMenu = await openWorkbenchMenu(page, "View");

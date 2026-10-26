@@ -231,3 +231,35 @@ Windows Chrome verification: **NOT VERIFIED by the implementation agent**.
 Default Playwright Chromium evidence is automation, not a claim of that
 independent browser witness. No owner debugging or manual acceptance is
 requested before the issue's reviewer-side runtime gate is fulfilled.
+
+### Recovery local gate limitations (2026-10-26)
+
+The complete local run at `b51c6af35a76dddc5418dce7c4b8bcf8ff1ad831`
+passed build and all 182 unit files / 1594 tests. Interaction governance,
+123 adversarial policy scenarios and design-token governance (297 files)
+passed. Package manifests/lockfile remain unchanged from main.
+
+The full Chromium run was not green: commercial PNG preparation exceeded its
+30-second test budget; DPR-2 shallow render-frame Pan and the 1440px oblique
+MMB Pan cases exceeded their existing 120-second budgets. These observations
+do not establish a new Measure or camera root cause and are not waived.
+The isolated Feature Access route additionally expected a redundant visible
+"Measure Session" heading removed by the compact layout. Its assertion now
+requires the actual visible, exactly named Measure Session region and enabled
+Measurement kind control instead. The real complete command route then passed
+in a focused run, without runtime edits, timeout changes or suppressed errors.
+The earlier full run remains failed; focused success does not relabel it.
+
+`npm audit --audit-level=low` reports one high-severity vulnerable dependency:
+`jsdom@29.1.1 -> undici@7.30.0` (GHSA-4qv8-2p9j-2685,
+GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c). The lockfile blob is identical on
+main and this feature: `787e24e28b621b14c9447b9755235e2aed1fa8e4`.
+Patched compatible minimum is 7.30.1. No dependency remediation or audit bypass
+is bundled into this interaction package. Until an authorized security update
+is available, exact-head CI cannot reach its runtime/evidence stages. Final
+run links and regenerated local evidence are recorded in successor PR
+Validation; local evidence is not misrepresented as a GitHub CI artifact.
+
+Automation Green: **FAIL / blocked**, not PASS. Independent normal Windows
+Chrome witness remains **NOT VERIFIED**. Contract Verified and Product
+Accepted remain **PENDING**; no owner manual test is requested.
