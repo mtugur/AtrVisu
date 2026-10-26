@@ -5,7 +5,6 @@ import { getFootprintCornersFromReferenceMm } from "../utils/coordinateReference
 import {
   areaResult,
   angleResult,
-  distanceResult,
   isFiniteMeasurePoint,
   dimensionsForEntity,
   type MeasurePoint,
@@ -17,6 +16,7 @@ import {
   type MeasureDimensionMetadata,
   type MeasureReference
 } from "./referenceTypes";
+import { projectedDistanceResult } from "./measureProjection";
 
 const finiteProperty = (entity: PlatformEntity, key: string) => {
   const value = entity.properties.find((property) => property.key === key)?.value;
@@ -157,7 +157,7 @@ export const getDimensionResult = (
   }
   if (dimension.dimensionKind === "distance" || dimension.dimensionKind === "pair") {
     return resolved.points.length >= 2
-      ? distanceResult(resolved.points[0], resolved.points[1])
+      ? projectedDistanceResult(resolved.points[0], resolved.points[1], dimension.projectionMode)
       : { values: [], reason: "Two references are required." };
   }
   if (dimension.dimensionKind === "angle") {

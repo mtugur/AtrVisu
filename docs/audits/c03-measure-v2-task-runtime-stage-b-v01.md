@@ -146,3 +146,88 @@ existing first-selected primary policy. The fixture now selects Group first
 through the real Explorer and asserts both Runtime Selection and the Measure
 entry primary before checking first-eligible fallback. The validator and
 production selection/Measure authorities are unchanged.
+
+## Issue #139 integrated professional recovery
+
+Owner scope: https://github.com/mtugur/AtrVisu/issues/139. The successor branch
+`codex/c03-professional-measure-recovery-v01` inherits #136 exact source
+`dc1ac534eff517410f41ebe390ec513b494ebd8b`; it does not merge, close or modify
+#136/#129/#130/#133. Main at authorization is
+`59bef9bfc0db77e4c188d9fccce25d12752e5c45`. The four-file contract/ADR/benchmark/
+oracle checkpoint `c59e81bfbd7455b00ce02cafff535e2980f4dfb2` preceded runtime
+edits. Existing prior-package paragraphs above are historical evidence, not
+acceptance of this successor.
+
+### Verified rejected-baseline findings
+
+- A migrated `atrvisu.panelSection.properties.v1=collapsed` profile produces a
+  selected machine with no property body. Measure then disables its disclosure.
+  Selection and actual DOM were observed separately. The unprovided owner's
+  exact profile is not claimed reproduced; clean normal Inspector editing is a
+  separate control. Clicking the old property header closed the whole dock,
+  rather than persisting the inner collapsed preference, so that false fixture
+  was rejected before recording the profile experiment.
+- Old Pair computes reference origins with zero user-chosen operands.
+- No explicit plane/axis interpretation or fan-out/chain/manual-pair control.
+- A completed two-point operation ignores a third B until reset. Four real
+  Chromium probes record these owner-task failures as FAIL on the old served
+  source, not as passing product tasks. Five independent unit oracles also
+  fail on that exact production source. Infrastructure failures with zero
+  executed tests were not counted as fail-before evidence.
+
+### One integrated authority-preserving implementation
+
+- Explicit Inspector open reveals its existing visible/expanded preference;
+  Auto selection reveals Inspector, while Pinned manual-collapse semantics
+  remain. Header/disclosure is outside the read-only property fieldset.
+  A visible ownership reason and registered Pause and edit release picking;
+  only unsaved operands/relationships are cancelled. Resume keeps entry
+  selection/workflow/interpretation, not a new panel-owned selection.
+- `measureProjection.ts` interprets canonical world A/B in seven explicit
+  modes. Actual XYZ and signed deltas remain; excluded projected B coordinates
+  come from A. Actual B and projected B' are distinguished in graphics with
+  dashed witnesses. Saved dimensions use the same interpretation authority.
+  Optional `projectionMode` stays in existing schemaVersion 1 metadata;
+  absent means True 3D. No project/storage version or coordinate migration.
+- `MeasureAuthority` owns manual Selected Pair, fan-out and chain transient
+  relationships, replacement operands and per-result Saved/Not saved status.
+  Each Keep still creates exactly one Annotation/history transaction. Normal
+  visible operand picking takes precedence over saved dimension hitboxes.
+  Old origins remain labelled Reference Point Diagnostic. Surface shortest
+  distance and Accumulate are visibly NOT READY, never guessed clearance.
+- No-op elevation commit and unchanged Rotation blur are ignored so returning
+  from property editing to Undo cannot manufacture an extra history entry.
+  Rotation snap/math/navigation itself is unchanged. The actual Tab-to-Rotation
+  then toolbar Undo path exposed this issue; the regression checks one edit,
+  one Undo and one Redo, not disconnected history variables.
+- Active readouts precede auxiliary controls. Narrow presentation places actual
+  A/B and projected B in a readable reference row without hiding IDs/XYZ,
+  shrinking text, changing panel dimensions, or programmatic autoscroll.
+
+### Executable review evidence and independent acceptance
+
+`e2e/measureRecoveryEvidence.ts` drives real Library, Explorer, Inspector,
+Measure, camera, keyboard, Keep, Undo/Redo and Project routes. R1-R7 are recorded
+at 1440x900, 1024x768 and 640x800; the explicit locked-layer/Auto/Pinned route
+also verifies that resume does not reseed entry selection. A later user scroll
+from saved style controls back to the session is an explicit input, not product
+autoscroll or an altered clipping threshold. All original A-E and T01-T06 tests
+and pixel oracles remain alongside these tests.
+
+CI reproduces both historical baselines in detached worktrees. The new baseline
+copies tests only and asserts no changed production source. The strict
+`validate-measure-recovery-evidence.mjs` requires exact served/delivery heads,
+all PNG/JSON pairs, independent arithmetic, real visible-panel rectangles,
+history/lifecycle results and both earlier acceptance matrices. It emits
+`test-results/c03-measure-recovery/acceptance-matrix.json`, with per-file hashes.
+Artifact: `c03-professional-measure-recovery` includes recovery plus prior task
+and protected evidence directories. The complete exact-head Quality Gate and
+artifact linked in successor PR Validation determine Automation Green; neither
+old-head green CI nor this narrative substitutes for that run.
+
+Contract Verified: **PENDING independent review**. Product Accepted:
+**PENDING / not requested**. Independent non-author persisted-state normal
+Windows Chrome verification: **NOT VERIFIED by the implementation agent**.
+Default Playwright Chromium evidence is automation, not a claim of that
+independent browser witness. No owner debugging or manual acceptance is
+requested before the issue's reviewer-side runtime gate is fulfilled.

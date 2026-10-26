@@ -207,7 +207,7 @@ export function MachineProperties({
 
     const committedRotation = commitMachineRotationDraft(rotationDraft, currentRotation, placementSettings);
     setRotationDraft(committedRotation.displayValue);
-    if (!committedRotation.shouldCommit) {
+    if (!committedRotation.shouldCommit || committedRotation.rotationDeg === currentRotation) {
       return;
     }
 

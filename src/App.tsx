@@ -1444,7 +1444,7 @@ export function App() {
   }, [openInspectorPresentation, uiPreferencesStore]);
 
   const openInspectorTab = useCallback(() => {
-    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.inspector, { visible: true });
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.inspector, { visible: true, collapsed: false });
     setRightDockTab("inspector");
     openInspectorPresentation();
   }, [openInspectorPresentation, uiPreferencesStore]);
@@ -2103,13 +2103,16 @@ export function App() {
       return;
     }
     if (runtimeSelection.ids.length > 0) {
-      openInspectorPresentation();
+      if (measureAuthority.getActive()) openInspectorPresentation();
+      else openInspectorTab();
     } else {
       closeInspectorPresentation();
     }
   }, [
     closeInspectorPresentation,
     inspectorVisibilityMode,
+    measureAuthority,
+    openInspectorTab,
     openInspectorPresentation,
     runtimeSelection.ids.length,
     runtimeSelectionSignature
@@ -3241,20 +3244,21 @@ export function App() {
       const machine = placedMachinesRef.current.find((item) => item.instanceId === id);
       if (!machine || isLayerLocked(machine.layerId, layersRef.current)) return;
       const level = getLevel(machine.levelId, levelsRef.current);
-      updateMachine(id, { elevationMm: getWorldElevationMm(relativeElevationMm, level) });
+      const elevationMm = getWorldElevationMm(relativeElevationMm, level);
+      if ((machine.elevationMm ?? 0) === elevationMm) return;
+      updateMachine(id, { elevationMm });
       return;
     }
     const id = entityKey.slice("civil:".length);
     const item = civilReferencesRef.current.find((reference) => reference.id === id);
     if (!item || item.locked || isLayerLocked(item.layerId, layersRef.current)) return;
     const level = getLevel(item.levelId, levelsRef.current);
+    const zMm = getCivilBottomWorldElevationFromAnchorMm(item, getWorldElevationMm(relativeElevationMm, level));
+    if (item.positionMm.zMm === zMm) return;
     updateSelectedCivilReference(id, {
       positionMm: {
         ...item.positionMm,
-        zMm: getCivilBottomWorldElevationFromAnchorMm(
-          item,
-          getWorldElevationMm(relativeElevationMm, level)
-        )
+        zMm
       }
     });
   }, [updateMachine, updateSelectedCivilReference]);
@@ -3452,7 +3456,7 @@ export function App() {
 
   const keepMeasureDimension = useCallback(() => {
     const session = measureAuthority.getSnapshot();
-    if (!session || !session.completed) return false;
+    if (!session || session.paused || !session.completed || session.relationships?.some(item => item.id === session.activeRelationshipId && item.savedAnnotationId)) return false;
     const result = getMeasureResult(session);
     if (result.reason || result.values.length === 0) return false;
     const activeEntity = getActiveMeasureDimensionGroup(session)?.entity;
@@ -3476,6 +3480,7 @@ export function App() {
       name: session.kind === "dimensions" ? activeEntity!.name + " dimensions" : "Measure " + session.kind,
       visible: true,
       references,
+      projectionMode: session.kind === "distance" ? session.projectionMode : undefined,
       presentationSource: session.kind === "area" ? session.source : undefined,
       presentationElevationMm: session.presentationElevationMm,
       style: cloneMeasureDimensionStyle(measureDimensionStyleRef.current),
@@ -3484,6 +3489,7 @@ export function App() {
     markLayoutChanged();
     setAnnotations((current) => [...current, { ...annotation, text, dimension, layerId: "default" }]);
     measureAuthority.selectDimension(annotation.id);
+    measureAuthority.markKept(annotation.id);
     setRightDockTab("measure");
     return true;
   }, [markLayoutChanged, measureAuthority]);
@@ -3792,7 +3798,7 @@ export function App() {
             : createUnavailableRuntimeCommandResult("Measure dimension operation could not be completed.");
         }
         const wasActive = measureAuthority.getActive();
-        if (!wasActive) {
+        if (!wasActive && !measureAuthority.getSnapshot()) {
           const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           const menuTriggerId = activeElement?.closest('[role="menu"]')?.getAttribute("aria-labelledby");
           measureInvokerRef.current = menuTriggerId ? document.getElementById(menuTriggerId) : activeElement;
@@ -3805,6 +3811,10 @@ export function App() {
           machines: placedMachinesRef.current,
           level: getLevel(activeLevelIdRef.current, levelsRef.current)
         });
+        if (action.type === "pauseForEdit") {
+          openInspectorTab();
+          return createExecutedRuntimeFeatureCommandResult();
+        }
         if (measureAuthority.getActive()) runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.measure);
         if (wasActive && !measureAuthority.getActive()) {
           const invoker = measureInvokerRef.current;
@@ -4232,6 +4242,7 @@ export function App() {
     measurementHelpersAvailable,
     measurementHelpersReason,
     measureAuthority,
+    openInspectorTab,
     requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,
@@ -5583,9 +5594,13 @@ export function App() {
               onUpdateDimensionReference={(annotationId, index, reference) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "reference", annotationId, index, reference }); }}
             />
           ) : (
-          <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
+          <div className="measure-domain-fieldset">
+          {measureAuthority.getSnapshot() ? <section className="measure-inspector-ownership" aria-label="Measure editing ownership">
+            <p role="status">{isMeasureActive ? "Read-only while Measure owns picking. Pause and edit cancels unsaved points; saved dimensions are retained." : "Measure paused. Saved dimensions follow property changes."}</p>
+            <button type="button" onClick={() => executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: isMeasureActive ? "pauseForEdit" : "resume" })}>{isMeasureActive ? "Pause and edit" : "Resume Measure"}</button>
+          </section> : null}
           {showLegacyCompatibilityStack ? (
-            <>
+            <fieldset className="measure-domain-fieldset" disabled={isMeasureActive}>
           {recoveryLayout ? (
             <section className="recovery-prompt" aria-label="Autosave recovery">
               <p>A previous unsaved layout was found. Restore it?</p>
@@ -5908,7 +5923,7 @@ export function App() {
               onChange={setCollisionSettings}
             />
           </PanelSection>
-            </>
+            </fieldset>
           ) : null}
           <PanelSection
             title={editingAnnotationId ? "Annotation Properties" : selectedGroup ? "Assembly Properties" : selectedCivilReference ? "Civil Reference Properties" : selectedAlignableEntities.length > 1 ? "Multi-Selection" : "Selected Object Properties"}
@@ -5916,6 +5931,7 @@ export function App() {
             badge={editingAnnotationId ? "Annotation" : selectedGroup ? selectedGroup.name : selectedCivilReference ? selectedCivilReference.name : selectedAlignableEntities.length > 1 ? `${selectedAlignableEntities.length}` : selectedMachine ? getPlacedMachineDisplayName(selectedMachine) : "None"}
             {...getPanelSectionRuntimeProps(RUNTIME_PANEL_IDS.inspector)}
           >
+            <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
             {editingAnnotationId ? (
               <WorkbenchContextContribution
                 panelId={RUNTIME_PANEL_IDS.annotations}
@@ -6035,6 +6051,7 @@ export function App() {
                 Select a machine, civil reference, annotation, or group to inspect it.
               </p>
             )}
+            </fieldset>
           </PanelSection>
           {showLegacyCompatibilityStack && !editingAnnotationId ? (
             <PanelSection
@@ -6121,7 +6138,7 @@ export function App() {
               )}
             </PanelSection>
           ) : null}
-          </fieldset>
+          </div>
           )}
         </aside>
       )}

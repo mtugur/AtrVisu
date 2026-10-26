@@ -1,11 +1,14 @@
 import type { PlatformEntity } from "../platform/contracts";
 import type { PlacedMachine } from "../types/machine";
-import { angleArc, angleResult, areaResult, dimensionLines, dimensionsForEntity, distanceResult, entityReferencePoint, isFiniteMeasurePoint, pairResult, type MeasureKind, type MeasureLine, type MeasurePoint, type MeasureResult } from "./measureGeometry";
+import { angleArc, angleResult, areaResult, dimensionLines, dimensionsForEntity, entityReferencePoint, isFiniteMeasurePoint, pairResult, type MeasureKind, type MeasureLine, type MeasurePoint, type MeasureResult } from "./measureGeometry";
 import type { MeasureAnchorKind, MeasureDimensionMetadata, MeasureReference } from "./referenceTypes";
 import { resolveMeasureReference } from "./measureReferences";
+import { isMeasureProjectionMode, MEASURE_PROJECTION_LABELS, projectMeasureB, projectedDistanceResult, type MeasureProjectionMode } from "./measureProjection";
 export const MEASURE_PICK_CLICK_TOLERANCE_CSS_PX = 4;
 export const MEASURE_ACTIVE_REASON = "Exit Measure before changing layout, selection or history.";
 export type MeasureSource = "geometry" | "level-plane";
+export type MeasureWorkflow = "point-to-point" | "fan-out" | "chain" | "selected-pair";
+export type MeasureRelationship = { id: number; points: readonly MeasurePoint[]; projectionMode: MeasureProjectionMode; savedAnnotationId?: string };
 export type MeasureLevel = {
     id: string;
     name: string;
@@ -19,7 +22,15 @@ export type MeasureContext = {
     level?: MeasureLevel;
 };
 export type MeasureAction = {
-    type: "toggle" | "exit" | "restart" | "finish" | "confirmLockedAnchor";
+    type: "toggle" | "exit" | "restart" | "finish" | "confirmLockedAnchor" | "pauseForEdit" | "resume" | "nextRelationship";
+} | {
+    type: "projectionMode"; projectionMode: MeasureProjectionMode;
+} | {
+    type: "workflow"; workflow: MeasureWorkflow;
+} | {
+    type: "changePoint"; index: number;
+} | {
+    type: "selectRelationship"; id: number;
 } | {
     type: "kind";
     kind: MeasureKind;
@@ -77,6 +88,12 @@ export const updatePickPress = (press: PickPress, x: number, y: number): PickPre
     return { ...press, maximum, cancelled: press.cancelled || !Number.isFinite(maximum) || maximum > MEASURE_PICK_CLICK_TOLERANCE_CSS_PX };
 };
 export type MeasureSession = {
+    paused?: boolean;
+    workflow?: MeasureWorkflow;
+    projectionMode?: MeasureProjectionMode;
+    relationships?: readonly MeasureRelationship[];
+    activeRelationshipId?: number;
+    replacePointIndex?: number;
     activeDimensionEntityId?: string;
     lockedReference?: Extract<MeasureReference, { type: "entity-anchor" }>;
     referenceEdit?: { annotationId: string; index: number };
@@ -127,6 +144,7 @@ export type MeasureProjection = {
         preview: boolean;
         offscreen?: boolean;
         occluded?: boolean;
+        labelOffset?: { x: number; y: number };
     }[];
 };
 export const getMeasureDimensionGroups = (s: MeasureSession) => s.entry.selectionIds.map(id => {
@@ -137,14 +155,18 @@ export const getMeasureDimensionGroups = (s: MeasureSession) => s.entry.selectio
     return { id, name: entity?.name ?? s.entry.entities.find(item => item.id === id)?.name ?? id, entity, result, eligible: !result.reason };
 });
 export const getActiveMeasureDimensionGroup = (s: MeasureSession) => getMeasureDimensionGroups(s).find(group => group.id === s.activeDimensionEntityId);
+export const getMeasureOperands = (s: MeasureSession) => s.completed || !s.hover ? s.points
+    : s.replacePointIndex !== undefined ? s.points.map((point, index) => index === s.replacePointIndex ? s.hover! : point) : [...s.points, s.hover];
 export const getMeasureResult = (s: MeasureSession): MeasureResult => {
     if (s.kind === "dimensions")
         return getActiveMeasureDimensionGroup(s)?.result ?? { values: [], reason: "Select eligible Machine/Civil entities before entering Measure. Exit Measure to reselect." };
     if (s.kind === "pair")
         return pairResult(s.entry.selectionIds.length === 2 ? s.entry.entities : [], s.entry.machines);
-    const p = s.completed ? s.points : s.hover ? [...s.points, s.hover] : s.points;
+    if (s.workflow === "selected-pair" && (s.entry.selectionIds.length !== 2 || s.entry.entities.some(entity => !["machine", "civil"].includes(entity.type))))
+        return { values: [], reason: "Select exactly two eligible Machine/Civil entities before entering Selected Pair A/B." };
+    const p = getMeasureOperands(s);
     if (s.kind === "distance" && p.length >= 2)
-        return distanceResult(p[0], p[1]);
+        return projectedDistanceResult(p[0], p[1], s.projectionMode);
     if (s.kind === "angle" && p.length >= 3)
         return angleResult(p[0], p[1], p[2]);
     if (s.kind === "area")
@@ -156,7 +178,7 @@ export const getMeasureLines = (s: MeasureSession): MeasureLine[] => {
         return !getMeasureResult(s).reason ? dimensionLines(getActiveMeasureDimensionGroup(s)!.entity!) : [];
     if (s.kind === "pair")
         return getMeasureResult(s).reason ? [] : [{ points: s.entry.entities.map(entityReferencePoint), label: "Reference Point" }];
-    const p = s.completed ? s.points : s.hover ? [...s.points, s.hover] : s.points;
+    const p = getMeasureOperands(s);
     if (s.kind === "area") {
         if (s.presentationElevationMm === undefined || !p.length)
             return [];
@@ -168,6 +190,11 @@ export const getMeasureLines = (s: MeasureSession): MeasureLine[] => {
     if (p.length < 2)
         return [];
     const [a, b] = p;
+    if (s.projectionMode && s.projectionMode !== "true-3d") {
+        const projected = projectMeasureB(a, b, s.projectionMode);
+        return [{ points: [a, projected], label: MEASURE_PROJECTION_LABELS[s.projectionMode], preview: !s.completed },
+            { points: [projected, b], preview: true }];
+    }
     const x = { ...a, xMm: b.xMm }, y = { ...x, yMm: b.yMm };
     return [{ points: [a, b], label: "3D Distance", preview: !s.completed }, { points: [a, x, y, b], label: "XYZ", preview: true }];
 };
@@ -178,11 +205,23 @@ export const createMeasureAuthority = () => {
     const listeners = new Set<() => void>(), projectionListeners = new Set<() => void>();
     const publish = (next: MeasureSession | null) => { session = next; listeners.forEach(fn => fn()); };
     const reset = (s: MeasureSession, context: MeasureContext): MeasureSession => ({ ...s, points: [], hover: null, completed: false, reason: undefined, lastPress: undefined, lockedReference: undefined, referenceEdit: undefined,
+        relationships: [], activeRelationshipId: undefined, replacePointIndex: undefined,
         level: s.source === "level-plane" && context.level ? { ...context.level } : undefined,
         presentationElevationMm: s.source === "level-plane" ? context.level?.elevationMm : undefined });
     const cancelPress = (reason = "Pointer cancelled") => { if (!press)
         return; const previous = press; press = null; if (session)
         publish({ ...session, lastPress: { maximum: previous.maximum, confirmed: false, reason } }); };
+    const advanceRelationship = (s: MeasureSession): MeasureSession => ({ ...s,
+        points: s.points.length === 2 ? [{ ...(s.workflow === "chain" ? s.points[1] : s.points[0]) }] : [],
+        completed: false, activeRelationshipId: undefined, replacePointIndex: undefined, hover: null, lockedReference: undefined, reason: undefined });
+    const captureRelationship = (s: MeasureSession): MeasureSession => {
+        if (s.kind !== "distance" || !s.completed) return s;
+        const relationships = s.relationships ?? [];
+        const id = s.activeRelationshipId ?? (relationships[relationships.length - 1]?.id ?? 0) + 1;
+        const previous = relationships.find(item => item.id === id);
+        const relationship = { id, points: s.points.map(point => ({ ...point })), projectionMode: s.projectionMode ?? "true-3d", savedAnnotationId: previous?.savedAnnotationId };
+        return { ...s, activeRelationshipId: id, relationships: previous ? relationships.map(item => item.id === id ? relationship : item) : [...relationships, relationship] };
+    };
     const dispatch = (action: MeasureAction, context: MeasureContext) => {
         cancelPress("Tool ownership changed");
         if (action.type === "exit" || (action.type === "toggle" && session)) {
@@ -199,6 +238,37 @@ export const createMeasureAuthority = () => {
         }
         if (!session)
             return;
+        if (action.type === "pauseForEdit" || action.type === "resume") {
+            const next = reset({ ...session, paused: action.type === "pauseForEdit" }, context);
+            if (!next.paused && ["dimensions", "pair"].includes(next.kind)) next.completed = !getMeasureResult(next).reason;
+            publish(next);
+            return;
+        }
+        if (session.paused) return;
+        if (action.type === "workflow") {
+            publish(reset({ ...session, kind: "distance", workflow: action.workflow, ...(action.workflow === "selected-pair" ? { source: "geometry" as const } : {}) }, context));
+            return;
+        }
+        if (action.type === "projectionMode") {
+            const current = session.relationships?.find(item => item.id === session!.activeRelationshipId);
+            if (current?.savedAnnotationId) return;
+            publish(captureRelationship({ ...session, projectionMode: action.projectionMode }));
+            return;
+        }
+        if (action.type === "changePoint") {
+            const current = session.relationships?.find(item => item.id === session!.activeRelationshipId);
+            if (!current?.savedAnnotationId && session.points[action.index]) publish({ ...session, completed: false, replacePointIndex: action.index, hover: null });
+            return;
+        }
+        if (action.type === "selectRelationship") {
+            const item = session.relationships?.find(item => item.id === action.id);
+            if (item) publish({ ...session, points: item.points, projectionMode: item.projectionMode, activeRelationshipId: item.id, completed: true, replacePointIndex: undefined, hover: null });
+            return;
+        }
+        if (action.type === "nextRelationship") {
+            if (session.completed && ["fan-out", "chain"].includes(session.workflow ?? "")) publish(advanceRelationship(session));
+            return;
+        }
         if (action.type === "activeDimensionEntity") {
             const group = getMeasureDimensionGroups(session).find(item => item.id === action.entityId && item.eligible);
             if (group) publish({ ...session, activeDimensionEntityId: group.id, completed: session.kind === "dimensions" || session.completed });
@@ -228,7 +298,7 @@ export const createMeasureAuthority = () => {
         }
         const next = { ...session };
         if (action.type === "kind")
-            next.kind = action.kind;
+            { next.kind = action.kind; next.workflow = "point-to-point"; }
         if (action.type === "source")
             next.source = action.source;
         const restarted = reset(next, context);
@@ -237,7 +307,7 @@ export const createMeasureAuthority = () => {
         publish(restarted);
     };
     const preview = (point: MeasurePoint | null, reason?: string) => {
-        if (!session || session.completed || session.mode !== "pick")
+        if (!session || session.paused || session.completed || session.mode !== "pick")
             return;
         // A rejected up remains observable until a genuinely different preview
         // or explicit operation reset, rather than disappearing next frame.
@@ -247,7 +317,7 @@ export const createMeasureAuthority = () => {
             return;
         publish({ ...session, hover: point && isFiniteMeasurePoint(point) ? { ...point } : null, reason });
     };
-    const beginPress = (pointerId: number, x: number, y: number) => { if (!press && session?.mode === "pick" && !session.completed && !session.referenceEdit)
+    const beginPress = (pointerId: number, x: number, y: number) => { if (!press && session?.mode === "pick" && !session.paused && !session.completed && !session.referenceEdit)
         press = { pointerId, x, y, maximum: 0, cancelled: false }; };
     const movePress = (pointerId: number, x: number, y: number) => { if (press?.pointerId === pointerId)
         press = updatePickPress(press, x, y); };
@@ -257,14 +327,15 @@ export const createMeasureAuthority = () => {
         return point && isFiniteMeasurePoint(point) ? { ...point, anchorKind: reference!.anchor } : null;
     };
     const confirmPoint = (point: MeasurePoint, explicit = false) => {
-        if (!session || session.completed || (!explicit && session.mode !== "pick") || !isFiniteMeasurePoint(point)
+        if (!session || session.paused || session.completed || (!explicit && session.mode !== "pick") || !isFiniteMeasurePoint(point)
             || ["dimensions", "pair"].includes(session.kind)) return false;
+        if (session.workflow === "selected-pair" && (session.entry.selectionIds.length !== 2 || !point.entityId || !session.entry.selectionIds.includes(point.entityId))) return false;
         if (session.kind === "area" && session.points.some(p => Math.hypot(p.xMm - point.xMm, p.yMm - point.yMm) <= .001)) return false;
-        const points = [...session.points, { ...point }];
+        const points = session.replacePointIndex !== undefined ? session.points.map((previous, index) => index === session!.replacePointIndex ? { ...point } : previous) : [...session.points, { ...point }];
         if (session.kind === "angle" && points.length === 3 && angleResult(points[0], points[1], points[2]).reason) return false;
-        publish({ ...session, points, hover: null, lockedReference: undefined,
+        publish(captureRelationship({ ...session, points, hover: null, lockedReference: undefined, replacePointIndex: undefined,
             presentationElevationMm: session.kind === "area" && session.source === "geometry" ? session.presentationElevationMm ?? point.zMm : session.presentationElevationMm,
-            completed: (session.kind === "distance" && points.length === 2) || (session.kind === "angle" && points.length === 3) });
+            completed: (session.kind === "distance" && points.length === 2) || (session.kind === "angle" && points.length === 3) }));
         return true;
     };
     const endPress = (pointerId: number, x: number, y: number, inside: boolean, point: MeasurePoint | null) => {
@@ -292,7 +363,12 @@ export const createMeasureAuthority = () => {
         publish({ ...session, reason, lastPress: { maximum: ended.maximum, confirmed: accepted, reason } });
         return accepted;
     };
-    return { getSnapshot: () => session, getActive: () => session !== null,
+    return { getSnapshot: () => session, getActive: () => session !== null && !session.paused,
+        markKept: (annotationId: string) => {
+            if (!session) return;
+            const next = { ...session, relationships: session.relationships?.map(item => item.id === session!.activeRelationshipId ? { ...item, savedAnnotationId: annotationId } : item) };
+            publish(["fan-out", "chain"].includes(next.workflow ?? "") ? advanceRelationship(next) : next);
+        },
         resolveLockedAnchor,
         lockAnchor: (point: MeasurePoint | null) => {
             if (!session || !point?.entityId || !point.anchorKind || (session.completed && !session.referenceEdit)) return;
@@ -321,7 +397,12 @@ export const isMeasureAction = (value: unknown): value is MeasureAction => {
     if (!value || typeof value !== "object")
         return false;
     const p = value as Record<string, unknown>;
-    return ["toggle", "exit", "restart", "finish", "confirmLockedAnchor", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(String(p.type)) || (p.type === "activeDimensionEntity" && typeof p.entityId === "string" && p.entityId.length > 0) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
+    return ["toggle", "exit", "restart", "finish", "confirmLockedAnchor", "keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement", "pauseForEdit", "resume", "nextRelationship"].includes(String(p.type))
+        || (p.type === "projectionMode" && isMeasureProjectionMode(p.projectionMode))
+        || (p.type === "workflow" && ["point-to-point", "fan-out", "chain", "selected-pair"].includes(String(p.workflow)))
+        || (p.type === "changePoint" && Number.isInteger(p.index) && Number(p.index) >= 0 && Number(p.index) <= 1)
+        || (p.type === "selectRelationship" && Number.isInteger(p.id) && Number(p.id) > 0)
+        || (p.type === "activeDimensionEntity" && typeof p.entityId === "string" && p.entityId.length > 0) || (p.type === "kind" && ["distance", "angle", "area", "dimensions", "pair"].includes(String(p.kind))) || (p.type === "source" && ["geometry", "level-plane"].includes(String(p.source))) || (p.type === "mode" && ["pick", "navigate"].includes(String(p.mode))) || (p.type === "snapMode" && ["semantic", "free"].includes(String(p.snapMode)));
 };
 
 export const measurePointToReference = (point: MeasurePoint): MeasureReference =>
@@ -333,6 +414,7 @@ export const measurePointToReference = (point: MeasurePoint): MeasureReference =
 
 export const measureSessionMatchesDimension = (session: MeasureSession | null, dimension: MeasureDimensionMetadata) => {
     if (!session?.completed || !dimension.visible || dimension.status === "orphaned" || dimension.dimensionKind !== session.kind) return false;
+    if (["distance", "pair"].includes(session.kind) && (session.projectionMode ?? "true-3d") !== (dimension.projectionMode ?? "true-3d")) return false;
     const entities = session.kind === "dimensions" ? [getActiveMeasureDimensionGroup(session)?.entity].filter((entity): entity is PlatformEntity => Boolean(entity)) : session.entry.entities.slice(0, 2);
     const references: MeasureReference[] = session.kind === "dimensions" || session.kind === "pair"
         ? entities.map(entity => ({ type: "entity-anchor", entityId: entity.id, anchor: "front-left-bottom" }))

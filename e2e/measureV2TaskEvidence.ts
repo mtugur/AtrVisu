@@ -132,22 +132,22 @@ const taskEvidence = async (page: Page, name: string, errors: string[], observat
     outcome: "PASS", errors, runtime: await snapshot(page), session: await taskSession(page), graphics: await graphics(page),
     generation: await canvas(page).getAttribute("data-scene-lifecycle-generation"), ...observations }, null, 2));
 };
-const taskToolbarCommand = async (page: Page, id: string) => {
+export const taskToolbarCommand = async (page: Page, id: string) => {
   if (!await command(page, id).isVisible()) await page.getByRole("button", { name: "More commands", exact: true }).click();
   await command(page, id).click(); await taskFrame(page);
 };
-const closePrimary = async (page: Page) => {
+export const closePrimary = async (page: Page) => {
   const toggle = page.getByRole("button", { name: "Collapse Primary Dock", exact: true });
   if (await toggle.isVisible()) await toggle.click();
 };
-const editSelectedMachine = async (page: Page, values: Record<string, number>) => {
+export const editSelectedMachine = async (page: Page, values: Record<string, number>) => {
   if ((page.viewportSize()?.width ?? 1440) <= 720) await closePrimary(page);
   await page.getByTestId("right-panel").getByRole("button", { name: "Inspector", exact: true }).click();
   for (const [name, value] of Object.entries(values)) {
     const input = page.getByRole("textbox", { name, exact: true }); await input.fill(String(value)); await input.press("Tab");
   }
 };
-const topAndFit = async (page: Page) => {
+export const topAndFit = async (page: Page) => {
   await closePrimary(page);
   await page.getByTestId("viewcube").getByRole("button", { name: "Top view (+Z)", exact: true }).click();
   await taskToolbarCommand(page, "view.fitView");
@@ -165,7 +165,7 @@ const topAndFit = async (page: Page) => {
   await page.mouse.move(start.x + available.width / 2 - center.x, start.y + available.height / 2 - center.y, { steps: 10 });
   await page.mouse.up({ button: "middle" }); await taskFrame(page);
 };
-const hoverCorner = async (page: Page, id: string) => {
+export const hoverCorner = async (page: Page, id: string) => {
   const body = await taskHoverBody(page, id), box = (await canvas(page).boundingBox())!;
   const corner = (await taskSession(page)).candidateObservations.find(point => point.entityId === id && point.visible && point.anchorKind.endsWith("-top"))!;
   expect(corner).toBeTruthy();
@@ -174,7 +174,7 @@ const hoverCorner = async (page: Page, id: string) => {
   expect(point).toMatchObject({ entityId: id, anchorKind: corner.anchorKind });
   return { point, pointer: { x: box.x + corner.x, y: box.y + corner.y } };
 };
-const visibleReferenceReadouts = async (page: Page) => {
+export const visibleReferenceReadouts = async (page: Page) => {
   const observed = await page.getByTestId("measure-panel").evaluate(panel => {
     const rect = (element: Element) => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, right: box.right, bottom: box.bottom }; };
     const dock = rect(panel.closest('[data-testid="right-panel"]')!);
@@ -192,7 +192,7 @@ const visibleReferenceReadouts = async (page: Page) => {
   expect(observed.references.length).toBeGreaterThan(0);
   return observed;
 };
-const expectOperands = async (page: Page, points: TaskPoint[]) => {
+export const expectOperands = async (page: Page, points: TaskPoint[]) => {
   await page.getByRole("region", { name: "Measure Session", exact: true }).hover(); await page.mouse.wheel(0, -1800); await taskFrame(page);
   const state = await taskSession(page); expect(state.points).toEqual(points);
   const [a, b] = points, dx = b.xMm - a.xMm, dy = b.yMm - a.yMm, dz = b.zMm - a.zMm;
@@ -206,8 +206,8 @@ const expectOperands = async (page: Page, points: TaskPoint[]) => {
   }
   return state.result;
 };
-const reloadProject = async (page: Page, name: string) => {
-  page.on("dialog", dialog => dialog.accept("C03 task regression"));
+export const reloadProject = async (page: Page, name: string) => {
+  page.once("dialog", dialog => dialog.accept("C03 task regression"));
   await taskToolbarCommand(page, "project.save");
   await expect.poll(() => page.evaluate(() => window.__atrvisuProjectCommands?.getActiveContext().hasUnsavedChanges)).toBe(false);
   await page.reload();

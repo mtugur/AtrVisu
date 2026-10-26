@@ -4977,8 +4977,8 @@ body.is-resizing-workbench-dock {
     align-items: flex-start;
     gap: 8px;
   }
-  .measure-panel .measure-session-inputs { flex: 1 1 180px; }
-  .measure-panel .measure-session-readout { flex: 1.5 1 310px; }
+  .measure-panel .measure-session-inputs { flex: 1 1 208px; }
+  .measure-panel .measure-session-readout { flex: 1.5 1 380px; }
   .measure-panel .measure-session-inputs,
   .measure-panel .measure-session-readout { gap: 6px; }
   .measure-panel .measure-panel-controls { gap: 4px; }
@@ -5671,6 +5671,20 @@ body.is-resizing-workbench-dock {
 .measure-domain-fieldset {
   display: contents;
 }
+.measure-session-layout.measure-domain-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.measure-inspector-ownership {
+  padding: 8px;
+  border-bottom: 1px solid var(--av-border-default);
+}
+.measure-inspector-ownership p { margin-block: 0 6px; }
+.measure-capabilities { font-size: inherit; }
+.measure-session-inputs [aria-label="Transient measurements"] { display: flex; flex-direction: column; gap: 4px; }
+.measure-session-inputs [aria-label="Transient measurements"] button { text-align: left; white-space: normal; }
 
 .measure-layer {
   position: absolute;
@@ -5838,6 +5852,7 @@ body.is-resizing-workbench-dock {
   border-radius: 4px;
   background: var(--av-surface-panel);
 }
+.measure-panel .measure-session-card { padding: 0; border: 0; background: transparent; }
 .measure-panel-section-title {
   display: flex;
   justify-content: space-between;
@@ -5910,6 +5925,17 @@ body.is-resizing-workbench-dock {
 .measure-point-reference dl > div { display: flex; justify-content: space-between; gap: 6px; }
 .measure-point-reference dt { white-space: nowrap; }
 .measure-point-reference dd { margin: 0; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.measure-projected-reference dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.measure-projected-reference { grid-column: 1 / -1; }
+.measure-projected-reference dl > div { flex-direction: column; }
+.measure-projected-reference dd { text-align: left; }
+@media (max-width: 720px) {
+  .measure-point-references:has(.measure-projected-reference) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .measure-projected-reference { grid-column: auto; }
+  .measure-projected-reference dl { display: block; }
+  .measure-projected-reference dl > div { flex-direction: row; }
+  .measure-projected-reference dd { text-align: right; }
+}
 .measure-session-readout .measure-values {
   display: flex;
   flex-wrap: wrap;
@@ -5918,6 +5944,7 @@ body.is-resizing-workbench-dock {
   line-height: 1.15;
 }
 .measure-session-readout .measure-values > div { min-width: 0; flex-wrap: nowrap; }
+.measure-session-readout { order: -1; }
 .measure-point-reference small,
 .measure-entity-results small { color: var(--av-text-secondary); }
 .measure-entity-results button { text-align: left; font: inherit; }

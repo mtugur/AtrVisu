@@ -1,6 +1,6 @@
 import { Matrix, Ray, Vector3, type ArcRotateCamera, type Scene } from "@babylonjs/core";
 import type { MeasureAuthority, MeasureAction, MeasureProjection } from "../../measure/measureAuthority";
-import { getMeasureLines, getMeasureResult } from "../../measure/measureAuthority";
+import { getMeasureLines, getMeasureOperands, getMeasureResult } from "../../measure/measureAuthority";
 import { entityReferencePoint, type MeasurePoint } from "../../measure/measureGeometry";
 import { getSelectionPickTarget } from "../babylonScene/selectionPicking";
 import { getSemanticAnchorPoints } from "../../measure/measureReferences";
@@ -14,6 +14,7 @@ import { dimensionLabelBounds, dimensionLabelLines, dimensionMarkerBounds, dimen
 import { createMeasureTextMeasurer, readMeasureLabelViewport } from "./measureLabelContext";
 import { getCandidateVisibility } from "../../measure/candidateVisibility";
 import { insideCandidateContext, projectedVolumeEnvelope } from "../../measure/candidateContext";
+import { projectMeasureB } from "../../measure/measureProjection";
 export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority, onAction, diagnostics, getDimensionManager, getStyle }: {
     scene: Scene;
     camera: ArcRotateCamera;
@@ -67,7 +68,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     const sameAnchor = (a: MeasurePoint | null, b: MeasurePoint | null) => a?.entityId === b?.entityId && a?.anchorKind === b?.anchorKind;
     const candidate = (clientX: number, clientY: number): MeasurePoint | null => {
         const state = authority.getSnapshot();
-        if (!state)
+        if (!state || state.paused)
             return null;
         const rect = canvas.getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
         anchors = [];
@@ -86,9 +87,11 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         const hit = scene.pick(x, y, eligibleMesh, false, camera);
         const target = getSelectionPickTarget(hit);
         let entityId = target.instanceId ? `machine:${target.instanceId}` : target.civilReferenceId ? `civil:${target.civilReferenceId}` : undefined;
-        const actual = hit?.hit && hit.pickedPoint ? pointFromVector(hit.pickedPoint, entityId) : null;
+        const allowed = (id?: string) => state.workflow !== "selected-pair" || Boolean(id && state.entry.selectionIds.length === 2 && state.entry.selectionIds.includes(id));
+        const actual = hit?.hit && hit.pickedPoint && allowed(entityId) ? pointFromVector(hit.pickedPoint, entityId) : null;
+        if (!allowed(entityId)) entityId = undefined;
         if (state.snapMode !== "semantic") return actual;
-        const active = state.entityCatalog.find(entity => entity.id === activeEntityId && entity.visible);
+        const active = state.entityCatalog.find(entity => entity.id === activeEntityId && entity.visible && allowed(entity.id));
         if (active && !state.lockedReference) {
             const canonical = Object.entries(getSemanticAnchorPoints(active));
             const corners = canonical.filter(([kind]) => kind.endsWith("-top") || kind.endsWith("-bottom")).map(([, point]) => screenPoint(point));
@@ -98,7 +101,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
         }
         // A visible marker remains reachable at a silhouette even without an interior mesh hit.
         if (!entityId) {
-            const nearby = state.entityCatalog.filter(entity => entity.visible && ["machine", "civil"].includes(entity.type)).flatMap(entity =>
+            const nearby = state.entityCatalog.filter(entity => entity.visible && allowed(entity.id) && ["machine", "civil"].includes(entity.type)).flatMap(entity =>
                 Object.values(getSemanticAnchorPoints(entity)).flatMap(point => {
                     const p = screenPoint(point);
                     const distance = Math.hypot(p.x - x, p.y - y);
@@ -148,13 +151,15 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     const block = (e: PointerEvent) => { e.preventDefault(); e.stopImmediatePropagation(); };
     const down = (e: PointerEvent) => {
         const s = authority.getSnapshot();
-        if (!s || e.button !== 0)
+        if (!s || s.paused || e.button !== 0)
             return;
         if (s.mode !== "pick")
             return;
         block(e);
         canvas.focus({ preventScroll: true });
-        const dimensionHit = getDimensionManager()?.hitTest(e.clientX, e.clientY);
+        const operand = observePreview(e.clientX, e.clientY);
+        const pickingOperand = !s.completed && !s.referenceEdit && !["dimensions", "pair"].includes(s.kind);
+        const dimensionHit = pickingOperand && operand ? null : getDimensionManager()?.hitTest(e.clientX, e.clientY);
         if (dimensionHit && e.isPrimary) {
             authority.selectDimension(dimensionHit.annotationId);
             if (dimensionHit.index !== undefined) authority.beginReferenceEdit(dimensionHit.annotationId, dimensionHit.index);
@@ -166,7 +171,6 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
                 depth: projected.z, point: null, moved: false };
             captured = e.pointerId; canvas.setPointerCapture(e.pointerId); return;
         }
-        observePreview(e.clientX, e.clientY);
         if (e.isPrimary) {
             authority.beginPress(e.pointerId, e.clientX, e.clientY);
             if (authority.getPress()) {
@@ -177,7 +181,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     };
     const move = (e: PointerEvent) => {
         const s = authority.getSnapshot();
-        if (!s || s.mode !== "pick" || (e.buttons !== 0 && (e.buttons & 1) === 0))
+        if (!s || s.paused || s.mode !== "pick" || (e.buttons !== 0 && (e.buttons & 1) === 0))
             return;
         block(e);
         if (edit) {
@@ -195,7 +199,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     };
     const up = (e: PointerEvent) => {
         const s = authority.getSnapshot();
-        if (!s || s.mode !== "pick" || e.button !== 0)
+        if (!s || s.paused || s.mode !== "pick" || e.button !== 0)
             return;
         block(e);
         if (edit) {
@@ -260,7 +264,7 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
     let previousState = authority.getSnapshot();
     const unsubscribe = authority.subscribe(() => {
         const state = authority.getSnapshot();
-        const reset = !state || state.mode !== previousState?.mode || state.source !== previousState?.source
+        const reset = !state || state.paused !== previousState?.paused || state.mode !== previousState?.mode || state.source !== previousState?.source
             || state.kind !== previousState?.kind || state.snapMode !== previousState?.snapMode
             || state.points !== previousState?.points;
         previousState = state;
@@ -268,13 +272,13 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             edit = null; clearChoice(); highlighted = null; anchors = []; observations = []; activeEntityId = undefined;
             getDimensionManager()?.previewText("", null);
         }
-        if (!state || state.mode !== "pick" || (!authority.getPress() && !edit))
+        if (!state || state.paused || state.mode !== "pick" || (!authority.getPress() && !edit))
             release();
     });
     const observer = scene.onAfterRenderObservable.add(() => {
         const state = authority.getSnapshot();
         const { viewport: rect, insets, maximumLabelWidth } = readMeasureLabelViewport(canvas);
-        if (!state) {
+        if (!state || state.paused) {
             authority.project({ width: rect.width, height: rect.height, lines: [], markers: [] });
             if (diagnostics())
                 delete canvas.dataset.measureSession;
@@ -297,15 +301,20 @@ export const installMeasureViewportAdapter = ({ scene, camera, canvas, authority
             const p = project(point);
             return p.visible ? [{ ...anchor, point: { ...point, anchorKind: anchor.point.anchorKind }, x: p.x, y: p.y }] : [];
         });
-        const markers = current.kind === "pair" ? current.entry.entities.map(entityReferencePoint) : current.kind === "dimensions" ? getMeasureLines(current).flatMap(line => line.points) : [...current.points, ...(current.hover && !current.completed ? [current.hover] : [])];
-        const projectedMarkers = markers.map((p, i) => ({ ...project(p), label: String.fromCharCode(65 + i), preview: i >= current.points.length && !["pair", "dimensions"].includes(current.kind) }));
+        const markers = current.kind === "pair" ? current.entry.entities.map(entityReferencePoint) : current.kind === "dimensions" ? getMeasureLines(current).flatMap(line => line.points) : getMeasureOperands(current);
+        const projectedMarkers: MeasureProjection["markers"][number][] = markers.map((p, i) => ({ ...project(p), label: String.fromCharCode(65 + i), preview: (i === current.replacePointIndex || i >= current.points.length) && !["pair", "dimensions"].includes(current.kind) }));
+        if (current.kind === "distance" && current.projectionMode && current.projectionMode !== "true-3d" && markers.length >= 2)
+            projectedMarkers.push({ ...project(projectMeasureB(markers[0], markers[1], current.projectionMode)), label: "B'", preview: true, labelOffset: { x: 8, y: 18 } });
         const result = getMeasureResult(current);
         const manager = getDimensionManager(), representedByDimensionId = manager?.getSessionRepresentationId();
         const style = getStyle();
         const reference = markers[0], zoom = reference ? Vector3.Distance(camera.globalPosition, new Vector3(reference.xMm / 1000, reference.zMm / 1000, reference.yMm / 1000)) : 12;
         const textPx = dimensionTextPx(style, 12 * Math.sqrt(12 / Math.max(1, zoom)));
         const measureText = textMeasurer(style.fontFamily, textPx);
-        const obstacles = [...projectedMarkers.filter(point => !point.offscreen).map(point => dimensionMarkerBounds(point)),
+        const obstacles = [...projectedMarkers.filter(point => !point.offscreen).map(point => {
+            const bounds = dimensionMarkerBounds(point, point.label.length * 9);
+            return point.labelOffset ? { ...bounds, height: Math.max(bounds.height, point.y + point.labelOffset.y + 4 - bounds.y) } : bounds;
+        }),
             ...(manager?.getLabelBounds() ?? [])];
         const labels: NonNullable<MeasureProjection["labels"]>[number][] = [];
         const lines = representedByDimensionId ? [] : getMeasureLines(current).flatMap<MeasureProjection["lines"][number]>(line => {

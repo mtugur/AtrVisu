@@ -78,7 +78,7 @@ jobs:
           ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
 
       - name: Reproduce C03 owner-task failures on the faithful historical port
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' }}
+        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' || github.event.pull_request.head.ref == 'codex/c03-professional-measure-recovery-v01') }}
         shell: bash
         env:
           ATRVISU_C03_DELIVERY_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -99,12 +99,53 @@ jobs:
           cp "$RUNNER_TEMP/c03-baseline-unit.json" "$GITHUB_WORKSPACE/test-results/c03-measure-v2-task/baseline-unit.json"
 
       - name: Validate exact-head C03 task and protected regression evidence
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' }}
+        if: ${{ github.event_name == 'pull_request' && (github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' || github.event.pull_request.head.ref == 'codex/c03-professional-measure-recovery-v01') }}
         run: |
           node scripts/validate-measure-v2-evidence.mjs
           node scripts/validate-measure-v2-task-evidence.mjs
         env:
           ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+
+      - name: Reproduce rejected C03 recovery baseline without changing its product source
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-professional-measure-recovery-v01' }}
+        shell: bash
+        env:
+          ATRVISU_C03_RECOVERY_DELIVERY_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          baseline="$RUNNER_TEMP/c03-recovery-baseline"
+          git worktree add --detach "$baseline" dc1ac534eff517410f41ebe390ec513b494ebd8b
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$baseline/node_modules"
+          cp e2e/app-smoke.spec.ts e2e/measureV2TaskEvidence.ts e2e/measureRecoveryEvidence.ts "$baseline/e2e/"
+          cp src/measure/measureRecoveryContract.test.ts "$baseline/src/measure/"
+          cd "$baseline"
+          test -z "$(git diff dc1ac534eff517410f41ebe390ec513b494ebd8b -- src ':(exclude)**/*.test.ts' ':(exclude)**/*.test.tsx')"
+          if npm run test -- --run src/measure/measureRecoveryContract.test.ts --reporter=json --outputFile="$RUNNER_TEMP/c03-recovery-unit.json"; then
+            echo "Rejected-baseline assertions unexpectedly passed"
+            exit 1
+          fi
+          node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));require("assert/strict").equal(r.numFailedTests,5);require("assert/strict").equal(r.numTotalTests,5)' "$RUNNER_TEMP/c03-recovery-unit.json"
+          ATRVISU_MEASURE_RECOVERY_BASELINE=1 npm run test:e2e -- --grep 'C03 recovery baseline'
+          mkdir -p "$GITHUB_WORKSPACE/test-results/c03-measure-recovery"
+          cp -R test-results/c03-measure-recovery/baseline "$GITHUB_WORKSPACE/test-results/c03-measure-recovery/"
+          cp "$RUNNER_TEMP/c03-recovery-unit.json" "$GITHUB_WORKSPACE/test-results/c03-measure-recovery/baseline-unit.json"
+
+      - name: Validate exact-head professional Measure recovery evidence
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-professional-measure-recovery-v01' }}
+        run: node scripts/validate-measure-recovery-evidence.mjs
+        env:
+          ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+
+      - name: Upload professional Measure recovery user-route evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-professional-measure-recovery-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: c03-professional-measure-recovery
+          path: |
+            test-results/c03-measure-recovery
+            test-results/c03-measure-v2-task
+            test-results/c03-measure-v2-stage-b
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload C03 renewed task runtime evidence
         if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' }}

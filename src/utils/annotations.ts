@@ -1,6 +1,7 @@
 import type { AnnotationObject, AnnotationType } from "../types/annotations";
 import { cloneMeasureDimensionStyle, type MeasureAnchorKind, type MeasureDimensionKind, type MeasureDimensionMetadata, type MeasureReference } from "../measure/referenceTypes";
 import type { PlacedMachine } from "../types/machine";
+import { isMeasureProjectionMode } from "../measure/measureProjection";
 import { ANNOTATION_TECHNICAL_STYLES } from "../designSystem";
 import { getMachinePlanPositionMm } from "./placement";
 
@@ -176,6 +177,7 @@ const normalizeMeasureDimension = (value: unknown): MeasureDimensionMetadata | u
   return {
     schemaVersion: 1,
     dimensionKind,
+    projectionMode: isMeasureProjectionMode(value.projectionMode) ? value.projectionMode : undefined,
     presentationSource: value.presentationSource === "geometry" || value.presentationSource === "level-plane"
       ? value.presentationSource : undefined,
     presentationElevationMm: typeof value.presentationElevationMm === "number" && Number.isFinite(value.presentationElevationMm)

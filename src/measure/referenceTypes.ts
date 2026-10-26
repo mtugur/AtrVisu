@@ -1,3 +1,5 @@
+import type { MeasureProjectionMode } from "./measureProjection";
+
 export type MeasureDimensionKind = "distance" | "angle" | "area" | "dimensions" | "pair";
 export type MeasureAnchorKind =
   | "front-left-bottom"
@@ -60,6 +62,7 @@ export type MeasureDimensionMetadata = {
   visible: boolean;
   references: readonly MeasureReference[];
   dimensionAxis?: "width" | "depth" | "height";
+  projectionMode?: MeasureProjectionMode;
   presentationSource?: "geometry" | "level-plane";
   presentationElevationMm?: number;
   style: MeasureDimensionStyle;

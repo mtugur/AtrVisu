@@ -1,5 +1,6 @@
 import type { MeasureDimensionKind, MeasureDimensionStyle } from "./referenceTypes";
 import type { MeasureValue } from "./measureGeometry";
+import { primaryDistanceValue } from "./measureProjection";
 import { MEASURE_ANCHOR_MARKER_RADIUS_CSS_PX, type MeasureSafeArea } from "./measurePresentation";
 
 export type DimensionScreenPoint = { x: number; y: number; z: number };
@@ -16,7 +17,7 @@ export const formatDimensionValue = (value: MeasureValue, style: MeasureDimensio
 
 export const dimensionLabelLines = (kind: MeasureDimensionKind, values: readonly MeasureValue[], style: MeasureDimensionStyle) => {
   const shown = kind === "area" ? values.filter(value => value.unit !== "m2")
-    : kind === "distance" || kind === "pair" ? values.filter(value => value.label === "3D Distance") : values;
+    : kind === "distance" || kind === "pair" ? [primaryDistanceValue(values)].filter((value): value is MeasureValue => Boolean(value)) : values;
   return shown.map(value => `${kind === "area" || kind === "distance" || kind === "pair" ? value.label + " " : kind === "angle" ? "Angle " : ""}${formatDimensionValue(value, style)}`);
 };
 

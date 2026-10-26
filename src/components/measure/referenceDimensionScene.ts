@@ -9,6 +9,7 @@ import { dimensionTextPx, dimensionLabelLines, measureDimensionLabel, fitDimensi
 import { createTechnicalColor3 } from "../../designSystem/technicalPaletteBabylon";
 import { TECHNICAL_CSS_COLORS } from "../../designSystem/technicalPalette";
 import { createMeasureTextMeasurer, readMeasureLabelViewport } from "./measureLabelContext";
+import { projectMeasureB } from "../../measure/measureProjection";
 
 type Node = { strokes: Mesh; grips: Mesh; label: Mesh; material: StandardMaterial; labelMaterial: StandardMaterial; texture: DynamicTexture; key: string };
 export type DimensionHit = { annotationId: string; index?: number; point: MeasurePoint };
@@ -74,6 +75,8 @@ export const createReferenceDimensionSceneManager = ({ scene, camera, canvas, au
       const renderId = dimension.dimensionAxis ? `${annotation.id}:${dimension.dimensionAxis}` : annotation.id;
       active.add(renderId);
       let points = resolved.points;
+      if (["distance", "pair"].includes(dimension.dimensionKind) && dimension.projectionMode && dimension.projectionMode !== "true-3d" && points.length >= 2)
+        points = [points[0], projectMeasureB(points[0], points[1], dimension.projectionMode)];
       if (dimension.dimensionKind === "dimensions") {
         const ref = dimension.references[0], entity = ref.type === "entity-anchor" ? entities.find(e => e.id === ref.entityId) : undefined;
         const axis = dimension.dimensionAxis === "depth" ? 1 : dimension.dimensionAxis === "height" ? 2 : 0;
@@ -113,6 +116,16 @@ export const createReferenceDimensionSceneManager = ({ scene, camera, canvas, au
       const placement = previewText?.id === annotation.id ? previewText.point : dimension.textPlacementMm;
       let labelPosition = placement ? project(placement) : projected.reduce((a, b) => ({ x: a.x + b.x / projected.length, y: a.y + b.y / projected.length, z: a.z + b.z / projected.length }), { x: 0, y: 0, z: 0 });
       const segments: DimensionSegment[] = []; let fit = "inside";
+      if (dimension.projectionMode && dimension.projectionMode !== "true-3d" && resolved.points.length >= 2) {
+        const actual = project(resolved.points[1]), projectedB = projected[1];
+        const length = Math.hypot(actual.x - projectedB.x, actual.y - projectedB.y);
+        // Same 4px dash / 3px gap as the transient preview, in CSS pixels.
+        for (let offset = 0; offset < length; offset += 7) {
+          const at = (distance: number) => ({ x: actual.x + (projectedB.x - actual.x) * distance / length,
+            y: actual.y + (projectedB.y - actual.y) * distance / length, z: actual.z + (projectedB.z - actual.z) * distance / length });
+          segments.push([at(offset), at(Math.min(length, offset + 4))]);
+        }
+      }
       if (["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && projected.length >= 2) {
         const layout = layoutLinearDimension(projected[0], projected[1], style, textWidth, textHeight, placement ? labelPosition : undefined);
         segments.push(...layout.segments); labelPosition = layout.text; fit = layout.outside ? "outside" : "inside";
@@ -151,7 +164,7 @@ export const createReferenceDimensionSceneManager = ({ scene, camera, canvas, au
       setQuads(node.strokes, quads); setQuads(node.label, [box(labelPosition, textWidth, textHeight)], true);
       const labelWorld = unproject(labelPosition);
       hitTargets.push({ hit: { annotationId: annotation.id, point: { xMm: labelWorld.x * 1000, yMm: labelWorld.z * 1000, zMm: labelWorld.y * 1000 } }, screen: labelPosition, width: textWidth, height: textHeight });
-      node.strokes.metadata = { referenceDimensionId: annotation.id, references: dimension.references, style, displayMode: style.displayMode, fit, witnessCount: ["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && style.showWitnessLines ? 2 : 0, lineWeightPx: style.lineWeightPx, textPx, text, labelLines: labelLayout.lines, labelPosition, labelWidthPx: textWidth, labelHeightPx: textHeight, endpoints: resolved.points, endpointScreens: resolved.points.map(project), segments };
+      node.strokes.metadata = { referenceDimensionId: annotation.id, references: dimension.references, projectionMode: dimension.projectionMode ?? "true-3d", projectedEndpoints: points, style, displayMode: style.displayMode, fit, witnessCount: ["distance", "pair", "dimensions"].includes(dimension.dimensionKind) && style.showWitnessLines ? 2 : 0, lineWeightPx: style.lineWeightPx, textPx, text, labelLines: labelLayout.lines, labelPosition, labelWidthPx: textWidth, labelHeightPx: textHeight, endpoints: resolved.points, endpointScreens: resolved.points.map(project), segments };
     });
     nodes.forEach((node, id) => { if (!active.has(id)) { disposeNode(node); nodes.delete(id); } });
   };

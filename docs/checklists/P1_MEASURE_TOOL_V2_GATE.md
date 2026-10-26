@@ -160,7 +160,7 @@ Authority: V2 section 22 / ADR-009 / benchmark section 11 / Issue #139.
 | R6 | Readable Inspector while picking; explicit pause/edit, actual elevation change, resume, saved recompute, one Undo per action, save/reopen and orphan/reassociation. |
 | R7 | All at 1440/1024/640, persisted preferences, overlap/occlusion, saved label near corner, Auto/Pinned, keyboard, locked layers, clean console and stable canvas/chrome. Old A-E/T01-T06 preserved. |
 
-- [ ] Genuine old-head input/PNG/JSON failure evidence, with truthful Inspector reproduction conditions.
+- [x] Genuine old-head input/PNG/JSON failure evidence, with truthful Inspector reproduction conditions: four rejected-product browser probes and five expected unit failures on dc1, not infrastructure errors; CI repeats both baselines.
 - [ ] New exact-head seven-task input/video/PNG/JSON and fail-closed validator.
 - [ ] Full previous suite and both Chromium phases / old validators.
 - [ ] Independent non-author normal Windows Chrome check (NOT VERIFIED if unavailable).
