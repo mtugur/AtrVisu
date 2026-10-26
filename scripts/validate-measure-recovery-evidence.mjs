@@ -46,6 +46,7 @@ for (const name of names) {
   }
   if (name.startsWith("R3")) {
     const { a, b, mode } = data, dx=b.xMm-a.xMm, dy=b.yMm-a.yMm, dz=b.zMm-a.zMm;
+    for (const delta of [dx,dy,dz]) assert.notEqual(delta,0,name+" requires nonzero world-axis deltas");
     const expected = { "true-3d": [Math.hypot(dx,dy,dz),[b.xMm,b.yMm,b.zMm]], "plan-xy": [Math.hypot(dx,dy),[b.xMm,b.yMm,a.zMm]],
       "vertical-xz": [Math.hypot(dx,dz),[b.xMm,a.yMm,b.zMm]], "vertical-yz": [Math.hypot(dy,dz),[a.xMm,b.yMm,b.zMm]],
       "axis-x": [Math.abs(dx),[b.xMm,a.yMm,a.zMm]], "axis-y": [Math.abs(dy),[a.xMm,b.yMm,a.zMm]], "axis-z": [Math.abs(dz),[a.xMm,a.yMm,b.zMm]] }[mode];

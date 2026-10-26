@@ -169,7 +169,7 @@ function registerRecoveryDelivery(helpers: Helpers) {
       test.setTimeout(120_000);
       const errors = await start(page, helpers, width, ["Flow Pack Machine", "Belt Conveyor"], undefined, height);
       await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
-      await editSelectedMachine(page, { "Plan X": -3500, "Elevation above Level": 1400 });
+      await editSelectedMachine(page, { "Plan X": -3500, "Plan Y": -1500, "Elevation above Level": 1400 });
       await taskOpenMeasure(page);
       const entities = (await taskSession(page)).entityCatalog.filter(entity => entity.type === "machine");
       await taskSelectEntries(page, entities.map(entity => entity.id));
@@ -183,6 +183,7 @@ function registerRecoveryDelivery(helpers: Helpers) {
       const result = await expectOperands(page, [a, b]);
       await record(page, `R2-references-${width}`, errors, { outcome: "PASS", task: "R2", a, b, result, readouts: await visibleReferenceReadouts(page) });
       const before = await snapshot(page), dx = b.xMm - a.xMm, dy = b.yMm - a.yMm, dz = b.zMm - a.zMm;
+      for (const delta of [dx, dy, dz]) expect(delta).not.toBe(0);
       for (const [mode, expected, projected] of [
         ["true-3d", Math.hypot(dx, dy, dz), [b.xMm, b.yMm, b.zMm]], ["plan-xy", Math.hypot(dx, dy), [b.xMm, b.yMm, a.zMm]],
         ["vertical-xz", Math.hypot(dx, dz), [b.xMm, a.yMm, b.zMm]], ["vertical-yz", Math.hypot(dy, dz), [a.xMm, b.yMm, b.zMm]],
