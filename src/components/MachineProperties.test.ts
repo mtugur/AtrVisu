@@ -86,6 +86,11 @@ const getButtonMarkup = (markup: string, label: string) => {
 };
 
 describe("MachineProperties ATARA diagnostics", () => {
+  it("Issue 139 exposes the placed instance identity, not only the library definition name", () => {
+    const markup = renderSelectedMachineProperties(createPlacedMachine(baseDefinition));
+    expect(markup).toContain('data-testid="machine-instance-identity"');
+    expect(markup).toContain("machine:machine-1");
+  });
   it("projects Level-relative and read-only world elevation without changing canonical data", () => {
     const markup = renderToStaticMarkup(createElement(MachineProperties, {
       selectedMachine: { ...createPlacedMachine(baseDefinition), levelId: "level-2", elevationMm: 6500 },

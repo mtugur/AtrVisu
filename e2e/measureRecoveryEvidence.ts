@@ -123,6 +123,7 @@ function registerRecoveryDelivery(helpers: Helpers) {
       await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
       const generation = await canvas(page).getAttribute("data-scene-lifecycle-generation");
       await editSelectedMachine(page, { "Plan X": -3500, "Elevation above Level": 1400 });
+      await expect(page.getByTestId("machine-instance-identity")).toContainText(entities[1].id);
       const elevation = page.getByRole("textbox", { name: "Elevation above Level", exact: true });
       await expect(elevation).toHaveValue("1400");
       await record(page, `R1-edit-${width}`, errors, { outcome: "PASS", task: "R1", persistedLegacyCollapsedFixture: true,
@@ -131,6 +132,7 @@ function registerRecoveryDelivery(helpers: Helpers) {
       await selectExplorer(page, [entities[1].id]);
       await page.getByTestId("right-panel").getByRole("button", { name: "Inspector", exact: true }).click();
       await expect(elevation).toBeEnabled(); await expect(elevation).toHaveValue("1400");
+      await expect(page.getByTestId("machine-instance-identity")).toContainText(entities[1].id);
       await taskOpenMeasure(page); await page.getByLabel("Measurement point source").selectOption("geometry"); await topAndFit(page);
       const a = await alternateCorner(page, entities[0].id), b = await alternateCorner(page, entities[1].id);
       await page.getByRole("button", { name: "Keep / Save", exact: true }).click();
@@ -189,7 +191,12 @@ function registerRecoveryDelivery(helpers: Helpers) {
         ["vertical-xz", Math.hypot(dx, dz), [b.xMm, a.yMm, b.zMm]], ["vertical-yz", Math.hypot(dy, dz), [a.xMm, b.yMm, b.zMm]],
         ["axis-x", Math.abs(dx), [b.xMm, a.yMm, a.zMm]], ["axis-y", Math.abs(dy), [a.xMm, b.yMm, a.zMm]], ["axis-z", Math.abs(dz), [a.xMm, a.yMm, b.zMm]]
       ] as const) {
-        await page.getByLabel("Measurement interpretation", { exact: true }).selectOption(mode); await taskFrame(page);
+        const interpretation = page.getByLabel("Measurement interpretation", { exact: true });
+        if (mode === "plan-xy") {
+          await interpretation.focus(); await page.keyboard.press("Home"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter");
+          await expect(interpretation).toHaveValue("plan-xy");
+        } else await interpretation.selectOption(mode);
+        await taskFrame(page);
         const state = await recoverySession(page);
         expect(state.points).toEqual([a, b]);
         const measured = mode === "true-3d" ? state.result.values.find(value => value.label === "3D Distance")! : state.result.values[0];
@@ -197,7 +204,7 @@ function registerRecoveryDelivery(helpers: Helpers) {
         if (mode !== "true-3d") expect(await page.getByRole("region", { name: "Projected B", exact: true }).locator("data").evaluateAll(elements => elements.map(element => Number(element.value)))).toEqual(projected);
         expect(await snapshot(page)).toEqual(before);
         await record(page, `R3-${mode}-${width}`, errors, { outcome: "PASS", task: "R3", a, b, mode, expected, projected, measured,
-          readouts: await visibleReferenceReadouts(page), state, sameCanvas: true });
+          readouts: await visibleReferenceReadouts(page), state, sameCanvas: true, keyboardInterpretation: mode === "plan-xy" });
       }
       await page.getByRole("button", { name: "Change A", exact: true }).click();
       const replacement = await alternateCorner(page, entities[0].id, a.anchorKind);

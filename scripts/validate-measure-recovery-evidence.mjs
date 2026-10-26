@@ -52,6 +52,7 @@ for (const name of names) {
       "axis-x": [Math.abs(dx),[b.xMm,a.yMm,a.zMm]], "axis-y": [Math.abs(dy),[a.xMm,b.yMm,a.zMm]], "axis-z": [Math.abs(dz),[a.xMm,a.yMm,b.zMm]] }[mode];
     assert.ok(expected); assert.ok(Math.abs(data.measured.value-expected[0]) < 1e-8); assert.deepEqual(data.projected, expected[1]);
     assert.deepEqual(data.state.points, [a,b]); assert.equal(data.sameCanvas, true);
+    if (mode === "plan-xy") assert.equal(data.keyboardInterpretation,true,name+" must exercise native keyboard selection");
   }
   if (name.startsWith("R4")) {
     assert.equal(data.sameCanvas, true);
