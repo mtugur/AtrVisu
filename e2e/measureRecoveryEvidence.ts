@@ -193,7 +193,8 @@ function registerRecoveryDelivery(helpers: Helpers) {
       ] as const) {
         const interpretation = page.getByLabel("Measurement interpretation", { exact: true });
         if (mode === "plan-xy") {
-          await interpretation.focus(); await page.keyboard.press("Home"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter");
+          // Finish native selection without leaving its popup over the readouts.
+          await interpretation.focus(); await page.keyboard.press("Home"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Tab");
           await expect(interpretation).toHaveValue("plan-xy");
         } else await interpretation.selectOption(mode);
         await taskFrame(page);
