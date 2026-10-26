@@ -193,8 +193,8 @@ function registerRecoveryDelivery(helpers: Helpers) {
       ] as const) {
         const interpretation = page.getByLabel("Measurement interpretation", { exact: true });
         if (mode === "plan-xy") {
-          // Finish native selection without leaving its popup over the readouts.
-          await interpretation.focus(); await page.keyboard.press("Home"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Tab");
+          // Open and commit the native picker without moving focus to another control.
+          await interpretation.focus(); await page.keyboard.press("Alt+ArrowDown"); await page.keyboard.press("Home"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter");
           await expect(interpretation).toHaveValue("plan-xy");
         } else await interpretation.selectOption(mode);
         await taskFrame(page);
