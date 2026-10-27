@@ -108,6 +108,10 @@ describe("HelpModal", () => {
         expect(visibleText).not.toContain(forbidden);
       }
     }
+    await act(async () => sectionButtons.find(button => button.textContent?.trim() === "Measurements")?.click());
+    expect(container.textContent).toContain("Quick Toolbar, View menu and Command Palette");
+    expect(container.textContent).toContain("Precision Placement Helpers remain separate");
+    expect(container.textContent).not.toContain("not yet available");
 
     const about = sectionButtons.find((button) => button.textContent?.trim() === "About");
     await act(async () => about?.click());

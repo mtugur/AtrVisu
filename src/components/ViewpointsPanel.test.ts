@@ -46,7 +46,8 @@ const callbacks = () => ({
 
 const renderPanel = async (
   viewpoints: LayoutViewpoint[],
-  selectedViewpointId: string | null
+  selectedViewpointId: string | null,
+  mutationUnavailableReason?: string
 ) => {
   const handlers = callbacks();
   const container = document.createElement("div");
@@ -56,6 +57,7 @@ const renderPanel = async (
     root.render(createElement(ViewpointsPanel, {
       viewpoints,
       selectedViewpointId,
+      mutationUnavailableReason,
       ...handlers
     }));
   });
@@ -82,6 +84,22 @@ const setStripGeometry = async (
 };
 
 describe("ViewpointsPanel", () => {
+  it("Measure ownership blocks saved-view mutations but preserves existing camera navigation", async () => {
+    const { container, handlers } = await renderPanel([createViewpoint("a", "Saved")], "a", "Exit Measure before changing layout, selection or history.");
+    const buttons = Array.from(container.querySelectorAll("button"));
+    for (const name of ["Capture Current View", "Update From Current View", "Rename Saved", "Delete Saved"]) {
+      const button = buttons.find(b => b.getAttribute("aria-label") === name)!;
+      expect(button.disabled).toBe(true);
+      await act(async () => button.click());
+    }
+    expect(handlers.onCaptureViewpoint).not.toHaveBeenCalled();
+    expect(handlers.onUpdateViewpoint).not.toHaveBeenCalled();
+    expect(handlers.onRenameViewpoint).not.toHaveBeenCalled();
+    expect(handlers.onDeleteViewpoint).not.toHaveBeenCalled();
+    await act(async () => buttons.find(b => b.getAttribute("aria-label") === "Apply / Go To")!.click());
+    expect(handlers.onApplyViewpoint).toHaveBeenCalledExactlyOnceWith("a");
+    expect((container.querySelector('[aria-label="Viewpoint Name"]') as HTMLInputElement).disabled).toBe(true);
+  });
   it("renders an intentional compact zero-viewpoint state without navigation or actions", async () => {
     const { container } = await renderPanel([], null);
     const panel = container.querySelector('[data-testid="viewpoints-panel"]') as HTMLElement;
