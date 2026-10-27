@@ -1,3 +1,5 @@
+import type { MeasureDimensionMetadata } from "../measure/referenceTypes";
+
 export type AnnotationType =
   | "note"
   | "callout"
@@ -32,4 +34,5 @@ export type AnnotationObject = {
   };
   createdAt?: string;
   updatedAt?: string;
+  dimension?: MeasureDimensionMetadata;
 };

@@ -32,6 +32,7 @@ export const COMPATIBILITY_PANEL_DEFAULTS = [
   { panelId: RUNTIME_PANEL_IDS.displayOverlayControls, collapsed: true },
   { panelId: RUNTIME_PANEL_IDS.collisionCheck, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.inspector, collapsed: false },
+  { panelId: RUNTIME_PANEL_IDS.measure, collapsed: false },
   { panelId: RUNTIME_PANEL_IDS.statusBar, collapsed: false }
 ] as const;
 

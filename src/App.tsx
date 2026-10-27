@@ -4,6 +4,11 @@ import type { ChangeEvent } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
+import { MeasureTool, MeasureViewportGraphics } from "./components/measure/MeasureTool";
+import { createMeasureAuthority, getActiveMeasureDimensionGroup, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
+import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
+import { cloneMeasureDimensionStyle, type MeasureDimensionStyle, type MeasureReference } from "./measure/referenceTypes";
+import { getDimensionResult } from "./measure/measureReferences";
 import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
 import { ViewportNavigationHud } from "./components/viewportNavigation/ViewportNavigationHud";
 import { getViewportHudSafeInsets } from "./components/viewportNavigation/hudSafeArea";
@@ -424,6 +429,9 @@ const normalizeNudgeSettings = (value: Partial<NudgeSettings> | null | undefined
 });
 
 export function App() {
+  const [measureAuthority] = useState(createMeasureAuthority);
+  const isMeasureActive = useSyncExternalStore(measureAuthority.subscribe, measureAuthority.getActive, measureAuthority.getActive);
+  const measureInvokerRef = useRef<HTMLElement | null>(null);
   const cameraTelemetry = useMemo(createCameraTelemetry, []);
   const effectiveThemeId = useEffectiveThemeId();
   const uiPreferencesStore = useUiPreferencesStore();
@@ -459,13 +467,15 @@ export function App() {
   }));
   const [isResponsiveInspectorOpen, setIsResponsiveInspectorOpen] = useState(false);
   const [inspectorVisibilityMode, setInspectorVisibilityMode] = useState<"auto" | "manual">("auto");
+  const [rightDockTab, setRightDockTab] = useState<"inspector" | "measure">("inspector");
   const [isResponsivePrimaryDockOpen, setIsResponsivePrimaryDockOpen] = useState(false);
   const responsiveInspectorPresentation = isResponsiveInspectorPresentation(workbenchViewportSize.width);
   const inspectorDockPresentation = getInspectorDockPresentation(workbenchViewportSize.width);
   const responsivePrimaryDockPresentation = isResponsivePrimaryDockPresentation(workbenchViewportSize.width);
   const responsiveInspectorPresentationRef = useRef(responsiveInspectorPresentation);
   const responsivePrimaryDockPresentationRef = useRef(responsivePrimaryDockPresentation);
-  const isInspectorPresentationCollapsed = resolveInspectorPresentationCollapsed({
+  const isInspectorPresentationCollapsed = uiPreferences.panels.find((panel) => panel.panelId ===
+    (rightDockTab === "measure" ? RUNTIME_PANEL_IDS.measure : RUNTIME_PANEL_IDS.inspector))?.visible === false || resolveInspectorPresentationCollapsed({
     viewportWidth: workbenchViewportSize.width,
     persistedCollapsed: isPanelCollapsed,
     responsiveInspectorOpen: isResponsiveInspectorOpen
@@ -583,6 +593,7 @@ export function App() {
   const [placedMachines, setPlacedMachines] = useState<PlacedMachine[]>([]);
   const [civilReferences, setCivilReferences] = useState<CivilReferenceItem[]>([]);
   const [annotations, setAnnotations] = useState<AnnotationObject[]>([]);
+  const [measureDimensionStyle, setMeasureDimensionStyle] = useState(() => cloneMeasureDimensionStyle());
   const [layers, setLayers] = useState<LayoutLayer[]>(() => [createDefaultLayer()]);
   const [levels, setLevels] = useState<LayoutLevel[]>(() => normalizeLevels([]));
   const [activeLevelId, setActiveLevelId] = useState(GROUND_LEVEL_ID);
@@ -663,6 +674,7 @@ export function App() {
   const placedMachinesRef = useRef<PlacedMachine[]>(placedMachines);
   const civilReferencesRef = useRef<CivilReferenceItem[]>(civilReferences);
   const annotationsRef = useRef<AnnotationObject[]>(annotations);
+  const measureDimensionStyleRef = useRef(measureDimensionStyle);
   const layersRef = useRef<LayoutLayer[]>(layers);
   const levelsRef = useRef<LayoutLevel[]>(levels);
   const activeLevelIdRef = useRef(activeLevelId);
@@ -748,7 +760,8 @@ export function App() {
     connectionPointSnapReason: "Select exactly two explicit machines.",
     measurementHelpersAvailable: false,
     measurementHelpersReason: "Select one machine to use Precision Placement helpers.",
-    propertiesContext: "none"
+    propertiesContext: "none",
+    rightDockTab: "inspector" as "inspector" | "measure"
   });
 
   const runtimeViewportBindings = useMemo<RuntimeViewportBindings>(() => ({
@@ -995,6 +1008,9 @@ export function App() {
     layers,
     groups
   }), [civilReferences, currentLayout, currentProject, currentRevision, groups, layers, placedMachines]);
+  const canCapturePresentation = commercialOutputSnapshot.planFootprints.some(footprint => footprint.visible)
+    || (overlaySettings.showAnnotations && visibleAnnotations.some(annotation => annotation.dimension?.visible
+      && !getDimensionResult(annotation, platformEntities, levels).reason));
   const collisionResult = useMemo(
     () => checkAllObjectCollisions(visiblePlacedMachines, visibleCivilReferences, collisionSettings.enabled),
     [collisionSettings.enabled, visibleCivilReferences, visiblePlacedMachines]
@@ -1060,9 +1076,10 @@ export function App() {
   useLayoutEffect(() => {
     runtimeSelectionRef.current = runtimeSelection;
     platformEntitiesRef.current = platformEntities;
+    measureAuthority.updateEntities(platformEntities);
     hasUnsavedProjectChangesRef.current = hasUnsavedProjectChanges;
     overlaySettingsRef.current = overlaySettings;
-  }, [hasUnsavedProjectChanges, overlaySettings, platformEntities, runtimeSelection]);
+  }, [hasUnsavedProjectChanges, measureAuthority, overlaySettings, platformEntities, runtimeSelection]);
 
   useEffect(() => {
     isBenchmarkModeRef.current = isBenchmarkMode;
@@ -1079,6 +1096,9 @@ export function App() {
   useLayoutEffect(() => {
     annotationsRef.current = annotations;
   }, [annotations]);
+  useLayoutEffect(() => {
+    measureDimensionStyleRef.current = measureDimensionStyle;
+  }, [measureDimensionStyle]);
 
   useLayoutEffect(() => {
     layersRef.current = layers;
@@ -1255,7 +1275,8 @@ export function App() {
         layerItems,
         groupItems,
         levelsRef.current,
-        activeLevelIdRef.current
+        activeLevelIdRef.current,
+        measureDimensionStyleRef.current
       )
     );
   }, []);
@@ -1285,13 +1306,15 @@ export function App() {
         layersRef.current,
         groupsRef.current,
         levelsRef.current,
-        activeLevelIdRef.current
+        activeLevelIdRef.current,
+        measureDimensionStyleRef.current
       );
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setMeasureDimensionStyle(cloneMeasureDimensionStyle(result.measureDimensionStyle));
       setCivilReferences(normalizeCivilReferences(result.civilReferences, result.layers));
       setLayers(normalizeLayers(result.layers));
       setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
@@ -1317,13 +1340,15 @@ export function App() {
         layersRef.current,
         groupsRef.current,
         levelsRef.current,
-        activeLevelIdRef.current
+        activeLevelIdRef.current,
+        measureDimensionStyleRef.current
       );
       if (!result) {
         return current;
       }
       setPlacedMachines(result.machines);
       setAnnotations(result.annotations);
+      setMeasureDimensionStyle(cloneMeasureDimensionStyle(result.measureDimensionStyle));
       setCivilReferences(normalizeCivilReferences(result.civilReferences, result.layers));
       setLayers(normalizeLayers(result.layers));
       setGroups(normalizeGroups(result.groups, result.machines, result.layers, result.civilReferences));
@@ -1411,6 +1436,18 @@ export function App() {
       setIsTaxonomyManagerOpen(true);
     }
   }), [requestLibraryManagerClose, setPrimaryDockPresentationCollapsed]);
+
+  const openMeasurePanel = useCallback(() => {
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.measure, { visible: true });
+    setRightDockTab("measure");
+    openInspectorPresentation();
+  }, [openInspectorPresentation, uiPreferencesStore]);
+
+  const openInspectorTab = useCallback(() => {
+    uiPreferencesStore.updatePanelPreference(RUNTIME_PANEL_IDS.inspector, { visible: true });
+    setRightDockTab("inspector");
+    openInspectorPresentation();
+  }, [openInspectorPresentation, uiPreferencesStore]);
 
   const runtimePanelBindings = useMemo<RuntimePanelBindings>(() => {
     const sectionBinding = (
@@ -1638,10 +1675,32 @@ export function App() {
         close: () => setIsCollisionCheckOpen(false),
         toggle: () => setIsCollisionCheckOpen((current) => !current)
       },
-      [RUNTIME_PANEL_IDS.inspector]: sectionBinding(
-        RUNTIME_PANEL_IDS.inspector,
-        () => ({ available: true, context: runtimePanelStateRef.current.propertiesContext })
-      ),
+      [RUNTIME_PANEL_IDS.inspector]: {
+        getState: () => ({
+          isVisible: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.inspector] !== false && runtimePanelStateRef.current.rightDockTab === "inspector",
+          isOpen: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.inspector] !== false && runtimePanelStateRef.current.rightDockTab === "inspector",
+          available: true,
+          context: runtimePanelStateRef.current.propertiesContext
+        }),
+        open: openInspectorTab,
+        close: () => { if (runtimePanelStateRef.current.rightDockTab === "inspector") closeInspectorPresentation(); return true; },
+        toggle: () => { if (runtimePanelStateRef.current.rightDockTab === "inspector") closeInspectorPresentation(); else openInspectorTab(); return true; }
+      },
+      [RUNTIME_PANEL_IDS.measure]: {
+        getState: () => ({
+          isVisible: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.measure] !== false && runtimePanelStateRef.current.rightDockTab === "measure",
+          isOpen: !runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.panelSectionVisibility[RUNTIME_PANEL_IDS.measure] !== false && runtimePanelStateRef.current.rightDockTab === "measure",
+          available: true,
+          context: "measure-workspace"
+        }),
+        open: openMeasurePanel,
+        close: () => { if (runtimePanelStateRef.current.rightDockTab === "measure") setRightDockTab("inspector"); return true; },
+        toggle: () => {
+          if (!runtimePanelStateRef.current.isPanelCollapsed && runtimePanelStateRef.current.rightDockTab === "measure") setRightDockTab("inspector");
+          else openMeasurePanel();
+          return true;
+        }
+      },
       [RUNTIME_PANEL_IDS.statusBar]: {
         getState: () => ({ isVisible: true, isOpen: true, available: true })
       },
@@ -1686,7 +1745,9 @@ export function App() {
     setPrimaryDockPresentationCollapsed,
     setPanelSectionExpanded,
     setPanelSectionExpansionPreservingVisibility,
-    toggleInspectorPresentation
+    toggleInspectorPresentation,
+    openInspectorTab,
+    openMeasurePanel
   ]);
 
   const propertiesPanelContext = selectedGroup
@@ -1736,7 +1797,8 @@ export function App() {
       connectionPointSnapReason,
       measurementHelpersAvailable,
       measurementHelpersReason,
-      propertiesContext: editingAnnotationId ? "annotation" : propertiesPanelContext
+      propertiesContext: editingAnnotationId ? "annotation" : propertiesPanelContext,
+      rightDockTab
     };
   }, [
     activePrimaryPanelId,
@@ -1762,7 +1824,8 @@ export function App() {
     panelSectionExpansion,
     panelSectionVisibility,
     panelWidth,
-    propertiesPanelContext
+    propertiesPanelContext,
+    rightDockTab
   ]);
 
   useLayoutEffect(() => {
@@ -1969,23 +2032,26 @@ export function App() {
 
   const createLayoutSnapshot = useCallback(
     (exportedAt = new Date().toISOString()): AtrVisuLayout =>
-      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences, levels, activeLevelId),
-    [activeLevelId, annotations, civilReferences, groups, layers, levels, placedMachines, viewpoints]
+      createLayoutSnapshotFromMachines(placedMachines, exportedAt, annotations, viewpoints, layers, groups, civilReferences, levels, activeLevelId, measureDimensionStyle),
+    [activeLevelId, annotations, civilReferences, groups, layers, levels, measureDimensionStyle, placedMachines, viewpoints]
   );
 
   const clearSelection = useCallback(() => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection(createEmptyRuntimeSelection("command"));
-  }, []);
+  }, [measureAuthority]);
 
   const selectMachine = useCallback((instanceId: string | null, mode: SelectionMode = "replace") => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: instanceId ? createLegacyPlatformEntityId("machine", instanceId) : null,
       mode: !instanceId ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, []);
+  }, [measureAuthority]);
 
   const selectAnnotationForEditing = useCallback((annotationId: string | null) => {
+    if (measureAuthority.getActive()) return;
     if (!annotationId) {
       setRuntimeSelection((current) => current.ids.some((id) => id.startsWith("annotation:"))
         ? createEmptyRuntimeSelection("scene")
@@ -2000,17 +2066,19 @@ export function App() {
     }, platformEntitiesRef.current));
     setAnnotationSelectionSignal((current) => current + 1);
     setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
-  }, [setPanelSectionExpansionPreservingVisibility]);
+  }, [measureAuthority, setPanelSectionExpansionPreservingVisibility]);
 
   const selectCivilReferenceForEditing = useCallback((id: string | null, mode: SelectionMode = "replace") => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: id ? createLegacyPlatformEntityId("civil", id) : null,
       mode: !id ? "clear" : mode,
       source: "scene"
     }, platformEntitiesRef.current, { activeGroupEditId: activeGroupEditIdRef.current }));
-  }, []);
+  }, [measureAuthority]);
 
   const selectPlatformEntityForEditing = useCallback((entityId: EntityId, mode: SelectionMode = "replace") => {
+    if (measureAuthority.getActive()) return;
     setRuntimeSelection((current) => applyRuntimeSelectionRequest(current, {
       targetId: entityId,
       mode,
@@ -2020,7 +2088,7 @@ export function App() {
       setAnnotationSelectionSignal((current) => current + 1);
       setPanelSectionExpansionPreservingVisibility(RUNTIME_PANEL_IDS.annotations, true);
     }
-  }, [setPanelSectionExpansionPreservingVisibility]);
+  }, [measureAuthority, setPanelSectionExpansionPreservingVisibility]);
 
   const runtimeSelectionSignature = getInspectorSelectionSignature(runtimeSelection.ids);
   // Auto presentation reacts to canonical selection meaning, not a recreated selection object.
@@ -2229,6 +2297,7 @@ export function App() {
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle(layout.measureDimensionStyle));
     setViewpoints(importedViewpoints);
     setLevels(importedLevels);
     setActiveLevelId(activeLevelIdFromLayout(layout));
@@ -2281,7 +2350,7 @@ export function App() {
         ...current,
         ...overlayDisplayState
       }));
-      if (selectedObjectIds) {
+      if (selectedObjectIds && !measureAuthority.getActive()) {
         setRuntimeSelection(replaceRuntimeSelection(
           selectedObjectIds.map((id) => createLegacyPlatformEntityId("machine", id)),
           "command"
@@ -2292,7 +2361,7 @@ export function App() {
       }
     }
     setSelectedViewpointId(viewpoint.id);
-  }, [selectAnnotationForEditing, viewpoints]);
+  }, [measureAuthority, selectAnnotationForEditing, viewpoints]);
 
   const updateSelectedViewpointFromCurrentView = useCallback((viewpointId: string) => {
     const camera = sceneRef.current?.getCameraState();
@@ -2562,6 +2631,7 @@ export function App() {
     setPlacedMachines(machines);
     setCivilReferences([]);
     setAnnotations([]);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle());
     setLayers([createDefaultLayer()]);
     setLevels(normalizeLevels([]));
     setActiveLevelId(GROUND_LEVEL_ID);
@@ -2585,6 +2655,7 @@ export function App() {
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle(snapshot.measureDimensionStyle));
     setLayers(importedLayers);
     setGroups(importedGroups);
     setActiveGroupEditId(null);
@@ -2603,6 +2674,7 @@ export function App() {
     setPlacedMachines([]);
     setCivilReferences([]);
     setAnnotations([]);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle());
     setLayers([createDefaultLayer()]);
     setLevels(normalizeLevels([]));
     setActiveLevelId(GROUND_LEVEL_ID);
@@ -2632,6 +2704,7 @@ export function App() {
     setPlacedMachines(importedMachines);
     setCivilReferences(importedCivilReferences);
     setAnnotations(importedAnnotations);
+    setMeasureDimensionStyle(cloneMeasureDimensionStyle(snapshot.measureDimensionStyle));
     setLayers(importedLayers);
     setGroups(importedGroups);
     setActiveGroupEditId(null);
@@ -3377,6 +3450,102 @@ export function App() {
     return createExecutedRuntimeCommandResult();
   }, [markLayoutChanged]);
 
+  const keepMeasureDimension = useCallback(() => {
+    const session = measureAuthority.getSnapshot();
+    if (!session || !session.completed) return false;
+    const result = getMeasureResult(session);
+    if (result.reason || result.values.length === 0) return false;
+    const activeEntity = getActiveMeasureDimensionGroup(session)?.entity;
+    const references: MeasureReference[] = session.kind === "dimensions"
+      ? (activeEntity ? [{ type: "entity-anchor", entityId: activeEntity.id, anchor: "front-left-bottom" }] : [])
+      : session.kind === "pair"
+        ? session.entry.entities.slice(0, 2).map((entity) => ({ type: "entity-anchor" as const, entityId: entity.id, anchor: "front-left-bottom" as const }))
+        : session.points.map(measurePointToReference);
+    if ((session.kind === "dimensions" && references.length !== 1)
+      || (session.kind === "pair" && references.length !== 2)
+      || (session.kind !== "dimensions" && session.kind !== "pair" && references.length === 0)) return false;
+    const firstPoint = session.kind === "dimensions" || session.kind === "pair"
+      ? (() => { const entity = session.kind === "dimensions" ? activeEntity : session.entry.entities[0]; return entity ? { xMm: entity.transform.planX, yMm: entity.transform.planY, zMm: entity.transform.elevation } : null; })()
+      : session.points[0] ? { xMm: session.points[0].xMm, yMm: session.points[0].yMm, zMm: session.points[0].zMm } : null;
+    if (!firstPoint) return false;
+    const annotation = createAnnotation({ type: session.kind === "area" ? "area-note" : "dimension-note", positionMm: firstPoint });
+    const text = result.values.map((value) => value.label + " " + value.value.toFixed(3) + " " + value.unit).join(" | ");
+    const dimension = {
+      schemaVersion: 1 as const,
+      dimensionKind: session.kind,
+      name: session.kind === "dimensions" ? activeEntity!.name + " dimensions" : "Measure " + session.kind,
+      visible: true,
+      references,
+      presentationSource: session.kind === "area" ? session.source : undefined,
+      presentationElevationMm: session.presentationElevationMm,
+      style: cloneMeasureDimensionStyle(measureDimensionStyleRef.current),
+      status: "healthy" as const
+    };
+    markLayoutChanged();
+    setAnnotations((current) => [...current, { ...annotation, text, dimension, layerId: "default" }]);
+    measureAuthority.selectDimension(annotation.id);
+    setRightDockTab("measure");
+    return true;
+  }, [markLayoutChanged, measureAuthority]);
+
+  const applyMeasureDimensionAction = useCallback((action: MeasureAction) => {
+    if (action.type === "keep") return keepMeasureDimension();
+    if (action.type === "textPlacement") {
+      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      if (!annotation?.dimension || ![action.point.xMm, action.point.yMm, action.point.zMm].every(Number.isFinite)) return false;
+      markLayoutChanged();
+      setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, textPlacementMm: action.point } }));
+      return true;
+    }
+    if (action.type === "rename") {
+      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      const name = action.name.trim();
+      if (!annotation?.dimension || !name) return false;
+      markLayoutChanged();
+      setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, name } }));
+      return true;
+    }
+    if (action.type === "setVisibility") {
+      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      if (!annotation?.dimension) return false;
+      markLayoutChanged();
+      setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, visible: action.visible } }));
+      return true;
+    }
+    if (action.type === "setAllVisibility") {
+      markLayoutChanged();
+      setAnnotations((current) => current.map((item) => item.dimension ? { ...item, dimension: { ...item.dimension, visible: action.visible } } : item));
+      return true;
+    }
+    if (action.type === "deleteDimension") return removeAnnotation(action.annotationId).handled;
+    if (action.type === "style") {
+      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      if (!annotation?.dimension) return false;
+      markLayoutChanged();
+      const patch = action.style as Partial<MeasureDimensionStyle>;
+      if (patch.displayMode !== undefined) {
+        const style = cloneMeasureDimensionStyle({ ...annotation.dimension.style, displayMode: patch.displayMode });
+        setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, style } }));
+      } else {
+        const style = cloneMeasureDimensionStyle({ ...measureDimensionStyleRef.current, ...patch });
+        setMeasureDimensionStyle(style);
+        setAnnotations(current => current.map(item => item.dimension
+          ? { ...item, dimension: { ...item.dimension, style: { ...style, displayMode: item.dimension.style.displayMode } } } : item));
+      }
+      return true;
+    }
+    if (action.type === "reference") {
+      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      if (!annotation?.dimension || !annotation.dimension.references[action.index]) return false;
+      markLayoutChanged();
+      const references = [...annotation.dimension.references];
+      references[action.index] = action.reference as MeasureReference;
+      setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, references, status: "healthy", orphanReason: undefined } }));
+      return true;
+    }
+    return false;
+  }, [keepMeasureDimension, markLayoutChanged, removeAnnotation]);
+
   const deleteSelectedMachines = useCallback(() => {
     const deletableMachines = selectedMachines.filter((machine) => !isLayerLocked(machine.layerId, layersRef.current));
     if (deletableMachines.length === 0) {
@@ -3469,8 +3638,8 @@ export function App() {
   ]);
 
   useLayoutEffect(() => {
-    runtimeCommandBindingsRef.current = runtimeCommandBindings;
-  }, [runtimeCommandBindings]);
+    runtimeCommandBindingsRef.current = guardMeasureCommandBindings(runtimeCommandBindings, measureAuthority.getActive);
+  }, [runtimeCommandBindings, measureAuthority]);
 
   const restoreAutosavedLayout = useCallback(() => {
     if (!recoveryLayout) {
@@ -3599,6 +3768,57 @@ export function App() {
 
   const runtimeFeatureCommandBindings = useMemo<RuntimeFeatureCommandBindings>(() => ({
     ...projectRuntimeCommandBindings,
+    [RUNTIME_FEATURE_COMMAND_IDS.measure]: {
+      getEnableState: () => runtimeViewportBridge.getCameraSnapshot(RUNTIME_VIEWPORT_IDS.main)
+        ? { enabled: true }
+        : { enabled: false, reason: "Viewport camera is not ready." },
+      execute: (context) => {
+        const action = context.payload === undefined ? { type: "toggle" as const } : context.payload;
+        if (!isMeasureAction(action)) return createUnavailableRuntimeCommandResult("Invalid Measure action.");
+        if (action.type === "confirmLockedAnchor") {
+          const point = measureAuthority.resolveLockedAnchor(platformEntitiesRef.current);
+          const session = measureAuthority.getSnapshot();
+          if (!point || !session?.lockedReference) return createUnavailableRuntimeCommandResult("Locked semantic reference is unavailable.");
+          const applied = session.referenceEdit
+            ? applyMeasureDimensionAction({ type: "reference", ...session.referenceEdit, reference: session.lockedReference })
+            : measureAuthority.dispatch(action, { selectionIds: runtimeSelectionRef.current.ids, entities: platformEntitiesRef.current, machines: placedMachinesRef.current });
+          if (!applied) return createUnavailableRuntimeCommandResult("Locked reference could not be confirmed.");
+          if (session.referenceEdit) measureAuthority.completeReferenceEdit();
+          return createExecutedRuntimeFeatureCommandResult();
+        }
+        if (["keep", "rename", "setVisibility", "setAllVisibility", "deleteDimension", "style", "reference", "textPlacement"].includes(action.type)) {
+          return applyMeasureDimensionAction(action)
+            ? createExecutedRuntimeFeatureCommandResult()
+            : createUnavailableRuntimeCommandResult("Measure dimension operation could not be completed.");
+        }
+        const wasActive = measureAuthority.getActive();
+        if (!wasActive) {
+          const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          const menuTriggerId = activeElement?.closest('[role="menu"]')?.getAttribute("aria-labelledby");
+          measureInvokerRef.current = menuTriggerId ? document.getElementById(menuTriggerId) : activeElement;
+          runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.measure);
+        }
+        measureAuthority.dispatch(action, {
+          selectionIds: runtimeSelectionRef.current.ids,
+          primaryId: runtimeSelectionRef.current.primaryId,
+          entities: platformEntitiesRef.current,
+          machines: placedMachinesRef.current,
+          level: getLevel(activeLevelIdRef.current, levelsRef.current)
+        });
+        if (measureAuthority.getActive()) runtimePanelBridge.openPanel(RUNTIME_PANEL_IDS.measure);
+        if (wasActive && !measureAuthority.getActive()) {
+          const invoker = measureInvokerRef.current;
+          (invoker?.isConnected ? invoker : document.querySelector<HTMLCanvasElement>(".scene-canvas"))?.focus({ preventScroll: true });
+        } else if (!wasActive && measureAuthority.getActive()) {
+          window.requestAnimationFrame(() => {
+            if (measureAuthority.getActive() && !document.querySelector('[role="dialog"][aria-modal="true"],dialog[open]')) {
+              document.querySelector<HTMLCanvasElement>(".scene-canvas")?.focus({ preventScroll: true });
+            }
+          });
+        }
+        return createExecutedRuntimeFeatureCommandResult();
+      }
+    },
     [RUNTIME_FEATURE_COMMAND_IDS.fitView]: {
       getEnableState: () => visiblePlacedMachines.length + visibleCivilReferences.length > 0
         ? { enabled: true }
@@ -3656,7 +3876,7 @@ export function App() {
       }
     },
     [RUNTIME_FEATURE_COMMAND_IDS.exportScenePng]: {
-      getEnableState: () => commercialOutputSnapshot.planFootprints.some((footprint) => footprint.visible)
+      getEnableState: () => canCapturePresentation
         ? { enabled: true }
         : { enabled: false, reason: "Add visible scene content before exporting a snapshot." },
       execute: async () => {
@@ -4000,6 +4220,7 @@ export function App() {
     connectionPointSnapContext.available,
     connectionPointSnapReason,
     commercialOutputSnapshot,
+    canCapturePresentation,
     exportCommercialBom,
     exportCommercialPlan,
     exportCommercialSnapshot,
@@ -4010,6 +4231,7 @@ export function App() {
     renameEnableState,
     measurementHelpersAvailable,
     measurementHelpersReason,
+    measureAuthority,
     requestSelectedEntityRename,
     recoveryLayout,
     restoreAutosavedLayout,
@@ -4023,8 +4245,8 @@ export function App() {
   ]);
 
   useLayoutEffect(() => {
-    runtimeFeatureCommandBindingsRef.current = runtimeFeatureCommandBindings;
-  }, [runtimeFeatureCommandBindings]);
+    runtimeFeatureCommandBindingsRef.current = guardMeasureCommandBindings(runtimeFeatureCommandBindings, measureAuthority.getActive);
+  }, [runtimeFeatureCommandBindings, measureAuthority]);
 
   const assemblyCommandBindings = useMemo<AssemblyRuntimeCommandBindings>(() => ({
     [ASSEMBLY_COMMAND_IDS.createGroup]: {
@@ -4116,8 +4338,16 @@ export function App() {
   ]);
 
   useLayoutEffect(() => {
-    assemblyCommandBindingsRef.current = assemblyCommandBindings;
-  }, [assemblyCommandBindings]);
+    assemblyCommandBindingsRef.current = guardMeasureCommandBindings(assemblyCommandBindings, measureAuthority.getActive);
+  }, [assemblyCommandBindings, measureAuthority]);
+
+  useEffect(() => {
+    measureAuthority.dispatch({ type: "exit" }, { selectionIds: [], entities: [], machines: [] });
+  }, [currentProjectId, currentLayoutId, measureAuthority]);
+
+  useEffect(() => () => {
+    measureAuthority.dispatch({ type: "exit" }, { selectionIds: [], entities: [], machines: [] });
+  }, [measureAuthority]);
 
   const recordRuntimeCommandExecution = useCallback((
     commandId: string,
@@ -4560,6 +4790,7 @@ export function App() {
   }), []);
 
   const getCommandSurfacePressedState = useCallback((commandId: string) => {
+    if (commandId === RUNTIME_FEATURE_COMMAND_IDS.measure) return measureAuthority.getActive();
     if (commandId === RUNTIME_FEATURE_COMMAND_IDS.toggleLabels) {
       return overlaySettingsRef.current.showLabels;
     }
@@ -4578,7 +4809,7 @@ export function App() {
       return runtimePanelStateRef.current.isAdvancedAlignmentOpen;
     }
     return undefined;
-  }, []);
+  }, [measureAuthority]);
 
   const commandSurfaceAdapter = useMemo(() => createCommandSurfaceAdapter({
     metadataRegistry: commandSurfaceMetadataRegistry,
@@ -4772,6 +5003,7 @@ export function App() {
         runtimePanelBridge.closePanel(RUNTIME_PANEL_IDS.connectionPointSnap);
         return;
       }
+      if (measureAuthority.getActive()) return;
       const action = resolveEditorShortcut({
         key: event.key,
         target: event.target,
@@ -4892,8 +5124,13 @@ export function App() {
         <>
           <BabylonScene
             ref={sceneRef}
+            measureAuthority={measureAuthority}
+            measureDimensionStyle={measureDimensionStyle}
+            onMeasureAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }}
             placedMachines={visiblePlacedMachines}
             civilReferences={visibleCivilReferences}
+            platformEntities={platformEntities}
+            levels={levels}
             annotations={visibleAnnotations}
             selectedMachineIds={selectedMachineIds}
             primarySelectedMachineId={primarySelectedMachineId}
@@ -4930,9 +5167,10 @@ export function App() {
             source={cameraTelemetry.source}
             onPreset={(id) => runtimeViewportBridge.applyViewPreset(RUNTIME_VIEWPORT_IDS.main, id)}
           />
+          <MeasureViewportGraphics authority={measureAuthority} />
           <div className="workbench-viewport-context-layer" aria-live="polite">
             <ViewportArrangeBar
-              selectionCount={arrangeSelectedEntityIds.length}
+              selectionCount={isMeasureActive ? 0 : arrangeSelectedEntityIds.length}
               movementAllowed={runtimeSelectionMovementEvaluation.allowed && arrangeSelectedEntityIds.length >= 2}
               canDistribute={arrangeSelectedEntityIds.length >= 3}
               canGroup={!selectedGroup && selectedAlignableEntities.length >= 2}
@@ -4977,7 +5215,7 @@ export function App() {
             ) : null}
           </div>
           {!isProjectStorageLoading
-          && !hasAcceptedWorkingLayout ? (
+          && !hasAcceptedWorkingLayout && !isMeasureActive ? (
             <EmptyProjectWelcome
               recoveryAvailable={Boolean(recoveryLayout)}
               onResumeRecovery={() => {
@@ -5168,6 +5406,7 @@ export function App() {
               iconId: "layers" as const,
               badge: layers.length > 1 ? `${layers.length}` : undefined,
               content: (
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <LayersPanel
                   layers={layers}
                   placedMachines={placedMachines}
@@ -5183,6 +5422,7 @@ export function App() {
                   onIsolateLayer={isolateSelectedLayer}
                   onShowAllLayers={showAllLayoutLayers}
                 />
+                </fieldset>
               )
             },
             {
@@ -5191,6 +5431,7 @@ export function App() {
               iconId: "layers" as const,
               badge: levels.length > 1 ? `${levels.length}` : undefined,
               content: (
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <LevelsPanel
                   levels={levels}
                   activeLevelId={activeLevelId}
@@ -5200,6 +5441,7 @@ export function App() {
                   onDeleteLevel={(levelId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.deleteLevel, { levelId }); }}
                   onSetActiveLevel={(levelId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.setActiveLevel, { levelId }); }}
                 />
+                </fieldset>
               )
             },
             {
@@ -5208,6 +5450,7 @@ export function App() {
               iconId: "groups" as const,
               badge: groups.length > 0 ? `${groups.length}` : undefined,
               content: (
+                <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
                 <AssemblyTreePanel
                   groups={groups}
                   placedMachines={placedMachines}
@@ -5229,6 +5472,7 @@ export function App() {
                   onSelectGroup={selectObjectGroup}
                   onToggleGroupCollapsed={toggleGroupCollapsed}
                 />
+                </fieldset>
               )
             },
             {
@@ -5238,14 +5482,14 @@ export function App() {
               badge: viewpoints.length > 0 ? `${viewpoints.length}` : undefined,
               content: (
                 <ViewpointsPanel
-                  viewpoints={viewpoints}
+                     viewpoints={viewpoints}
                   selectedViewpointId={selectedViewpointId}
                   onSelectViewpoint={setSelectedViewpointId}
-                  onCaptureViewpoint={captureViewpoint}
+                  onCaptureViewpoint={(name) => { if (!measureAuthority.getActive()) captureViewpoint(name); }}
                   onApplyViewpoint={applyViewpoint}
-                  onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
-                  onRenameViewpoint={renameViewpoint}
-                  onDeleteViewpoint={removeViewpoint}
+                  onUpdateViewpoint={(id) => { if (!measureAuthority.getActive()) updateSelectedViewpointFromCurrentView(id); }}
+                  onRenameViewpoint={(id, name) => { if (!measureAuthority.getActive()) renameViewpoint(id, name); }}
+                  onDeleteViewpoint={(id) => { if (!measureAuthority.getActive()) removeViewpoint(id); }}
                   onStepViewpoint={stepViewpoint}
                 />
               )
@@ -5284,7 +5528,7 @@ export function App() {
           <WorkbenchDockCollapseButton
             side="right"
             collapsed
-            onToggle={openInspectorPresentation}
+            onToggle={rightDockTab === "measure" ? openMeasurePanel : openInspectorTab}
             testId="right-dock-collapse-toggle"
           />
         </div>
@@ -5308,25 +5552,38 @@ export function App() {
             onPointerDown={startPanelResize}
           />
           <header className="workbench-inspector-header">
-            <div className="workbench-inspector-heading">
-              <strong>Inspector</strong>
-              <small>{inspectorVisibilityMode === "manual" ? "Pinned" : "Auto"}</small>
-            </div>
+            <nav className="workbench-right-dock-tabs" aria-label="Right Dock panels">
+              <button type="button" className={rightDockTab === "inspector" ? "is-active" : undefined} aria-pressed={rightDockTab === "inspector"} onClick={openInspectorTab}>Inspector</button>
+              <button type="button" className={rightDockTab === "measure" ? "is-active" : undefined} aria-pressed={rightDockTab === "measure"} onClick={openMeasurePanel}>Measure</button>
+            </nav>
             <div className="workbench-inspector-header-actions">
-              <WorkbenchActionButton
+              {rightDockTab === "inspector" ? <span className="workbench-inspector-mode">{inspectorVisibilityMode === "manual" ? "Pinned" : "Auto"}</span> : null}
+              {rightDockTab === "inspector" ? <WorkbenchActionButton
                 iconId={inspectorVisibilityMode === "manual" ? "unpin" : "pin"}
                 label={inspectorVisibilityMode === "manual" ? "Unpin Inspector" : "Pin Inspector"}
                 aria-pressed={inspectorVisibilityMode === "manual"}
                 onClick={() => setInspectorVisibilityMode((current) => current === "auto" ? "manual" : "auto")}
-              />
-              <WorkbenchDockCollapseButton
-                side="right"
-                collapsed={false}
-                onToggle={closeInspectorPresentation}
-                testId="right-dock-collapse-toggle"
-              />
+              /> : null}
+              <WorkbenchDockCollapseButton side="right" collapsed={false} onToggle={closeInspectorPresentation} testId="right-dock-collapse-toggle" />
             </div>
           </header>
+          {rightDockTab === "measure" ? (
+            <MeasureTool
+              authority={measureAuthority}
+              onAction={(action) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, action); }}
+              annotations={annotations}
+              entities={platformEntities}
+              levels={levels}
+              onKeep={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "keep" }); }}
+              onRenameDimension={(annotationId, name) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "rename", annotationId, name }); }}
+              onSetDimensionVisibility={(annotationId, visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setVisibility", annotationId, visible }); }}
+              onSetAllDimensionVisibility={(visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setAllVisibility", visible }); }}
+              onDeleteDimension={(annotationId) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "deleteDimension", annotationId }); }}
+              onUpdateDimensionStyle={(annotationId, style) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "style", annotationId, style }); }}
+              onUpdateDimensionReference={(annotationId, index, reference) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "reference", annotationId, index, reference }); }}
+            />
+          ) : (
+          <fieldset className="measure-domain-fieldset" disabled={isMeasureActive} title={isMeasureActive ? MEASURE_ACTIVE_REASON : undefined}>
           {showLegacyCompatibilityStack ? (
             <>
           {recoveryLayout ? (
@@ -5384,11 +5641,11 @@ export function App() {
               viewpoints={viewpoints}
               selectedViewpointId={selectedViewpointId}
               onSelectViewpoint={setSelectedViewpointId}
-              onCaptureViewpoint={captureViewpoint}
+              onCaptureViewpoint={(name) => { if (!measureAuthority.getActive()) captureViewpoint(name); }}
               onApplyViewpoint={applyViewpoint}
-              onUpdateViewpoint={updateSelectedViewpointFromCurrentView}
-              onRenameViewpoint={renameViewpoint}
-              onDeleteViewpoint={removeViewpoint}
+              onUpdateViewpoint={(id) => { if (!measureAuthority.getActive()) updateSelectedViewpointFromCurrentView(id); }}
+              onRenameViewpoint={(id, name) => { if (!measureAuthority.getActive()) renameViewpoint(id, name); }}
+              onDeleteViewpoint={(id) => { if (!measureAuthority.getActive()) removeViewpoint(id); }}
               onStepViewpoint={stepViewpoint}
             />
           </PanelSection>
@@ -5864,6 +6121,8 @@ export function App() {
               )}
             </PanelSection>
           ) : null}
+          </fieldset>
+          )}
         </aside>
       )}
       statusBar={(
@@ -5967,7 +6226,7 @@ export function App() {
                 plan: commercialOutputSnapshot.extents
                   ? { enabled: true }
                   : { enabled: false, reason: "Add visible layout geometry before exporting a plan." },
-                snapshot: commercialOutputSnapshot.planFootprints.some((footprint) => footprint.visible)
+                snapshot: canCapturePresentation
                   ? { enabled: true }
                   : { enabled: false, reason: "Add visible scene content before exporting a snapshot." }
               }}

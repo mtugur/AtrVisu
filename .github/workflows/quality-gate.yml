@@ -77,6 +77,46 @@ jobs:
         env:
           ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
 
+      - name: Reproduce C03 owner-task failures on the faithful historical port
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' }}
+        shell: bash
+        env:
+          ATRVISU_C03_DELIVERY_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          baseline="$RUNNER_TEMP/c03-owner-baseline"
+          git worktree add --detach "$baseline" 76bac9fac43a3a1ebba1a24285d5c28021c57f00
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$baseline/node_modules"
+          cd "$baseline"
+          test -z "$(git diff 17763309b532813a7e004d608992073a97c08bb0 -- src ':(exclude)**/*.test.ts' ':(exclude)**/*.test.tsx')"
+          if npm run test -- --run src/measure/measureTask.test.ts --reporter=json --outputFile="$RUNNER_TEMP/c03-baseline-unit.json"; then
+            echo "Historical regression assertions unexpectedly passed"
+            exit 1
+          fi
+          node -e 'const r=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));require("assert/strict").equal(r.numFailedTests,5);require("assert/strict").equal(r.numTotalTests,5)' "$RUNNER_TEMP/c03-baseline-unit.json"
+          ATRVISU_MEASURE_TASK_BASELINE=1 npm run test:e2e -- --grep 'C03 renewed baseline'
+          mkdir -p "$GITHUB_WORKSPACE/test-results/c03-measure-v2-task"
+          cp -R test-results/c03-measure-v2-task/baseline "$GITHUB_WORKSPACE/test-results/c03-measure-v2-task/"
+          cp "$RUNNER_TEMP/c03-baseline-unit.json" "$GITHUB_WORKSPACE/test-results/c03-measure-v2-task/baseline-unit.json"
+
+      - name: Validate exact-head C03 task and protected regression evidence
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' }}
+        run: |
+          node scripts/validate-measure-v2-evidence.mjs
+          node scripts/validate-measure-v2-task-evidence.mjs
+        env:
+          ATRVISU_E2E_EXPECTED_SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+
+      - name: Upload C03 renewed task runtime evidence
+        if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'codex/c03-v2-task-runtime-stage-b-v01' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: c03-measure-v2-task-runtime-stage-b
+          path: |
+            test-results/c03-measure-v2-task
+            test-results/c03-measure-v2-stage-b
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload Pan and grid runtime evidence
         if: ${{ always() && github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'fix/p1-viewport-pan-grid-runtime-v01' }}
         uses: actions/upload-artifact@v4

@@ -28,6 +28,7 @@ export const RUNTIME_FEATURE_COMMAND_IDS = {
   exportScenePng: "commercial.exportScenePng",
   displayOverlayControls: "view.displayOverlayControls",
   fitView: "view.fitView",
+  measure: "view.measure",
   toggleLabels: "view.toggleLabels",
   viewpoints: "view.viewpoints",
   toggleConnectionPoints: "view.toggleConnectionPoints",

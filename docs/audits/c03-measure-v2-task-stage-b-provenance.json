@@ -1,0 +1,202 @@
+{
+  "approvedMain": "b8bba52fefbe550d760f772bf95517beb373012c",
+  "historicalSource": "17763309b532813a7e004d608992073a97c08bb0",
+  "authorization": "https://github.com/mtugur/AtrVisu/pull/133#issuecomment-6285504650",
+  "excluded": [
+    ".github/workflows/quality-gate.yml",
+    "docs/audits/c03-measure-v2-stage-b-delivery-v01.md",
+    "docs/audits/c03-measure-v2-stage-b-provenance.json"
+  ],
+  "files": [
+    {
+      "path": "e2e/app-smoke.spec.ts",
+      "sourceBlob": "75405c2931209d03b354688e86b0b2d1011cf75f",
+      "baseBlob": "33696d483be4c6e9a16ee5726b09b50b5ae98cbd"
+    },
+    {
+      "path": "e2e/measureV2Evidence.ts",
+      "sourceBlob": "e3741c400735193e17fe5abd6b3a965f341d8ee3",
+      "baseBlob": null
+    },
+    {
+      "path": "e2e/measureV2StageBEvidence.ts",
+      "sourceBlob": "bdea558afa6813db3ddef0c1e46cb54571a3f2e3",
+      "baseBlob": null
+    },
+    {
+      "path": "scripts/validate-measure-v2-evidence.mjs",
+      "sourceBlob": "d5473f4297c4a7abec6673b9f0f6f3d09d1a67bf",
+      "baseBlob": null
+    },
+    {
+      "path": "src/App.tsx",
+      "sourceBlob": "cbab58651b419bf10e6d3075d6f39b8ba5465e5b",
+      "baseBlob": "5f7156c825e5b7e89e5e41c9966bba270b1d9f54"
+    },
+    {
+      "path": "src/components/BabylonScene.tsx",
+      "sourceBlob": "f71bde257027b1ed53f0bf811288ea340328efe8",
+      "baseBlob": "1db22c3b8935ebf983f4062b355f7c8f478ebfcf"
+    },
+    {
+      "path": "src/components/measure/MeasureTool.test.ts",
+      "sourceBlob": "e40e666fdeb8661588b26b3ad049952bdc504bb0",
+      "baseBlob": null
+    },
+    {
+      "path": "src/components/measure/MeasureTool.tsx",
+      "sourceBlob": "dfba2179ea96482587e7e82f1384f3150cec5fd0",
+      "baseBlob": null
+    },
+    {
+      "path": "src/components/measure/measureLabelContext.ts",
+      "sourceBlob": "2d56c56029487ce80b75127b375e95dd4c60681f",
+      "baseBlob": null
+    },
+    {
+      "path": "src/components/measure/measureViewportAdapter.ts",
+      "sourceBlob": "474b8e6d9b1d165b667a94ade276d8cac6728b4c",
+      "baseBlob": null
+    },
+    {
+      "path": "src/components/measure/referenceDimensionScene.ts",
+      "sourceBlob": "82b108151d590fff91eea4ca18b8adc526356c9a",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/candidateVisibility.ts",
+      "sourceBlob": "116d74b3b19a1fa306f1624c1822dfab084e0cce",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/dimensionPresentation.test.ts",
+      "sourceBlob": "e98d2bc5d03f9a6ecea3b314db747b8b49a56d73",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/dimensionPresentation.ts",
+      "sourceBlob": "978f283709a84aaa241d405889aa31a640c44e80",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/lockedAnchor.test.ts",
+      "sourceBlob": "d61587c3fe76cc6228b5f7b7d29aec65c51a9d03",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/measureAuthority.test.ts",
+      "sourceBlob": "ff266e9917c757af0e3bdc4cd0c8deb51efe5239",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/measureAuthority.ts",
+      "sourceBlob": "04bceb3fea23dcd7f228ca254564ebfa986b14ad",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/measureCommandGate.ts",
+      "sourceBlob": "6161ae10fae88defa206edae87e02ff9cff92c4e",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/measureGeometry.ts",
+      "sourceBlob": "594c59a582cdd92860f5fb6cef426a0c28be9972",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/measurePresentation.ts",
+      "sourceBlob": "6bdd02bf00a94760fd6afe0a93f952cb0d330ac7",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/measureReferences.ts",
+      "sourceBlob": "a347da8e62e87899720d66c851fd80eccb3f7518",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/referenceTypes.test.ts",
+      "sourceBlob": "fc88ce53ab10b2d5d007fe04e1ae483e3d719850",
+      "baseBlob": null
+    },
+    {
+      "path": "src/measure/referenceTypes.ts",
+      "sourceBlob": "5894a7d0f79ff1c739d79289c0de8c51777795b1",
+      "baseBlob": null
+    },
+    {
+      "path": "src/platform/featureAccess/featureAccessMatrix.ts",
+      "sourceBlob": "e5a0b5cf3b84e35286d6f993ee544b91f44b6573",
+      "baseBlob": "7705875cf9a4c4f2ffd2e3cce0a51a1be9795e23"
+    },
+    {
+      "path": "src/platform/registrySeeds/commandSeedDefinitions.ts",
+      "sourceBlob": "caede754e55bb669e9da747870e261d9dc26e96b",
+      "baseBlob": "16ad81a632fe734d2a0f8875789ad31d8bd62b5c"
+    },
+    {
+      "path": "src/platform/registrySeeds/panelSeedDefinitions.ts",
+      "sourceBlob": "3341613534f77829ac20b1d53a54b8ee3a0b73ad",
+      "baseBlob": "5aafc15ead235de14e8bf3cf9c774e74c09fcf27"
+    },
+    {
+      "path": "src/platform/runtimeCommands/runtimeFeatureCommands.ts",
+      "sourceBlob": "2de4712ddc742f217356ca4383e1f831580610f3",
+      "baseBlob": "18194aef376d795e6546a935e3959d67ffe6c12b"
+    },
+    {
+      "path": "src/platform/runtimePanels/runtimePanelRegistryBridge.ts",
+      "sourceBlob": "69ed33fdd7ed47b8506a9b1ad294b2c2b46a4468",
+      "baseBlob": "7ee38bb9e4c0f914328556c4528f6b4a0ef781f6"
+    },
+    {
+      "path": "src/platform/surfaceInventory/currentSurfaceInventory.ts",
+      "sourceBlob": "67d77c36127dcf784751b332b63dbfcd9f8824bd",
+      "baseBlob": "ec29cdd46b1162eaf6afc6bf7f9802bb9dbf827e"
+    },
+    {
+      "path": "src/styles.css",
+      "sourceBlob": "b6945dca03c30c32ee2718c8dcf008c53fd4d19f",
+      "baseBlob": "db8d5f4b41efbc38b7acc5117b0ed05228812779"
+    },
+    {
+      "path": "src/types/annotations.ts",
+      "sourceBlob": "9cb7409b805af0aa755954c0aeadedd21549dbef",
+      "baseBlob": "4a6053d3830d64a1acaa071ba6ca68f84b99c5e8"
+    },
+    {
+      "path": "src/types/history.ts",
+      "sourceBlob": "4d7a947e1ece08d782dee3d41facf3be60431224",
+      "baseBlob": "bfaa518a3ec1d09bac83aa72dc181fe2f53c612b"
+    },
+    {
+      "path": "src/types/machine.ts",
+      "sourceBlob": "596a82b6d6913b78cfe1364c6af764265519420c",
+      "baseBlob": "0e9fd64fc0f8f272f467ae85ed6b2e3abd315c51"
+    },
+    {
+      "path": "src/utils/annotations.ts",
+      "sourceBlob": "16fd5dcb4bd44fce92fd52b9fb7d621a869147b5",
+      "baseBlob": "74de9c6824be694590b27fcd930f80fbabfd3b2a"
+    },
+    {
+      "path": "src/utils/layoutHistory.ts",
+      "sourceBlob": "aa9dac9bb23fd9181cbd0fdd532c9a2dc261a6dc",
+      "baseBlob": "4a96d9be6b904cb831a25a7f54ee7305589c8989"
+    },
+    {
+      "path": "src/utils/layoutSerialization.ts",
+      "sourceBlob": "63bf5b1c0d23974088d9d24df715aa18078e60ab",
+      "baseBlob": "9adfbf9c2d274192b2e2eb0990ef014604f4de14"
+    },
+    {
+      "path": "src/workbench/commandSurfaces/commandSurfaceConfig.ts",
+      "sourceBlob": "b7d50291b8d5a2742049d6bc9c58ff96a0a4ef31",
+      "baseBlob": "d570767e897418672ec042fb703162b8d3d58787"
+    },
+    {
+      "path": "src/workbench/uiPreferences/uiPreferencesDefaults.ts",
+      "sourceBlob": "b3598dd3205e9a4043d0335faecb2d740c2cabfa",
+      "baseBlob": "81e518b11c41a477a04ef184ba583fe3361e2211"
+    }
+  ]
+}
