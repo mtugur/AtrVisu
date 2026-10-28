@@ -4,8 +4,8 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
   {
     surfaceId: "surface.workbenchCommandPalette", surfaceType: "toolbar-action", label: "Command Palette", owner: "platform",
     sourceFiles: ["src/App.tsx", "src/components/workbench/CommandPalette.tsx", "src/workbench/commandSurfaces/commandSurfaceAdapter.ts"],
-    commandIds: ["view.fitView"], featureIds: ["view.fitView"],
-    notes: "Fit View is searchable and executed through the same registered runtime binding as View and Quick Toolbar."
+    commandIds: ["view.fitView", "view.measure"], featureIds: ["view.fitView", "viewport.measure"],
+    notes: "Fit View and Measure are searchable and execute the same registered runtime bindings as View and Quick Toolbar."
   },
   {
     surfaceId: "surface.nativeAssetImport", surfaceType: "modal", label: "Import 3D Asset", owner: "existing-ui",
@@ -57,6 +57,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.fitView",
+      "view.measure",
       "view.viewpoints",
       "view.toggleConnectionPoints",
       "view.showMeasurements",
@@ -95,6 +96,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.fitView",
+      "viewport.measure",
       "view.viewpoints",
       "connectionPoints.toggle",
       "measurements.show",
@@ -124,6 +126,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "edit.duplicateSelected",
       "edit.deleteSelected",
       "view.fitView",
+      "view.measure",
       "view.toggleLabels",
       "view.toggleConnectionPoints",
       "view.viewpoints"
@@ -136,6 +139,7 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "edit.deleteSelected",
       "view.toggleLabels",
       "view.fitView",
+      "viewport.measure",
       "connectionPoints.toggle",
       "view.viewpoints"
     ],
@@ -210,6 +214,17 @@ export const currentPlatformSurfaceInventory: readonly PlatformSurfaceInventoryI
       "object.rotateY",
       "object.movePlan"
     ]
+  },
+  {
+    surfaceId: "surface.measure",
+    surfaceType: "panel",
+    label: "Measure Task Pane",
+    owner: "platform",
+    sourceFiles: ["src/App.tsx", "src/components/measure/MeasureTool.tsx", "src/components/measure/referenceDimensionScene.ts"],
+    commandIds: ["view.measure"],
+    panelIds: ["panel.measure"],
+    featureIds: ["viewport.measure"],
+    notes: "Dedicated right-dock Measure task pane. Session controls remain transient; Keep/Save creates persistent Reference Dimensions in the existing Annotation entity family."
   },
   {
     surfaceId: "surface.projectSave",

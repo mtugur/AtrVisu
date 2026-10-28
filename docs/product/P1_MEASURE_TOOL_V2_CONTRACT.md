@@ -948,3 +948,52 @@ Stage A Contract Verified is PENDING independent review; PR #133 task-level
 Contract Verified is REOPENED and Product Accepted is FAIL. A green repository
 gate cannot change either result. No Stage B or manual re-acceptance request
 until independent governance review and explicit implementation authorization.
+
+## 22. Issue #139 - approved integrated professional recovery
+
+Owner authority: https://github.com/mtugur/AtrVisu/issues/139 (2026-10-23).
+Frozen before recovery code. This supersedes narrower workflow limits, not
+Entity/Selection/Annotation/Level/history/coordinate or camera authorities.
+Rejected product baseline: #136 `dc1ac534eff517410f41ebe390ec513b494ebd8b`.
+One integrated successor PR; no changes to historical PRs.
+
+- Inspector shows actual selected name/ID, transform and editable elevation.
+  Explicit Inspector opening and new normal selection reveal its context using
+  existing panel preferences, including persisted collapsed/Measure-tab state.
+  Auto/Pinned and no-selection guidance remain; locked values have a reason.
+  Switching tabs alone preserves operands and displays read-only picking state.
+- Explicit Pause and edit explains and cancels only unsaved transient work,
+  retains every saved dimension and releases domain editing. Resume restarts
+  the chosen workflow/constraint with the original entry selection. Neither
+  saved dimensions nor selection/history are duplicated in a panel store.
+- Explicit interpretation: True 3D (default), Plan XY, Vertical XZ, Vertical YZ,
+  Axis X/Y/Z. Actual world A/B and signed deltas remain unchanged on orbit.
+  Projected B copies A's excluded coordinates. Show projected XYZ and a
+  distinct projected line/actual-to-projected witness. Persist only an optional
+  interpretation in existing dimension metadata; absent means True 3D.
+- Point to Point and Selected Pair A/B require deliberate semantic/free clicks,
+  with editable A/B before Keep and saved-reference editing afterwards.
+  Selected Pair limits sources to two eligible entry identities, never automatic
+  operands. Old origins arithmetic is Reference Point Diagnostic only.
+- Same A - Multiple B retains A after explicit Next B or Keep; Point Chain uses
+  preceding B as next A and shows cumulative route length. Completed unkept
+  relationships stay in the transient authority until individually kept.
+  Each Keep creates one associative Annotation/Undo transaction; identify Saved
+  results and prevent accidental duplicate Keep. Any previous corner is reusable.
+  New/Restart explicitly discards unsaved work only, never saved annotations.
+- Preserve Angle, Plan Area, multi-entity local W/D/H and active-group Keep,
+  Level, associativity/orphan/reassociation, capture and old A-E/T01-T06.
+  True surface Shortest Distance is NOT READY until a proven geometry authority
+  exists; no origin/bounds/GLB estimate may impersonate clearance. Accumulate
+  may be separately NOT READY; the required Point Chain itself is not deferred.
+
+The seven Issue #139 tasks are the independent acceptance oracle: persisted and
+clean Inspector; actual different-height A/B; all seven constraints; manual pair
+and replacement; fan-out/chain/reuse; pause/edit/resume/history/save/reopen;
+1440/1024/640 integration, occlusion, keyboard, Auto/Pinned and locked layers.
+Known A=(0,0,0), B=(3000,4000,1200) mm determine independent arithmetic.
+Old-head failures need real input and state evidence; do not infer literal
+empty Inspector solely from a disabled fieldset. No synthetic mutation,
+weakened assertion, hidden field, camera compensation or autoscroll trick.
+Independent non-author normal Windows Chrome verification is NOT VERIFIED when
+the checker is unavailable; screenshots/CI cannot replace it or owner acceptance.

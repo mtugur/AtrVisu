@@ -6,6 +6,10 @@ import { createNativeGlbFixture } from "../tests/fixtures/nativeGlb";
 import { VIEW_PRESETS, getPresetAngles, getCameraBasis, domainToBabylonDirection, dot3 } from "../src/components/viewportNavigation/navigationGeometry";
 import { measureMachinePixels } from "./navigationPixelEvidence";
 import { registerPanGridTests } from "./panGridEvidence";
+import { registerMeasureV2Tests } from "./measureV2Evidence";
+import { registerMeasureV2StageBTests } from "./measureV2StageBEvidence";
+import { registerMeasureV2TaskTests } from "./measureV2TaskEvidence";
+import { registerMeasureRecoveryTests } from "./measureRecoveryEvidence";
 import {
   capture as captureNativeAssetEvidence,
   start as startNativeAssetTest,
@@ -1554,6 +1558,13 @@ test("runtime feature access complete gate is bound to observed visible command 
   await observe("view.showMeasurements", async () =>
     (await getMenuCommand(page, "Tools", "view.showMeasurements")).click()
   );
+  await observe("view.measure", () => getCommandBarCommand(page, "view.measure").click());
+  await expect(page.getByTestId("measure-panel")).toBeVisible();
+  const measureSession = page.getByTestId("right-panel").getByRole("region", { name: "Measure Session", exact: true });
+  await expect(measureSession).toBeVisible();
+  await expect(measureSession.getByRole("combobox", { name: "Measurement kind", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Exit Measure", exact: true }).click();
+  await page.getByRole("button", { name: "Inspector", exact: true }).click();
   const viewMenu = await openWorkbenchMenu(page, "View");
   await observe("view.displayOverlayControls", () =>
     viewMenu.locator('[data-command-id="view.displayOverlayControls"]').click()
@@ -1668,18 +1679,25 @@ test("runtime feature access complete gate is bound to observed visible command 
     fileMenu.locator('[data-command-id="project.commercialOutputs"]').click()
   );
   await expect(page.getByTestId("commercial-outputs-modal")).toBeVisible();
-  await Promise.all([
-    page.waitForEvent("download"),
-    observe("commercial.exportBomExcel", () => page.getByTestId("export-commercial-bom").click())
-  ]);
-  await Promise.all([
-    page.waitForEvent("download"),
-    observe("commercial.exportLayoutPdf", () => page.getByTestId("export-commercial-plan").click())
-  ]);
-  await Promise.all([
-    page.waitForEvent("download"),
-    observe("commercial.exportScenePng", () => page.getByTestId("export-commercial-snapshot").click())
-  ]);
+  // Runtime command receipts are recorded after the asynchronous export completes.
+  await observe("commercial.exportBomExcel", async () => {
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.getByTestId("export-commercial-bom").click()
+    ]);
+  });
+  await observe("commercial.exportLayoutPdf", async () => {
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.getByTestId("export-commercial-plan").click()
+    ]);
+  });
+  await observe("commercial.exportScenePng", async () => {
+    await Promise.all([
+      page.waitForEvent("download"),
+      page.getByTestId("export-commercial-snapshot").click()
+    ]);
+  });
   await page.getByTestId("close-commercial-outputs").click();
   await expect(page.getByTestId("commercial-outputs-modal")).toHaveCount(0);
 
@@ -7866,7 +7884,8 @@ test("PF-1 premium command information architecture is accessible and responsive
   ]);
 
   const commandButtons = page.getByTestId("workbench-command-bar").locator(".workbench-command-button");
-  await expect(commandButtons).toHaveCount(9);
+  await expect(commandButtons).toHaveCount(10);
+  await expect(getCommandBarCommand(page, "view.measure")).toBeVisible();
   await expect(page.locator(".workbench-command-group-label")).toHaveCount(0);
   await expect(page.getByTestId("workbench-command-bar").locator('[data-command-id="project.save"]')).toHaveCount(1);
   await expect(page.getByTestId("workbench-application-bar").locator('[data-command-id="project.save"]')).toHaveCount(0);
@@ -7877,7 +7896,7 @@ test("PF-1 premium command information architecture is accessible and responsive
     expect(await button.getAttribute("title")).toBeTruthy();
   }
   expect(await commandButtons.locator(".visually-hidden").allTextContents()).toEqual([
-    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Fit View", "Labels", "Connection Points", "Viewpoints"
+    "Save Project", "Undo", "Redo", "Duplicate Selected", "Delete Selected", "Fit View", "Measure", "Labels", "Connection Points", "Viewpoints"
   ]);
   await expect(getCommandBarCommand(page, "view.showMeasurements")).toHaveCount(0);
   await expect(getCommandBarCommand(page, "arrange.alignmentTools")).toHaveCount(0);
@@ -8103,4 +8122,8 @@ registerPanGridTests({
   openCleanApp, expectExactHeadServer, openPrimaryDockPanel, addBuildPrimitive,
   createTwoMachineAssembly, getMenuCommand, openPreferenceBranch
 });
+registerMeasureV2Tests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
+registerMeasureV2StageBTests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
+registerMeasureV2TaskTests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
+registerMeasureRecoveryTests({ openCleanApp, collectPageErrors, waitForRuntimeViewport });
 

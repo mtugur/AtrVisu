@@ -129,3 +129,18 @@ another tuning round. Product Constitution/protocol authority is unchanged.
 | E / F / H | Future runtime matrix in P1_MEASURE_TOOL_V2_GATE.md; T01/T02/T06 preservation and unfiltered no-red-console evidence required. Runtime conformance for the delta is NOT EXECUTED/N/A in this docs-only package, not PASS. |
 | G / J | Stop honored. Submit governance for independent review, synchronize the accepted contract, then require explicit authorization and exact baseline for a new bounded implementation branch. PR #129/#130 stay unchanged Draft baselines. |
 | I | Stage A Automation Green belongs to the exact-head Quality Gate in PR Validation. Contract Verified PENDING independent review; Product Accepted N/A for docs. PR #130 runtime acceptance remains FAIL/REOPENED, not upgraded by Stage A CI. |
+
+## Issue #139 integrated recovery evidence
+
+This is the single owner-authorized successor to rejected #136, not another
+threshold/weight tuning round. The pre-runtime checkpoint is
+`c59e81bfbd7455b00ce02cafff535e2980f4dfb2`; V2 section 22, ADR-009 and benchmark
+section 11 freeze the task flows before implementation.
+
+| Gate | Recovery evidence |
+| --- | --- |
+| A/B | Issue #139 professional operator tasks; official VC/Navisworks/Fusion/Factory sources checked before code. No C04/C05/C07/C09, new store, package, camera solver or historical PR change. |
+| C/D | Existing Entity/Runtime Selection/Annotation/Level/Command/history. Explicit A-anchored world projection, manual operands, repeatable fan-out/chain and explicit one-result Keep. Same 4 CSS px classifier and semantic visibility/lock authority. No fallback, smoothing, hysteresis or widened hit radius. |
+| E/F | R1-R7 UI routes plus unchanged A-E/T01-T06. Migrated collapsed profile distinguished from clean control; real elevation/Undo/Redo, save/reload, Auto/Pinned/locked layer, all three widths, actual/projected XYZ, unfiltered console and canvas generation. `e2e/measureRecoveryEvidence.ts` and the three artifact validators provide executable oracles. |
+| G/J | One integrated implementation package under the explicit recovery mandate. Independent review and correction budget remain required; old Product Accepted FAIL is not relabelled. |
+| H/I | Exact-head artifact/CI decides automated evidence only. Contract Verified PENDING; Product Accepted PENDING; non-author normal Windows Chrome witness NOT VERIFIED by this implementer. No user exploratory QA or premature acceptance request. |

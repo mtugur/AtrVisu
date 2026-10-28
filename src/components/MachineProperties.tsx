@@ -14,6 +14,7 @@ import {
 } from "../propertySchema";
 import { getMachineDimensionsMm } from "../utils/machineDimensions";
 import { getPlacedMachineDisplayName } from "../utils/entityNames";
+import { createLegacyPlatformEntityId } from "../platform/adapters";
 import { commitRotationAngle } from "../utils/placement";
 import { formatLength, metersToMm, mmToMeters } from "../utils/units";
 import {
@@ -207,7 +208,7 @@ export function MachineProperties({
 
     const committedRotation = commitMachineRotationDraft(rotationDraft, currentRotation, placementSettings);
     setRotationDraft(committedRotation.displayValue);
-    if (!committedRotation.shouldCommit) {
+    if (!committedRotation.shouldCommit || committedRotation.rotationDeg === currentRotation) {
       return;
     }
 
@@ -261,6 +262,10 @@ export function MachineProperties({
           <div className="property-readout">
             <span>Category</span>
             <strong>{selectedMachine.definition.category}</strong>
+          </div>
+          <div className="property-readout" data-testid="machine-instance-identity">
+            <span>Instance ID</span>
+            <strong>{createLegacyPlatformEntityId("machine", selectedMachine.instanceId)}</strong>
           </div>
           <label className="property-field">
             <span>Layer</span>

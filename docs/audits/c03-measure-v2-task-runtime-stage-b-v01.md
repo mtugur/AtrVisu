@@ -1,0 +1,265 @@
+# C03 renewed Stage B - task-level runtime evidence
+
+## Frozen authority and provenance
+
+- Approved main: `b8bba52fefbe550d760f772bf95517beb373012c` (merged Stage A #135).
+- Authorization: [6285504650](https://github.com/mtugur/AtrVisu/pull/133#issuecomment-6285504650).
+- Historical source: #133 `17763309b532813a7e004d608992073a97c08bb0`.
+- Exact 38-file source/base blob inventory: `c03-measure-v2-task-stage-b-provenance.json` beside this audit.
+- No merge/cherry-pick of the historical PR history. Its workflow and two old audits were excluded. The workflow change here only carries this branch's C03 evidence.
+- Faithful-port implementation checkpoint: `934fecf5aadd2f7f13a682cc2a1bf1b648b7d255`.
+- Reproducible pre-fix owner-path checkpoint: `76bac9fac43a3a1ebba1a24285d5c28021c57f00`. Production `src` at that checkpoint is identical to #133; the new failing contract test is the only additional source-tree test.
+
+The approved Product Constitution, Interaction Standard section 15, V2 contract
+sections 4.4/4.7/6.2.1/21, ADR-009, benchmark review section 10 and existing gates
+are read-only. No C04/C05/C07/C09 or new persistence schema is included.
+
+## Fail-before observations
+
+Three actual pointer/keyboard routes run against the faithful historical port,
+not against a synthetic stand-in:
+
+| Task | Observed failure and source cause |
+| --- | --- |
+| A | Hover resolves an entity/top anchor, but unlocked presentation exposes neither its entity ID nor world XYZ. The old geometry already computes full 3D/Plan/Delta Z correctly for known operands; the owner's original 8628.777 mm cannot be adjudicated without original A/B. |
+| B | A simple unobstructed body-to-corner path did **not** reproduce candidate loss. The controlled overlapping Column fixture does: `candidate()` chooses a new raw body hit on every frame and discards the still-visible original corner pool. Baseline JSON records every interpolated sample and first-drop PNG. |
+| C | Two canonical preselected Machine IDs are captured correctly, but the exactly-one condition returns an empty dimensions result. Its reason was not rendered. No named per-entity group or active result exists. |
+
+Five contract-derived assertions fail on that checkpoint and pass on the
+corrected authority/UI. CI reruns the three browser reproductions and expected
+five unit failures in a detached baseline worktree. Those files carry the
+**baseline served SHA** separately from the **delivery SHA**; they are explicitly
+historical FAIL evidence, not falsely labelled delivery-head screenshots.
+
+## Bounded implementation
+
+### A - engineering reference presentation
+
+One `PointReference` presentation shows confirmed/preview operand identity,
+semantic ID/name or explicit Free Geometry Hit/Level, plus world XYZ in mm.
+Display rounding does not mutate operands; `<data value>` retains the exact
+number. Confirmed A remains beside prospective B. The same presentation is
+used for resolved saved references. 3D Distance, Plan Distance and signed Delta Z
+are distinguished; the shared scene label explicitly says 3D Distance.
+
+### B - transient candidate context
+
+The existing canonical semantic volume is projected with the existing adapter.
+A screen-only convex envelope plus the existing visible 7 CSS px marker regions
+owns approach. An intervening raw body hit cannot steal that context. Outside
+it, a body hover hands off; an outside miss, leave, confirmation, Restart,
+source/kind change and Exit release it. There is no time grace, new world
+coordinate model, enlarged marker hit radius or change to 4 CSS px cancellation.
+The visibility-tested pool still supplies dots, highlight, cycle and click.
+Invisible locked references keep the existing explicit confirmation authority.
+
+### C/D - active named local dimensions
+
+Ordered Runtime Selection/primary are cloned only on tool entry. Named groups
+resolve those IDs against the current canonical entity catalog. Eligible primary
+is initially active, otherwise first eligible entry. Kind/Restart do not reseed.
+An unavailable active entity is not silently replaced. Row activation is a
+registered Measure action, transient only: no Runtime Selection/domain/history
+mutation. Local dimensions remain canonical rather than rotated aggregate AABB.
+
+`getMeasureResult`, `getMeasureLines`, `measureSessionMatchesDimension`, panel
+presentation and App Keep all resolve the same active entity. Keep exposes its
+name and creates exactly one existing associative dimensions Annotation with
+one history transaction. The existing renderer derives three axis graphics from
+that one Annotation; it does not create three persistent entities. Existing
+reference resolution, orphan/repair, style, Level and serialization remain in
+their original authorities.
+
+## Verification and evidence map
+
+| Gate | Executable evidence |
+| --- | --- |
+| Renewed A | `A-preview-a/b`, `A-depth/overlay`, `A-oblique`, `A-reload` at 1440/1024/640: real two-height/elevation fixtures; exact XYZ arithmetic, named operands, normal navigation, saved reference identity and resolved XYZ. |
+| Renewed B | `B-<four top IDs>` and `B-handoff` at all three sizes: 25 real pointer samples per corner; overlap, one exact confirmation, Tab/Shift lock, outside-context handoff and leave release; unchanged domain/camera/canvas. |
+| Renewed C/D | `C-groups`, `D-kept`, `D-reload` at all three sizes: primary/order, per-group W/D/H, real row keyboard activation, one Annotation/history transaction, Undo/Redo and project reload. Unit tests cover empty/invalid/unsupported/missing and rotated Civil/Floor local dimensions. |
+| Renewed E | Before/after snapshots and canvas identity/generation in new task routes plus protected T04/T05 tests. Actual open panels are not bypassed. Fixture framing uses explicit real pan/zoom before operands, never production camera compensation. |
+| T01/T02 | Existing free distance and Plan Area/Finish/Keep PNG/JSON, unchanged calculations. |
+| T03 | Existing four top-corner/Column, visible/occluded/chrome/offscreen lock and grip reference tests. |
+| T04 | Existing Depth/Overlay at all three sizes: matched pointer/focus/DOM, zero changed chrome pixels, actual visible-label positive control and hover-only negative control retained. |
+| T05 | Existing default/minimum header, real pin/unpin/collapse/reopen, Auto/Pinned at all three sizes. |
+| T06 | Existing move/rotate/resize association, orphan/reassociation, Level references, history and hard reload tests. |
+
+`validate-measure-v2-evidence.mjs` validates the protected matrix.
+`validate-measure-v2-task-evidence.mjs` fails closed on missing/stale/failing new
+cases or baseline proof and produces the combined A-E/T01-T06 matrix.
+Artifact: `c03-measure-v2-task-runtime-stage-b` (both directories, PNG/JSON and
+matrices). No console filtering, arbitrary sleeps or renderer/GPU bypass.
+
+The 640 px fixture failure was reproduced before Measure operands: the narrow
+Library starts collapsed, and existing CSS hides the right machine panel while
+the Primary Dock drawer is open. The test helper now opens Library through its
+real control for creation, then collapses that drawer before opening Measure or
+Inspector. No responsive production rule or breakpoint changed. Mixed
+unsupported browser coverage uses the existing Group-plus-Machine selection
+route; Annotation-exclusive canonical selection is deliberately not weakened.
+PNG inspection also caught a real readout clipping defect in the first local
+presentation: at 640 px Reference A ended at 917.375 CSS px while the visible
+Measure scrollport ended at 757. The oracle now checks complete reference and
+result rectangles, not merely DOM visibility. A bounded controls/readout layout
+within the existing bottom sheet keeps A/B and 3D/Plan/Delta Z visible; the same
+compact reference table supports shorter desktop panels. It wraps vertically
+when space is insufficient, with no new responsive breakpoint, panel height,
+visibility authority or measurement behavior.
+
+## Interaction Change Gate evidence
+
+- A: Constitution + section 15 + V2 sections above; pre-existing official Visual Components/Navisworks benchmark facts and approved AtrVisu adaptations in the V2 benchmark review; ADR-009 unchanged.
+- B: one authorized clean-port package; no new product decisions or unrelated features.
+- C/D: canonical selection/entity/coordinate/Annotation/history and click/navigation authorities preserved; only transient candidate/result ownership added.
+- E/F/H: actual entry selection, Machine/Civil/invalid unit cases, real mouse/keyboard, saved/reloaded/current preferences, Auto/Pinned and dock tests; unfiltered page/console checks and lifecycle snapshots. Snap/Group mutation is N/A to this read-only Measure task; the full suite preserves their existing regression coverage.
+- G/J: one implementation round against independently accepted #135, with auditable fail-before checkpoint. Stop if single-Annotation persistence or canonical candidate context requires a competing authority. Neither conflict was needed.
+- I: Automation is determined by the **exact-head Quality Gate and artifact matrix linked in PR Validation**, not by a historical run or this prose. Contract Verified: **PENDING independent review**. Product Accepted: **NOT REQUESTED**. No manual acceptance request is authorized before reviewer clearance.
+
+PR #129/#130/#133 remain untouched Draft baselines. #133 historical Product
+Accepted FAIL is not upgraded by these tests. This PR remains Draft/unmerged.
+
+## Delivery security blocker
+
+The 2026-10-21 delivery audit reports one high-severity Vite finding covering
+GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm. Approved main
+and the implementation checkpoint have the identical lockfile blob
+`481642f8e9480e73da826135957961b39237cdd9`, resolving Vite `8.0.16` and Vitest
+`4.1.11`. This finding was not introduced by the Measure port. No package change,
+audit exception or weakened CI policy is included. Automation Green remains
+FAIL until security remediation and a successful exact-head gate; passing local
+runtime evidence cannot substitute for that gate or its CI artifact.
+
+The complete local Chromium run passed its 249 parallel cases (one unrelated,
+branch-conditional PF-3B case was skipped), then exposed an export-observation
+ordering race in the isolated Feature Access test. Its failure snapshot showed
+PNG still Preparing, while the five-second receipt assertion was already
+running. `executeRuntimeFeatureCommand` records receipts only after the awaited
+export returns. An unchanged focused rerun passed. The bounded test correction
+keeps observation open through the real download, then checks the same exact
+attempt/execution increments and handled result. No runtime binding, assertion,
+timeout, retry, worker or export behavior is changed. Final focused results and
+the still-required exact-head CI result are recorded in PR Validation.
+
+The strict artifact validator also caught that the mixed unsupported-Group
+fixture had selected the eligible Machine first, leaving it primary under the
+existing first-selected primary policy. The fixture now selects Group first
+through the real Explorer and asserts both Runtime Selection and the Measure
+entry primary before checking first-eligible fallback. The validator and
+production selection/Measure authorities are unchanged.
+
+## Issue #139 integrated professional recovery
+
+Owner scope: https://github.com/mtugur/AtrVisu/issues/139. The successor branch
+`codex/c03-professional-measure-recovery-v01` inherits #136 exact source
+`dc1ac534eff517410f41ebe390ec513b494ebd8b`; it does not merge, close or modify
+#136/#129/#130/#133. Main at authorization is
+`59bef9bfc0db77e4c188d9fccce25d12752e5c45`. The four-file contract/ADR/benchmark/
+oracle checkpoint `c59e81bfbd7455b00ce02cafff535e2980f4dfb2` preceded runtime
+edits. Existing prior-package paragraphs above are historical evidence, not
+acceptance of this successor.
+
+### Verified rejected-baseline findings
+
+- A migrated `atrvisu.panelSection.properties.v1=collapsed` profile produces a
+  selected machine with no property body. Measure then disables its disclosure.
+  Selection and actual DOM were observed separately. The unprovided owner's
+  exact profile is not claimed reproduced; clean normal Inspector editing is a
+  separate control. Clicking the old property header closed the whole dock,
+  rather than persisting the inner collapsed preference, so that false fixture
+  was rejected before recording the profile experiment.
+- Old Pair computes reference origins with zero user-chosen operands.
+- No explicit plane/axis interpretation or fan-out/chain/manual-pair control.
+- A completed two-point operation ignores a third B until reset. Four real
+  Chromium probes record these owner-task failures as FAIL on the old served
+  source, not as passing product tasks. Five independent unit oracles also
+  fail on that exact production source. Infrastructure failures with zero
+  executed tests were not counted as fail-before evidence.
+
+### One integrated authority-preserving implementation
+
+- Explicit Inspector open reveals its existing visible/expanded preference;
+  Auto selection reveals Inspector, while Pinned manual-collapse semantics
+  remain. Header/disclosure is outside the read-only property fieldset.
+  A visible ownership reason and registered Pause and edit release picking;
+  only unsaved operands/relationships are cancelled. Resume keeps entry
+  selection/workflow/interpretation, not a new panel-owned selection.
+- `measureProjection.ts` interprets canonical world A/B in seven explicit
+  modes. Actual XYZ and signed deltas remain; excluded projected B coordinates
+  come from A. Actual B and projected B' are distinguished in graphics with
+  dashed witnesses. Saved dimensions use the same interpretation authority.
+  Optional `projectionMode` stays in existing schemaVersion 1 metadata;
+  absent means True 3D. No project/storage version or coordinate migration.
+- `MeasureAuthority` owns manual Selected Pair, fan-out and chain transient
+  relationships, replacement operands and per-result Saved/Not saved status.
+  Each Keep still creates exactly one Annotation/history transaction. Normal
+  visible operand picking takes precedence over saved dimension hitboxes.
+  Old origins remain labelled Reference Point Diagnostic. Surface shortest
+  distance and Accumulate are visibly NOT READY, never guessed clearance.
+- No-op elevation commit and unchanged Rotation blur are ignored so returning
+  from property editing to Undo cannot manufacture an extra history entry.
+  Rotation snap/math/navigation itself is unchanged. The actual Tab-to-Rotation
+  then toolbar Undo path exposed this issue; the regression checks one edit,
+  one Undo and one Redo, not disconnected history variables.
+- Active readouts precede auxiliary controls. Narrow presentation places actual
+  A/B and projected B in a readable reference row without hiding IDs/XYZ,
+  shrinking text, changing panel dimensions, or programmatic autoscroll.
+
+### Executable review evidence and independent acceptance
+
+`e2e/measureRecoveryEvidence.ts` drives real Library, Explorer, Inspector,
+Measure, camera, keyboard, Keep, Undo/Redo and Project routes. R1-R7 are recorded
+at 1440x900, 1024x768 and 640x800; the explicit locked-layer/Auto/Pinned route
+also verifies that resume does not reseed entry selection. A later user scroll
+from saved style controls back to the session is an explicit input, not product
+autoscroll or an altered clipping threshold. All original A-E and T01-T06 tests
+and pixel oracles remain alongside these tests.
+
+CI reproduces both historical baselines in detached worktrees. The new baseline
+copies tests only and asserts no changed production source. The strict
+`validate-measure-recovery-evidence.mjs` requires exact served/delivery heads,
+all PNG/JSON pairs, independent arithmetic, real visible-panel rectangles,
+history/lifecycle results and both earlier acceptance matrices. It emits
+`test-results/c03-measure-recovery/acceptance-matrix.json`, with per-file hashes.
+Artifact: `c03-professional-measure-recovery` includes recovery plus prior task
+and protected evidence directories. The complete exact-head Quality Gate and
+artifact linked in successor PR Validation determine Automation Green; neither
+old-head green CI nor this narrative substitutes for that run.
+
+Contract Verified: **PENDING independent review**. Product Accepted:
+**PENDING / not requested**. Independent non-author persisted-state normal
+Windows Chrome verification: **NOT VERIFIED by the implementation agent**.
+Default Playwright Chromium evidence is automation, not a claim of that
+independent browser witness. No owner debugging or manual acceptance is
+requested before the issue's reviewer-side runtime gate is fulfilled.
+
+### Recovery local gate limitations (2026-10-26)
+
+The complete local run at `b51c6af35a76dddc5418dce7c4b8bcf8ff1ad831`
+passed build and all 182 unit files / 1594 tests. Interaction governance,
+123 adversarial policy scenarios and design-token governance (297 files)
+passed. Package manifests/lockfile remain unchanged from main.
+
+The full Chromium run was not green: commercial PNG preparation exceeded its
+30-second test budget; DPR-2 shallow render-frame Pan and the 1440px oblique
+MMB Pan cases exceeded their existing 120-second budgets. These observations
+do not establish a new Measure or camera root cause and are not waived.
+The isolated Feature Access route additionally expected a redundant visible
+"Measure Session" heading removed by the compact layout. Its assertion now
+requires the actual visible, exactly named Measure Session region and enabled
+Measurement kind control instead. The real complete command route then passed
+in a focused run, without runtime edits, timeout changes or suppressed errors.
+The earlier full run remains failed; focused success does not relabel it.
+
+`npm audit --audit-level=low` reports one high-severity vulnerable dependency:
+`jsdom@29.1.1 -> undici@7.30.0` (GHSA-4qv8-2p9j-2685,
+GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c). The lockfile blob is identical on
+main and this feature: `787e24e28b621b14c9447b9755235e2aed1fa8e4`.
+Patched compatible minimum is 7.30.1. No dependency remediation or audit bypass
+is bundled into this interaction package. Until an authorized security update
+is available, exact-head CI cannot reach its runtime/evidence stages. Final
+run links and regenerated local evidence are recorded in successor PR
+Validation; local evidence is not misrepresented as a GitHub CI artifact.
+
+Automation Green: **FAIL / blocked**, not PASS. Independent normal Windows
+Chrome witness remains **NOT VERIFIED**. Contract Verified and Product
+Accepted remain **PENDING**; no owner manual test is requested.

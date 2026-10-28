@@ -275,3 +275,22 @@ The single user-journey design card and source findings are V2 section 21;
 new task oracles are in the existing V2 gate. New Stage A independent review
 is PENDING. Repository CI is not future-runtime acceptance. No Stage B branch
 or implementation is authorized here; PR #129/#130/#133 remain untouched.
+
+## Issue #139 recovery decision - before runtime
+
+Owner-frozen Issue #139 (2026-10-23), V2 section 22 and benchmark section 11
+authorize one integrated successor from rejected #136, not another patch there.
+Keep the single Measure authority; explicit pause/edit cancels unsaved work and
+releases existing command guards, never saved Annotation/selection/history.
+Tab switching itself preserves operands and exposes truthful read-only values.
+Actual associative references remain canonical. Explicit A-anchored world-axis
+projection is optional additive schemaVersion 1 dimension metadata, absent=True
+3D; normalization/history/serialization preserve it without a version migration.
+Fan-out/chain completed relationships remain transient until one-per-result
+Keep. Available semantic markers outrank saved-label/grip hits during explicit
+new-operand picking; reference/text editing remains deliberate and independent.
+Exact surface clearance is NOT READY rather than counterfeit origins/bounds math.
+Seven real owner tasks plus old A-E/T01-T06 test dead Inspector state, projection
+ambiguity, shared-corner interception, duplicate Keep and lost associations.
+No new selection, coordinate, storage or rendering authority is authorized.
+Independent normal-browser review and owner acceptance remain distinct from CI.
