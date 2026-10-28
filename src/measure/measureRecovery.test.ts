@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMeasureAuthority, getMeasureLines, getMeasureResult, measurePointToReference, measureSessionMatchesDimension, type MeasureContext } from "./measureAuthority";
+import { createMeasureAuthority, getKeptMeasureAnnotationId, getMeasureLines, getMeasureResult, measurePointToReference, measureSessionMatchesDimension, type MeasureContext } from "./measureAuthority";
 import { primaryDistanceValue, projectMeasureB, projectedDistanceResult, type MeasureProjectionMode } from "./measureProjection";
 import { createAnnotation } from "../utils/annotations";
 import { annotationsFromLayout, createLayoutSnapshotFromMachines } from "../utils/layoutSerialization";
@@ -50,6 +50,41 @@ describe("Issue 139 world-reference constraint arithmetic (independent oracle)",
 });
 
 describe("Issue 139 reusable operands and explicit persistence boundaries", () => {
+  it("rejects repeat Keep for a completed distance, angle and diagnostic instead of growing history", () => {
+    const authority = begin(); pick(authority, a); pick(authority, b);
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBeUndefined();
+    authority.markKept("distance-one");
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBe("distance-one");
+    authority.markKept("distance-duplicate");
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBe("distance-one");
+    authority.dispatch({ type: "kind", kind: "angle" }, context);
+    pick(authority, a); pick(authority, b); pick(authority, { xMm: 4000, yMm: 1000, zMm: 900 });
+    authority.markKept("angle-one");
+    authority.markKept("angle-duplicate");
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBe("angle-one");
+    authority.dispatch({ type: "restart" }, context);
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBeUndefined();
+  });
+  it("keeps dimensions once per selected entity, allows each next entity and resets only for a new task", () => {
+    const entities = ["a", "b"].map(id => ({ id, type: "machine", name: id, visible: true,
+      transform: { planX: 0, planY: 0, elevation: 0, rotationDeg: 0 },
+      properties: ["widthMm", "depthMm", "heightMm"].map(key => ({ key, value: 1000 })) } as unknown as PlatformEntity));
+    const c = { ...context, selectionIds: ["a", "b"], entities };
+    const authority = begin(c);
+    authority.dispatch({ type: "kind", kind: "dimensions" }, c);
+    expect(authority.getSnapshot()!.activeDimensionEntityId).toBe("a");
+    authority.markKept("a-one"); authority.markKept("a-duplicate");
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBe("a-one");
+    authority.dispatch({ type: "activeDimensionEntity", entityId: "b" }, c);
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBeUndefined();
+    authority.markKept("b-one"); authority.markKept("b-duplicate");
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBe("b-one");
+    authority.dispatch({ type: "activeDimensionEntity", entityId: "a" }, c);
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBe("a-one");
+    authority.dispatch({ type: "restart" }, c);
+    expect(getKeptMeasureAnnotationId(authority.getSnapshot()!)).toBeUndefined();
+  });
+
   for (const workflow of ["fan-out", "chain"] as const) it(`${workflow} retains unkept relationships and advances only after explicit Next/Keep`, () => {
     const authority = begin(); authority.dispatch({ type: "workflow", workflow }, context);
     expect(pick(authority, a)).toBe(true); expect(pick(authority, b)).toBe(true);

@@ -3,7 +3,7 @@ import type { AnnotationObject } from "../../types/annotations";
 import type { LayoutLevel } from "../../types/levels";
 import type { PlatformEntity } from "../../platform/contracts";
 import type { MeasureAction, MeasureAuthority, MeasureWorkflow } from "../../measure/measureAuthority";
-import { getActiveMeasureDimensionGroup, getMeasureDimensionGroups, getMeasureOperands, getMeasureResult } from "../../measure/measureAuthority";
+import { getActiveMeasureDimensionGroup, getKeptMeasureAnnotationId, getMeasureDimensionGroups, getMeasureOperands, getMeasureResult } from "../../measure/measureAuthority";
 import { getDimensionResult, resolveDimensionReferences, resolveMeasureReference, MEASURE_ANCHOR_LABELS } from "../../measure/measureReferences";
 import { cloneMeasureDimensionStyle, type MeasureAnchorKind, type MeasureDimensionStyle, type MeasureReference } from "../../measure/referenceTypes";
 import { formatMeasureValue, type MeasureKind, type MeasurePoint } from "../../measure/measureGeometry";
@@ -18,6 +18,7 @@ export type MeasureToolProps = {
   annotations: readonly AnnotationObject[];
   entities: readonly PlatformEntity[];
   levels: readonly LayoutLevel[];
+  isDimensionEditable: (annotationId: string) => boolean;
   onKeep: () => void;
   onRenameDimension: (annotationId: string, name: string) => void;
   onSetDimensionVisibility: (annotationId: string, visible: boolean) => void;
@@ -84,7 +85,7 @@ function ReferenceEditor({ reference, index, entities, levels, onChange }: {
   </div>{point ? <PointReference point={{ ...point, ...(reference.type === "entity-anchor" ? { entityId: reference.entityId, anchorKind: reference.anchor } : {}) }} index={index} confirmed entities={entities} saved /> : null}</div>;
 }
 
-export function MeasureTool({ authority, onAction, annotations, entities, levels, onKeep, onRenameDimension, onSetDimensionVisibility, onSetAllDimensionVisibility, onDeleteDimension, onUpdateDimensionStyle, onUpdateDimensionReference }: MeasureToolProps) {
+export function MeasureTool({ authority, onAction, annotations, entities, levels, isDimensionEditable, onKeep, onRenameDimension, onSetDimensionVisibility, onSetAllDimensionVisibility, onDeleteDimension, onUpdateDimensionStyle, onUpdateDimensionReference }: MeasureToolProps) {
   const session = useSyncExternalStore(authority.subscribe, authority.getSnapshot, authority.getSnapshot);
   const projection = useSyncExternalStore(authority.subscribeProjection, authority.getProjection, authority.getProjection);
   const lockedAnchor = projection.lockedAnchor;
@@ -95,7 +96,7 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
   const sessionResult = session ? getMeasureResult(session) : null;
   const activeGroup = session ? getActiveMeasureDimensionGroup(session) : undefined;
   const activeRelationship = session?.relationships?.find(item => item.id === session.activeRelationshipId);
-  const canKeep = Boolean(session?.completed && !session.paused && !activeRelationship?.savedAnnotationId && sessionResult && !sessionResult.reason && sessionResult.values.length > 0);
+  const canKeep = Boolean(session?.completed && !session.paused && !getKeptMeasureAnnotationId(session) && sessionResult && !sessionResult.reason && sessionResult.values.length > 0);
   const operands = session ? getMeasureOperands(session) : [];
   const projectedB = session?.kind === "distance" && operands.length >= 2 ? projectMeasureB(operands[0], operands[1], session.projectionMode) : null;
   const resolved = selectedDimension ? resolveDimensionReferences(selectedDimension, entities, levels) : null;
@@ -190,7 +191,8 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
         })}</div>
       </section>
       {selected && selectedDimension ? (
-        <section className="measure-dimension-editor" aria-label="Reference Dimension Editor">
+        <fieldset className="measure-dimension-editor" role="region" aria-label="Reference Dimension Editor" disabled={!isDimensionEditable(selected.id)}>
+          {!isDimensionEditable(selected.id) ? <p role="status">This dimension is on a locked layer. Unlock the layer to edit it.</p> : null}
           <div className="measure-panel-section-title"><strong>Selected Dimension</strong><span>{resolved?.orphaned ? "Orphaned" : "Healthy"}</span></div>
           <label>Name<input value={selectedDimension.name} onChange={(event) => onRenameDimension(selected.id, event.target.value)} /></label>
           <div className="measure-reference-editor"><strong>References</strong>{selectedDimension.references.map((reference, index) => <ReferenceEditor key={index} reference={reference} index={index} entities={entities} levels={levels} onChange={next => onUpdateDimensionReference(selected.id, index, next)} />)}</div>
@@ -205,7 +207,7 @@ export function MeasureTool({ authority, onAction, annotations, entities, levels
           </div>
           {selectedResult?.values.length ? <dl className="measure-values">{selectedResult.values.map((value, index) => <div key={index}><dt>{value.label}</dt><dd>{formatMeasureValue(value)}</dd></div>)}</dl> : <p className="measure-panel-empty">{selectedResult?.reason ?? "No result."}</p>}
           <div className="measure-panel-actions"><label className="measure-visibility-toggle"><input type="checkbox" checked={selectedDimension.visible} onChange={(event) => onSetDimensionVisibility(selected.id, event.target.checked)} />Show dimension</label><button type="button" className="danger-action" onClick={() => onDeleteDimension(selected.id)}>Delete</button></div>
-        </section>
+        </fieldset>
       ) : null}
     </section>
   );

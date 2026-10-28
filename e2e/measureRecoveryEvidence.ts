@@ -107,6 +107,25 @@ const assertSameScene = async (page: Page, handle: Awaited<ReturnType<ReturnType
 };
 
 function registerRecoveryDelivery(helpers: Helpers) {
+  test("C03 Keep does not duplicate a completed Entity Dimensions result on repeated interaction", async ({ page }) => {
+    const errors = await start(page, helpers, 1440, ["Flow Pack Machine"]);
+    await page.getByLabel("Measurement kind").selectOption("dimensions");
+    const keep = page.getByRole("button", { name: "Keep / Save", exact: true });
+    await expect(keep).toBeEnabled();
+    const before = await snapshot(page);
+    await keep.click();
+    await expect.poll(async () => (await graphics(page)).length).toBe(1);
+    await expect(keep).toBeDisabled();
+    const after = await snapshot(page);
+    expect(after.invariants.undoDepth).toBe(before.invariants.undoDepth + 1);
+    await page.getByRole("button", { name: "Restart", exact: true }).click();
+    await expect(keep).toBeEnabled();
+    await keep.click();
+    await expect.poll(async () => (await graphics(page)).length).toBe(2);
+    await expect(keep).toBeDisabled();
+    await record(page, "R7-dimensions-keep-once-1440", errors, { outcome: "PASS", before, after, restarted: await snapshot(page) });
+  });
+
   for (const [width, height] of [[1440, 900], [1024, 768], [640, 800]]) {
     test(`C03 recovery R1 R6 persisted Inspector and explicit edit resume ${width}`, async ({ page }) => {
       test.setTimeout(120_000);
@@ -250,7 +269,11 @@ function registerRecoveryDelivery(helpers: Helpers) {
       const handle = await canvas(page).elementHandle(), generation = await canvas(page).getAttribute("data-scene-lifecycle-generation");
       const a = await alternateCorner(page, entities[0].id), b1 = await alternateCorner(page, entities[1].id);
       await page.getByRole("button", { name: "Next B", exact: true }).click();
-      expect((await taskSession(page)).points).toEqual([a]);
+      // Assert actual rendered operator state before relying on the canvas after-render diagnostic.
+      await expect(page.getByRole("region", { name: "Reference A confirmed", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Reference B confirmed", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Keep / Save", exact: true })).toBeDisabled();
+      await expect.poll(async () => (await taskSession(page)).points).toEqual([a]);
       const b2 = await alternateCorner(page, entities[1].id, b1.anchorKind);
       expect((await recoverySession(page)).relationships).toHaveLength(2);
       expect((await graphics(page)).length).toBe(0);
@@ -272,7 +295,10 @@ function registerRecoveryDelivery(helpers: Helpers) {
       await page.getByLabel("Measurement kind").selectOption("chain");
       await alternateCorner(page, entities[0].id); await alternateCorner(page, entities[1].id);
       await page.getByRole("button", { name: "Next segment", exact: true }).click();
-      expect((await taskSession(page)).points).toEqual([b1]);
+      await expect(page.getByRole("region", { name: "Reference A confirmed", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "Reference B confirmed", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Keep / Save", exact: true })).toBeDisabled();
+      await expect.poll(async () => (await taskSession(page)).points).toEqual([b1]);
       await alternateCorner(page, entities[1].id, b1.anchorKind);
       const chain = await recoverySession(page);
       expect(chain.relationships[1].points[0]).toEqual(chain.relationships[0].points[1]);

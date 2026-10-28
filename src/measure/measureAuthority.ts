@@ -88,6 +88,8 @@ export const updatePickPress = (press: PickPress, x: number, y: number): PickPre
     return { ...press, maximum, cancelled: press.cancelled || !Number.isFinite(maximum) || maximum > MEASURE_PICK_CLICK_TOLERANCE_CSS_PX };
 };
 export type MeasureSession = {
+    savedResultAnnotationId?: string;
+    savedDimensionsByEntityId?: Readonly<Record<string, string>>;
     paused?: boolean;
     workflow?: MeasureWorkflow;
     projectionMode?: MeasureProjectionMode;
@@ -199,12 +201,21 @@ export const getMeasureLines = (s: MeasureSession): MeasureLine[] => {
     return [{ points: [a, b], label: "3D Distance", preview: !s.completed }, { points: [a, x, y, b], label: "XYZ", preview: true }];
 };
 const emptyProjection: MeasureProjection = { width: 0, height: 0, lines: [], markers: [] };
+// Keep belongs to the active operation, not to a generic completed session.
+// Entity Dimensions can independently save each selected entity once per session.
+export const getKeptMeasureAnnotationId = (s: MeasureSession): string | undefined => {
+    if (s.kind === "distance") return s.relationships?.find(item => item.id === s.activeRelationshipId)?.savedAnnotationId;
+    if (s.kind === "dimensions") return s.activeDimensionEntityId ? s.savedDimensionsByEntityId?.[s.activeDimensionEntityId] : undefined;
+    return s.savedResultAnnotationId;
+};
+
 export const createMeasureAuthority = () => {
     let selectedDimensionId: string | null = null;
     let session: MeasureSession | null = null, press: PickPress | null = null, projection = emptyProjection, projectionKey = "";
     const listeners = new Set<() => void>(), projectionListeners = new Set<() => void>();
     const publish = (next: MeasureSession | null) => { session = next; listeners.forEach(fn => fn()); };
     const reset = (s: MeasureSession, context: MeasureContext): MeasureSession => ({ ...s, points: [], hover: null, completed: false, reason: undefined, lastPress: undefined, lockedReference: undefined, referenceEdit: undefined,
+        savedResultAnnotationId: undefined, savedDimensionsByEntityId: undefined,
         relationships: [], activeRelationshipId: undefined, replacePointIndex: undefined,
         level: s.source === "level-plane" && context.level ? { ...context.level } : undefined,
         presentationElevationMm: s.source === "level-plane" ? context.level?.elevationMm : undefined });
@@ -365,7 +376,16 @@ export const createMeasureAuthority = () => {
     };
     return { getSnapshot: () => session, getActive: () => session !== null && !session.paused,
         markKept: (annotationId: string) => {
-            if (!session) return;
+            if (!session || !session.completed || getKeptMeasureAnnotationId(session)) return;
+            if (session.kind === "dimensions") {
+                if (!session.activeDimensionEntityId) return;
+                publish({ ...session, savedDimensionsByEntityId: { ...session.savedDimensionsByEntityId, [session.activeDimensionEntityId]: annotationId } });
+                return;
+            }
+            if (session.kind !== "distance") {
+                publish({ ...session, savedResultAnnotationId: annotationId });
+                return;
+            }
             const next = { ...session, relationships: session.relationships?.map(item => item.id === session!.activeRelationshipId ? { ...item, savedAnnotationId: annotationId } : item) };
             publish(["fan-out", "chain"].includes(next.workflow ?? "") ? advanceRelationship(next) : next);
         },

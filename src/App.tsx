@@ -5,8 +5,9 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useEffectiveThemeId } from "./designSystem";
 import { BabylonScene, type BabylonSceneHandle } from "./components/BabylonScene";
 import { MeasureTool, MeasureViewportGraphics } from "./components/measure/MeasureTool";
-import { createMeasureAuthority, getActiveMeasureDimensionGroup, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
+import { createMeasureAuthority, getActiveMeasureDimensionGroup, getKeptMeasureAnnotationId, getMeasureResult, isMeasureAction, MEASURE_ACTIVE_REASON, measurePointToReference, type MeasureAction } from "./measure/measureAuthority";
 import { guardMeasureCommandBindings } from "./measure/measureCommandGate";
+import { isSavedMeasureDimensionEditable } from "./measure/dimensionEditPermissions";
 import { cloneMeasureDimensionStyle, type MeasureDimensionStyle, type MeasureReference } from "./measure/referenceTypes";
 import { getDimensionResult } from "./measure/measureReferences";
 import { createCameraTelemetry } from "./components/viewportNavigation/cameraTelemetry";
@@ -3456,7 +3457,7 @@ export function App() {
 
   const keepMeasureDimension = useCallback(() => {
     const session = measureAuthority.getSnapshot();
-    if (!session || session.paused || !session.completed || session.relationships?.some(item => item.id === session.activeRelationshipId && item.savedAnnotationId)) return false;
+    if (!session || session.paused || !session.completed || getKeptMeasureAnnotationId(session)) return false;
     const result = getMeasureResult(session);
     if (result.reason || result.values.length === 0) return false;
     const activeEntity = getActiveMeasureDimensionGroup(session)?.entity;
@@ -3496,36 +3497,43 @@ export function App() {
 
   const applyMeasureDimensionAction = useCallback((action: MeasureAction) => {
     if (action.type === "keep") return keepMeasureDimension();
+    const editableDimension = (id: string) =>
+      annotationsRef.current.find(item => item.id === id && isSavedMeasureDimensionEditable(item, layersRef.current));
     if (action.type === "textPlacement") {
-      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      const annotation = editableDimension(action.annotationId);
       if (!annotation?.dimension || ![action.point.xMm, action.point.yMm, action.point.zMm].every(Number.isFinite)) return false;
       markLayoutChanged();
       setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, textPlacementMm: action.point } }));
       return true;
     }
     if (action.type === "rename") {
-      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      const annotation = editableDimension(action.annotationId);
       const name = action.name.trim();
-      if (!annotation?.dimension || !name) return false;
+      if (!annotation?.dimension || !name || annotation.dimension.name === name) return false;
       markLayoutChanged();
       setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, name } }));
       return true;
     }
     if (action.type === "setVisibility") {
-      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
-      if (!annotation?.dimension) return false;
+      const annotation = editableDimension(action.annotationId);
+      if (!annotation?.dimension || annotation.dimension.visible === action.visible) return false;
       markLayoutChanged();
       setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, visible: action.visible } }));
       return true;
     }
     if (action.type === "setAllVisibility") {
+      const editableIds = new Set(annotationsRef.current.filter(item =>
+        isSavedMeasureDimensionEditable(item, layersRef.current) && item.dimension?.visible !== action.visible
+      ).map(item => item.id));
+      if (editableIds.size === 0) return false;
       markLayoutChanged();
-      setAnnotations((current) => current.map((item) => item.dimension ? { ...item, dimension: { ...item.dimension, visible: action.visible } } : item));
+      setAnnotations((current) => current.map((item) => editableIds.has(item.id) && item.dimension
+        ? { ...item, dimension: { ...item.dimension, visible: action.visible } } : item));
       return true;
     }
     if (action.type === "deleteDimension") return removeAnnotation(action.annotationId).handled;
     if (action.type === "style") {
-      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      const annotation = editableDimension(action.annotationId);
       if (!annotation?.dimension) return false;
       markLayoutChanged();
       const patch = action.style as Partial<MeasureDimensionStyle>;
@@ -3534,14 +3542,17 @@ export function App() {
         setAnnotations((current) => updateAnnotation(current, action.annotationId, { dimension: { ...annotation.dimension!, style } }));
       } else {
         const style = cloneMeasureDimensionStyle({ ...measureDimensionStyleRef.current, ...patch });
+        const editableIds = new Set(annotationsRef.current.filter(item =>
+          isSavedMeasureDimensionEditable(item, layersRef.current)
+        ).map(item => item.id));
         setMeasureDimensionStyle(style);
-        setAnnotations(current => current.map(item => item.dimension
+        setAnnotations(current => current.map(item => editableIds.has(item.id) && item.dimension
           ? { ...item, dimension: { ...item.dimension, style: { ...style, displayMode: item.dimension.style.displayMode } } } : item));
       }
       return true;
     }
     if (action.type === "reference") {
-      const annotation = annotationsRef.current.find((item) => item.id === action.annotationId);
+      const annotation = editableDimension(action.annotationId);
       if (!annotation?.dimension || !annotation.dimension.references[action.index]) return false;
       markLayoutChanged();
       const references = [...annotation.dimension.references];
@@ -5585,6 +5596,7 @@ export function App() {
               annotations={annotations}
               entities={platformEntities}
               levels={levels}
+              isDimensionEditable={(annotationId) => isSavedMeasureDimensionEditable(annotations.find(item => item.id === annotationId), layers)}
               onKeep={() => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "keep" }); }}
               onRenameDimension={(annotationId, name) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "rename", annotationId, name }); }}
               onSetDimensionVisibility={(annotationId, visible) => { void executeRuntimeFeatureCommand(RUNTIME_FEATURE_COMMAND_IDS.measure, { type: "setVisibility", annotationId, visible }); }}
