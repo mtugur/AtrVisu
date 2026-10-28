@@ -113,17 +113,32 @@ function registerRecoveryDelivery(helpers: Helpers) {
     const keep = page.getByRole("button", { name: "Keep / Save", exact: true });
     await expect(keep).toBeEnabled();
     const before = await snapshot(page);
+    const savedList = page.getByRole("region", { name: "Reference Dimensions", exact: true }).locator(".measure-dimension-list-item");
+    const roots = (rows: Awaited<ReturnType<typeof graphics>>) => rows.map(row => row.id.replace(/:(width|depth|height)$/, ""));
     await keep.click();
-    await expect.poll(async () => (await graphics(page)).length).toBe(1);
+    // One dimension annotation intentionally renders three canonical W/D/H graphical segments.
+    await expect(savedList).toHaveCount(1);
+    await expect.poll(async () => (await graphics(page)).length).toBe(3);
+    const firstGraphics = await graphics(page), firstRoots = roots(firstGraphics);
+    expect(new Set(firstRoots).size).toBe(1);
+    expect(firstGraphics.map(row => row.id.split(":").at(-1)).sort()).toEqual(["depth", "height", "width"]);
     await expect(keep).toBeDisabled();
     const after = await snapshot(page);
     expect(after.invariants.undoDepth).toBe(before.invariants.undoDepth + 1);
+    // Explicit Restart creates a genuinely new independent measurement task.
     await page.getByRole("button", { name: "Restart", exact: true }).click();
     await expect(keep).toBeEnabled();
     await keep.click();
-    await expect.poll(async () => (await graphics(page)).length).toBe(2);
+    await expect(savedList).toHaveCount(2);
+    await expect.poll(async () => (await graphics(page)).length).toBe(6);
+    const secondGraphics = await graphics(page), secondRoots = roots(secondGraphics);
+    expect(new Set(secondRoots).size).toBe(2);
+    expect(secondRoots.filter(root => root === firstRoots[0])).toHaveLength(3);
     await expect(keep).toBeDisabled();
-    await record(page, "R7-dimensions-keep-once-1440", errors, { outcome: "PASS", before, after, restarted: await snapshot(page) });
+    await record(page, "R7-dimensions-keep-once-1440", errors, {
+      outcome: "PASS", before, after, firstGraphics, secondGraphics, firstRoots, secondRoots,
+      restarted: await snapshot(page)
+    });
   });
 
   for (const [width, height] of [[1440, 900], [1024, 768], [640, 800]]) {

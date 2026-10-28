@@ -71,7 +71,13 @@ for (const name of names) {
   }
   if (name === "R7-dimensions-keep-once-1440") {
     assert.equal(data.after.invariants.undoDepth, data.before.invariants.undoDepth + 1, "first Keep must be one history transaction");
-    assert.equal(data.runtime.invariants.undoDepth, data.before.invariants.undoDepth + 2, "explicit Restart must be required for second Keep");
+    assert.equal(data.runtime.invariants.undoDepth, data.before.invariants.undoDepth + 2, "second Keep requires explicit Restart and one transaction");
+    assert.equal(data.firstGraphics.length, 3, "one local W/D/H dimension intentionally has three graphics");
+    assert.equal(new Set(data.firstRoots).size, 1, "first Keep must persist one annotation identity");
+    assert.deepEqual(data.firstGraphics.map(item => item.id.split(":").at(-1)).sort(), ["depth", "height", "width"]);
+    assert.equal(data.secondGraphics.length, 6, "two explicitly separate W/D/H annotations render six graphics");
+    assert.equal(new Set(data.secondRoots).size, 2, "only explicit Restart creates a second annotation identity");
+    assert.equal(data.secondRoots.filter(rootId => rootId === data.firstRoots[0]).length, 3, "first saved dimension remains unmodified");
   }
   if (name === "R7-locks-1440") {
     assert.equal(data.sameCanvas,true); assert.deepEqual(data.resumedEntry.selectionIds,[data.lockedEntity.id]);
