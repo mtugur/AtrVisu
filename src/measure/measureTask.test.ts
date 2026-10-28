@@ -17,7 +17,7 @@ const context: MeasureContext = { selectionIds: [a.id, b.id], primaryId: b.id, e
 const open = (ctx = context) => { const authority = createMeasureAuthority(); authority.dispatch({ type: "toggle" }, ctx); return authority; };
 const markup = (authority: ReturnType<typeof open>) => {
   const noop = () => undefined;
-  const props: MeasureToolProps = { authority, entities: [a, b], levels: [], annotations: [], onAction: noop, onKeep: noop,
+  const props: MeasureToolProps = { authority, entities: [a, b], levels: [], annotations: [], onAction: noop, onKeep: noop, isDimensionEditable: () => true,
     onRenameDimension: noop, onSetDimensionVisibility: noop, onSetAllDimensionVisibility: noop, onDeleteDimension: noop,
     onUpdateDimensionStyle: noop, onUpdateDimensionReference: noop };
   return renderToStaticMarkup(createElement(MeasureTool, props));

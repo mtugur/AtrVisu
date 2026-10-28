@@ -7,7 +7,7 @@ import { createAnnotation } from "../../utils/annotations";
 import { cloneMeasureDimensionStyle } from "../../measure/referenceTypes";
 
 const props = (): MeasureToolProps => ({
-  authority: createMeasureAuthority(), annotations: [], entities: [], levels: [], onAction: vi.fn(),
+  authority: createMeasureAuthority(), annotations: [], entities: [], levels: [], onAction: vi.fn(), isDimensionEditable: () => true,
   onKeep: vi.fn(), onRenameDimension: vi.fn(), onSetDimensionVisibility: vi.fn(), onSetAllDimensionVisibility: vi.fn(),
   onDeleteDimension: vi.fn(), onUpdateDimensionStyle: vi.fn(), onUpdateDimensionReference: vi.fn()
 });
@@ -79,6 +79,10 @@ describe("M20/M23/M26 Measure workspace presentation", () => {
     expect(markup).toContain("Orphaned"); expect(markup).toContain("Unavailable: machine:deleted");
     for (const label of ["Text Mode", "Display", "Units", "Reference A entity", "Reference A anchor", "Reference A type"]) expect(markup).toContain(`aria-label="${label}"`);
     for (const label of ["Font", "Min px", "Max px", "Fixed text px", "Line px", "Arrow px", "Text offset px", "Witness lines", "Leaders", "Halo"]) expect(markup).toContain(label);
+    p.isDimensionEditable = () => false;
+    const locked = renderToStaticMarkup(createElement(MeasureTool, p));
+    expect(locked).toContain("This dimension is on a locked layer.");
+    expect(locked).toMatch(/<fieldset[^>]*disabled=""/);
   });
   it("M22/M23 presents saved Plan Area, perimeter and its captured Geometry plane", () => {
     const p = props();
