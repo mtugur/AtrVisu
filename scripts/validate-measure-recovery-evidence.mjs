@@ -13,7 +13,7 @@ const modes = ["true-3d", "plan-xy", "vertical-xz", "vertical-yz", "axis-x", "ax
 const names = [1440, 1024, 640].flatMap(width => [
   `R1-edit-${width}`, `R1-reload-${width}`, `R6-resume-${width}`, `R2-references-${width}`,
   ...modes.map(mode => `R3-${mode}-${width}`), `R4-manual-pair-${width}`, `R5-fan-out-${width}`, `R7-reuse-${width}`
-]).concat("R7-locks-1440");
+]).concat("R7-locks-1440", "R7-dimensions-keep-once-1440");
 const files = [];
 for (const name of names) {
   const json = join(directory, name + ".json"), png = join(directory, name + ".png"), data = read(json), pixels = readFileSync(png);
@@ -68,6 +68,10 @@ for (const name of names) {
   if (name.startsWith("R7-reuse")) {
     assert.equal(data.sameCanvas,true); assert.equal(data.graphics.length,3);
     assert.deepEqual(data.chain.relationships[1].points[0],data.chain.relationships[0].points[1]);
+  }
+  if (name === "R7-dimensions-keep-once-1440") {
+    assert.equal(data.after.invariants.undoDepth, data.before.invariants.undoDepth + 1, "first Keep must be one history transaction");
+    assert.equal(data.runtime.invariants.undoDepth, data.before.invariants.undoDepth + 2, "explicit Restart must be required for second Keep");
   }
   if (name === "R7-locks-1440") {
     assert.equal(data.sameCanvas,true); assert.deepEqual(data.resumedEntry.selectionIds,[data.lockedEntity.id]);
